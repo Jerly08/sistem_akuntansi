@@ -1,0 +1,45 @@
+package models
+
+import (
+    "time"
+    "gorm.io/gorm"
+)
+
+type Asset struct {
+    ID            uint           `json:"id" gorm:"primaryKey"`
+    Code          string         `json:"code" gorm:"unique;not null;size:20"`
+    Name          string         `json:"name" gorm:"not null;size:100"`
+    Category      string         `json:"category" gorm:"size:50"`
+    Status        string         `json:"status" gorm:"not null;size:20"` // ACTIVE, INACTIVE, SOLD
+    PurchaseDate  time.Time      `json:"purchase_date"`
+    PurchasePrice float64        `json:"purchase_price" gorm:"type:decimal(15,2);default:0"`
+    SalvageValue  float64        `json:"salvage_value" gorm:"type:decimal(15,2);default:0"`
+    UsefulLife    int            `json:"useful_life" gorm:"default:0"` // Years
+    DepreciationMethod string    `json:"depreciation_method" gorm:"size:20"` // STRAIGHT_LINE, DECLINING_BALANCE
+    IsActive      bool           `json:"is_active" gorm:"default:true"`
+    Notes         string         `json:"notes" gorm:"type:text"`
+    CreatedAt     time.Time      `json:"created_at"`
+    UpdatedAt     time.Time      `json:"updated_at"`
+    DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
+
+    // Relations
+    AssetAccountID     uint      `json:"asset_account_id" gorm:"index"`
+    DepreciationAccountID uint   `json:"depreciation_account_id" gorm:"index"`
+    AccumulatedDepreciation float64 `json:"accumulated_depreciation" gorm:"type:decimal(15,2);default:0"`
+    AssetAccount    *Account     `json:"asset_account" gorm:"foreignKey:AssetAccountID"`
+    DepreciationAccount *Account `json:"depreciation_account" gorm:"foreignKey:DepreciationAccountID"`
+}
+
+// Asset Status Constants
+const (
+    AssetStatusActive   = "ACTIVE"
+    AssetStatusInactive = "INACTIVE"
+    AssetStatusSold     = "SOLD"
+)
+
+// Depreciation Methods Constants
+const (
+    DepreciationMethodStraightLine       = "STRAIGHT_LINE"
+    DepreciationMethodDecliningBalance   = "DECLINING_BALANCE"
+)
+

@@ -1,0 +1,308 @@
+Saya perlu membangun database schema lengkap untuk aplikasi akuntansi dengan PostgreSQL. 
+
+Buatkan:
+1. Complete database models untuk semua entitas:
+   - Users (dengan roles: admin, finance, director, inventory_manager, employee, auditor)
+   - Accounts (Chart of Accounts dengan hierarchy)
+   - Products (dengan categories, units, pricing)
+   - Contacts (customers, vendors, employees)
+   - Assets (fixed assets dengan depreciation)
+   - Sales & SalesItems
+   - Purchases & PurchaseItems
+   - Payments & CashBank transactions
+   - Audit logs untuk tracking
+
+2. Database migrations dengan proper foreign keys & constraints
+3. Indexes untuk optimasi query
+4. Seed data untuk testing
+
+Path: D:\Project\app_sistem_akuntansi\backend\models\
+
+
+Perbaiki dan lengkapi sistem authentication & authorization:
+
+1. Fix authentication mismatch (frontend kirim email, backend expect username)
+2. Implementasi complete JWT middleware dengan refresh token
+3. Role-based access control middleware yang granular
+4. Password policies & security enhancements
+5. Session management & token blacklisting
+
+Buat juga:
+- Input validation dengan go-playground/validator
+- Rate limiting per IP
+- Security headers middleware
+- Audit logging untuk auth events
+
+Path: D:\Project\app_sistem_akuntansi\backend\middleware\
+
+
+Buat struktur backend yang scalable dan maintainable:
+
+1. Repository pattern untuk database operations
+2. Service layer untuk business logic
+3. Proper error handling dengan custom error types
+4. Centralized logging dengan structured logs
+5. Configuration management dengan environment variables
+6. Health check endpoints dengan database connectivity check
+
+Struktur:
+- /repositories (database layer)
+- /services (business logic)
+- /handlers (HTTP handlers)
+- /utils (helper functions)
+- /config (configuration)
+
+
+Implementasi modul Chart of Accounts dengan fitur:
+
+1. Backend API:
+   - CRUD accounts dengan hierarchy (parent-child)
+   - Account types: Asset, Liability, Equity, Revenue, Expense
+   - Account codes dengan auto-numbering
+   - Bulk import dari CSV/Excel
+   - Account balances calculation
+
+2. Frontend UI:
+   - Tree view untuk account hierarchy
+   - Form untuk create/edit accounts
+   - Bulk import interface
+   - Search & filtering
+   - Account balance summary
+
+Access: ADMIN, FINANCE
+
+
+Buat modul Products & Inventory lengkap:
+
+1. Backend:
+   - Products CRUD dengan categories, units, pricing tiers
+   - Inventory tracking dengan stock movements
+   - Stock adjustment & stock opname
+   - Low stock alerts
+   - Product variants & bundle products
+   - Inventory valuation (FIFO, LIFO, Average)
+
+2. Frontend:
+   - Product catalog dengan image upload
+   - Inventory dashboard dengan stock levels
+   - Stock movement history
+   - Bulk price updates
+   - Stock reports
+
+Access: ADMIN, INVENTORY_MANAGER, EMPLOYEE (limited)
+
+
+Implementasi Contacts module untuk customers, vendors, employees:
+
+1. Backend API:
+   - Contact types: customer, vendor, employee
+   - Contact information dengan multiple addresses
+   - Credit limits & payment terms
+   - Contact history & notes
+   - Import/export contacts
+
+2. Frontend:
+   - Contact directory dengan advanced search
+   - Contact profiles dengan transaction history
+   - Communication log
+   - Contact reports
+
+Access berdasarkan role (Finance: customers, Inventory: vendors, dll)
+
+
+Buat comprehensive sales module:
+
+1. Backend:
+   - Sales quotations, orders, invoices
+   - Multi-currency support
+   - Tax calculations (PPN, PPh)
+   - Payment tracking & receivables
+   - Sales returns & credit notes
+   - Automatic journal entries
+
+2. Frontend:
+   - Sales pipeline dashboard
+   - Invoice generator dengan PDF export
+   - Payment collection interface
+   - Sales analytics & reporting
+   - Customer portal (optional)
+
+Integration: Products, Contacts, Accounts, Payments
+
+
+Implementasi purchase management:
+
+1. Backend:
+   - Purchase requisitions, orders, receipts
+   - Vendor quotation comparison
+   - Purchase returns & debit notes
+   - Three-way matching (PO, Receipt, Invoice)
+   - Automatic journal entries
+   - Payables tracking
+
+2. Frontend:
+   - Purchase dashboard
+   - PO generation & approval workflow
+   - Vendor evaluation
+   - Purchase analytics
+   - Receipt management
+
+Integration: Products, Contacts, Accounts, Payments
+
+
+Buat cash & bank management system:
+
+1. Backend:
+   - Multiple bank accounts & cash registers
+   - Cash receipts & payments
+   - Bank transfers & reconciliation
+   - Petty cash management
+   - Foreign exchange handling
+   - Automatic journal entries
+
+2. Frontend:
+   - Cash flow dashboard
+   - Bank reconciliation interface
+   - Payment vouchers
+   - Cash position reports
+   - Bank statement import
+
+Access: ADMIN, FINANCE, DIRECTOR (view only)
+
+
+Implementasi comprehensive reporting system:
+
+1. Backend:
+   - Balance Sheet generation
+   - Profit & Loss statement
+   - Cash Flow statement
+   - Trial Balance
+   - General Ledger reports
+   - Aged receivables/payables
+   - Custom report builder
+
+2. Frontend:
+   - Report dashboard dengan preview
+   - Export ke PDF, Excel, CSV
+   - Report scheduling & email delivery
+   - Interactive charts & graphs
+   - Drill-down capabilities
+
+3. Features:
+   - Multi-period comparison
+   - Budget vs actual analysis
+   - Departmental reporting
+   - Consolidation reports
+
+
+
+   Buat executive dashboard dengan real-time analytics:
+
+1. Backend APIs:
+   - KPI calculations (revenue, profit, cash flow)
+   - Trend analysis algorithms
+   - Forecasting models
+   - Alert system untuk critical metrics
+
+2. Frontend Dashboard:
+   - Role-based dashboard layouts
+   - Interactive charts (Recharts/Chart.js)
+   - Real-time notifications
+   - Customizable widgets
+   - Mobile-responsive design
+
+3. Analytics:
+   - Sales performance metrics
+   - Cash flow projections
+   - Profitability analysis
+   - Operational efficiency KPIs
+
+
+
+   Implementasi user management dan approval workflow:
+
+1. User Management:
+   - User CRUD dengan role assignments
+   - Permission matrix management
+   - User activity tracking
+   - Password policies & MFA
+   - User onboarding workflow
+
+2. Approval Workflow:
+   - Configurable approval chains
+   - Document approval (PO, invoices, payments)
+   - Email notifications
+   - Mobile approval interface
+   - Workflow audit trail
+
+Access: ADMIN only
+
+
+
+Buat system configuration module:
+
+1. General Settings:
+   - Company information & branding
+   - Fiscal year & accounting periods
+   - Currency & exchange rates
+   - Tax configuration
+   - Number sequences
+
+2. Accounting Settings:
+   - Depreciation methods
+   - Inventory valuation methods
+   - Journal posting rules
+   - Period lock & closing procedures
+
+3. System Preferences:
+   - Email templates
+   - Report layouts
+   - Dashboard configurations
+   - Integration settings
+
+
+
+   Implementasi security features untuk production:
+
+1. Security Enhancements:
+   - Advanced rate limiting
+   - API security (OWASP guidelines)
+   - Data encryption at rest
+   - Secure file uploads
+   - XSS & CSRF protection
+
+2. Audit & Compliance:
+   - Complete audit trail
+   - Data retention policies
+   - GDPR compliance features
+   - Security event logging
+   - Backup & recovery procedures
+
+3. Monitoring:
+   - Application monitoring
+   - Database performance monitoring
+   - Error tracking & alerting
+   - Log aggregation & analysis
+
+
+   Buat production deployment dengan Docker:
+
+1. Docker Configuration:
+   - Multi-stage Dockerfile untuk backend
+   - Next.js Dockerfile dengan optimization
+   - PostgreSQL dengan persistent volumes
+   - Redis for caching & sessions
+   - Nginx reverse proxy
+
+2. Docker Compose:
+   - Production-ready compose file
+   - Environment configuration
+   - Health checks & restart policies
+   - Volume management
+   - Network security
+
+3. Deployment Scripts:
+   - Automated deployment pipeline
+   - Database migration scripts
+   - Backup & restore procedures
+   - Monitoring setup

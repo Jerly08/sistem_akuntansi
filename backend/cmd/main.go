@@ -18,6 +18,9 @@ func main() {
 	
 	// Auto migrate models
 	database.AutoMigrate(db)
+	
+	// Seed database with initial data
+	database.SeedData(db)
 
 	// Initialize Gin router
 	r := gin.Default()
