@@ -54,6 +54,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				products.DELETE("/:id", middleware.RoleRequired("admin"), productController.DeleteProduct)
 				products.POST("/adjust-stock", middleware.RoleRequired("admin", "inventory_manager"), productController.AdjustStock)
 				products.POST("/opname", middleware.RoleRequired("admin", "inventory_manager"), productController.Opname)
+				products.POST("/upload-image", middleware.RoleRequired("admin", "inventory_manager"), productController.UploadProductImage)
 			}
 
 			// Category routes
@@ -145,8 +146,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 		}
 	}
 
-	// Static files (templates)
+	// Static files (templates and uploads)
 	r.Static("/templates", "./templates")
+	r.Static("/uploads", "./uploads")
 
 	// Health check endpoint
 	v1.GET("/health", func(c *gin.Context) {

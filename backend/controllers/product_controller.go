@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 	"app-sistem-akuntansi/models"
@@ -21,7 +23,7 @@ func NewProductController(db *gorm.DB) *ProductController {
 func (pc *ProductController) GetProducts(c *gin.Context) {
 	var products []models.Product
 	
-	query := pc.DB.Where("is_active = ?", true)
+	query := pc.DB.Where("is_active = ?", true).Preload("Category")
 	
 	// Add search functionality
 	if search := c.Query("search"); search != "" {
@@ -29,8 +31,8 @@ func (pc *ProductController) GetProducts(c *gin.Context) {
 	}
 	
 	// Add category filter
-	if category := c.Query("category"); category != "" {
-		query = query.Where("category = ?", category)
+	if categoryID := c.Query("category"); categoryID != "" {
+		query = query.Where("category_id = ?", categoryID)
 	}
 	
 	if err := query.Find(&products).Error; err != nil {
@@ -52,7 +54,7 @@ func (pc *ProductController) GetProduct(c *gin.Context) {
 	}
 
 	var product models.Product
-	if err := pc.DB.First(&product, id).Error; err != nil {
+	if err := pc.DB.Preload("Category").First(&product, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
 		return
 	}
@@ -171,6 +173,12 @@ func (pc *ProductController) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	// Load the category relation
+	if err := pc.DB.Preload("Category").First(&product, product.ID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load product relations"})
+		return
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Product created successfully",
 		"data":    product,
@@ -210,6 +218,12 @@ func (pc *ProductController) UpdateProduct(c *gin.Context) {
 		return
 	}
 
+	// Load the updated product with category relation
+	if err := pc.DB.Preload("Category").First(&product, id).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load updated product relations"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Product updated successfully",
 		"data":    product,
@@ -237,5 +251,71 @@ func (pc *ProductController) DeleteProduct(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Product deleted successfully",
+	})
+}
+
+// UploadProductImage handles product image upload
+func (pc *ProductController) UploadProductImage(c *gin.Context) {
+	productID, err := strconv.Atoi(c.PostForm("product_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid product ID"})
+		return
+	}
+
+	// Check if product exists
+	var product models.Product
+	if err := pc.DB.First(&product, productID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
+		return
+	}
+
+	// Get uploaded file
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get uploaded file"})
+		return
+	}
+
+	// Validate file type
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/jpg":  true,
+		"image/png":  true,
+		"image/gif":  true,
+	}
+
+	if !allowedTypes[file.Header.Get("Content-Type")] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Only JPEG, PNG, and GIF are allowed"})
+		return
+	}
+
+	// Create uploads directory if it doesn't exist
+	uploadPath := "./uploads/products/"
+	if err := os.MkdirAll(uploadPath, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
+		return
+	}
+
+	// Generate unique filename
+	filename := fmt.Sprintf("%d_%d_%s", productID, time.Now().Unix(), file.Filename)
+	filePath := uploadPath + filename
+
+	// Save the file
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		return
+	}
+
+	// Update product with image path
+	relativeImagePath := "/uploads/products/" + filename
+	if err := pc.DB.Model(&product).Update("image_path", relativeImagePath).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product image path"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Image uploaded successfully",
+		"filename": filename,
+		"path": relativeImagePath,
 	})
 }

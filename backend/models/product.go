@@ -35,6 +35,7 @@ type Product struct {
 	IsActive      bool           `json:"is_active" gorm:"default:true"`
 	IsService     bool           `json:"is_service" gorm:"default:false"`
 	Taxable       bool           `json:"taxable" gorm:"default:true"`
+	ImagePath     string         `json:"image_path" gorm:"size:255"`
 	Notes         string         `json:"notes" gorm:"type:text"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`

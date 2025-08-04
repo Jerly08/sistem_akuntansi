@@ -23,6 +23,7 @@ export interface Product {
   is_active: boolean;
   is_service: boolean;
   taxable: boolean;
+  image_path?: string;
   notes?: string;
   category?: Category;
   variants?: ProductVariant[];
