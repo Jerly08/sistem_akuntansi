@@ -2,69 +2,19 @@ package middleware
 
 import (
 	"net/http"
-	"strings"
-	"time"
-	"app-sistem-akuntansi/config"
-	"app-sistem-akuntansi/models"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 )
 
-type Claims struct {
-	UserID   uint   `json:"user_id"`
-	Username string `json:"username"`
-	Role     string `json:"role"`
-	jwt.RegisteredClaims
-}
-
-func GenerateToken(user models.User) (string, error) {
-	cfg := config.LoadConfig()
-	
-	claims := &Claims{
-		UserID:   user.ID,
-		Username: user.Username,
-		Role:     user.Role,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(cfg.JWTSecret))
-}
-
+// AuthRequired returns the enhanced JWT middleware from jwt.go
 func AuthRequired() gin.HandlerFunc {
+	// This will be set up with database instance in routes
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
-			c.Abort()
-			return
-		}
-
-		tokenString := strings.Replace(authHeader, "Bearer ", "", 1)
-		
-		cfg := config.LoadConfig()
-		claims := &Claims{}
-		
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(cfg.JWTSecret), nil
-		})
-
-		if err != nil || !token.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			c.Abort()
-			return
-		}
-
-		c.Set("user_id", claims.UserID)
-		c.Set("username", claims.Username)
-		c.Set("role", claims.Role)
-		c.Next()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "JWT Manager not initialized"})
+		c.Abort()
 	}
 }
 
+// RoleRequired ensures that the user belongs to one of the specified roles
 func RoleRequired(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userRole, exists := c.Get("role")

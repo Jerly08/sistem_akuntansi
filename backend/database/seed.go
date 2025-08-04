@@ -2,12 +2,10 @@ package database
 
 import (
 	"log"
-	"time"
 	"app-sistem-akuntansi/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
-
 func SeedData(db *gorm.DB) {
 	log.Println("Starting database seeding...")
 
@@ -37,28 +35,28 @@ func SeedData(db *gorm.DB) {
 	
 	// Seed Report Templates
 	seedReportTemplates(db)
+	
+	// Seed Permissions
+	seedPermissions(db)
+	
+	// Seed Role Permissions
+	seedRolePermissions(db)
 
 	log.Println("Database seeding completed successfully")
 }
 
 func seedUsers(db *gorm.DB) {
-	// Check if users already exist
-	var count int64
-	db.Model(&models.User{}).Count(&count)
-	if count > 0 {
-		return
-	}
-
+	// Seed all users for all roles
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 
-	users := []models.User{
+	allUsers := []models.User{
 		{
 			Username:  "admin",
 			Email:     "admin@company.com",
 			Password:  string(hashedPassword),
 			Role:      "admin",
-			FirstName: "System",
-			LastName:  "Administrator",
+			FirstName: "Admin",
+			LastName:  "User",
 			IsActive:  true,
 		},
 		{
@@ -67,7 +65,7 @@ func seedUsers(db *gorm.DB) {
 			Password:  string(hashedPassword),
 			Role:      "finance",
 			FirstName: "Finance",
-			LastName:  "Manager",
+			LastName:  "User",
 			IsActive:  true,
 		},
 		{
@@ -76,7 +74,7 @@ func seedUsers(db *gorm.DB) {
 			Password:  string(hashedPassword),
 			Role:      "inventory_manager",
 			FirstName: "Inventory",
-			LastName:  "Manager",
+			LastName:  "User",
 			IsActive:  true,
 		},
 		{
@@ -84,14 +82,45 @@ func seedUsers(db *gorm.DB) {
 			Email:     "director@company.com",
 			Password:  string(hashedPassword),
 			Role:      "director",
-			FirstName: "Company",
-			LastName:  "Director",
+			FirstName: "Director",
+			LastName:  "User",
+			IsActive:  true,
+		},
+		{
+			Username:  "operational",
+			Email:     "operational@company.com",
+			Password:  string(hashedPassword),
+			Role:      "operational_user",
+			FirstName: "Operational",
+			LastName:  "User",
+			IsActive:  true,
+		},
+		{
+			Username:  "auditor",
+			Email:     "auditor@company.com",
+			Password:  string(hashedPassword),
+			Role:      "auditor",
+			FirstName: "Auditor",
+			LastName:  "User",
+			IsActive:  true,
+		},
+		{
+			Username:  "employee",
+			Email:     "employee@company.com",
+			Password:  string(hashedPassword),
+			Role:      "employee",
+			FirstName: "Employee",
+			LastName:  "User",
 			IsActive:  true,
 		},
 	}
-
-	for _, user := range users {
-		db.Create(&user)
+	
+	// Add users if not existing
+	for _, user := range allUsers {
+		var existingUser models.User
+		if err := db.Where("username = ?", user.Username).First(&existingUser).Error; err != nil {
+			db.Create(&user)
+		}
 	}
 }
 
@@ -424,5 +453,180 @@ func seedReportTemplates(db *gorm.DB) {
 
 	for _, template := range templates {
 		db.Create(&template)
+	}
+}
+
+func seedPermissions(db *gorm.DB) {
+	// Check if permissions already exist
+	var count int64
+	db.Model(&models.Permission{}).Count(&count)
+	if count > 0 {
+		return
+	}
+
+	permissions := []models.Permission{
+		// User permissions
+		{Name: "users:read", Resource: "users", Action: "read", Description: "View users"},
+		{Name: "users:create", Resource: "users", Action: "create", Description: "Create users"},
+		{Name: "users:update", Resource: "users", Action: "update", Description: "Update users"},
+		{Name: "users:delete", Resource: "users", Action: "delete", Description: "Delete users"},
+		{Name: "users:manage", Resource: "users", Action: "manage", Description: "Full user management"},
+
+		// Account permissions
+		{Name: "accounts:read", Resource: "accounts", Action: "read", Description: "View accounts"},
+		{Name: "accounts:create", Resource: "accounts", Action: "create", Description: "Create accounts"},
+		{Name: "accounts:update", Resource: "accounts", Action: "update", Description: "Update accounts"},
+		{Name: "accounts:delete", Resource: "accounts", Action: "delete", Description: "Delete accounts"},
+
+		// Transaction permissions
+		{Name: "transactions:read", Resource: "transactions", Action: "read", Description: "View transactions"},
+		{Name: "transactions:create", Resource: "transactions", Action: "create", Description: "Create transactions"},
+		{Name: "transactions:update", Resource: "transactions", Action: "update", Description: "Update transactions"},
+		{Name: "transactions:delete", Resource: "transactions", Action: "delete", Description: "Delete transactions"},
+
+		// Product permissions
+		{Name: "products:read", Resource: "products", Action: "read", Description: "View products"},
+		{Name: "products:create", Resource: "products", Action: "create", Description: "Create products"},
+		{Name: "products:update", Resource: "products", Action: "update", Description: "Update products"},
+		{Name: "products:delete", Resource: "products", Action: "delete", Description: "Delete products"},
+
+		// Sales permissions
+		{Name: "sales:read", Resource: "sales", Action: "read", Description: "View sales"},
+		{Name: "sales:create", Resource: "sales", Action: "create", Description: "Create sales"},
+		{Name: "sales:update", Resource: "sales", Action: "update", Description: "Update sales"},
+		{Name: "sales:delete", Resource: "sales", Action: "delete", Description: "Delete sales"},
+
+		// Purchase permissions
+		{Name: "purchases:read", Resource: "purchases", Action: "read", Description: "View purchases"},
+		{Name: "purchases:create", Resource: "purchases", Action: "create", Description: "Create purchases"},
+		{Name: "purchases:update", Resource: "purchases", Action: "update", Description: "Update purchases"},
+		{Name: "purchases:delete", Resource: "purchases", Action: "delete", Description: "Delete purchases"},
+
+		// Report permissions
+		{Name: "reports:read", Resource: "reports", Action: "read", Description: "View reports"},
+		{Name: "reports:create", Resource: "reports", Action: "create", Description: "Create reports"},
+		{Name: "reports:update", Resource: "reports", Action: "update", Description: "Update reports"},
+		{Name: "reports:delete", Resource: "reports", Action: "delete", Description: "Delete reports"},
+
+		// Contact permissions
+		{Name: "contacts:read", Resource: "contacts", Action: "read", Description: "View contacts"},
+		{Name: "contacts:create", Resource: "contacts", Action: "create", Description: "Create contacts"},
+		{Name: "contacts:update", Resource: "contacts", Action: "update", Description: "Update contacts"},
+		{Name: "contacts:delete", Resource: "contacts", Action: "delete", Description: "Delete contacts"},
+
+		// Asset permissions
+		{Name: "assets:read", Resource: "assets", Action: "read", Description: "View assets"},
+		{Name: "assets:create", Resource: "assets", Action: "create", Description: "Create assets"},
+		{Name: "assets:update", Resource: "assets", Action: "update", Description: "Update assets"},
+		{Name: "assets:delete", Resource: "assets", Action: "delete", Description: "Delete assets"},
+
+		// Budget permissions
+		{Name: "budgets:read", Resource: "budgets", Action: "read", Description: "View budgets"},
+		{Name: "budgets:create", Resource: "budgets", Action: "create", Description: "Create budgets"},
+		{Name: "budgets:update", Resource: "budgets", Action: "update", Description: "Update budgets"},
+		{Name: "budgets:delete", Resource: "budgets", Action: "delete", Description: "Delete budgets"},
+	}
+
+	for _, permission := range permissions {
+		db.Create(&permission)
+	}
+}
+
+func seedRolePermissions(db *gorm.DB) {
+	// Check if role permissions already exist
+	var count int64
+	db.Model(&models.RolePermission{}).Count(&count)
+	if count > 0 {
+		return
+	}
+
+	// Get all permissions
+	var permissions []models.Permission
+	db.Find(&permissions)
+
+	permissionMap := make(map[string]uint)
+	for _, perm := range permissions {
+		permissionMap[perm.Name] = perm.ID
+	}
+
+	// Define role permissions
+	rolePermissions := map[string][]string{
+		"admin": {
+			"users:read", "users:create", "users:update", "users:delete", "users:manage",
+			"accounts:read", "accounts:create", "accounts:update", "accounts:delete",
+			"transactions:read", "transactions:create", "transactions:update", "transactions:delete",
+			"products:read", "products:create", "products:update", "products:delete",
+			"sales:read", "sales:create", "sales:update", "sales:delete",
+			"purchases:read", "purchases:create", "purchases:update", "purchases:delete",
+			"reports:read", "reports:create", "reports:update", "reports:delete",
+			"contacts:read", "contacts:create", "contacts:update", "contacts:delete",
+			"assets:read", "assets:create", "assets:update", "assets:delete",
+			"budgets:read", "budgets:create", "budgets:update", "budgets:delete",
+		},
+		"finance": {
+			"accounts:read", "accounts:create", "accounts:update",
+			"transactions:read", "transactions:create", "transactions:update",
+			"sales:read", "sales:create", "sales:update",
+			"purchases:read", "purchases:create", "purchases:update",
+			"reports:read", "reports:create",
+			"contacts:read", "contacts:update",
+			"assets:read", "assets:update",
+			"budgets:read", "budgets:create", "budgets:update",
+		},
+		"director": {
+			"users:read",
+			"accounts:read",
+			"transactions:read",
+			"products:read",
+			"sales:read",
+			"purchases:read",
+			"reports:read", "reports:create",
+			"contacts:read",
+			"assets:read",
+			"budgets:read", "budgets:create", "budgets:update",
+		},
+		"inventory_manager": {
+			"products:read", "products:create", "products:update",
+			"sales:read", "sales:create", "sales:update",
+			"purchases:read", "purchases:create", "purchases:update",
+			"contacts:read", "contacts:create", "contacts:update",
+		},
+		"employee": {
+			"products:read",
+			"sales:read", "sales:create",
+			"contacts:read",
+		},
+		"auditor": {
+			"users:read",
+			"accounts:read",
+			"transactions:read",
+			"products:read",
+			"sales:read",
+			"purchases:read",
+			"reports:read",
+			"contacts:read",
+			"assets:read",
+			"budgets:read",
+		},
+		"operational_user": {
+			"transactions:create", "transactions:read",
+			"sales:create", "sales:read",
+			"purchases:create", "purchases:read",
+			"products:read",
+			"contacts:read",
+		},
+	}
+
+	// Create role permissions
+	for role, perms := range rolePermissions {
+		for _, permName := range perms {
+			if permID, exists := permissionMap[permName]; exists {
+				rolePermission := models.RolePermission{
+					Role:         role,
+					PermissionID: permID,
+				}
+				db.Create(&rolePermission)
+			}
+		}
 	}
 }

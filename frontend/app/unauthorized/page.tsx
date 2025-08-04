@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   Box,
@@ -10,11 +11,47 @@ import {
   Text,
   Heading,
   Stack,
+  useToast,
 } from '@chakra-ui/react';
-import { FiXCircle, FiLayout } from 'react-icons/fi';
+import { FiXCircle, FiLayout, FiLogOut, FiRefreshCw } from 'react-icons/fi';
 
 export default function UnauthorizedPage() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const toast = useToast();
+
+  const handleClearAuthAndRelogin = () => {
+    // Clear all auth data
+    logout();
+    
+    // Clear localStorage completely
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+    }
+    
+    toast({
+      title: 'Auth Data Cleared',
+      description: 'Please login again with your credentials.',
+      status: 'info',
+      duration: 3000,
+      isClosable: true,
+    });
+    
+    // Redirect to login
+    router.push('/login');
+  };
+
+  const handleLogout = () => {
+    logout();
+    toast({
+      title: 'Logged Out',
+      description: 'You have been logged out successfully.',
+      status: 'success',
+      duration: 3000,
+      isClosable: true,
+    });
+    router.push('/login');
+  };
 
   return (
     <Flex minH="100vh" align="center" justify="center" bg="red.50">
@@ -65,15 +102,37 @@ export default function UnauthorizedPage() {
           </Text>
         </Box>
         
-        <Button 
-          as={Link} 
-          href="/dashboard" 
-          colorScheme="blue" 
-          leftIcon={<FiLayout />}
-          width="full"
-        >
-          Return to Dashboard
-        </Button>
+        <Stack spacing={3} w="full">
+          <Button 
+            onClick={handleClearAuthAndRelogin}
+            colorScheme="orange" 
+            leftIcon={<FiRefreshCw />}
+            width="full"
+          >
+            Clear Auth Data & Login Again
+          </Button>
+          
+          <Button 
+            onClick={handleLogout}
+            colorScheme="red" 
+            variant="outline"
+            leftIcon={<FiLogOut />}
+            width="full"
+          >
+            Logout
+          </Button>
+          
+          <Button 
+            as={Link} 
+            href="/dashboard" 
+            colorScheme="blue" 
+            variant="ghost"
+            leftIcon={<FiLayout />}
+            width="full"
+          >
+            Try Dashboard Again
+          </Button>
+        </Stack>
       </Box>
     </Flex>
   );

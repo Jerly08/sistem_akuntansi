@@ -3,7 +3,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
 // Define user type
-export type UserRole = 'ADMIN' | 'FINANCE' | 'INVENTORY_MANAGER' | 'DIRECTOR' | 'EMPLOYEE';
+export type UserRole = 'ADMIN' | 'FINANCE' | 'INVENTORY_MANAGER' | 'DIRECTOR' | 'EMPLOYEE' | 'OPERATIONAL_USER' | 'AUDITOR';
 
 export interface User {
   id: string;
@@ -148,8 +148,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Logout function
-  const logout = () => {
+  // Clear all auth data function
+  const clearAuthData = () => {
     // Clear state
     setToken(null);
     setRefreshToken(null);
@@ -160,7 +160,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      // Also clear any other auth-related items
+      localStorage.removeItem('authData');
+      localStorage.removeItem('userData');
     }
+  };
+
+  // Logout function
+  const logout = () => {
+    clearAuthData();
   };
 
   // Check if user is authenticated

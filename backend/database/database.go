@@ -62,6 +62,17 @@ func AutoMigrate(db *gorm.DB) {
 		&models.CashBank{},
 		&models.CashBankTransaction{},
 		&models.Payment{},
+		
+		// Additional missing models
+		&models.CompanyProfile{},
+		&models.ReportTemplate{},
+		&models.Permission{},
+		&models.RolePermission{},
+		&models.UserSession{},
+		&models.RefreshToken{},
+		&models.BlacklistedToken{},
+		&models.RateLimitRecord{},
+		&models.AuthAttempt{},
 	)
 	
 	if err != nil {

@@ -70,3 +70,58 @@ const (
 	CategoryOperatingExpense = "OPERATING_EXPENSE"
 	CategoryOtherExpense    = "OTHER_EXPENSE"
 )
+
+// AccountType enum
+type AccountType string
+
+// IsValidAccountType checks if account type is valid
+func IsValidAccountType(accountType string) bool {
+	types := []string{
+		AccountTypeAsset,
+		AccountTypeLiability,
+		AccountTypeEquity,
+		AccountTypeRevenue,
+		AccountTypeExpense,
+	}
+	for _, t := range types {
+		if t == accountType {
+			return true
+		}
+	}
+	return false
+}
+
+// Request/Response structures
+type AccountCreateRequest struct {
+	Code           string      `json:"code" binding:"required,max=20"`
+	Name           string      `json:"name" binding:"required,max=100"`
+	Type           AccountType `json:"type" binding:"required"`
+	Category       string      `json:"category"`
+	ParentID       *uint       `json:"parent_id"`
+	Description    string      `json:"description"`
+	OpeningBalance float64     `json:"opening_balance"`
+}
+
+type AccountUpdateRequest struct {
+	Name        string `json:"name" binding:"required,max=100"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	IsActive    *bool  `json:"is_active"`
+}
+
+type AccountImportRequest struct {
+	Code           string      `json:"code" binding:"required"`
+	Name           string      `json:"name" binding:"required"`
+	Type           AccountType `json:"type" binding:"required"`
+	Category       string      `json:"category"`
+	ParentCode     string      `json:"parent_code"`
+	Description    string      `json:"description"`
+	OpeningBalance float64     `json:"opening_balance"`
+}
+
+type AccountSummaryResponse struct {
+	Type           AccountType `json:"type"`
+	TotalAccounts  int64       `json:"total_accounts"`
+	TotalBalance   float64     `json:"total_balance"`
+	ActiveAccounts int64       `json:"active_accounts"`
+}

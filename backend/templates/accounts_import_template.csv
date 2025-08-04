@@ -1,0 +1,17 @@
+code,name,type,parent_code,opening_balance,description
+1000,AKTIVA,ASSET,,,Header account for all assets
+1100,AKTIVA LANCAR,ASSET,1000,,Current assets header
+1110,Kas,ASSET,1100,0,Cash on hand
+1120,Bank,ASSET,1100,0,Bank accounts
+1130,Piutang Usaha,ASSET,1100,0,Accounts receivable
+2000,KEWAJIBAN,LIABILITY,,,Header account for all liabilities
+2100,KEWAJIBAN LANCAR,LIABILITY,2000,,Current liabilities header
+2110,Hutang Usaha,LIABILITY,2100,0,Accounts payable
+3000,MODAL,EQUITY,,,Header account for equity
+3100,Modal Pemilik,EQUITY,3000,0,Owner's equity
+4000,PENDAPATAN,REVENUE,,,Header account for revenue
+4100,PENDAPATAN USAHA,REVENUE,4000,,Operating revenue header
+4110,Penjualan,REVENUE,4100,0,Sales revenue
+5000,BEBAN,EXPENSE,,,Header account for expenses
+5100,HARGA POKOK PENJUALAN,EXPENSE,5000,,Cost of goods sold header
+5110,Pembelian,EXPENSE,5100,0,Purchases

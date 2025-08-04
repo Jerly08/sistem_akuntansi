@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [analytics, setAnalytics] = useState<DashboardAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     if (!user || !token) {
@@ -125,15 +126,23 @@ export default function DashboardPage() {
     }
   }, [user, token, router]);
 
+  // Handle unauthorized role redirect
+  useEffect(() => {
+    if (user && !loading && !['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'DIRECTOR', 'EMPLOYEE', 'OPERATIONAL_USER', 'AUDITOR'].includes(user.role)) {
+      setRedirecting(true);
+      router.push('/unauthorized');
+    }
+  }, [user, loading, router]);
+
   const toast = useToast();
 
   const renderDashboardByRole = () => {
-    if (loading) {
+    if (loading || redirecting) {
       return (
         <Flex justify="center" align="center" minH="60vh">
           <VStack spacing={4}>
             <Spinner size="xl" color="brand.500" thickness="4px" />
-            <Text>Memuat dasbor...</Text>
+            <Text>{redirecting ? 'Mengalihkan...' : 'Memuat dasbor...'}</Text>
           </VStack>
         </Flex>
       );
@@ -160,14 +169,25 @@ export default function DashboardPage() {
         return <DirectorDashboard />;
       case 'EMPLOYEE':
         return <EmployeeDashboard />;
+      case 'OPERATIONAL_USER':
+        return <EmployeeDashboard />; // Similar to employee for now
+      case 'AUDITOR':
+        return <DirectorDashboard />; // Similar to director with read-only access
       default:
-        router.push('/unauthorized');
-        return null;
+        // Don't call router.push here, it's handled in useEffect
+        return (
+          <Flex justify="center" align="center" minH="60vh">
+            <VStack spacing={4}>
+              <Spinner size="xl" color="brand.500" thickness="4px" />
+              <Text>Mengalihkan ke halaman yang sesuai...</Text>
+            </VStack>
+          </Flex>
+        );
     }
   };
 
   return (
-    <DynamicLayout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR', 'INVENTORY_MANAGER', 'EMPLOYEE']}>
+    <DynamicLayout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR', 'INVENTORY_MANAGER', 'EMPLOYEE', 'OPERATIONAL_USER', 'AUDITOR']}>
       {renderDashboardByRole()}
     </DynamicLayout>
   );

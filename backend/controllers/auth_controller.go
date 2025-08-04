@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"net/http"
+	"strings"
+	"time"
 	"app-sistem-akuntansi/middleware"
 	"app-sistem-akuntansi/models"
 	"github.com/gin-gonic/gin"
@@ -15,6 +17,50 @@ type AuthController struct {
 
 func NewAuthController(db *gorm.DB) *AuthController {
 	return &AuthController{DB: db}
+}
+
+// Helper function to convert role to uppercase for frontend
+func convertRoleToUppercase(role string) string {
+	switch role {
+	case "admin":
+		return "ADMIN"
+	case "finance":
+		return "FINANCE"
+	case "director":
+		return "DIRECTOR"
+	case "inventory_manager":
+		return "INVENTORY_MANAGER"
+	case "employee":
+		return "EMPLOYEE"
+	case "auditor":
+		return "AUDITOR"
+	case "operational_user":
+		return "OPERATIONAL_USER"
+	default:
+		return strings.ToUpper(role)
+	}
+}
+
+// Helper function to convert role to lowercase for backend
+func convertRoleToLowercase(role string) string {
+	switch role {
+	case "ADMIN":
+		return "admin"
+	case "FINANCE":
+		return "finance"
+	case "DIRECTOR":
+		return "director"
+	case "INVENTORY_MANAGER":
+		return "inventory_manager"
+	case "EMPLOYEE":
+		return "employee"
+	case "AUDITOR":
+		return "auditor"
+	case "OPERATIONAL_USER":
+		return "operational_user"
+	default:
+		return strings.ToLower(role)
+	}
 }
 
 func (ac *AuthController) Register(c *gin.Context) {
@@ -59,65 +105,147 @@ func (ac *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	// Generate token
-	token, err := middleware.GenerateToken(user)
+	// Initialize JWT Manager
+	jw := middleware.NewJWTManager(ac.DB)
+
+	// Generate token pair
+	tokens, err := jw.GenerateTokenPair(user, "Web Browser", c.ClientIP())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
 
-	response := models.LoginResponse{
-		Token: token,
-		User:  user,
-	}
+	// Convert role to uppercase for frontend compatibility
+	userWithUppercaseRole := tokens.User
+	userWithUppercaseRole.Role = convertRoleToUppercase(userWithUppercaseRole.Role)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully",
-		"data":    response,
+		"token":   tokens.AccessToken,
+		"refreshToken": tokens.RefreshToken,
+		"user":    userWithUppercaseRole,
 	})
 }
 
 func (ac *AuthController) Login(c *gin.Context) {
-	var req models.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Support both simple and enhanced login requests
+	var simpleReq struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	
+	var enhancedReq models.EnhancedLoginRequest
+	
+	// Try to bind as simple request first (for frontend compatibility)
+	if err := c.ShouldBindJSON(&simpleReq); err != nil {
+		// If simple binding fails, try enhanced request
+		if err := c.ShouldBindJSON(&enhancedReq); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+			return
+		}
+	}
+	
+	// Determine the identifier and password
+	var identifier, password, deviceInfo string
+	if simpleReq.Email != "" {
+		identifier = simpleReq.Email
+		password = simpleReq.Password
+		deviceInfo = "Web Browser"
+	} else {
+		identifier = enhancedReq.EmailOrUsername
+		password = enhancedReq.Password
+		deviceInfo = enhancedReq.DeviceInfo
 	}
 
-	// Find user
+	// Find user by email or username
 	var user models.User
-	if err := ac.DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
+	if err := ac.DB.Where("username = ? OR email = ?", identifier, identifier).First(&user).Error; err != nil {
+		ac.logAuthAttempt(identifier, false, models.FailureReasonInvalidCredentials, c.ClientIP(), c.Request.UserAgent())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
 	// Check if user is active
 	if !user.IsActive {
+		ac.logAuthAttempt(identifier, false, models.FailureReasonAccountDisabled, c.ClientIP(), c.Request.UserAgent())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Account is deactivated"})
 		return
 	}
 
 	// Verify password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		ac.logAuthAttempt(identifier, false, models.FailureReasonInvalidCredentials, c.ClientIP(), c.Request.UserAgent())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Generate token
-	token, err := middleware.GenerateToken(user)
+	// Initialize JWT Manager
+	jw := middleware.NewJWTManager(ac.DB)
+
+	// Generate token pair
+	tokens, err := jw.GenerateTokenPair(user, deviceInfo, c.ClientIP())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
 
-	response := models.LoginResponse{
-		Token: token,
-		User:  user,
+	ac.logAuthAttempt(identifier, true, "", c.ClientIP(), c.Request.UserAgent())
+	
+	// Convert role to uppercase for frontend compatibility
+	userWithUppercaseRole := tokens.User
+	userWithUppercaseRole.Role = convertRoleToUppercase(userWithUppercaseRole.Role)
+	
+	// Return response in format expected by frontend
+	c.JSON(http.StatusOK, gin.H{
+		"token":        tokens.AccessToken,
+		"refreshToken": tokens.RefreshToken,
+		"user":         userWithUppercaseRole,
+		"message":      "Login successful",
+	})
+}
+
+// Log authentication attempts
+func (ac *AuthController) logAuthAttempt(identifier string, success bool, reason, ipAddress, userAgent string) {
+	authAttempt := models.AuthAttempt{
+		Email:         identifier,
+		Username:      identifier,
+		Success:       success,
+		FailureReason: reason,
+		IPAddress:     ipAddress,
+		UserAgent:     userAgent,
+		AttemptedAt:   time.Now(),
+	}
+	
+	ac.DB.Create(&authAttempt)
+}
+
+func (ac *AuthController) RefreshToken(c *gin.Context) {
+	var req models.RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
+	jw := middleware.NewJWTManager(ac.DB)
+	tokens, err := jw.RefreshAccessToken(req.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
+		return
+	}
+
+	// Convert role to uppercase for frontend compatibility
+	userWithUppercaseRole := tokens.User
+	userWithUppercaseRole.Role = convertRoleToUppercase(userWithUppercaseRole.Role)
+
+	// Update tokens with uppercase role
+	updatedTokens := *tokens
+	updatedTokens.User = userWithUppercaseRole
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Login successful",
-		"data":    response,
+		"token":        updatedTokens.AccessToken,
+		"refreshToken": updatedTokens.RefreshToken,
+		"user":         userWithUppercaseRole,
+		"message":      "Token refreshed successfully",
 	})
 }
 
@@ -129,6 +257,9 @@ func (ac *AuthController) Profile(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
+
+	// Convert role to uppercase for frontend compatibility
+	user.Role = convertRoleToUppercase(user.Role)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Profile retrieved successfully",

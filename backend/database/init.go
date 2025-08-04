@@ -28,6 +28,15 @@ func RunMigrations(db *gorm.DB) {
 		&models.User{},
 		&models.CompanyProfile{},
 		
+		// Auth models
+		&models.RefreshToken{},
+		&models.UserSession{},
+		&models.BlacklistedToken{},
+		&models.AuthAttempt{},
+		&models.RateLimitRecord{},
+		&models.Permission{},
+		&models.RolePermission{},
+		
 		// Accounting models
 		&models.Account{},
 		&models.Transaction{},

@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"net/http"
 	"app-sistem-akuntansi/controllers"
 	"app-sistem-akuntansi/middleware"
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	// Controllers
 	authController := controllers.NewAuthController(db)
 	productController := controllers.NewProductController(db)
+	
+	// Initialize JWT Manager
+	jwtManager := middleware.NewJWTManager(db)
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -20,11 +24,12 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 		{
 			auth.POST("/login", authController.Login)
 			auth.POST("/register", authController.Register)
+			auth.POST("/refresh", authController.RefreshToken)
 		}
 
 		// Protected routes (auth required)
 		protected := v1.Group("")
-		protected.Use(middleware.AuthRequired())
+		protected.Use(jwtManager.AuthRequired())
 		{
 			// Profile routes
 			protected.GET("/profile", authController.Profile)
@@ -98,10 +103,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	}
 
 	// Health check endpoint
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":  "ok",
-			"message": "Server is running",
-		})
+	v1.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 }
