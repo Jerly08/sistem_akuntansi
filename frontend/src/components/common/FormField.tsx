@@ -14,6 +14,7 @@ interface FormFieldProps {
   options?: { value: string | number; label: string }[];
   className?: string;
   disabled?: boolean;
+  name?: string;
 }
 
 const FormField: React.FC<FormFieldProps> = ({
@@ -28,6 +29,7 @@ const FormField: React.FC<FormFieldProps> = ({
   options,
   className = '',
   disabled = false,
+  name,
 }) => {
   const baseInputClasses = `w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
     error ? 'border-red-500' : 'border-gray-300'
@@ -39,6 +41,7 @@ const FormField: React.FC<FormFieldProps> = ({
         return (
           <textarea
             id={id}
+            name={name || id}
             value={value}
             onChange={onChange}
             placeholder={placeholder}
@@ -51,6 +54,7 @@ const FormField: React.FC<FormFieldProps> = ({
         return (
           <select
             id={id}
+            name={name || id}
             value={value}
             onChange={onChange}
             required={required}
@@ -69,6 +73,7 @@ const FormField: React.FC<FormFieldProps> = ({
         return (
           <input
             id={id}
+            name={name || id}
             type={type}
             value={value}
             onChange={onChange}

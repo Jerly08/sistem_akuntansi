@@ -103,6 +103,7 @@ type AccountCreateRequest struct {
 }
 
 type AccountUpdateRequest struct {
+	Code        string `json:"code" binding:"max=20"`
 	Name        string `json:"name" binding:"required,max=100"`
 	Description string `json:"description"`
 	Category    string `json:"category"`

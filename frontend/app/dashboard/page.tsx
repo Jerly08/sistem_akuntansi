@@ -128,7 +128,7 @@ export default function DashboardPage() {
 
   // Handle unauthorized role redirect
   useEffect(() => {
-    if (user && !loading && !['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'DIRECTOR', 'EMPLOYEE', 'OPERATIONAL_USER', 'AUDITOR'].includes(user.role)) {
+    if (user && !loading && !['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'DIRECTOR', 'EMPLOYEE'].includes(user.role)) {
       setRedirecting(true);
       router.push('/unauthorized');
     }
@@ -169,10 +169,6 @@ export default function DashboardPage() {
         return <DirectorDashboard />;
       case 'EMPLOYEE':
         return <EmployeeDashboard />;
-      case 'OPERATIONAL_USER':
-        return <EmployeeDashboard />; // Similar to employee for now
-      case 'AUDITOR':
-        return <DirectorDashboard />; // Similar to director with read-only access
       default:
         // Don't call router.push here, it's handled in useEffect
         return (
@@ -187,7 +183,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <DynamicLayout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR', 'INVENTORY_MANAGER', 'EMPLOYEE', 'OPERATIONAL_USER', 'AUDITOR']}>
+    <DynamicLayout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR', 'INVENTORY_MANAGER', 'EMPLOYEE']}>
       {renderDashboardByRole()}
     </DynamicLayout>
   );

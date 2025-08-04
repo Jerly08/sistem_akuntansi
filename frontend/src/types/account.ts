@@ -27,6 +27,7 @@ export interface AccountCreateRequest {
 }
 
 export interface AccountUpdateRequest {
+  code?: string;
   name: string;
   description?: string;
   category?: string;

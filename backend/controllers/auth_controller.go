@@ -32,10 +32,6 @@ func convertRoleToUppercase(role string) string {
 		return "INVENTORY_MANAGER"
 	case "employee":
 		return "EMPLOYEE"
-	case "auditor":
-		return "AUDITOR"
-	case "operational_user":
-		return "OPERATIONAL_USER"
 	default:
 		return strings.ToUpper(role)
 	}
@@ -54,10 +50,6 @@ func convertRoleToLowercase(role string) string {
 		return "inventory_manager"
 	case "EMPLOYEE":
 		return "employee"
-	case "AUDITOR":
-		return "auditor"
-	case "OPERATIONAL_USER":
-		return "operational_user"
 	default:
 		return strings.ToLower(role)
 	}

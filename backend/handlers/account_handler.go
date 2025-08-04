@@ -3,11 +3,14 @@ package handlers
 import (
 	"encoding/csv"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
+	"app-sistem-akuntansi/services"
 	"app-sistem-akuntansi/utils"
 	"github.com/gin-gonic/gin"
 )
@@ -15,12 +18,14 @@ import (
 // AccountHandler handles account-related operations
 type AccountHandler struct {
 	repo repositories.AccountRepository
+	exportService services.ExportService
 }
 
 // NewAccountHandler creates a new account handler
-func NewAccountHandler(repo repositories.AccountRepository) *AccountHandler {
+func NewAccountHandler(repo repositories.AccountRepository, exportService services.ExportService) *AccountHandler {
 	return &AccountHandler{
 		repo: repo,
+		exportService: exportService,
 	}
 }
 
@@ -68,15 +73,21 @@ func (h *AccountHandler) GetAccount(c *gin.Context) {
 // UpdateAccount updates an account
 func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 	code := c.Param("code")
+	log.Printf("UpdateAccount called with code: %s", code)
+	
 	var req models.AccountUpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("Failed to bind JSON: %v", err)
 		appError := utils.NewBadRequestError("Invalid request payload")
 		c.JSON(appError.StatusCode, appError.ToErrorResponse(""))
 		return
 	}
+	
+	log.Printf("Update request data: %+v", req)
 
 	account, err := h.repo.Update(c.Request.Context(), code, &req)
 	if err != nil {
+		log.Printf("Failed to update account: %v", err)
 		if appErr := utils.GetAppError(err); appErr != nil {
 			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))
 		} else {
@@ -85,7 +96,8 @@ func (h *AccountHandler) UpdateAccount(c *gin.Context) {
 		}
 		return
 	}
-
+	
+	log.Printf("Account updated successfully: %+v", account)
 	c.JSON(http.StatusOK, gin.H{"data": account})
 }
 
@@ -240,3 +252,46 @@ func (h *AccountHandler) ImportAccounts(c *gin.Context) {
 	})
 }
 
+// ExportAccountsPDF exports accounts to PDF
+func (h *AccountHandler) ExportAccountsPDF(c *gin.Context) {
+	pdfData, err := h.exportService.ExportAccountsPDF(c.Request.Context())
+	if err != nil {
+		if appErr := utils.GetAppError(err); appErr != nil {
+			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))
+		} else {
+			internalErr := utils.NewInternalError("Failed to generate PDF", err)
+			c.JSON(internalErr.StatusCode, internalErr.ToErrorResponse(""))
+		}
+		return
+	}
+
+	// Set headers for PDF download
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=chart_of_accounts_%s.pdf", time.Now().Format("20060102_150405")))
+	c.Header("Content-Length", fmt.Sprintf("%d", len(pdfData)))
+
+	// Write PDF data
+	c.Data(http.StatusOK, "application/pdf", pdfData)
+}
+
+// ExportAccountsExcel exports accounts to Excel
+func (h *AccountHandler) ExportAccountsExcel(c *gin.Context) {
+	excelData, err := h.exportService.ExportAccountsExcel(c.Request.Context())
+	if err != nil {
+		if appErr := utils.GetAppError(err); appErr != nil {
+			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))
+		} else {
+			internalErr := utils.NewInternalError("Failed to generate Excel", err)
+			c.JSON(internalErr.StatusCode, internalErr.ToErrorResponse(""))
+		}
+		return
+	}
+
+	// Set headers for Excel download
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=chart_of_accounts_%s.xlsx", time.Now().Format("20060102_150405")))
+	c.Header("Content-Length", fmt.Sprintf("%d", len(excelData)))
+
+	// Write Excel data
+	c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelData)
+}

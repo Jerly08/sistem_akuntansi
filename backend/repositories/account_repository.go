@@ -96,7 +96,20 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 		return nil, utils.NewDatabaseError("find account", err)
 	}
 
+	// Check if new code already exists (if code is being changed)
+	if req.Code != "" && req.Code != code {
+		var existingAccount models.Account
+		if err := r.DB.WithContext(ctx).Where("code = ? AND id != ?", req.Code, account.ID).First(&existingAccount).Error; err == nil {
+			return nil, utils.NewConflictError("Account code already exists")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, utils.NewDatabaseError("check existing code", err)
+		}
+	}
+
 	// Update fields
+	if req.Code != "" {
+		account.Code = req.Code
+	}
 	account.Name = req.Name
 	account.Description = req.Description
 	account.Category = req.Category

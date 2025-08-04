@@ -264,10 +264,6 @@ func (rm *RBACManager) InventoryManagerOrAdmin() gin.HandlerFunc {
 	return rm.RequireRole(models.RoleAdmin, models.RoleInventoryManager)
 }
 
-// AuditorOrAdmin restricts access to auditor and admin users
-func (rm *RBACManager) AuditorOrAdmin() gin.HandlerFunc {
-	return rm.RequireRole(models.RoleAdmin, models.RoleAuditor)
-}
 
 // Custom permission checkers for specific resources
 
@@ -295,7 +291,6 @@ func (rm *RBACManager) CanAccessReports() gin.HandlerFunc {
 		models.RoleAdmin,
 		models.RoleDirector,
 		models.RoleFinance,
-		models.RoleAuditor,
 	)
 }
 

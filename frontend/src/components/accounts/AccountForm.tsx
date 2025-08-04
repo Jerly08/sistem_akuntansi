@@ -4,23 +4,12 @@ import React, { useState, useEffect } from 'react';
 import FormField from '../common/FormField';
 import { Button } from '@chakra-ui/react';
 
-// Define the Account type based on the Prisma schema
-interface Account {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-  type: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
-  subType?: string;
-  parentAccountId?: string;
-  active: boolean;
-  balance: number;
-}
+import { Account, AccountCreateRequest, AccountUpdateRequest } from '@/types/account';
 
 interface AccountFormProps {
-  account?: Partial<Account>;
+  account?: Account;
   parentAccounts?: Account[];
-  onSubmit: (data: Partial<Account>) => void;
+  onSubmit: (data: AccountCreateRequest | AccountUpdateRequest) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
 }
@@ -32,16 +21,31 @@ const AccountForm: React.FC<AccountFormProps> = ({
   onCancel,
   isSubmitting = false,
 }) => {
-  const [formData, setFormData] = useState<Partial<Account>>({
+  const [formData, setFormData] = useState<any>({
     code: '',
     name: '',
     description: '',
     type: 'ASSET',
-    subType: '',
-    parentAccountId: '',
-    active: true,
-    ...account,
+    category: '',
+    parent_id: null,
+    opening_balance: 0,
+    is_active: true,
+    // Convert from account if provided
+    ...(account && {
+      code: account.code,
+      name: account.name,
+      description: account.description,
+      type: account.type,
+      category: account.category,
+      parent_id: account.parent_id,
+      is_active: account.is_active,
+    }),
   });
+
+  // Debug log for form data changes
+  useEffect(() => {
+    console.log('Form data updated:', formData);
+  }, [formData]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -52,10 +56,20 @@ const AccountForm: React.FC<AccountFormProps> = ({
       name: '',
       description: '',
       type: 'ASSET',
-      subType: '',
-      parentAccountId: '',
-      active: true,
-      ...account,
+      category: '',
+      parent_id: null,
+      opening_balance: 0,
+      is_active: true,
+      // Convert from account if provided
+      ...(account && {
+        code: account.code,
+        name: account.name,
+        description: account.description,
+        type: account.type,
+        category: account.category,
+        parent_id: account.parent_id,
+        is_active: account.is_active,
+      }),
     });
   }, [account]);
 
@@ -64,12 +78,23 @@ const AccountForm: React.FC<AccountFormProps> = ({
   ) => {
     const { name, value, type } = e.target;
     
+    console.log('Form change:', { name, value, type }); // Debug log
+    
     // Handle checkbox inputs
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       setFormData((prev) => ({ ...prev, [name]: checked }));
     } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
+      // Handle special field mappings
+      let fieldValue: any = value;
+      if (name === 'parent_id' && value === '') {
+        fieldValue = null;
+      } else if (name === 'parent_id' && value !== '') {
+        fieldValue = parseInt(value);
+      } else if (name === 'opening_balance') {
+        fieldValue = parseFloat(value) || 0;
+      }
+      setFormData((prev) => ({ ...prev, [name]: fieldValue }));
     }
     
     // Clear error when field is edited
@@ -151,28 +176,38 @@ const AccountForm: React.FC<AccountFormProps> = ({
         />
         
         <FormField
-          id="subType"
-          label="Sub Type"
-          value={formData.subType || ''}
+          id="category"
+          label="Category"
+          value={formData.category || ''}
           onChange={handleChange}
-          placeholder="Enter sub type"
-          name="subType"
+          placeholder="Enter category"
+          name="category"
         />
         
         <FormField
-          id="parentAccountId"
+          id="parent_id"
           label="Parent Account"
           type="select"
-          value={formData.parentAccountId || ''}
+          value={formData.parent_id || ''}
           onChange={handleChange}
           options={[
             { value: '', label: 'No Parent (Top Level)' },
             ...parentAccounts.map((parent) => ({
-              value: parent.id,
+              value: parent.id.toString(),
               label: `${parent.code} - ${parent.name}`,
             })),
           ]}
-          name="parentAccountId"
+          name="parent_id"
+        />
+        
+        <FormField
+          id="opening_balance"
+          label="Opening Balance"
+          type="number"
+          value={formData.opening_balance || ''}
+          onChange={handleChange}
+          placeholder="Enter opening balance"
+          name="opening_balance"
         />
         
         <div className="md:col-span-2">
@@ -189,14 +224,14 @@ const AccountForm: React.FC<AccountFormProps> = ({
         
         <div className="flex items-center">
           <input
-            id="active"
+            id="is_active"
             type="checkbox"
-            checked={formData.active}
+            checked={formData.is_active}
             onChange={handleChange}
             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            name="active"
+            name="is_active"
           />
-          <label htmlFor="active" className="ml-2 block text-sm text-gray-700">
+          <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700">
             Active
           </label>
         </div>

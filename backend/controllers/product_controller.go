@@ -3,10 +3,12 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"time"
 	"app-sistem-akuntansi/models"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
 
 type ProductController struct {
 	DB *gorm.DB
@@ -59,6 +61,95 @@ func (pc *ProductController) GetProduct(c *gin.Context) {
 		"message": "Product retrieved successfully",
 		"data":    product,
 	})
+}
+
+// AdjustStock handles stock adjustments for products
+func (pc *ProductController) AdjustStock(c *gin.Context) {
+	var input struct {
+		ProductID uint `json:"product_id" binding:"required"`
+		Quantity  int  `json:"quantity" binding:"required"`
+		Type      string `json:"type" binding:"required,oneof=IN OUT"`
+		Notes     string `json:"notes"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	product := models.Product{}
+	if err := pc.DB.First(&product, input.ProductID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
+		return
+	}
+
+	inventory := models.Inventory{
+		ProductID:     input.ProductID,
+		Type:          input.Type,
+		Quantity:      input.Quantity,
+		TransactionDate: time.Now(),
+		Notes:         input.Notes,
+	}
+
+	if err := pc.DB.Save(&inventory).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save inventory adjustment"})
+		return
+	}
+
+	if input.Type == models.InventoryTypeIn {
+		product.Stock += input.Quantity
+	} else if input.Type == models.InventoryTypeOut {
+		product.Stock -= input.Quantity
+	}
+
+	if err := pc.DB.Save(&product).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product stock"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Stock adjusted successfully", "product": product})
+}
+
+// Opname processes stock opname
+func (pc *ProductController) Opname(c *gin.Context) {
+	var input struct {
+		ProductID uint `json:"product_id" binding:"required"`
+		NewStock  int  `json:"new_stock" binding:"required"`
+		Notes     string `json:"notes"`
+	}
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	product := models.Product{}
+	if err := pc.DB.First(&product, input.ProductID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
+		return
+	}
+
+	inventory := models.Inventory{
+		ProductID:     input.ProductID,
+		Type:          models.InventoryTypeIn,
+		Quantity:      input.NewStock - product.Stock,
+		TransactionDate: time.Now(),
+		Notes:         input.Notes,
+	}
+
+	if err := pc.DB.Save(&inventory).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save inventory opname"})
+		return
+	}
+
+	product.Stock = input.NewStock
+
+	if err := pc.DB.Save(&product).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product stock"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Stock opname processed successfully", "product": product})
 }
 
 func (pc *ProductController) CreateProduct(c *gin.Context) {

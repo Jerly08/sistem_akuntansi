@@ -3,7 +3,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
 // Define user type
-export type UserRole = 'ADMIN' | 'FINANCE' | 'INVENTORY_MANAGER' | 'DIRECTOR' | 'EMPLOYEE' | 'OPERATIONAL_USER' | 'AUDITOR';
+export type UserRole = 'ADMIN' | 'FINANCE' | 'INVENTORY_MANAGER' | 'DIRECTOR' | 'EMPLOYEE';
 
 export interface User {
   id: string;

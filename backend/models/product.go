@@ -5,6 +5,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// Inventory Valuation Method Constants
+const (
+	ValuationFIFO    = "FIFO"
+	ValuationLIFO    = "LIFO"
+	ValuationAverage = "Average"
+)
+
 type Product struct {
 	ID            uint           `json:"id" gorm:"primaryKey"`
 	Code          string         `json:"code" gorm:"unique;not null;size:20"`
@@ -16,6 +23,7 @@ type Product struct {
 	Unit          string         `json:"unit" gorm:"not null;size:20"` // pcs, kg, liter, etc
 	PurchasePrice float64        `json:"purchase_price" gorm:"type:decimal(15,2);default:0"`
 	SalePrice     float64        `json:"sale_price" gorm:"type:decimal(15,2);default:0"`
+	PricingTier   string         `json:"pricing_tier" gorm:"size:100"`
 	Stock         int            `json:"stock" gorm:"default:0"`
 	MinStock      int            `json:"min_stock" gorm:"default:0"`
 	MaxStock      int            `json:"max_stock" gorm:"default:0"`
@@ -37,6 +45,37 @@ type Product struct {
 	SaleItems     []SaleItem       `json:"-" gorm:"foreignKey:ProductID"`
 	PurchaseItems []PurchaseItem   `json:"-" gorm:"foreignKey:ProductID"`
 	Inventories   []Inventory      `json:"-" gorm:"foreignKey:ProductID"`
+	Variants      []ProductVariant `json:"variants,omitempty" gorm:"foreignKey:ProductID"`
+}
+
+type ProductVariant struct {
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	ProductID   uint           `json:"product_id" gorm:"not null;index"`
+	Name        string         `json:"name" gorm:"size:100;not null"`
+	SKU         string         `json:"sku" gorm:"size:50"`
+	Price       float64        `json:"price" gorm:"type:decimal(15,2);default:0"`
+	Stock       int            `json:"stock" gorm:"default:0"`
+	IsActive    bool           `json:"is_active" gorm:"default:true"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	Product Product `json:"product" gorm:"foreignKey:ProductID"`
+}
+
+type ProductBundle struct {
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	ProductID   uint           `json:"product_id" gorm:"not null;index"`
+	BundleProductID uint       `json:"bundle_product_id" gorm:"not null;index"`
+	Quantity    int            `json:"quantity" gorm:"not null;default:1"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	Product       Product `json:"product" gorm:"foreignKey:ProductID"`
+	BundleProduct Product `json:"bundle_product" gorm:"foreignKey:BundleProductID"`
 }
 
 type ProductCategory struct {
