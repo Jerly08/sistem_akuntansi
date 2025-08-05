@@ -23,6 +23,11 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	exportService := services.NewExportService(accountRepo)
 	accountHandler := handlers.NewAccountHandler(accountRepo, exportService)
 	
+	// Contact repositories, services and controllers
+	contactRepo := repositories.NewContactRepository(db)
+	contactService := services.NewContactService(contactRepo)
+	contactController := controllers.NewContactController(contactService)
+	
 	// Initialize JWT Manager
 	jwtManager := middleware.NewJWTManager(db)
 
@@ -84,6 +89,25 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				// Export routes
 				accounts.GET("/export/pdf", middleware.RoleRequired("admin", "finance"), accountHandler.ExportAccountsPDF)
 				accounts.GET("/export/excel", middleware.RoleRequired("admin", "finance"), accountHandler.ExportAccountsExcel)
+			}
+
+			// Contact routes
+			contacts := protected.Group("/contacts")
+			{
+				// Basic CRUD operations
+				contacts.GET("", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.GetContacts)
+				contacts.GET("/:id", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.GetContact)
+				contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.CreateContact)
+				contacts.PUT("/:id", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.UpdateContact)
+				contacts.DELETE("/:id", middleware.RoleRequired("admin"), contactController.DeleteContact)
+				
+				// Advanced operations
+				contacts.GET("/type/:type", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.GetContactsByType)
+				contacts.GET("/search", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.SearchContacts)
+				
+				// Import/Export operations
+				contacts.POST("/import", middleware.RoleRequired("admin"), contactController.ImportContacts)
+				contacts.GET("/export", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.ExportContacts)
 			}
 
 			// Sales routes

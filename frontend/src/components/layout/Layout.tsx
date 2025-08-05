@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useAuthService } from '@/hooks/useAuthService';
 import {
   Box,
   Flex,
@@ -16,8 +17,9 @@ interface LayoutProps {
   children: React.ReactNode;
   allowedRoles?: UserRole[];
 }
-
 const Layout: React.FC<LayoutProps> = ({ children, allowedRoles = [] }) => {
+  useAuthService(); // Setup unauthorized handler
+
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   

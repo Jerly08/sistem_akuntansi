@@ -16,7 +16,7 @@ func SeedData(db *gorm.DB) {
 	seedAccounts(db)
 	
 	// Seed Contacts
-	seedContacts(db)
+	SeedContacts(db)
 	
 	// Seed Product Categories
 	seedProductCategories(db)

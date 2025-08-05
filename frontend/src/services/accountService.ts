@@ -11,7 +11,17 @@ import {
 // Base API URL - should be moved to environment variables
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+// Type for the unauthorized handler callback
+type UnauthorizedHandler = () => void;
+
 class AccountService {
+  private unauthorizedHandler?: UnauthorizedHandler;
+
+  // Set the unauthorized handler (to be called from components)
+  setUnauthorizedHandler(handler: UnauthorizedHandler) {
+    this.unauthorizedHandler = handler;
+  }
+
   private getHeaders(token?: string): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -35,6 +45,11 @@ class AccountService {
           code: 'NETWORK_ERROR',
         };
       }
+      
+      if (response.status === 401 && this.unauthorizedHandler) {
+        this.unauthorizedHandler();
+      }
+
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
     
@@ -173,6 +188,11 @@ class AccountService {
           code: 'NETWORK_ERROR',
         };
       }
+      
+      if (response.status === 401 && this.unauthorizedHandler) {
+        this.unauthorizedHandler();
+      }
+      
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
     
@@ -196,6 +216,11 @@ class AccountService {
           code: 'NETWORK_ERROR',
         };
       }
+      
+      if (response.status === 401 && this.unauthorizedHandler) {
+        this.unauthorizedHandler();
+      }
+      
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
     

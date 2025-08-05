@@ -24,10 +24,11 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<boolean>;
+  handleUnauthorized: () => void;
 }
 
 // Create context
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // API URL - ensure this is correctly defined
 const API_URL = 'http://localhost:8080/api/v1';
@@ -166,9 +167,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+// Handle unauthorized access (e.g., invalid token)
+  const handleUnauthorized = () => {
+    console.error('Unauthorized access, logging out...');
+    logout();
+  };
+
   // Logout function
   const logout = () => {
     clearAuthData();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   };
 
   // Check if user is authenticated
@@ -225,6 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         checkAuth,
+        handleUnauthorized
       }}
     >
       {children}

@@ -51,6 +51,8 @@ func RunMigrations(db *gorm.DB) {
 		// Contact models
 		&models.Contact{},
 		&models.ContactAddress{},
+		&models.ContactHistory{},
+		&models.CommunicationLog{},
 		
 		// Sales & Purchase models
 		&models.Sale{},
@@ -120,6 +122,11 @@ func CreateIndexes(db *gorm.DB) {
 	
 	// Contact indexes
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_contacts_type_category ON contacts(type, category)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_addresses_type_default ON contact_addresses(contact_id, type, is_default)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_history_contact_user ON contact_histories(contact_id, user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_contact_history_action_date ON contact_histories(action, created_at)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_communication_logs_contact_type ON communication_logs(contact_id, type)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_communication_logs_status_date ON communication_logs(status, created_at)")
 	
 	// Payment indexes
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_payments_date_contact ON payments(date, contact_id)")

@@ -73,3 +73,65 @@ const (
 	CategoryManufacturer  = "MANUFACTURER"
 	CategoryServiceProvider = "SERVICE_PROVIDER"
 )
+
+// ContactHistory tracks changes made to contacts
+type ContactHistory struct {
+	ID        uint           `json:"id" gorm:"primaryKey"`
+	ContactID uint           `json:"contact_id" gorm:"not null;index"`
+	UserID    uint           `json:"user_id" gorm:"not null;index"`
+	Action    string         `json:"action" gorm:"not null;size:50"` // CREATED, UPDATED, DELETED
+	Field     string         `json:"field" gorm:"size:100"`          // Field that was changed
+	OldValue  string         `json:"old_value" gorm:"type:text"`
+	NewValue  string         `json:"new_value" gorm:"type:text"`
+	Notes     string         `json:"notes" gorm:"type:text"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	Contact Contact `json:"-" gorm:"foreignKey:ContactID"`
+	User    User    `json:"user,omitempty" gorm:"foreignKey:UserID"`
+}
+
+// CommunicationLog tracks communication with contacts
+type CommunicationLog struct {
+	ID          uint           `json:"id" gorm:"primaryKey"`
+	ContactID   uint           `json:"contact_id" gorm:"not null;index"`
+	UserID      uint           `json:"user_id" gorm:"not null;index"`
+	Type        string         `json:"type" gorm:"not null;size:50"` // EMAIL, PHONE, MEETING, etc.
+	Subject     string         `json:"subject" gorm:"size:255"`
+	Content     string         `json:"content" gorm:"type:text"`
+	Direction   string         `json:"direction" gorm:"not null;size:20"` // INBOUND, OUTBOUND
+	Status      string         `json:"status" gorm:"default:'COMPLETED';size:20"` // COMPLETED, SCHEDULED, CANCELLED
+	ScheduledAt *time.Time     `json:"scheduled_at"`
+	CompletedAt *time.Time     `json:"completed_at"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	Contact Contact `json:"-" gorm:"foreignKey:ContactID"`
+	User    User    `json:"user,omitempty" gorm:"foreignKey:UserID"`
+}
+
+// Communication Types Constants
+const (
+	CommunicationTypeEmail   = "EMAIL"
+	CommunicationTypePhone   = "PHONE"
+	CommunicationTypeMeeting = "MEETING"
+	CommunicationTypeSMS     = "SMS"
+	CommunicationTypeChat    = "CHAT"
+)
+
+// Communication Direction Constants
+const (
+	DirectionInbound  = "INBOUND"
+	DirectionOutbound = "OUTBOUND"
+)
+
+// Communication Status Constants
+const (
+	StatusCompleted = "COMPLETED"
+	StatusScheduled = "SCHEDULED"
+	StatusCancelled = "CANCELLED"
+)
