@@ -17,6 +17,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	productController := controllers.NewProductController(db)
 	categoryController := controllers.NewCategoryController(db)
 	inventoryController := controllers.NewInventoryController(db)
+	assetController := controllers.NewAssetController(db)
 	
 	// Initialize repositories, services and handlers
 	accountRepo := repositories.NewAccountRepository(db)
@@ -137,9 +138,18 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 			// Assets routes
 			assets := protected.Group("/assets")
 			{
-				assets.GET("", func(c *gin.Context) {
-					c.JSON(200, gin.H{"message": "Assets endpoint - coming soon"})
-				})
+				// Basic CRUD operations
+				assets.GET("", middleware.RoleRequired("admin", "finance"), assetController.GetAssets)
+				assets.GET("/:id", middleware.RoleRequired("admin", "finance"), assetController.GetAsset)
+				assets.POST("", middleware.RoleRequired("admin"), assetController.CreateAsset)
+				assets.PUT("/:id", middleware.RoleRequired("admin"), assetController.UpdateAsset)
+				assets.DELETE("/:id", middleware.RoleRequired("admin"), assetController.DeleteAsset)
+				
+				// Reports and calculations
+				assets.GET("/summary", middleware.RoleRequired("admin", "finance", "director"), assetController.GetAssetsSummary)
+				assets.GET("/depreciation-report", middleware.RoleRequired("admin", "finance", "director"), assetController.GetDepreciationReport)
+				assets.GET("/:id/depreciation-schedule", middleware.RoleRequired("admin", "finance"), assetController.GetDepreciationSchedule)
+				assets.GET("/:id/calculate-depreciation", middleware.RoleRequired("admin", "finance"), assetController.CalculateCurrentDepreciation)
 			}
 
 			// Cash Bank routes

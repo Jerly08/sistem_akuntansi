@@ -18,13 +18,16 @@ type Asset struct {
     DepreciationMethod string    `json:"depreciation_method" gorm:"size:20"` // STRAIGHT_LINE, DECLINING_BALANCE
     IsActive      bool           `json:"is_active" gorm:"default:true"`
     Notes         string         `json:"notes" gorm:"type:text"`
+    Location      string         `json:"location" gorm:"size:100"`
+    SerialNumber  string         `json:"serial_number" gorm:"size:50"`
+    Condition     string         `json:"condition" gorm:"size:20;default:'Good'"`
     CreatedAt     time.Time      `json:"created_at"`
     UpdatedAt     time.Time      `json:"updated_at"`
     DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
 
     // Relations
-    AssetAccountID     uint      `json:"asset_account_id" gorm:"index"`
-    DepreciationAccountID uint   `json:"depreciation_account_id" gorm:"index"`
+    AssetAccountID     *uint     `json:"asset_account_id" gorm:"index"`
+    DepreciationAccountID *uint  `json:"depreciation_account_id" gorm:"index"`
     AccumulatedDepreciation float64 `json:"accumulated_depreciation" gorm:"type:decimal(15,2);default:0"`
     AssetAccount    *Account     `json:"asset_account" gorm:"foreignKey:AssetAccountID"`
     DepreciationAccount *Account `json:"depreciation_account" gorm:"foreignKey:DepreciationAccountID"`
