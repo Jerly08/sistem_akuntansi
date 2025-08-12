@@ -1,0 +1,512 @@
+package repositories
+
+import (
+	"fmt"
+	"strings"
+	"time"
+	"app-sistem-akuntansi/models"
+
+	"gorm.io/gorm"
+)
+
+type SalesRepository struct {
+	db *gorm.DB
+}
+
+func NewSalesRepository(db *gorm.DB) *SalesRepository {
+	return &SalesRepository{
+		db: db,
+	}
+}
+
+// Basic CRUD Operations
+
+func (r *SalesRepository) Create(sale *models.Sale) (*models.Sale, error) {
+	err := r.db.Create(sale).Error
+	if err != nil {
+		return nil, err
+	}
+	return r.FindByID(sale.ID)
+}
+
+func (r *SalesRepository) FindByID(id uint) (*models.Sale, error) {
+	var sale models.Sale
+	err := r.db.Preload("Customer").
+		Preload("Customer.Addresses").
+		Preload("User").
+		Preload("SalesPerson").
+		Preload("SaleItems").
+		Preload("SaleItems.Product").
+		Preload("SaleItems.RevenueAccount").
+		Preload("SaleItems.TaxAccount").
+		Preload("SalePayments").
+		Preload("SalePayments.CashBank").
+		Preload("SalePayments.Account").
+		Preload("SalePayments.User").
+		Preload("SaleReturns").
+		Preload("SaleReturns.ReturnItems").
+		Preload("SaleReturns.User").
+		First(&sale, id).Error
+	
+	if err != nil {
+		return nil, err
+	}
+	return &sale, nil
+}
+
+func (r *SalesRepository) Update(sale *models.Sale) (*models.Sale, error) {
+	err := r.db.Session(&gorm.Session{FullSaveAssociations: true}).Save(sale).Error
+	if err != nil {
+		return nil, err
+	}
+	return r.FindByID(sale.ID)
+}
+
+func (r *SalesRepository) Delete(id uint) error {
+	return r.db.Delete(&models.Sale{}, id).Error
+}
+
+// Query Operations with Filters
+
+func (r *SalesRepository) FindWithFilter(filter models.SalesFilter) ([]models.Sale, int64, error) {
+	var sales []models.Sale
+	var total int64
+
+	query := r.db.Model(&models.Sale{}).
+		Preload("Customer").
+		Preload("User").
+		Preload("SalesPerson").
+		Preload("SaleItems").
+		Preload("SalePayments")
+
+	// Apply filters
+	if filter.Status != "" {
+		query = query.Where("status = ?", filter.Status)
+	}
+
+	if filter.CustomerID != "" {
+		query = query.Where("customer_id = ?", filter.CustomerID)
+	}
+
+	if filter.StartDate != "" {
+		query = query.Where("date >= ?", filter.StartDate)
+	}
+
+	if filter.EndDate != "" {
+		query = query.Where("date <= ?", filter.EndDate)
+	}
+
+	if filter.Search != "" {
+		searchPattern := "%" + strings.ToLower(filter.Search) + "%"
+		query = query.Joins("JOIN contacts ON contacts.id = sales.customer_id").
+			Where("LOWER(sales.code) LIKE ? OR LOWER(sales.invoice_number) LIKE ? OR LOWER(contacts.name) LIKE ?",
+				searchPattern, searchPattern, searchPattern)
+	}
+
+	// Count total records
+	query.Count(&total)
+
+	// Apply pagination
+	offset := (filter.Page - 1) * filter.Limit
+	err := query.Offset(offset).Limit(filter.Limit).
+		Order("date DESC, created_at DESC").
+		Find(&sales).Error
+
+	return sales, total, err
+}
+
+func (r *SalesRepository) FindByCustomerID(customerID uint, page, limit int) ([]models.Sale, error) {
+	var sales []models.Sale
+	offset := (page - 1) * limit
+
+	err := r.db.Where("customer_id = ?", customerID).
+		Preload("SaleItems").
+		Preload("SaleItems.Product").
+		Preload("SalePayments").
+		Offset(offset).Limit(limit).
+		Order("date DESC").
+		Find(&sales).Error
+
+	return sales, err
+}
+
+func (r *SalesRepository) FindInvoicesByCustomerID(customerID uint) ([]models.Sale, error) {
+	var sales []models.Sale
+
+	err := r.db.Where("customer_id = ? AND invoice_number IS NOT NULL AND invoice_number != ''", customerID).
+		Preload("SaleItems").
+		Preload("SaleItems.Product").
+		Preload("SalePayments").
+		Order("date DESC").
+		Find(&sales).Error
+
+	return sales, err
+}
+
+func (r *SalesRepository) FindByDateRange(startDate, endDate string) ([]models.Sale, error) {
+	var sales []models.Sale
+
+	query := r.db.Preload("Customer").
+		Preload("SaleItems").
+		Preload("SaleItems.Product")
+
+	if startDate != "" {
+		query = query.Where("date >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("date <= ?", endDate)
+	}
+
+	err := query.Order("date DESC").Find(&sales).Error
+	return sales, err
+}
+
+// Payment Operations
+
+func (r *SalesRepository) CreatePayment(payment *models.SalePayment) (*models.SalePayment, error) {
+	err := r.db.Create(payment).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var createdPayment models.SalePayment
+	err = r.db.Preload("Sale").
+		Preload("CashBank").
+		Preload("Account").
+		Preload("User").
+		First(&createdPayment, payment.ID).Error
+
+	return &createdPayment, err
+}
+
+func (r *SalesRepository) FindPaymentsBySaleID(saleID uint) ([]models.SalePayment, error) {
+	var payments []models.SalePayment
+	err := r.db.Where("sale_id = ?", saleID).
+		Preload("CashBank").
+		Preload("Account").
+		Preload("User").
+		Order("date DESC").
+		Find(&payments).Error
+
+	return payments, err
+}
+
+// Return Operations
+
+func (r *SalesRepository) CreateReturn(saleReturn *models.SaleReturn) (*models.SaleReturn, error) {
+	err := r.db.Create(saleReturn).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var createdReturn models.SaleReturn
+	err = r.db.Preload("Sale").
+		Preload("User").
+		Preload("Approver").
+		First(&createdReturn, saleReturn.ID).Error
+
+	return &createdReturn, err
+}
+
+func (r *SalesRepository) CreateReturnItem(returnItem *models.SaleReturnItem) error {
+	return r.db.Create(returnItem).Error
+}
+
+func (r *SalesRepository) FindReturns(page, limit int) ([]models.SaleReturn, error) {
+	var returns []models.SaleReturn
+	offset := (page - 1) * limit
+
+	err := r.db.Preload("Sale").
+		Preload("Sale.Customer").
+		Preload("User").
+		Preload("ReturnItems").
+		Preload("ReturnItems.SaleItem").
+		Preload("ReturnItems.SaleItem.Product").
+		Offset(offset).Limit(limit).
+		Order("date DESC").
+		Find(&returns).Error
+
+	return returns, err
+}
+
+// Sale Item Operations
+
+func (r *SalesRepository) FindSaleItemByID(id uint) (*models.SaleItem, error) {
+	var item models.SaleItem
+	err := r.db.Preload("Product").
+		Preload("Sale").
+		First(&item, id).Error
+
+	return &item, err
+}
+
+// Counting Operations for Number Generation
+
+func (r *SalesRepository) CountByTypeAndYear(saleType string, year int) (int64, error) {
+	var count int64
+	startDate := fmt.Sprintf("%d-01-01", year)
+	endDate := fmt.Sprintf("%d-12-31", year)
+
+	err := r.db.Model(&models.Sale{}).
+		Where("type = ? AND date BETWEEN ? AND ?", saleType, startDate, endDate).
+		Count(&count).Error
+
+	return count, err
+}
+
+func (r *SalesRepository) CountInvoicesByMonth(year, month int) (int64, error) {
+	var count int64
+	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
+	endDate := fmt.Sprintf("%04d-%02d-31", year, month)
+
+	err := r.db.Model(&models.Sale{}).
+		Where("invoice_number IS NOT NULL AND invoice_number != '' AND date BETWEEN ? AND ?", 
+			startDate, endDate).
+		Count(&count).Error
+
+	return count, err
+}
+
+func (r *SalesRepository) CountQuotationsByMonth(year, month int) (int64, error) {
+	var count int64
+	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
+	endDate := fmt.Sprintf("%04d-%02d-31", year, month)
+
+	err := r.db.Model(&models.Sale{}).
+		Where("quotation_number IS NOT NULL AND quotation_number != '' AND date BETWEEN ? AND ?", 
+			startDate, endDate).
+		Count(&count).Error
+
+	return count, err
+}
+
+func (r *SalesRepository) CountPaymentsByMonth(year, month int) (int64, error) {
+	var count int64
+	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
+	endDate := fmt.Sprintf("%04d-%02d-31", year, month)
+
+	err := r.db.Model(&models.SalePayment{}).
+		Where("date BETWEEN ? AND ?", startDate, endDate).
+		Count(&count).Error
+
+	return count, err
+}
+
+func (r *SalesRepository) CountReturnsByMonth(year, month int) (int64, error) {
+	var count int64
+	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
+	endDate := fmt.Sprintf("%04d-%02d-31", year, month)
+
+	err := r.db.Model(&models.SaleReturn{}).
+		Where("date BETWEEN ? AND ?", startDate, endDate).
+		Count(&count).Error
+
+	return count, err
+}
+
+func (r *SalesRepository) CountCreditNotesByMonth(year, month int) (int64, error) {
+	var count int64
+	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
+	endDate := fmt.Sprintf("%04d-%02d-31", year, month)
+
+	err := r.db.Model(&models.SaleReturn{}).
+		Where("credit_note_number IS NOT NULL AND credit_note_number != '' AND date BETWEEN ? AND ?", 
+			startDate, endDate).
+		Count(&count).Error
+
+	return count, err
+}
+
+// Analytics and Reporting
+
+func (r *SalesRepository) GetSalesSummary(startDate, endDate string) (*models.SalesSummaryResponse, error) {
+	var result struct {
+		TotalSales       int64   `json:"total_sales"`
+		TotalAmount      float64 `json:"total_amount"`
+		TotalPaid        float64 `json:"total_paid"`
+		TotalOutstanding float64 `json:"total_outstanding"`
+	}
+
+	query := r.db.Model(&models.Sale{}).
+		Where("status != ?", models.SaleStatusCancelled)
+
+	if startDate != "" {
+		query = query.Where("date >= ?", startDate)
+	}
+	if endDate != "" {
+		query = query.Where("date <= ?", endDate)
+	}
+
+	err := query.Select(`
+		COUNT(*) as total_sales,
+		COALESCE(SUM(total_amount), 0) as total_amount,
+		COALESCE(SUM(paid_amount), 0) as total_paid,
+		COALESCE(SUM(outstanding_amount), 0) as total_outstanding
+	`).Scan(&result).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate average order value
+	avgOrderValue := 0.0
+	if result.TotalSales > 0 {
+		avgOrderValue = result.TotalAmount / float64(result.TotalSales)
+	}
+
+	// Get top customers
+	var topCustomers []models.CustomerSales
+	customerQuery := r.db.Model(&models.Sale{}).
+		Select(`
+			customer_id,
+			contacts.name as customer_name,
+			COALESCE(SUM(total_amount), 0) as total_amount,
+			COUNT(*) as total_orders
+		`).
+		Joins("JOIN contacts ON contacts.id = sales.customer_id").
+		Where("sales.status != ?", models.SaleStatusCancelled)
+
+	if startDate != "" {
+		customerQuery = customerQuery.Where("sales.date >= ?", startDate)
+	}
+	if endDate != "" {
+		customerQuery = customerQuery.Where("sales.date <= ?", endDate)
+	}
+
+	err = customerQuery.
+		Group("customer_id, contacts.name").
+		Order("total_amount DESC").
+		Limit(5).
+		Scan(&topCustomers).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.SalesSummaryResponse{
+		TotalSales:       result.TotalSales,
+		TotalAmount:      result.TotalAmount,
+		TotalPaid:        result.TotalPaid,
+		TotalOutstanding: result.TotalOutstanding,
+		AvgOrderValue:    avgOrderValue,
+		TopCustomers:     topCustomers,
+	}, nil
+}
+
+func (r *SalesRepository) GetSalesAnalytics(period, year string) (*models.SalesAnalyticsResponse, error) {
+	var data []models.SalesAnalyticsData
+
+	query := r.db.Model(&models.Sale{}).
+		Where("status != ? AND EXTRACT(YEAR FROM date) = ?", models.SaleStatusCancelled, year)
+
+	var groupBy, selectClause string
+	switch period {
+	case "daily":
+		selectClause = `
+			TO_CHAR(date, 'YYYY-MM-DD') as period,
+			COUNT(*) as total_sales,
+			COALESCE(SUM(total_amount), 0) as total_amount
+		`
+		groupBy = "TO_CHAR(date, 'YYYY-MM-DD')"
+	case "weekly":
+		selectClause = `
+			TO_CHAR(date, 'YYYY-"W"WW') as period,
+			COUNT(*) as total_sales,
+			COALESCE(SUM(total_amount), 0) as total_amount
+		`
+		groupBy = "TO_CHAR(date, 'YYYY-\"W\"WW')"
+	default: // monthly
+		selectClause = `
+			TO_CHAR(date, 'YYYY-MM') as period,
+			COUNT(*) as total_sales,
+			COALESCE(SUM(total_amount), 0) as total_amount
+		`
+		groupBy = "TO_CHAR(date, 'YYYY-MM')"
+	}
+
+	err := query.Select(selectClause).
+		Group(groupBy).
+		Order("period ASC").
+		Scan(&data).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate growth rates
+	for i := range data {
+		if i > 0 {
+			prevAmount := data[i-1].TotalAmount
+			currentAmount := data[i].TotalAmount
+			if prevAmount > 0 {
+				data[i].GrowthRate = ((currentAmount - prevAmount) / prevAmount) * 100
+			}
+		}
+	}
+
+	return &models.SalesAnalyticsResponse{
+		Period: period,
+		Data:   data,
+	}, nil
+}
+
+func (r *SalesRepository) GetReceivablesReport() (*models.ReceivablesReportResponse, error) {
+	var receivables []models.ReceivableItem
+	now := time.Now()
+
+	err := r.db.Model(&models.Sale{}).
+		Select(`
+			sales.id as sale_id,
+			sales.invoice_number,
+			contacts.name as customer_name,
+			sales.date,
+			sales.due_date,
+			sales.total_amount,
+			sales.paid_amount,
+			sales.outstanding_amount,
+			CASE 
+				WHEN sales.due_date < ? THEN EXTRACT(DAY FROM ? - sales.due_date)::int
+				ELSE 0
+			END as days_overdue,
+			sales.status
+		`, now, now).
+		Joins("JOIN contacts ON contacts.id = sales.customer_id").
+		Where("sales.outstanding_amount > 0 AND sales.status IN (?)", 
+			[]string{models.SaleStatusInvoiced, models.SaleStatusOverdue}).
+		Order("sales.due_date ASC").
+		Scan(&receivables).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate totals
+	var totalOutstanding, overdueAmount float64
+	for _, item := range receivables {
+		totalOutstanding += item.OutstandingAmount
+		if item.DaysOverdue > 0 {
+			overdueAmount += item.OutstandingAmount
+		}
+	}
+
+	return &models.ReceivablesReportResponse{
+		TotalOutstanding: totalOutstanding,
+		OverdueAmount:    overdueAmount,
+		Receivables:      receivables,
+	}, nil
+}
+
+// Product Repository Interface (temporary - should be moved to separate file)
+type ProductRepository struct {
+	db *gorm.DB
+}
+
+func NewProductRepository(db *gorm.DB) *ProductRepository {
+	return &ProductRepository{db: db}
+}
+
+func (r *ProductRepository) FindByID(id uint) (*models.Product, error) {
+	var product models.Product
+	err := r.db.First(&product, id).Error
+	return &product, err
+}

@@ -74,7 +74,7 @@ const SettingsPage: React.FC = () => {
   // Loading state - moved after all hooks
   if (loading) {
     return (
-      <Layout allowedRoles={['ADMIN']}>
+<Layout allowedRoles={['admin']}>
         <Box>
           <Spinner size="xl" thickness="4px" speed="0.65s" color="blue.500" />
           <Text ml={4}>Loading settings...</Text>
@@ -84,7 +84,7 @@ const SettingsPage: React.FC = () => {
   }
 
   return (
-    <Layout allowedRoles={['ADMIN']}>
+<Layout allowedRoles={['admin']}>
       <Box>
         <VStack spacing={6} alignItems="start">
           <HStack justify="space-between" width="full">

@@ -23,69 +23,76 @@ func InitializeDatabase(db *gorm.DB) {
 func RunMigrations(db *gorm.DB) {
 	log.Println("Running database migrations...")
 	
-	err := db.AutoMigrate(
-		// Core models
-		&models.User{},
-		&models.CompanyProfile{},
-		
-		// Auth models
-		&models.RefreshToken{},
-		&models.UserSession{},
-		&models.BlacklistedToken{},
-		&models.AuthAttempt{},
-		&models.RateLimitRecord{},
-		&models.Permission{},
-		&models.RolePermission{},
-		
-		// Accounting models
-		&models.Account{},
-		&models.Transaction{},
-		&models.Journal{},
-		&models.JournalEntry{},
-		
-		// Product & Inventory models
-		&models.ProductCategory{},
-		&models.Product{},
-		&models.Inventory{},
-		
-		// Contact models
-		&models.Contact{},
-		&models.ContactAddress{},
-		&models.ContactHistory{},
-		&models.CommunicationLog{},
-		
-		// Sales & Purchase models
-		&models.Sale{},
-		&models.SaleItem{},
-		&models.Purchase{},
-		&models.PurchaseItem{},
-		
-		// Payment & Cash Bank models
-		&models.Payment{},
-		&models.CashBank{},
-		&models.CashBankTransaction{},
-		
-		// Expense models
-		&models.ExpenseCategory{},
-		&models.Expense{},
-		
-		// Asset models
-		&models.Asset{},
-		
-		// Budget models
-		&models.Budget{},
-		&models.BudgetItem{},
-		&models.BudgetComparison{},
-		
-		// Report models
-		&models.Report{},
-		&models.ReportTemplate{},
-		&models.FinancialRatio{},
-		&models.AccountBalance{},
-		
-		// Audit models
-		&models.AuditLog{},
-	)
+		err := db.AutoMigrate(
+			// Core models
+			&models.User{},
+			&models.CompanyProfile{},
+			
+			// Auth models
+			&models.RefreshToken{},
+			&models.UserSession{},
+			&models.BlacklistedToken{},
+			&models.AuthAttempt{},
+			&models.RateLimitRecord{},
+			&models.Permission{},
+			&models.RolePermission{},
+			
+			// Approval models
+			&models.ApprovalWorkflow{},
+			&models.ApprovalStep{},
+			&models.ApprovalRequest{},
+			&models.ApprovalAction{},
+			&models.ApprovalHistory{},
+			
+			// Accounting models
+			&models.Account{},
+			&models.Transaction{},
+			&models.Journal{},
+			&models.JournalEntry{},
+			
+			// Product & Inventory models
+			&models.ProductCategory{},
+			&models.Product{},
+			&models.Inventory{},
+			
+			// Contact models
+			&models.Contact{},
+			&models.ContactAddress{},
+			&models.ContactHistory{},
+			&models.CommunicationLog{},
+			
+			// Sales & Purchase models
+			&models.Sale{},
+			&models.SaleItem{},
+			&models.Purchase{},
+			&models.PurchaseItem{},
+			
+			// Payment & Cash Bank models
+			&models.Payment{},
+			&models.CashBank{},
+			&models.CashBankTransaction{},
+			
+			// Expense models
+			&models.ExpenseCategory{},
+			&models.Expense{},
+			
+			// Asset models
+			&models.Asset{},
+			
+			// Budget models
+			&models.Budget{},
+			&models.BudgetItem{},
+			&models.BudgetComparison{},
+			
+			// Report models
+			&models.Report{},
+			&models.ReportTemplate{},
+			&models.FinancialRatio{},
+			&models.AccountBalance{},
+			
+			// Audit models
+			&models.AuditLog{},
+		)
 
 	if err != nil {
 		log.Fatalf("Database migration failed: %v", err)

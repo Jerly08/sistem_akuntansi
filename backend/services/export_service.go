@@ -122,7 +122,8 @@ func (s *ExportServiceImpl) ExportAccountsExcel(ctx context.Context) ([]byte, er
 	f := excelize.NewFile()
 	defer func() {
 		if err := f.Close(); err != nil {
-			fmt.Println(err)
+			// Log the error but don't fail the export
+			// In a production environment, you would use a proper logger here
 		}
 	}()
 

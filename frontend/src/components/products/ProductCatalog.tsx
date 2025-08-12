@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from '@/components/layout/Layout';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Box,
   Button,
@@ -38,6 +39,8 @@ import ProductService, { Product, Category } from '@/services/productService';
 import ProductForm from './ProductForm';
 
 const ProductCatalog: React.FC = () => {
+  const { user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'INVENTORY_MANAGER';
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -102,6 +105,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   const handleAddProductClick = () => {
+    if (!canEdit) return;
     setSelectedProduct(null);
     setIsModalOpen(true);
   };
@@ -243,15 +247,17 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   }, [products, searchTerm, categoryFilter, statusFilter, sortBy, sortOrder]);
 
   return (
-    <Layout allowedRoles={['ADMIN', 'INVENTORY_MANAGER']}>
+    <Layout allowedRoles={['ADMIN', 'INVENTORY_MANAGER', 'EMPLOYEE', 'FINANCE', 'DIRECTOR']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Box>
             <Heading as="h1" size="xl" mb={2}>Product Catalog</Heading>
           </Box>
-<Button leftIcon={<FiUpload />} colorScheme="brand" size="lg" onClick={handleAddProductClick}>
-            Add Product
-          </Button>
+          {canEdit && (
+            <Button leftIcon={<FiUpload />} colorScheme="brand" size="lg" onClick={handleAddProductClick}>
+              Add Product
+            </Button>
+          )}
         </Flex>
 
         {/* Search and Filters */}
@@ -363,50 +369,55 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                   >
                     View
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    leftIcon={<FiEdit />} 
-                    mr={2}
-                    onClick={() => handleEditProduct(product)}
-                  >
-                    Edit
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    colorScheme="red" 
-                    leftIcon={<FiTrash2 />} 
-                    mr={2}
-                    onClick={() => handleDeleteProduct(product)}
-                  >
-                    Delete
-                  </Button>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleFileChange(e, product.id!)}
-                    style={{ display: 'none' }}
-                    id={`file-upload-${product.id}`}
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    leftIcon={<FiUpload />}
-                    as="label"
-                    htmlFor={`file-upload-${product.id}`}
-                    cursor="pointer"
-                  >
-                    {product.image_path ? 'Update Image' : 'Upload Image'}
-                  </Button>
+                  {canEdit && (
+                    <>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        leftIcon={<FiEdit />} 
+                        mr={2}
+                        onClick={() => handleEditProduct(product)}
+                      >
+                        Edit
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        colorScheme="red" 
+                        leftIcon={<FiTrash2 />} 
+                        mr={2}
+                        onClick={() => handleDeleteProduct(product)}
+                      >
+                        Delete
+                      </Button>
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e, product.id!)}
+                        style={{ display: 'none' }}
+                        id={`file-upload-${product.id}`}
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        leftIcon={<FiUpload />}
+                        as="label"
+                        htmlFor={`file-upload-${product.id}`}
+                        cursor="pointer"
+                      >
+                        {product.image_path ? 'Update Image' : 'Upload Image'}
+                      </Button>
+                    </>
+                  )}
                 </Td>
               </Tr>
             ))}
           </Tbody>
         </Table>
 
-{/* Add/Edit Product Modal */}
-        <Modal isOpen={isModalOpen || !!selectedProduct} onClose={handleCloseModal} size="6xl">
+        {/* Add/Edit Product Modal */}
+        {canEdit && (
+          <Modal isOpen={isModalOpen || !!selectedProduct} onClose={handleCloseModal} size="6xl">
           <ModalOverlay />
           <ModalContent>
             <ModalHeader>
@@ -421,8 +432,9 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
               />
             </ModalBody>
           </ModalContent>
-        </Modal>
-
+          </Modal>
+        )}
+        
         {/* Product Details Modal */}
         <Modal isOpen={isDetailOpen} onClose={onDetailClose} size="4xl">
           <ModalOverlay />

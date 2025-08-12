@@ -76,3 +76,5 @@ go.work
 noted.txt
 .noted.txt
 *.noted.txt
+
+/backup

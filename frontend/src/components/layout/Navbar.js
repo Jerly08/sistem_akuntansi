@@ -18,8 +18,9 @@ import {
   useColorModeValue,
   Stack,
 } from '@chakra-ui/react';
-import { FiMenu, FiBell, FiChevronDown, FiX } from 'react-icons/fi';
+import { FiMenu, FiChevronDown, FiX } from 'react-icons/fi';
 import { useAuth } from '@/contexts/AuthContext';
+import ApprovalNotifications from '@/components/notification/ApprovalNotifications';
 
 const NavLink = ({ children }) => (
   <Box
@@ -63,14 +64,10 @@ const Navbar = ({ onMenuClick, sidebarCollapsed, onToggleSidebar, isMenuOpen = f
           
           <Flex alignItems="center">
             <Stack direction="row" spacing={3}>
-              <IconButton
-                size="sm"
-                icon={<FiBell />}
-                aria-label="Notifications"
-                variant="ghost"
-                colorScheme="brand"
-                display={{ base: 'none', sm: 'flex' }}
-              />
+              {/* Approval notifications dropdown with badge */}
+              <Box display={{ base: 'none', sm: 'flex' }}>
+                <ApprovalNotifications />
+              </Box>
               <Menu>
                 <MenuButton
                   as={Button}

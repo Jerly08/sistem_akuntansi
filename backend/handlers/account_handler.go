@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"app-sistem-akuntansi/services"
 	"app-sistem-akuntansi/utils"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // AccountHandler handles account-related operations
@@ -122,7 +124,6 @@ func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 // ListAccounts lists all accounts with optional filtering
 func (h *AccountHandler) ListAccounts(c *gin.Context) {
 	accountType := c.Query("type")
-	
 	var accounts []models.Account
 	var err error
 	
@@ -274,6 +275,53 @@ func (h *AccountHandler) ExportAccountsPDF(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", pdfData)
 }
 
+// GetAccountCatalog gets minimal account data for EXPENSE accounts (id, code, name, active)
+// This endpoint is specifically for EMPLOYEE role to select expense accounts in purchases
+func (h *AccountHandler) GetAccountCatalog(c *gin.Context) {
+	accountType := c.Query("type")
+	
+	// Only allow EXPENSE type for catalog to restrict access
+	if accountType != "EXPENSE" {
+		appError := utils.NewBadRequestError("Account catalog only supports EXPENSE type")
+		c.JSON(appError.StatusCode, appError.ToErrorResponse(""))
+		return
+	}
+	
+	accounts, err := h.repo.FindByType(c.Request.Context(), accountType)
+	if err != nil {
+		if appErr := utils.GetAppError(err); appErr != nil {
+			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))
+		} else {
+			internalErr := utils.NewInternalError("Failed to retrieve account catalog", err)
+			c.JSON(internalErr.StatusCode, internalErr.ToErrorResponse(""))
+		}
+		return
+	}
+	
+	// Return minimal data only - no balance or hierarchy
+	type AccountCatalogItem struct {
+		ID     uint   `json:"id"`
+		Code   string `json:"code"`
+		Name   string `json:"name"`
+		Active bool   `json:"active"`
+	}
+	
+	catalog := make([]AccountCatalogItem, 0, len(accounts))
+	for _, account := range accounts {
+		// Only include active expense accounts
+		if account.IsActive {
+			catalog = append(catalog, AccountCatalogItem{
+				ID:     account.ID,
+				Code:   account.Code,
+				Name:   account.Name,
+				Active: account.IsActive,
+			})
+		}
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"data": catalog, "count": len(catalog)})
+}
+
 // ExportAccountsExcel exports accounts to Excel
 func (h *AccountHandler) ExportAccountsExcel(c *gin.Context) {
 	excelData, err := h.exportService.ExportAccountsExcel(c.Request.Context())
@@ -294,4 +342,51 @@ func (h *AccountHandler) ExportAccountsExcel(c *gin.Context) {
 
 	// Write Excel data
 	c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelData)
+}
+
+// ValidateAccountCode checks if an account code is available
+func (h *AccountHandler) ValidateAccountCode(c *gin.Context) {
+	code := c.Query("code")
+	if code == "" {
+		appError := utils.NewBadRequestError("Account code is required")
+		c.JSON(appError.StatusCode, appError.ToErrorResponse(""))
+		return
+	}
+
+	excludeId := c.Query("exclude_id") // For updates
+
+	// Check if code exists
+	var account models.Account
+	query := h.repo.(*repositories.AccountRepo).DB.Where("code = ? AND deleted_at IS NULL", code)
+	if excludeId != "" {
+		if id, err := strconv.ParseUint(excludeId, 10, 32); err == nil {
+			query = query.Where("id != ?", uint(id))
+		}
+	}
+
+	err := query.First(&account).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Code is available
+			c.JSON(http.StatusOK, gin.H{
+				"available": true,
+				"message": "Account code is available",
+			})
+		} else {
+			internalErr := utils.NewInternalError("Failed to validate account code", err)
+			c.JSON(internalErr.StatusCode, internalErr.ToErrorResponse(""))
+		}
+		return
+	}
+
+	// Code is not available
+	c.JSON(http.StatusOK, gin.H{
+		"available": false,
+		"message": fmt.Sprintf("Account code '%s' is already used by: %s", code, account.Name),
+		"existing_account": gin.H{
+			"id": account.ID,
+			"code": account.Code,
+			"name": account.Name,
+		},
+	})
 }

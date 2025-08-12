@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Layout from '@/components/layout/Layout';
+import { useAuth } from '@/contexts/AuthContext';
 import { DataTable } from '@/components/common/DataTable';
 import {
   Box,
@@ -72,10 +73,12 @@ const columns = [
 ];
 
 const SalesPage: React.FC = () => {
+  const { user } = useAuth();
+  const canCreate = user?.role === 'ADMIN' || user?.role === 'FINANCE' || user?.role === 'DIRECTOR';
   const [sales, setSales] = useState(dummySales);
 
   return (
-    <Layout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR']}>
+<Layout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
       <Box>
         {/* Header */}
         <Flex justify="space-between" align="center" mb={6}>
@@ -83,9 +86,11 @@ const SalesPage: React.FC = () => {
             <Heading as="h1" size="xl" mb={2}>Sales</Heading>
             <Text color="gray.600">Manage your sales transactions</Text>
           </Box>
-          <Button leftIcon={<FiPlus />} colorScheme="brand" size="lg">
-            Create Invoice
-          </Button>
+          {canCreate && (
+            <Button leftIcon={<FiPlus />} colorScheme="brand" size="lg">
+              Create Invoice
+            </Button>
+          )}
         </Flex>
 
         {/* Search and Filters */}

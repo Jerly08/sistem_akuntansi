@@ -4,6 +4,7 @@ import {
   AccountUpdateRequest,
   AccountImportRequest,
   AccountSummaryResponse,
+  AccountCatalogItem,
   ApiResponse,
   ApiError
 } from '@/types/account';
@@ -69,6 +70,20 @@ class AccountService {
     });
     
     const result: ApiResponse<Account[]> = await this.handleResponse(response);
+    return result.data;
+  }
+
+  // Get account catalog (minimal data for EXPENSE accounts) - for EMPLOYEE role
+  async getAccountCatalog(token: string, type: string = 'EXPENSE'): Promise<AccountCatalogItem[]> {
+    const url = new URL(`${API_BASE_URL}/api/v1/accounts/catalog`);
+    url.searchParams.append('type', type);
+    
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders(token),
+    });
+    
+    const result: ApiResponse<AccountCatalogItem[]> = await this.handleResponse(response);
     return result.data;
   }
 
@@ -256,7 +271,24 @@ class AccountService {
   }
 
   // Helper: Get account type label
-  getAccountTypeLabel(type: string): string {
+  getAccountTypeLabel(type: string, useEnglish: boolean = false): string {
+    if (useEnglish) {
+      switch (type) {
+        case 'ASSET':
+          return 'Asset';
+        case 'LIABILITY':
+          return 'Liability';
+        case 'EQUITY':
+          return 'Equity';
+        case 'REVENUE':
+          return 'Revenue';
+        case 'EXPENSE':
+          return 'Expense';
+        default:
+          return type;
+      }
+    }
+    
     switch (type) {
       case 'ASSET':
         return 'Aktiva';
@@ -272,6 +304,31 @@ class AccountService {
         return type;
     }
   }
+
+  // Validate account code availability
+  async validateAccountCode(token: string, code: string, excludeId?: number): Promise<{
+    available: boolean;
+    message: string;
+    existing_account?: {
+      id: number;
+      code: string;
+      name: string;
+    };
+  }> {
+    const url = new URL(`${API_BASE_URL}/api/v1/accounts/validate-code`);
+    url.searchParams.append('code', code);
+    if (excludeId) {
+      url.searchParams.append('exclude_id', excludeId.toString());
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: this.getHeaders(token),
+    });
+
+    return this.handleResponse(response);
+  }
+
 }
 
 export const accountService = new AccountService();

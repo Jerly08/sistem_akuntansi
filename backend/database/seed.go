@@ -12,11 +12,13 @@ func SeedData(db *gorm.DB) {
 	// Seed Users
 	seedUsers(db)
 	
-	// Seed Chart of Accounts
-	seedAccounts(db)
+	// Seed Accounts
+	if err := SeedAccounts(db); err != nil {
+		log.Printf("Error seeding accounts: %v", err)
+	}
 	
 	// Seed Contacts
-	SeedContacts(db)
+	seedContacts(db)
 	
 	// Seed Product Categories
 	seedProductCategories(db)
@@ -41,6 +43,9 @@ func SeedData(db *gorm.DB) {
 	
 	// Seed Role Permissions
 	seedRolePermissions(db)
+
+	// Seed default approval workflows for PURCHASE module
+	seedApprovalWorkflows(db)
 
 	log.Println("Database seeding completed successfully")
 }
@@ -592,4 +597,59 @@ func seedRolePermissions(db *gorm.DB) {
 			}
 		}
 	}
+}
+
+// seedApprovalWorkflows creates default PURCHASE workflows if none exist
+func seedApprovalWorkflows(db *gorm.DB) {
+	var count int64
+	db.Model(&models.ApprovalWorkflow{}).Where("module = ?", models.ApprovalModulePurchase).Count(&count)
+	if count > 0 {
+		return
+	}
+
+	// Tier A: 0 - 25,000,000 (Finance only)
+	wfA := models.ApprovalWorkflow{
+		Name:            "PO <= 25M",
+		Module:          models.ApprovalModulePurchase,
+		MinAmount:       0,
+		MaxAmount:       25000000,
+		IsActive:        true,
+		RequireFinance:  true,
+		RequireDirector: false,
+	}
+	db.Create(&wfA)
+	stepA1 := models.ApprovalStep{WorkflowID: wfA.ID, StepOrder: 1, StepName: "Finance Approval", ApproverRole: "finance"}
+	db.Create(&stepA1)
+
+	// Tier B: >25,000,000 - 100,000,000 (Finance -> Director)
+	wfB := models.ApprovalWorkflow{
+		Name:            "PO > 25M - 100M",
+		Module:          models.ApprovalModulePurchase,
+		MinAmount:       25000000.01,
+		MaxAmount:       100000000,
+		IsActive:        true,
+		RequireFinance:  true,
+		RequireDirector: true,
+	}
+	db.Create(&wfB)
+	stepB1 := models.ApprovalStep{WorkflowID: wfB.ID, StepOrder: 1, StepName: "Finance Approval", ApproverRole: "finance"}
+	stepB2 := models.ApprovalStep{WorkflowID: wfB.ID, StepOrder: 2, StepName: "Director Approval", ApproverRole: "director"}
+	db.Create(&stepB1)
+	db.Create(&stepB2)
+
+	// Tier C: >100,000,000 (Finance -> Director)
+	wfC := models.ApprovalWorkflow{
+		Name:            "PO > 100M",
+		Module:          models.ApprovalModulePurchase,
+		MinAmount:       100000000.01,
+		MaxAmount:       0, // no upper bound
+		IsActive:        true,
+		RequireFinance:  true,
+		RequireDirector: true,
+	}
+	db.Create(&wfC)
+	stepC1 := models.ApprovalStep{WorkflowID: wfC.ID, StepOrder: 1, StepName: "Finance Approval", ApproverRole: "finance"}
+	stepC2 := models.ApprovalStep{WorkflowID: wfC.ID, StepOrder: 2, StepName: "Director Approval", ApproverRole: "director"}
+	db.Create(&stepC1)
+	db.Create(&stepC2)
 }

@@ -41,10 +41,13 @@ type StockAlert struct {
 
 // Notification Types Constants
 const (
-	NotificationTypeLowStock     = "LOW_STOCK"
-	NotificationTypeStockOut     = "STOCK_OUT"
-	NotificationTypeReorderAlert = "REORDER_ALERT"
-	NotificationTypeOverstock    = "OVERSTOCK"
+	NotificationTypeLowStock          = "LOW_STOCK"
+	NotificationTypeStockOut          = "STOCK_OUT"
+	NotificationTypeReorderAlert      = "REORDER_ALERT"
+	NotificationTypeOverstock         = "OVERSTOCK"
+	NotificationTypeApprovalPending   = "APPROVAL_PENDING"
+	NotificationTypeApprovalApproved  = "APPROVAL_APPROVED"
+	NotificationTypeApprovalRejected  = "APPROVAL_REJECTED"
 )
 
 // Notification Priority Constants

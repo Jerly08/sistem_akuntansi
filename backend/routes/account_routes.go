@@ -16,6 +16,9 @@ func SetupAccountRoutes(router *gin.Engine, accountHandler *handlers.AccountHand
 		// List accounts - accessible by ADMIN, FINANCE
 		accounts.GET("", middleware.RoleRequired("admin", "finance"), accountHandler.ListAccounts)
 		
+		// Get account catalog (minimal EXPENSE data) - accessible by EMPLOYEE for purchases
+		accounts.GET("/catalog", middleware.RoleRequired("employee", "admin", "finance"), accountHandler.GetAccountCatalog)
+		
 		// Get account hierarchy - accessible by ADMIN, FINANCE
 		accounts.GET("/hierarchy", middleware.RoleRequired("admin", "finance"), accountHandler.GetAccountHierarchy)
 		

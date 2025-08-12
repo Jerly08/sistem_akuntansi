@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"errors"
+	"fmt"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/utils"
 	"gorm.io/gorm"
@@ -45,10 +46,11 @@ func (r *AccountRepo) Create(ctx context.Context, req *models.AccountCreateReque
 		})
 	}
 
-	// Check if code already exists
+	// Check if code already exists (only check non-deleted accounts)
 	var existingAccount models.Account
-	if err := r.DB.WithContext(ctx).Where("code = ?", req.Code).First(&existingAccount).Error; err == nil {
-		return nil, utils.NewConflictError("Account code already exists")
+	if err := r.DB.WithContext(ctx).Where("code = ? AND deleted_at IS NULL", req.Code).First(&existingAccount).Error; err == nil {
+		errorMsg := fmt.Sprintf("Account code '%s' already exists (used by: %s)", req.Code, existingAccount.Name)
+		return nil, utils.NewConflictError(errorMsg)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, utils.NewDatabaseError("check existing code", err)
 	}
@@ -100,7 +102,8 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 	if req.Code != "" && req.Code != code {
 		var existingAccount models.Account
 		if err := r.DB.WithContext(ctx).Where("code = ? AND id != ?", req.Code, account.ID).First(&existingAccount).Error; err == nil {
-			return nil, utils.NewConflictError("Account code already exists")
+			errorMsg := fmt.Sprintf("Account code '%s' already exists (used by: %s)", req.Code, existingAccount.Name)
+			return nil, utils.NewConflictError(errorMsg)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.NewDatabaseError("check existing code", err)
 		}
@@ -113,8 +116,20 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 	account.Name = req.Name
 	account.Description = req.Description
 	account.Category = req.Category
+	if req.Type != "" {
+		// Validate account type before updating
+		if !models.IsValidAccountType(string(req.Type)) {
+			return nil, utils.NewValidationError("Invalid account type", map[string]string{
+				"type": "Must be one of: ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE",
+			})
+		}
+		account.Type = string(req.Type)
+	}
 	if req.IsActive != nil {
 		account.IsActive = *req.IsActive
+	}
+	if req.OpeningBalance != nil {
+		account.Balance = *req.OpeningBalance
 	}
 
 	if err := r.DB.WithContext(ctx).Save(&account).Error; err != nil {
@@ -185,13 +200,30 @@ func (r *AccountRepo) FindByID(ctx context.Context, id uint) (*models.Account, e
 	return &account, nil
 }
 
-// FindAll finds all accounts
+// FindAll finds all accounts, now derived from GetHierarchy for consistency
 func (r *AccountRepo) FindAll(ctx context.Context) ([]models.Account, error) {
-	var accounts []models.Account
-	if err := r.DB.WithContext(ctx).Preload("Parent").Order("code").Find(&accounts).Error; err != nil {
-		return nil, utils.NewDatabaseError("find all accounts", err)
+	hierarchy, err := r.GetHierarchy(ctx)
+	if err != nil {
+		return nil, utils.NewDatabaseError("find all accounts via hierarchy", err)
 	}
-	return accounts, nil
+
+	// Flatten the hierarchy into a simple list
+	var flattened []models.Account
+	var flatten func(accounts []models.Account)
+	flatten = func(accounts []models.Account) {
+		for _, acc := range accounts {
+			// Create a copy without the children to avoid circular references in JSON
+			accountCopy := acc
+			accountCopy.Children = nil 
+			flattened = append(flattened, accountCopy)
+			if len(acc.Children) > 0 {
+				flatten(acc.Children)
+			}
+		}
+	}
+
+	flatten(hierarchy)
+	return flattened, nil
 }
 
 // FindByType finds accounts by type
@@ -203,35 +235,102 @@ func (r *AccountRepo) FindByType(ctx context.Context, accountType string) ([]mod
 	return accounts, nil
 }
 
-// GetHierarchy gets account hierarchy
+// GetHierarchy gets account hierarchy with calculated balances
 func (r *AccountRepo) GetHierarchy(ctx context.Context) ([]models.Account, error) {
-	var accounts []models.Account
-	if err := r.DB.WithContext(ctx).Preload("Children").Where("parent_id IS NULL").Order("code").Find(&accounts).Error; err != nil {
-		return nil, utils.NewDatabaseError("get account hierarchy", err)
+	var allAccounts []models.Account
+	if err := r.DB.WithContext(ctx).Order("code").Find(&allAccounts).Error; err != nil {
+		return nil, utils.NewDatabaseError("get all accounts for hierarchy", err)
 	}
-	return accounts, nil
+
+	// Build a map for quick parent lookups
+	accountMap := make(map[uint]*models.Account)
+	for i := range allAccounts {
+		allAccounts[i].Children = []models.Account{}
+		accountMap[allAccounts[i].ID] = &allAccounts[i]
+	}
+
+	// Build hierarchy recursively
+	var rootAccounts []models.Account
+	for i := range allAccounts {
+		if allAccounts[i].ParentID == nil {
+			// This is a root account, build its complete hierarchy
+			rootAccount := r.buildAccountHierarchy(&allAccounts[i], accountMap)
+			rootAccounts = append(rootAccounts, rootAccount)
+		}
+	}
+
+	// Calculate balances starting from the roots
+	for i := range rootAccounts {
+		r.calculateTotalBalanceRecursive(ctx, &rootAccounts[i])
+	}
+
+	return rootAccounts, nil
 }
+
+// calculateTotalBalance recursively calculates the total balance for parent accounts.
+// It sums up the balances of its children.
+func (r *AccountRepo) calculateTotalBalance(ctx context.Context, account *models.Account) {
+	// If it's a leaf account, calculate its balance from transactions
+	if len(account.Children) == 0 {
+		if !account.IsHeader {
+			calculatedBalance, err := r.CalculateBalance(ctx, account.ID)
+			if err != nil {
+				// On error, use the stored balance and log the error
+				fmt.Printf("[ERROR] Failed to calculate balance for account %s: %v\\n", account.Code, err)
+				account.TotalBalance = account.Balance
+			} else {
+				account.Balance = calculatedBalance
+				account.TotalBalance = calculatedBalance
+			}
+		}
+		account.ChildCount = 0
+		return
+	}
+
+	// If it's a header account, recursively call for children and sum up their balances
+	var childrenTotal float64
+	for i := range account.Children {
+		child := &account.Children[i]
+		r.calculateTotalBalance(ctx, child)
+		childrenTotal += child.TotalBalance
+	}
+
+	account.TotalBalance = childrenTotal
+	account.ChildCount = len(account.Children)
+	
+	// The individual balance of a header account is the sum of its children
+	if account.IsHeader {
+		account.Balance = childrenTotal
+	}
+}
+
 
 // BulkImport imports multiple accounts
 func (r *AccountRepo) BulkImport(ctx context.Context, accounts []models.AccountImportRequest) error {
 	tx := r.DB.WithContext(ctx).Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
+	
+	// Create a map to track parent codes
+	parentCodeMap := make(map[string]*uint)
+	
 	for _, req := range accounts {
 		var parentID *uint
+		
+		// Find parent if parent code is specified
 		if req.ParentCode != "" {
-			var parent models.Account
-			if err := tx.Where("code = ?", req.ParentCode).First(&parent).Error; err != nil {
-				tx.Rollback()
-				return utils.NewBadRequestError("Parent account not found: " + req.ParentCode)
+			if cachedParentID, exists := parentCodeMap[req.ParentCode]; exists {
+				parentID = cachedParentID
+			} else {
+				var parent models.Account
+				if err := tx.Where("code = ?", req.ParentCode).First(&parent).Error; err != nil {
+					tx.Rollback()
+					return utils.NewDatabaseError("find parent account for import", err)
+				}
+				parentCodeMap[req.ParentCode] = &parent.ID
+				parentID = &parent.ID
 			}
-			parentID = &parent.ID
 		}
-
+		
+		// Calculate level
 		level := 1
 		if parentID != nil {
 			var parent models.Account
@@ -241,7 +340,7 @@ func (r *AccountRepo) BulkImport(ctx context.Context, accounts []models.AccountI
 			}
 			level = parent.Level + 1
 		}
-
+		
 		account := models.Account{
 			Code:        req.Code,
 			Name:        req.Name,
@@ -254,18 +353,25 @@ func (r *AccountRepo) BulkImport(ctx context.Context, accounts []models.AccountI
 			IsActive:    true,
 			IsHeader:    false,
 		}
-
+		
 		if err := tx.Create(&account).Error; err != nil {
 			tx.Rollback()
 			return utils.NewDatabaseError("create account in bulk import", err)
 		}
 	}
-
+	
 	return tx.Commit().Error
 }
 
-// CalculateBalance calculates account balance
+// CalculateBalance calculates account balance including opening balance
 func (r *AccountRepo) CalculateBalance(ctx context.Context, accountID uint) (float64, error) {
+	// Get account to determine type and opening balance
+	var account models.Account
+	if err := r.DB.WithContext(ctx).First(&account, accountID).Error; err != nil {
+		return 0, utils.NewDatabaseError("find account for balance calculation", err)
+	}
+
+	// Get transaction totals
 	var result struct {
 		DebitSum  float64
 		CreditSum float64
@@ -278,32 +384,50 @@ func (r *AccountRepo) CalculateBalance(ctx context.Context, accountID uint) (flo
 		return 0, utils.NewDatabaseError("calculate balance", err)
 	}
 
-	// Get account to determine if it's a debit or credit account
-	var account models.Account
-	if err := r.DB.WithContext(ctx).First(&account, accountID).Error; err != nil {
-		return 0, utils.NewDatabaseError("find account for balance calculation", err)
+	// Calculate transaction balance based on account type
+	var transactionBalance float64
+	if account.Type == models.AccountTypeAsset || account.Type == models.AccountTypeExpense {
+		// Debit balance accounts: Assets and Expenses
+		transactionBalance = result.DebitSum - result.CreditSum
+	} else {
+		// Credit balance accounts: Liabilities, Equity, Revenue
+		transactionBalance = result.CreditSum - result.DebitSum
 	}
 
-	// Calculate balance based on account type
-	if account.Type == models.AccountTypeAsset || account.Type == models.AccountTypeExpense {
-		return result.DebitSum - result.CreditSum, nil
-	}
-	return result.CreditSum - result.DebitSum, nil
+	// For accounts with normal debit balance (Assets, Expenses):
+	// Final Balance = Opening Balance + Transaction Balance
+	// For accounts with normal credit balance (Liabilities, Equity, Revenue):
+	// Final Balance = Opening Balance + Transaction Balance
+	return account.Balance + transactionBalance, nil
 }
 
-// UpdateBalance updates account balance
+// UpdateBalance updates the balance of an account based on a transaction
 func (r *AccountRepo) UpdateBalance(ctx context.Context, accountID uint, debitAmount, creditAmount float64) error {
-	balance, err := r.CalculateBalance(ctx, accountID)
+	var account models.Account
+	if err := r.DB.WithContext(ctx).First(&account, accountID).Error; err != nil {
+		return utils.NewDatabaseError("find account for balance update", err)
+	}
+
+	// Get the normal balance type for the account
+	normalBalance := account.GetNormalBalance()
+	
+	var balanceChange float64
+	if normalBalance == models.NormalBalanceDebit {
+		balanceChange = debitAmount - creditAmount
+	} else {
+		balanceChange = creditAmount - debitAmount
+	}
+
+	// Atomically update the balance
+	err := r.DB.WithContext(ctx).Model(&models.Account{}).Where("id = ?", accountID).
+		Update("balance", gorm.Expr("balance + ?", balanceChange)).Error
+		
 	if err != nil {
-		return err
+		return utils.NewDatabaseError("update account balance", err)
 	}
 
-	if err := r.DB.WithContext(ctx).Model(&models.Account{}).
-		Where("id = ?", accountID).
-		Update("balance", balance).Error; err != nil {
-		return utils.NewDatabaseError("update balance", err)
-	}
-
+	// After updating, we might need to update parent balances.
+	// This can be complex, so for now, we leave it to be recalculated on the next hierarchy fetch.
 	return nil
 }
 
@@ -342,4 +466,58 @@ func (r *AccountRepo) GetBalanceSummary(ctx context.Context) ([]models.AccountSu
 	}
 
 	return summaries, nil
+}
+
+// buildAccountHierarchy recursively builds the account hierarchy starting from a root account
+func (r *AccountRepo) buildAccountHierarchy(account *models.Account, accountMap map[uint]*models.Account) models.Account {
+	result := *account // Create a copy
+	result.Children = []models.Account{}
+
+	// Find and add children recursively
+	for _, acc := range accountMap {
+		if acc.ParentID != nil && *acc.ParentID == account.ID {
+			child := r.buildAccountHierarchy(acc, accountMap)
+			result.Children = append(result.Children, child)
+		}
+	}
+
+	// Update child count
+	result.ChildCount = len(result.Children)
+
+	return result
+}
+
+// calculateTotalBalanceRecursive recursively calculates balances for the entire hierarchy
+func (r *AccountRepo) calculateTotalBalanceRecursive(ctx context.Context, account *models.Account) {
+	// If it's a leaf account, calculate its balance from transactions
+	if len(account.Children) == 0 {
+		if !account.IsHeader {
+			calculatedBalance, err := r.CalculateBalance(ctx, account.ID)
+			if err != nil {
+				// On error, use the stored balance and log the error
+				fmt.Printf("[ERROR] Failed to calculate balance for account %s: %v\\n", account.Code, err)
+				account.TotalBalance = account.Balance
+			} else {
+				account.Balance = calculatedBalance
+				account.TotalBalance = calculatedBalance
+			}
+		} else {
+			account.TotalBalance = account.Balance
+		}
+		return
+	}
+
+	// If it's a parent account, recursively calculate children's balances first
+	var childrenTotal float64
+	for i := range account.Children {
+		r.calculateTotalBalanceRecursive(ctx, &account.Children[i])
+		childrenTotal += account.Children[i].TotalBalance
+	}
+
+	account.TotalBalance = childrenTotal
+
+	// For header accounts, the balance is the sum of their children
+	if account.IsHeader {
+		account.Balance = childrenTotal
+	}
 }

@@ -101,7 +101,7 @@ const ReportsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <Layout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR']}>
+<Layout allowedRoles={['admin', 'finance', 'director']}>
         <Box>
           <Spinner size="xl" thickness="4px" speed="0.65s" color="blue.500" />
           <Text ml={4}>Loading reports...</Text>
@@ -111,7 +111,7 @@ const ReportsPage: React.FC = () => {
   }
 
   return (
-    <Layout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR']}>
+<Layout allowedRoles={['admin', 'finance', 'director']}>
       <Box>
         <VStack spacing={6} alignItems="start">
           <Heading as="h1" size="xl">Financial Reports</Heading>

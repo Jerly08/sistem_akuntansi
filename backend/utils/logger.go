@@ -2,8 +2,11 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 	"time"
+	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
 
@@ -295,4 +298,41 @@ func Performance(operation string, duration time.Duration, fields Fields) {
 	} else {
 		WithFields(logFields).Debug("Performance metric")
 	}
+}
+
+// JWT Token utility functions
+// GetUserIDFromToken extracts user ID from JWT token in gin context
+func GetUserIDFromToken(c *gin.Context) (uint, error) {
+	// Try to get user_id from context (set by JWT middleware)
+	if userID, exists := c.Get("user_id"); exists {
+		if id, ok := userID.(uint); ok {
+			return id, nil
+		}
+	}
+	
+	// If not found in context, try to parse from Authorization header
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		return 0, fmt.Errorf("no authorization header")
+	}
+	
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	if tokenString == authHeader {
+		return 0, fmt.Errorf("invalid authorization header format")
+	}
+	
+	// Parse token (simplified - in production use proper JWT parsing)
+	// This is a fallback, normally the middleware should set the context
+	return 0, fmt.Errorf("user ID not found in token")
+}
+
+// GetUserRoleFromToken extracts user role from JWT token in gin context
+func GetUserRoleFromToken(c *gin.Context) (string, error) {
+	// JWT middleware sets the role under key "role"
+	if userRole, exists := c.Get("role"); exists {
+		if role, ok := userRole.(string); ok {
+			return role, nil
+		}
+	}
+	return "", fmt.Errorf("user role not found in token")
 }

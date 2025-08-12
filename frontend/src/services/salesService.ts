@@ -1,0 +1,541 @@
+import api from './api';
+
+export interface Sale {
+  id: number;
+  code: string;
+  invoice_number?: string;
+  quotation_number?: string;
+  customer_id: number;
+  user_id: number;
+  sales_person_id?: number;
+  type: 'QUOTATION' | 'ORDER' | 'INVOICE' | 'SALE';
+  status: 'DRAFT' | 'PENDING' | 'CONFIRMED' | 'INVOICED' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+  date: string;
+  due_date?: string;
+  valid_until?: string;
+  currency: string;
+  exchange_rate: number;
+  subtotal: number;
+  discount_percent: number;
+  discount_amount: number;
+  taxable_amount: number;
+  ppn: number;
+  ppn_percent: number;
+  pph: number;
+  pph_percent: number;
+  pph_type?: string;
+  total_tax: number;
+  total_amount: number;
+  paid_amount: number;
+  outstanding_amount: number;
+  payment_terms: string;
+  payment_method?: string;
+  shipping_method?: string;
+  shipping_cost: number;
+  billing_address?: string;
+  shipping_address?: string;
+  notes?: string;
+  internal_notes?: string;
+  reference?: string;
+  created_at: string;
+  updated_at: string;
+  
+  // Relations
+  customer?: any;
+  user?: any;
+  sales_person?: any;
+  sale_items?: SaleItem[];
+  sale_payments?: SalePayment[];
+  sale_returns?: SaleReturn[];
+}
+
+export interface SaleItem {
+  id?: number;
+  sale_id?: number;
+  product_id: number;
+  description?: string;
+  quantity: number;
+  unit_price: number;
+  discount_percent: number;
+  discount_amount: number;
+  line_total: number;
+  taxable: boolean;
+  ppn_amount: number;
+  pph_amount: number;
+  total_tax: number;
+  final_amount: number;
+  revenue_account_id?: number;
+  tax_account_id?: number;
+  
+  // Relations
+  product?: any;
+}
+
+export interface SalePayment {
+  id: number;
+  sale_id: number;
+  payment_number: string;
+  date: string;
+  amount: number;
+  method: string;
+  reference?: string;
+  cash_bank_id?: number;
+  account_id: number;
+  notes?: string;
+  user_id: number;
+  
+  // Relations
+  cash_bank?: any;
+  account?: any;
+  user?: any;
+}
+
+export interface SaleReturn {
+  id: number;
+  sale_id: number;
+  return_number: string;
+  credit_note_number?: string;
+  date: string;
+  type: 'RETURN' | 'CREDIT_NOTE';
+  reason: string;
+  total_amount: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  notes?: string;
+  user_id: number;
+  approved_by?: number;
+  approved_at?: string;
+  
+  // Relations
+  return_items?: SaleReturnItem[];
+}
+
+export interface SaleReturnItem {
+  id: number;
+  sale_return_id: number;
+  sale_item_id: number;
+  quantity: number;
+  unit_price: number;
+  total_amount: number;
+  reason?: string;
+}
+
+export interface SaleCreateRequest {
+  customer_id: number;
+  sales_person_id?: number;
+  type: string;
+  date: string;
+  due_date?: string;
+  valid_until?: string;
+  currency?: string;
+  exchange_rate?: number;
+  discount_percent?: number;
+  ppn_percent?: number;
+  pph_percent?: number;
+  pph_type?: string;
+  payment_terms?: string;
+  payment_method?: string;
+  shipping_method?: string;
+  shipping_cost?: number;
+  billing_address?: string;
+  shipping_address?: string;
+  notes?: string;
+  internal_notes?: string;
+  reference?: string;
+  items: SaleItemCreateRequest[];
+}
+
+export interface SaleItemCreateRequest {
+  product_id: number;
+  description?: string;
+  quantity: number;
+  unit_price: number;
+  discount_percent?: number;
+  taxable?: boolean;
+  revenue_account_id?: number;
+}
+
+export interface SaleUpdateRequest {
+  customer_id?: number;
+  sales_person_id?: number;
+  date?: string;
+  due_date?: string;
+  valid_until?: string;
+  discount_percent?: number;
+  ppn_percent?: number;
+  pph_percent?: number;
+  pph_type?: string;
+  payment_terms?: string;
+  payment_method?: string;
+  shipping_method?: string;
+  shipping_cost?: number;
+  billing_address?: string;
+  shipping_address?: string;
+  notes?: string;
+  internal_notes?: string;
+  reference?: string;
+  items?: SaleItemUpdateRequest[];
+}
+
+export interface SaleItemUpdateRequest {
+  id?: number;
+  product_id: number;
+  description?: string;
+  quantity: number;
+  unit_price: number;
+  discount_percent?: number;
+  taxable?: boolean;
+  revenue_account_id?: number;
+  delete?: boolean;
+}
+
+export interface SalePaymentRequest {
+  date: string;
+  amount: number;
+  method: string;
+  reference?: string;
+  cash_bank_id?: number;
+  account_id: number;
+  notes?: string;
+}
+
+export interface SaleReturnRequest {
+  date: string;
+  type: string;
+  reason: string;
+  notes?: string;
+  items: SaleReturnItemRequest[];
+}
+
+export interface SaleReturnItemRequest {
+  sale_item_id: number;
+  quantity: number;
+  reason?: string;
+}
+
+export interface SalesFilter {
+  page?: number;
+  limit?: number;
+  status?: string;
+  customer_id?: string;
+  start_date?: string;
+  end_date?: string;
+  search?: string;
+}
+
+export interface SalesResult {
+  data: Sale[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export interface SalesSummary {
+  total_sales: number;
+  total_amount: number;
+  total_paid: number;
+  total_outstanding: number;
+  avg_order_value: number;
+  top_customers: CustomerSales[];
+}
+
+export interface CustomerSales {
+  customer_id: number;
+  customer_name: string;
+  total_amount: number;
+  total_orders: number;
+}
+
+export interface SalesAnalytics {
+  period: string;
+  data: SalesAnalyticsData[];
+}
+
+export interface SalesAnalyticsData {
+  period: string;
+  total_sales: number;
+  total_amount: number;
+  growth_rate: number;
+}
+
+export interface ReceivablesReport {
+  total_outstanding: number;
+  overdue_amount: number;
+  receivables: ReceivableItem[];
+}
+
+export interface ReceivableItem {
+  sale_id: number;
+  invoice_number: string;
+  customer_name: string;
+  date: string;
+  due_date: string;
+  total_amount: number;
+  paid_amount: number;
+  outstanding_amount: number;
+  days_overdue: number;
+  status: string;
+}
+
+class SalesService {
+  // Basic CRUD Operations
+  
+  async getSales(filter: SalesFilter = {}): Promise<SalesResult> {
+    const params = new URLSearchParams();
+    Object.entries(filter).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+    
+    const response = await api.get(`/sales?${params}`);
+    return response.data;
+  }
+
+  async getSale(id: number): Promise<Sale> {
+    const response = await api.get(`/sales/${id}`);
+    return response.data;
+  }
+
+  async createSale(data: SaleCreateRequest): Promise<Sale> {
+    const response = await api.post('/sales', data);
+    return response.data;
+  }
+
+  async updateSale(id: number, data: SaleUpdateRequest): Promise<Sale> {
+    const response = await api.put(`/sales/${id}`, data);
+    return response.data;
+  }
+
+  async deleteSale(id: number): Promise<void> {
+    await api.delete(`/sales/${id}`);
+  }
+
+  // Status Management
+  
+  async confirmSale(id: number): Promise<void> {
+    await api.post(`/sales/${id}/confirm`);
+  }
+
+  async createInvoiceFromSale(id: number): Promise<Sale> {
+    const response = await api.post(`/sales/${id}/invoice`);
+    return response.data;
+  }
+
+  async cancelSale(id: number, reason: string): Promise<void> {
+    await api.post(`/sales/${id}/cancel`, { reason });
+  }
+
+  // Payment Management
+  
+  async getSalePayments(saleId: number): Promise<SalePayment[]> {
+    const response = await api.get(`/sales/${saleId}/payments`);
+    return response.data;
+  }
+
+  async createSalePayment(saleId: number, data: SalePaymentRequest): Promise<SalePayment> {
+    const response = await api.post(`/sales/${saleId}/payments`, data);
+    return response.data;
+  }
+
+  // Returns and Credit Notes
+  
+  async createSaleReturn(saleId: number, data: SaleReturnRequest): Promise<SaleReturn> {
+    const response = await api.post(`/sales/${saleId}/returns`, data);
+    return response.data;
+  }
+
+  async getSaleReturns(page: number = 1, limit: number = 10): Promise<SaleReturn[]> {
+    const response = await api.get(`/sales/returns?page=${page}&limit=${limit}`);
+    return response.data;
+  }
+
+  // Reporting and Analytics
+  
+  async getSalesSummary(startDate?: string, endDate?: string): Promise<SalesSummary> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const response = await api.get(`/sales/summary?${params}`);
+    return response.data;
+  }
+
+  async getSalesAnalytics(period: string = 'monthly', year: string = '2024'): Promise<SalesAnalytics> {
+    const response = await api.get(`/sales/analytics?period=${period}&year=${year}`);
+    return response.data;
+  }
+
+  async getReceivablesReport(): Promise<ReceivablesReport> {
+    const response = await api.get('/sales/receivables');
+    return response.data;
+  }
+
+  // Customer Portal
+  
+  async getCustomerSales(customerId: number, page: number = 1, limit: number = 10): Promise<Sale[]> {
+    const response = await api.get(`/sales/customer/${customerId}?page=${page}&limit=${limit}`);
+    return response.data;
+  }
+
+  async getCustomerInvoices(customerId: number): Promise<Sale[]> {
+    const response = await api.get(`/sales/customer/${customerId}/invoices`);
+    return response.data;
+  }
+
+  // PDF Export
+  
+  async exportInvoicePDF(saleId: number): Promise<Blob> {
+    const response = await api.get(`/sales/${saleId}/invoice/pdf`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  }
+
+  async exportSalesReportPDF(startDate?: string, endDate?: string): Promise<Blob> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const response = await api.get(`/sales/report/pdf?${params}`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  }
+
+  // Helper methods for frontend
+  
+  getStatusColor(status: string): string {
+    const colors: { [key: string]: string } = {
+      'DRAFT': 'gray',
+      'PENDING': 'yellow',
+      'CONFIRMED': 'blue',
+      'INVOICED': 'purple',
+      'PAID': 'green',
+      'OVERDUE': 'red',
+      'CANCELLED': 'red'
+    };
+    return colors[status] || 'gray';
+  }
+
+  getStatusLabel(status: string): string {
+    const labels: { [key: string]: string } = {
+      'DRAFT': 'Draft',
+      'PENDING': 'Pending',
+      'CONFIRMED': 'Confirmed',
+      'INVOICED': 'Invoiced',
+      'PAID': 'Paid',
+      'OVERDUE': 'Overdue',
+      'CANCELLED': 'Cancelled'
+    };
+    return labels[status] || status;
+  }
+
+  getTypeLabel(type: string): string {
+    const labels: { [key: string]: string } = {
+      'QUOTATION': 'Quotation',
+      'ORDER': 'Order',
+      'INVOICE': 'Invoice',
+      'SALE': 'Sale'
+    };
+    return labels[type] || type;
+  }
+
+  calculateLineTotal(quantity: number, unitPrice: number, discountPercent: number = 0): number {
+    const subtotal = quantity * unitPrice;
+    const discountAmount = subtotal * (discountPercent / 100);
+    return subtotal - discountAmount;
+  }
+
+  calculateTaxAmount(amount: number, taxPercent: number): number {
+    return amount * (taxPercent / 100);
+  }
+
+  formatCurrency(amount: number, currency: string = 'IDR'): string {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  }
+
+  formatDate(date: string): string {
+    return new Date(date).toLocaleDateString('id-ID');
+  }
+
+  // Validation helpers
+  
+  validateSaleData(data: SaleCreateRequest): string[] {
+    const errors: string[] = [];
+    
+    if (!data.customer_id) {
+      errors.push('Customer is required');
+    }
+    
+    if (!data.type) {
+      errors.push('Sale type is required');
+    }
+    
+    if (!data.date) {
+      errors.push('Date is required');
+    }
+    
+    if (!data.items || data.items.length === 0) {
+      errors.push('At least one item is required');
+    }
+    
+    data.items?.forEach((item, index) => {
+      if (!item.product_id) {
+        errors.push(`Product is required for item ${index + 1}`);
+      }
+      if (!item.quantity || item.quantity <= 0) {
+        errors.push(`Valid quantity is required for item ${index + 1}`);
+      }
+      if (!item.unit_price || item.unit_price < 0) {
+        errors.push(`Valid unit price is required for item ${index + 1}`);
+      }
+    });
+    
+    return errors;
+  }
+
+  // Generate PDF download
+  
+  async downloadInvoicePDF(saleId: number, invoiceNumber: string): Promise<void> {
+    try {
+      const blob = await this.exportInvoicePDF(saleId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Invoice_${invoiceNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading invoice PDF:', error);
+      throw error;
+    }
+  }
+
+  async downloadSalesReportPDF(startDate?: string, endDate?: string): Promise<void> {
+    try {
+      const blob = await this.exportSalesReportPDF(startDate, endDate);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = `Sales_Report_${startDate || 'all'}_to_${endDate || 'all'}.pdf`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading sales report PDF:', error);
+      throw error;
+    }
+  }
+}
+
+export default new SalesService();

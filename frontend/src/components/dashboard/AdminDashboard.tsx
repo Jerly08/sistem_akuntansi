@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Box,
   SimpleGrid,
@@ -16,6 +17,8 @@ import {
   StatArrow,
   Flex,
   Icon,
+  Button,
+  HStack,
 } from '@chakra-ui/react';
 import {
   FiTrendingUp,
@@ -26,6 +29,7 @@ import {
   FiBarChart2,
   FiPieChart,
   FiUsers,
+  FiPlus,
 } from 'react-icons/fi';
 import {
   LineChart,
@@ -86,6 +90,8 @@ const StatCard = ({ icon, title, stat, change, changeType }) => (
 );
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => {
+  const router = useRouter();
+  
   if (!analytics) {
     return <Box>Loading analytics...</Box>;
   }
@@ -140,6 +146,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
           changeType="increase"
         />
       </SimpleGrid>
+
+      {/* Quick Access Section */}
+      <Card mb={6}>
+        <CardHeader>
+          <Heading size="md" display="flex" alignItems="center">
+            <Icon as={FiPlus} mr={2} color="blue.500" />
+            Akses Cepat
+          </Heading>
+        </CardHeader>
+        <CardBody>
+          <HStack spacing={4} flexWrap="wrap">
+            <Button
+              leftIcon={<FiDollarSign />}
+              colorScheme="green"
+              variant="outline"
+              onClick={() => router.push('/sales')}
+              size="md"
+            >
+              Tambah Penjualan
+            </Button>
+            <Button
+              leftIcon={<FiShoppingCart />}
+              colorScheme="orange"
+              variant="outline"
+              onClick={() => router.push('/purchases')}
+              size="md"
+            >
+              Tambah Pembelian
+            </Button>
+            <Button
+              leftIcon={<FiTrendingUp />}
+              colorScheme="blue"
+              variant="outline"
+              onClick={() => router.push('/payments')}
+              size="md"
+            >
+              Kelola Pembayaran
+            </Button>
+          </HStack>
+        </CardBody>
+      </Card>
 
       <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
         <Card>

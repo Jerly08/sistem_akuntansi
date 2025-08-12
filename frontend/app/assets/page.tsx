@@ -391,7 +391,7 @@ const AssetsPage = () => {
   );
 
   return (
-    <Layout allowedRoles={['ADMIN', 'FINANCE']}>
+<Layout allowedRoles={['admin', 'finance', 'director']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">Asset Master</Heading>

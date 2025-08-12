@@ -12,10 +12,11 @@ import Navbar from './Navbar';
 import Sidebar from './SidebarNew';
 import ProtectedRoute from '../auth/ProtectedRoute';
 import { UserRole } from '@/contexts/AuthContext';
+import { normalizeRoles } from '@/utils/roles';
 
 interface LayoutProps {
   children: React.ReactNode;
-  allowedRoles?: UserRole[];
+  allowedRoles?: (UserRole | string)[];
 }
 const Layout: React.FC<LayoutProps> = ({ children, allowedRoles = [] }) => {
   useAuthService(); // Setup unauthorized handler
@@ -36,8 +37,10 @@ const Layout: React.FC<LayoutProps> = ({ children, allowedRoles = [] }) => {
     }
   };
 
+  const normalizedAllowed = normalizeRoles(allowedRoles as string[]);
+
   return (
-    <ProtectedRoute allowedRoles={allowedRoles}>
+    <ProtectedRoute allowedRoles={normalizedAllowed as any}>
       <Box minH="100vh" bg="gray.50">
         {/* Sidebar */}
         <Sidebar

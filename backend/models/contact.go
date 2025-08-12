@@ -20,6 +20,10 @@ type Contact struct {
 	CreditLimit  float64        `json:"credit_limit" gorm:"type:decimal(15,2);default:0"`
 	PaymentTerms int            `json:"payment_terms" gorm:"default:30"` // Days
 	IsActive     bool           `json:"is_active" gorm:"default:true"`
+	
+	// Default Expense Account for purchases from this vendor
+	DefaultExpenseAccountID *uint `json:"default_expense_account_id" gorm:"index"`
+	
 	Notes        string         `json:"notes" gorm:"type:text"`
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`

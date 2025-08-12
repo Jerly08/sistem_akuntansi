@@ -9,92 +9,50 @@ import (
 func SeedAccounts(db *gorm.DB) error {
 	accounts := []models.Account{
 		// ASSETS (1xxx)
-		{Code: "1000", Name: "AKTIVA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 1, IsHeader: true, IsActive: true},
-		{Code: "1100", Name: "AKTIVA LANCAR", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "1110", Name: "Kas", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1120", Name: "Bank", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1130", Name: "Piutang Usaha", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1140", Name: "Piutang Lain-lain", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1150", Name: "Persediaan", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1160", Name: "Biaya Dibayar Dimuka", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1000", Name: "ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 1, IsHeader: true, IsActive: true},
+		{Code: "1100", Name: "CURRENT ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
+		{Code: "1101", Name: "Kas", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 50000000},
+		{Code: "1102", Name: "Bank BCA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 600000000},
+		{Code: "1103", Name: "Bank Mandiri", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1105", Name: "Bank BRI", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1201", Name: "Piutang Usaha", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1301", Name: "Persediaan Barang Dagangan", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		
-		{Code: "1200", Name: "AKTIVA TETAP", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "1210", Name: "Tanah", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1220", Name: "Bangunan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1221", Name: "Akumulasi Penyusutan Bangunan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 4, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1230", Name: "Peralatan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1231", Name: "Akumulasi Penyusutan Peralatan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 4, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1240", Name: "Kendaraan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1241", Name: "Akumulasi Penyusutan Kendaraan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 4, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1500", Name: "FIXED ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 2, IsHeader: true, IsActive: true},
+		{Code: "1501", Name: "Peralatan Kantor", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1502", Name: "Kendaraan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1503", Name: "Bangunan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1509", Name: "TRUK", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 2000000},
 
 		// LIABILITIES (2xxx)
-		{Code: "2000", Name: "KEWAJIBAN", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 1, IsHeader: true, IsActive: true},
-		{Code: "2100", Name: "KEWAJIBAN LANCAR", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "2110", Name: "Hutang Usaha", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "2120", Name: "Hutang Pajak", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "2130", Name: "Hutang Gaji", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "2140", Name: "Hutang Lain-lain", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		
-		{Code: "2200", Name: "KEWAJIBAN JANGKA PANJANG", Type: models.AccountTypeLiability, Category: models.CategoryLongTermLiability, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "2210", Name: "Hutang Bank Jangka Panjang", Type: models.AccountTypeLiability, Category: models.CategoryLongTermLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "2000", Name: "LIABILITIES", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 1, IsHeader: true, IsActive: true},
+		{Code: "2100", Name: "CURRENT LIABILITIES", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 2, IsHeader: true, IsActive: true},
+		{Code: "2101", Name: "Utang Usaha", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "2102", Name: "Utang Pajak", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 		// EQUITY (3xxx)
-		{Code: "3000", Name: "MODAL", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 1, IsHeader: true, IsActive: true},
-		{Code: "3100", Name: "Modal Pemilik", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "3200", Name: "Laba Ditahan", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "3300", Name: "Laba Tahun Berjalan", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "3000", Name: "EQUITY", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 1, IsHeader: true, IsActive: true},
+		{Code: "3101", Name: "Modal Pemilik", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "3201", Name: "Laba Ditahan", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 
 		// REVENUE (4xxx)
-		{Code: "4000", Name: "PENDAPATAN", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 1, IsHeader: true, IsActive: true},
-		{Code: "4100", Name: "PENDAPATAN USAHA", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "4110", Name: "Penjualan", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "4120", Name: "Jasa", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		
-		{Code: "4200", Name: "PENDAPATAN LAIN-LAIN", Type: models.AccountTypeRevenue, Category: models.CategoryOtherRevenue, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "4210", Name: "Bunga Bank", Type: models.AccountTypeRevenue, Category: models.CategoryOtherRevenue, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "4220", Name: "Lain-lain", Type: models.AccountTypeRevenue, Category: models.CategoryOtherRevenue, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "4000", Name: "REVENUE", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 1, IsHeader: true, IsActive: true},
+		{Code: "4101", Name: "Pendapatan Penjualan", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "4201", Name: "Pendapatan Lain-lain", Type: models.AccountTypeRevenue, Category: models.CategoryOtherRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 
 		// EXPENSES (5xxx)
-		{Code: "5000", Name: "BEBAN", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 1, IsHeader: true, IsActive: true},
-		{Code: "5100", Name: "HARGA POKOK PENJUALAN", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "5110", Name: "Pembelian", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "5120", Name: "Biaya Angkut Pembelian", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		
-		{Code: "5200", Name: "BEBAN OPERASIONAL", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "5210", Name: "Beban Gaji", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "5220", Name: "Beban Listrik", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "5230", Name: "Beban Telepon", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "5240", Name: "Beban Sewa", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "5250", Name: "Beban Penyusutan", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "5260", Name: "Beban Administrasi", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "5270", Name: "Beban Pemasaran", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		
-		{Code: "5300", Name: "BEBAN LAIN-LAIN", Type: models.AccountTypeExpense, Category: models.CategoryOtherExpense, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "5310", Name: "Beban Bunga", Type: models.AccountTypeExpense, Category: models.CategoryOtherExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "5320", Name: "Beban Lain-lain", Type: models.AccountTypeExpense, Category: models.CategoryOtherExpense, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "5000", Name: "EXPENSES", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 1, IsHeader: true, IsActive: true},
+		{Code: "5101", Name: "Harga Pokok Penjualan", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "5201", Name: "Beban Gaji", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "5202", Name: "Beban Listrik", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "5203", Name: "Beban Telepon", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "5204", Name: "Beban Transportasi", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 	}
 
-	// Set parent relationships
-	for i, account := range accounts {
-		if account.Level > 1 {
-			// Find parent based on code pattern
-			parentCode := account.Code[:len(account.Code)-1]
-			if account.Level == 3 {
-				parentCode = account.Code[:3] + "0"
-			} else if account.Level == 4 {
-				parentCode = account.Code[:3]
-			}
-			
-			for _, parent := range accounts {
-				if parent.Code == parentCode {
-					accounts[i].ParentID = &parent.ID
-					break
-				}
-			}
-		}
-	}
-
-	// Create or update accounts
+	// Set parent relationships based on account hierarchy
+	accountMap := make(map[string]uint)
+	
+	// First pass: create accounts to get IDs
 	for _, account := range accounts {
 		var existingAccount models.Account
 		result := db.Where("code = ?", account.Code).First(&existingAccount)
@@ -104,6 +62,7 @@ func SeedAccounts(db *gorm.DB) error {
 			if err := db.Create(&account).Error; err != nil {
 				return err
 			}
+			accountMap[account.Code] = account.ID
 		} else {
 			// Account exists, update it
 			existingAccount.Name = account.Name
@@ -113,12 +72,54 @@ func SeedAccounts(db *gorm.DB) error {
 			existingAccount.IsHeader = account.IsHeader
 			existingAccount.IsActive = account.IsActive
 			existingAccount.Description = account.Description
+			existingAccount.Balance = account.Balance
 			
 			if err := db.Save(&existingAccount).Error; err != nil {
 				return err
 			}
+			accountMap[account.Code] = existingAccount.ID
 		}
 	}
+	
+	// Define parent-child relationships
+	parentChildMap := map[string]string{
+		"1100": "1000", // CURRENT ASSETS -> ASSETS
+		"1101": "1100", // Kas -> CURRENT ASSETS
+		"1102": "1100", // Bank BCA -> CURRENT ASSETS
+		"1103": "1100", // Bank Mandiri -> CURRENT ASSETS
+		"1105": "1100", // Bank BRI -> CURRENT ASSETS
+		"1201": "1100", // Piutang Usaha -> CURRENT ASSETS
+		"1301": "1100", // Persediaan Barang Dagangan -> CURRENT ASSETS
+		"1500": "1000", // FIXED ASSETS -> ASSETS
+		"1501": "1500", // Peralatan Kantor -> FIXED ASSETS
+		"1502": "1500", // Kendaraan -> FIXED ASSETS
+		"1503": "1500", // Bangunan -> FIXED ASSETS
+		"1509": "1500", // TRUK -> FIXED ASSETS
+		"2100": "2000", // CURRENT LIABILITIES -> LIABILITIES
+		"2101": "2100", // Utang Usaha -> CURRENT LIABILITIES
+		"2102": "2100", // Utang Pajak -> CURRENT LIABILITIES
+		"3101": "3000", // Modal Pemilik -> EQUITY
+		"3201": "3000", // Laba Ditahan -> EQUITY
+		"4101": "4000", // Pendapatan Penjualan -> REVENUE
+		"4201": "4000", // Pendapatan Lain-lain -> REVENUE
+		"5101": "5000", // Harga Pokok Penjualan -> EXPENSES
+		"5201": "5000", // Beban Gaji -> EXPENSES
+		"5202": "5000", // Beban Listrik -> EXPENSES
+		"5203": "5000", // Beban Telepon -> EXPENSES
+		"5204": "5000", // Beban Transportasi -> EXPENSES
+	}
+	
+	// Second pass: set parent relationships
+	for childCode, parentCode := range parentChildMap {
+		if childID, childExists := accountMap[childCode]; childExists {
+			if parentID, parentExists := accountMap[parentCode]; parentExists {
+				if err := db.Model(&models.Account{}).Where("id = ?", childID).Update("parent_id", parentID).Error; err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 
 	return nil
 }

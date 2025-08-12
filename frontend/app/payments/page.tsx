@@ -213,7 +213,7 @@ useEffect(() => {
 
   if (loading) {
     return (
-      <Layout allowedRoles={['ADMIN', 'FINANCE', 'INVENTORY_MANAGER']}>
+<Layout allowedRoles={['admin', 'finance', 'director']}>
         <Box>
           <Text>Loading payments...</Text>
         </Box>
@@ -222,7 +222,7 @@ useEffect(() => {
   }
 
   return (
-    <Layout allowedRoles={['ADMIN', 'FINANCE', 'INVENTORY_MANAGER']}>
+<Layout allowedRoles={['admin', 'finance', 'director']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">Payments</Heading>

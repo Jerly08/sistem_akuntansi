@@ -12,19 +12,36 @@ type Purchase struct {
 	UserID       uint           `json:"user_id" gorm:"not null;index"`
 	Date         time.Time      `json:"date"`
 	DueDate      time.Time      `json:"due_date"`
-	TotalAmount  float64        `json:"total_amount" gorm:"type:decimal(15,2);default:0"`
-	Discount     float64        `json:"discount" gorm:"type:decimal(8,2);default:0"`
-	Tax          float64        `json:"tax" gorm:"type:decimal(8,2);default:0"`
-	Status       string         `json:"status" gorm:"size:20"` // PENDING, COMPLETED, CANCELLED
+	// Monetary breakdown
+	SubtotalBeforeDiscount float64 `json:"subtotal_before_discount" gorm:"type:decimal(15,2);default:0"`
+	ItemDiscountAmount     float64 `json:"item_discount_amount" gorm:"type:decimal(15,2);default:0"`
+	Discount               float64 `json:"discount" gorm:"type:decimal(8,2);default:0"` // order-level discount percent
+	OrderDiscountAmount    float64 `json:"order_discount_amount" gorm:"type:decimal(15,2);default:0"`
+	NetBeforeTax           float64 `json:"net_before_tax" gorm:"type:decimal(15,2);default:0"`
+	TaxAmount              float64 `json:"tax_amount" gorm:"type:decimal(15,2);default:0"`
+	TotalAmount            float64 `json:"total_amount" gorm:"type:decimal(15,2);default:0"` // kept for compatibility (grand total)
+	Status       string         `json:"status" gorm:"size:20"` // DRAFT, PENDING_APPROVAL, APPROVED, COMPLETED, CANCELLED
 	Notes        string         `json:"notes" gorm:"type:text"`
+	
+	// Approval fields
+	RequiresApproval      bool        `json:"requires_approval" gorm:"default:false"`
+	ApprovalStatus        string      `json:"approval_status" gorm:"size:20;default:'NOT_STARTED'"`
+	ApprovalAmountBasis   string      `json:"approval_amount_basis" gorm:"size:40;default:'SUBTOTAL_BEFORE_DISCOUNT'"`
+	ApprovalBaseAmount    float64     `json:"approval_base_amount" gorm:"type:decimal(15,2);default:0"`
+	ApprovalRequestID     *uint       `json:"approval_request_id" gorm:"index"`
+	ApprovedBy            *uint       `json:"approved_by" gorm:"index"`
+	ApprovedAt            *time.Time  `json:"approved_at"`
+	
 	CreatedAt    time.Time      `json:"created_at"`
 	UpdatedAt    time.Time      `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
 
 	// Relations
-	Vendor        Contact        `json:"vendor" gorm:"foreignKey:VendorID"`
-	User          User           `json:"user" gorm:"foreignKey:UserID"`
-	PurchaseItems []PurchaseItem `json:"purchase_items" gorm:"foreignKey:PurchaseID"`
+	Vendor          Contact          `json:"vendor" gorm:"foreignKey:VendorID"`
+	User            User             `json:"user" gorm:"foreignKey:UserID"`
+	PurchaseItems   []PurchaseItem   `json:"purchase_items" gorm:"foreignKey:PurchaseID"`
+	ApprovalRequest *ApprovalRequest `json:"approval_request,omitempty" gorm:"foreignKey:ApprovalRequestID"`
+	Approver        *User            `json:"approver,omitempty" gorm:"foreignKey:ApprovedBy"`
 }
 
 type PurchaseItem struct {
@@ -49,7 +66,209 @@ type PurchaseItem struct {
 
 // Purchase Status Constants
 const (
-	PurchaseStatusPending   = "PENDING"
-	PurchaseStatusCompleted = "COMPLETED"
-	PurchaseStatusCancelled = "CANCELLED"
+	PurchaseStatusDraft              = "DRAFT"
+	PurchaseStatusPending            = "PENDING"
+	PurchaseStatusPendingApproval    = "PENDING_APPROVAL"
+	PurchaseStatusApproved           = "APPROVED"
+	PurchaseStatusCompleted          = "COMPLETED"
+	PurchaseStatusCancelled          = "CANCELLED"
+)
+
+// Purchase Approval Status Constants
+const (
+	PurchaseApprovalNotStarted = "NOT_STARTED"
+	PurchaseApprovalNotRequired = "NOT_REQUIRED"
+	PurchaseApprovalPending     = "PENDING"
+	PurchaseApprovalApproved    = "APPROVED"
+	PurchaseApprovalRejected    = "REJECTED"
+)
+
+// Filter and Request DTOs
+type PurchaseFilter struct {
+	Status           string `json:"status"`
+	VendorID         string `json:"vendor_id"`
+	StartDate        string `json:"start_date"`
+	EndDate          string `json:"end_date"`
+	Search           string `json:"search"`
+	ApprovalStatus   string `json:"approval_status"`
+	RequiresApproval *bool  `json:"requires_approval"`
+	Page             int    `json:"page"`
+	Limit            int    `json:"limit"`
+}
+
+type PurchaseCreateRequest struct {
+	VendorID     uint                     `json:"vendor_id" binding:"required"`
+	Date         time.Time                `json:"date" binding:"required"`
+	DueDate      time.Time                `json:"due_date"`
+	Discount     float64                  `json:"discount"`
+	Tax          float64                  `json:"tax"`
+	Notes        string                   `json:"notes"`
+	Items        []PurchaseItemRequest    `json:"items" binding:"required,min=1"`
+}
+
+type PurchaseUpdateRequest struct {
+	VendorID     *uint                    `json:"vendor_id"`
+	Date         *time.Time               `json:"date"`
+	DueDate      *time.Time               `json:"due_date"`
+	Discount     *float64                 `json:"discount"`
+	Tax          *float64                 `json:"tax"`
+	Notes        *string                  `json:"notes"`
+	Items        []PurchaseItemRequest    `json:"items"`
+}
+
+type PurchaseItemRequest struct {
+	ProductID        uint    `json:"product_id" binding:"required"`
+	Quantity         int     `json:"quantity" binding:"required,min=1"`
+	UnitPrice        float64 `json:"unit_price" binding:"required,min=0"`
+	Discount         float64 `json:"discount"`
+	Tax              float64 `json:"tax"`
+	ExpenseAccountID uint    `json:"expense_account_id"`
+}
+
+// Document Management
+type PurchaseDocument struct {
+	ID           uint           `json:"id" gorm:"primaryKey"`
+	PurchaseID   uint           `json:"purchase_id" gorm:"not null;index"`
+	DocumentType string         `json:"document_type" gorm:"size:50"`
+	FileName     string         `json:"file_name" gorm:"not null;size:255"`
+	FilePath     string         `json:"file_path" gorm:"not null;size:500"`
+	FileSize     int64          `json:"file_size"`
+	MimeType     string         `json:"mime_type" gorm:"size:100"`
+	UploadedBy   uint           `json:"uploaded_by" gorm:"not null;index"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	Purchase Purchase `json:"purchase" gorm:"foreignKey:PurchaseID"`
+	Uploader User     `json:"uploader" gorm:"foreignKey:UploadedBy"`
+}
+
+// Receipt Management
+type PurchaseReceipt struct {
+	ID             uint           `json:"id" gorm:"primaryKey"`
+	PurchaseID     uint           `json:"purchase_id" gorm:"not null;index"`
+	ReceiptNumber  string         `json:"receipt_number" gorm:"size:50"`
+	ReceivedDate   time.Time      `json:"received_date"`
+	ReceivedBy     uint           `json:"received_by" gorm:"not null;index"`
+	Status         string         `json:"status" gorm:"size:20;default:'PENDING'"`
+	Notes          string         `json:"notes" gorm:"type:text"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	Purchase     Purchase             `json:"purchase" gorm:"foreignKey:PurchaseID"`
+	Receiver     User                 `json:"receiver" gorm:"foreignKey:ReceivedBy"`
+	ReceiptItems []PurchaseReceiptItem `json:"receipt_items" gorm:"foreignKey:ReceiptID"`
+}
+
+type PurchaseReceiptItem struct {
+	ID                  uint           `json:"id" gorm:"primaryKey"`
+	ReceiptID           uint           `json:"receipt_id" gorm:"not null;index"`
+	PurchaseItemID      uint           `json:"purchase_item_id" gorm:"not null;index"`
+	QuantityReceived    int            `json:"quantity_received" gorm:"not null"`
+	Condition           string         `json:"condition" gorm:"size:50"`
+	Notes               string         `json:"notes" gorm:"type:text"`
+	CreatedAt           time.Time      `json:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
+	DeletedAt           gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	PurchaseReceipt PurchaseReceipt `json:"purchase_receipt" gorm:"foreignKey:ReceiptID"`
+	PurchaseItem    PurchaseItem    `json:"purchase_item" gorm:"foreignKey:PurchaseItemID"`
+}
+
+// Analytics and Reporting
+type PurchaseSummary struct {
+	TotalPurchases         int64                  `json:"total_purchases"`
+	TotalAmount            float64                `json:"total_amount"`
+	TotalPaid              float64                `json:"total_paid"`
+	TotalOutstanding       float64                `json:"total_outstanding"`
+	AvgOrderValue          float64                `json:"avg_order_value"`
+	TopVendors             []VendorPurchaseSummary `json:"top_vendors"`
+	StatusCounts           map[string]int64       `json:"status_counts"`
+	ApprovalStatusCounts   map[string]int64       `json:"approval_status_counts"`
+}
+
+type VendorPurchaseSummary struct {
+	VendorID     uint    `json:"vendor_id"`
+	VendorName   string  `json:"vendor_name"`
+	TotalAmount  float64 `json:"total_amount"`
+	TotalOrders  int64   `json:"total_orders"`
+}
+
+type PurchaseAnalyticsData struct {
+	Period         string  `json:"period"`
+	TotalPurchases int64   `json:"total_purchases"`
+	TotalAmount    float64 `json:"total_amount"`
+	GrowthRate     float64 `json:"growth_rate"`
+}
+
+type PurchaseAnalyticsResponse struct {
+	Period string                   `json:"period"`
+	Data   []PurchaseAnalyticsData  `json:"data"`
+}
+
+type PurchaseMatchingData struct {
+	Purchase  Purchase             `json:"purchase"`
+	Receipts  []PurchaseReceipt    `json:"receipts"`
+	Documents []PurchaseDocument   `json:"documents"`
+}
+
+type PayablesReportData struct {
+	PurchaseID        uint      `json:"purchase_id"`
+	PurchaseCode      string    `json:"purchase_code"`
+	VendorName        string    `json:"vendor_name"`
+	Date              time.Time `json:"date"`
+	DueDate           time.Time `json:"due_date"`
+	TotalAmount       float64   `json:"total_amount"`
+	PaidAmount        float64   `json:"paid_amount"`
+	OutstandingAmount float64   `json:"outstanding_amount"`
+	DaysOverdue       int       `json:"days_overdue"`
+	Status            string    `json:"status"`
+}
+
+type PayablesReportResponse struct {
+	TotalOutstanding float64               `json:"total_outstanding"`
+	OverdueAmount    float64               `json:"overdue_amount"`
+	Payables         []PayablesReportData  `json:"payables"`
+}
+
+// Request DTOs for Receipt Management
+type PurchaseReceiptRequest struct {
+	PurchaseID   uint                           `json:"purchase_id" binding:"required"`
+	ReceivedDate time.Time                      `json:"received_date" binding:"required"`
+	Notes        string                         `json:"notes"`
+	ReceiptItems []PurchaseReceiptItemRequest  `json:"receipt_items" binding:"required,min=1"`
+}
+
+type PurchaseReceiptItemRequest struct {
+	PurchaseItemID   uint   `json:"purchase_item_id" binding:"required"`
+	QuantityReceived int    `json:"quantity_received" binding:"required,min=1"`
+	Condition        string `json:"condition"`
+	Notes            string `json:"notes"`
+}
+
+// Receipt Status Constants
+const (
+	ReceiptStatusPending  = "PENDING"
+	ReceiptStatusPartial  = "PARTIAL"
+	ReceiptStatusComplete = "COMPLETE"
+	ReceiptStatusRejected = "REJECTED"
+)
+
+// Receipt Condition Constants
+const (
+	ReceiptConditionGood     = "GOOD"
+	ReceiptConditionDamaged  = "DAMAGED"
+	ReceiptConditionDefected = "DEFECTED"
+)
+
+// Document Type Constants
+const (
+	PurchaseDocumentInvoice        = "INVOICE"
+	PurchaseDocumentReceipt        = "RECEIPT"
+	PurchaseDocumentPurchaseOrder  = "PURCHASE_ORDER"
+	PurchaseDocumentContract       = "CONTRACT"
 )

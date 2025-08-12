@@ -37,6 +37,10 @@ type Product struct {
 	Taxable       bool           `json:"taxable" gorm:"default:true"`
 	ImagePath     string         `json:"image_path" gorm:"size:255"`
 	Notes         string         `json:"notes" gorm:"type:text"`
+	
+	// Default Expense Account for Purchase Items
+	DefaultExpenseAccountID *uint `json:"default_expense_account_id" gorm:"index"`
+	
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
 	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
@@ -86,6 +90,9 @@ type ProductCategory struct {
 	Description string         `json:"description" gorm:"type:text"`
 	ParentID    *uint          `json:"parent_id" gorm:"index"`
 	IsActive    bool           `json:"is_active" gorm:"default:true"`
+	
+	// Default Expense Account for products in this category
+	DefaultExpenseAccountID *uint `json:"default_expense_account_id" gorm:"index"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`

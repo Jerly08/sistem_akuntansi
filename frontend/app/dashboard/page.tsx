@@ -183,7 +183,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <DynamicLayout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR', 'INVENTORY_MANAGER', 'EMPLOYEE']}>
+<DynamicLayout allowedRoles={['admin', 'finance', 'director', 'inventory_manager', 'employee']}>
       {renderDashboardByRole()}
     </DynamicLayout>
   );

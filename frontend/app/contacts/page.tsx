@@ -69,7 +69,8 @@ interface ContactAddress {
 }
 
 const ContactsPage = () => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const canEdit = user?.role === 'ADMIN' || user?.role === 'FINANCE' || user?.role === 'INVENTORY_MANAGER';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -262,38 +263,44 @@ const ContactsPage = () => {
   // Action buttons for each row
   const renderActions = (contact: Contact) => (
     <>
-      <Button
-        size="sm"
-        variant="outline"
-        leftIcon={<FiEdit />}
-        onClick={() => handleEdit(contact)}
-      >
-        Edit
-      </Button>
-      <Button
-        size="sm"
-        colorScheme="red"
-        variant="outline"
-        leftIcon={<FiTrash2 />}
-        onClick={() => handleDelete(contact.id)}
-      >
-        Delete
-      </Button>
+      {canEdit && (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<FiEdit />}
+            onClick={() => handleEdit(contact)}
+          >
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            colorScheme="red"
+            variant="outline"
+            leftIcon={<FiTrash2 />}
+            onClick={() => handleDelete(contact.id)}
+          >
+            Delete
+          </Button>
+        </>
+      )}
     </>
   );
 
   return (
-    <Layout allowedRoles={['ADMIN', 'FINANCE', 'INVENTORY_MANAGER']}>
+<Layout allowedRoles={['admin', 'finance', 'inventory_manager', 'employee', 'director']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">Contact Master</Heading>
-          <Button
-            colorScheme="brand"
-            leftIcon={<FiPlus />}
-            onClick={handleCreate}
-          >
-            Add Contact
-          </Button>
+          {canEdit && (
+            <Button
+              colorScheme="brand"
+              leftIcon={<FiPlus />}
+              onClick={handleCreate}
+            >
+              Add Contact
+            </Button>
+          )}
         </Flex>
         
         {error && (

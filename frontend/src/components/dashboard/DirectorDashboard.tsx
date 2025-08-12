@@ -1,12 +1,33 @@
 'use client';
 import React from 'react';
-import { Box, Flex, Heading, Text, Button } from '@chakra-ui/react';
+import { useRouter } from 'next/navigation';
+import { 
+  Box, 
+  Flex, 
+  Heading, 
+  Text, 
+  Button, 
+  Card,
+  CardHeader,
+  CardBody,
+  HStack,
+  Icon
+} from '@chakra-ui/react';
+import {
+  FiDollarSign,
+  FiShoppingCart,
+  FiTrendingUp,
+  FiPlus,
+} from 'react-icons/fi';
 
-export const DirectorDashboard = () => (
-  <Box>
-    <Heading as="h2" size="xl" mb={6} color="gray.800">
-      Dasbor Direktur
-    </Heading>
+export const DirectorDashboard = () => {
+  const router = useRouter();
+  
+  return (
+    <Box>
+      <Heading as="h2" size="xl" mb={6} color="gray.800">
+        Dasbor Direktur
+      </Heading>
     
     <Box 
       p={4} 
@@ -47,5 +68,47 @@ export const DirectorDashboard = () => (
         <Text fontSize="2xl" fontWeight="bold" color="green.600">Sehat</Text>
       </Box>
     </Flex>
+
+    {/* Quick Access Section - Director has access to all modules */}
+    <Card mt={6}>
+      <CardHeader>
+        <Heading size="md" display="flex" alignItems="center">
+          <Icon as={FiPlus} mr={2} color="blue.500" />
+          Akses Cepat
+        </Heading>
+      </CardHeader>
+      <CardBody>
+        <HStack spacing={4} flexWrap="wrap">
+          <Button
+            leftIcon={<FiDollarSign />}
+            colorScheme="green"
+            variant="outline"
+            onClick={() => router.push('/sales')}
+            size="md"
+          >
+            Tambah Penjualan
+          </Button>
+          <Button
+            leftIcon={<FiShoppingCart />}
+            colorScheme="orange"
+            variant="outline"
+            onClick={() => router.push('/purchases')}
+            size="md"
+          >
+            Tambah Pembelian
+          </Button>
+          <Button
+            leftIcon={<FiTrendingUp />}
+            colorScheme="blue"
+            variant="outline"
+            onClick={() => router.push('/payments')}
+            size="md"
+          >
+            Kelola Pembayaran
+          </Button>
+        </HStack>
+      </CardBody>
+    </Card>
   </Box>
-);
+  );
+};

@@ -1,0 +1,302 @@
+import api from './api';
+
+export interface Asset {
+  id: number;
+  code: string;
+  name: string;
+  category: string;
+  status: string;
+  purchase_date: string;
+  purchase_price: number;
+  salvage_value: number;
+  useful_life: number;
+  depreciation_method: string;
+  accumulated_depreciation: number;
+  is_active: boolean;
+  notes: string;
+  asset_account_id?: number;
+  depreciation_account_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AssetCreateRequest {
+  code?: string;
+  name: string;
+  category: string;
+  status?: string;
+  purchase_date: string;
+  purchase_price: number;
+  salvage_value?: number;
+  useful_life: number;
+  depreciation_method?: string;
+  is_active?: boolean;
+  notes?: string;
+  asset_account_id?: number;
+  depreciation_account_id?: number;
+}
+
+export interface AssetUpdateRequest {
+  name: string;
+  category: string;
+  status?: string;
+  purchase_date: string;
+  purchase_price: number;
+  salvage_value?: number;
+  useful_life: number;
+  depreciation_method?: string;
+  is_active?: boolean;
+  notes?: string;
+  asset_account_id?: number;
+  depreciation_account_id?: number;
+}
+
+export interface AssetsSummary {
+  total_assets: number;
+  active_assets: number;
+  total_value: number;
+  total_depreciation: number;
+  net_book_value: number;
+}
+
+export interface DepreciationEntry {
+  year: number;
+  date: string;
+  depreciation_cost: number;
+  accumulated_depreciation: number;
+  book_value: number;
+}
+
+export interface AssetDepreciationReport {
+  asset: Asset;
+  annual_depreciation: number;
+  monthly_depreciation: number;
+  remaining_depreciation: number;
+  remaining_years: number;
+  current_book_value: number;
+}
+
+export interface DepreciationCalculation {
+  asset_id: number;
+  asset_name: string;
+  as_of_date: string;
+  purchase_price: number;
+  salvage_value: number;
+  accumulated_depreciation: number;
+  current_book_value: number;
+  depreciation_method: string;
+  useful_life_years: number;
+}
+
+class AssetService {
+  // Get all assets
+  async getAssets(): Promise<{ data: Asset[]; message: string; count: number }> {
+    const response = await api.get('/assets');
+    return response.data;
+  }
+
+  // Get single asset by ID
+  async getAsset(id: number): Promise<{ data: Asset; message: string }> {
+    const response = await api.get(`/assets/${id}`);
+    return response.data;
+  }
+
+  // Create new asset
+  async createAsset(asset: AssetCreateRequest): Promise<{ data: Asset; message: string }> {
+    const response = await api.post('/assets', asset);
+    return response.data;
+  }
+
+  // Update existing asset
+  async updateAsset(id: number, asset: AssetUpdateRequest): Promise<{ data: Asset; message: string }> {
+    // Ensure date is properly formatted for backend
+    const formattedAsset = {
+      ...asset,
+      purchase_date: asset.purchase_date.includes('T') ? asset.purchase_date : `${asset.purchase_date}T00:00:00Z`
+    };
+    const response = await api.put(`/assets/${id}`, formattedAsset);
+    return response.data;
+  }
+
+  // Delete asset
+  async deleteAsset(id: number): Promise<{ message: string }> {
+    const response = await api.delete(`/assets/${id}`);
+    return response.data;
+  }
+
+  // Get assets summary
+  async getAssetsSummary(): Promise<{ data: AssetsSummary; message: string }> {
+    const response = await api.get('/assets/summary');
+    return response.data;
+  }
+
+  // Get depreciation report
+  async getDepreciationReport(): Promise<{ data: AssetDepreciationReport[]; message: string; count: number }> {
+    const response = await api.get('/assets/depreciation-report');
+    return response.data;
+  }
+
+  // Get depreciation schedule for specific asset
+  async getDepreciationSchedule(id: number): Promise<{ 
+    data: { asset: Asset; schedule: DepreciationEntry[] }; 
+    message: string 
+  }> {
+    const response = await api.get(`/assets/${id}/depreciation-schedule`);
+    return response.data;
+  }
+
+  // Calculate current depreciation
+  async calculateDepreciation(id: number, asOfDate?: string): Promise<{ 
+    data: DepreciationCalculation; 
+    message: string 
+  }> {
+    const params = asOfDate ? { as_of_date: asOfDate } : {};
+    const response = await api.get(`/assets/${id}/calculate-depreciation`, { params });
+    return response.data;
+  }
+
+  // Helper method to format currency
+  formatCurrency(amount: number): string {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  }
+
+  // Helper method to format date
+  formatDate(dateString: string): string {
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
+
+  // Helper method to get category prefix
+  getCategoryPrefix(category: string): string {
+    const prefixes: { [key: string]: string } = {
+      'Real Estate': 'RE',
+      'Computer Equipment': 'CE',
+      'Vehicle': 'VH',
+      'Office Equipment': 'OE',
+      'Furniture': 'FR',
+      'IT Infrastructure': 'IT',
+      'Machinery': 'MC',
+    };
+    return prefixes[category] || 'AS';
+  }
+
+  // Helper method to calculate current book value
+  calculateBookValue(asset: Asset): number {
+    return asset.purchase_price - asset.accumulated_depreciation;
+  }
+
+  // Helper method to get asset status color
+  getStatusColor(status: string): string {
+    switch (status) {
+      case 'ACTIVE':
+        return 'green';
+      case 'INACTIVE':
+        return 'gray';
+      case 'SOLD':
+        return 'red';
+      default:
+        return 'gray';
+    }
+  }
+
+  // Helper method to get depreciation method display name
+  getDepreciationMethodName(method: string): string {
+    switch (method) {
+      case 'STRAIGHT_LINE':
+        return 'Straight Line';
+      case 'DECLINING_BALANCE':
+        return 'Declining Balance';
+      default:
+        return method;
+    }
+  }
+
+  // Validate asset data
+  validateAsset(asset: AssetCreateRequest | AssetUpdateRequest): string[] {
+    const errors: string[] = [];
+
+    if (!asset.name?.trim()) {
+      errors.push('Asset name is required');
+    }
+
+    if (!asset.category?.trim()) {
+      errors.push('Category is required');
+    }
+
+    if (!asset.purchase_date) {
+      errors.push('Purchase date is required');
+    }
+
+    if (!asset.purchase_price || asset.purchase_price <= 0) {
+      errors.push('Purchase price must be greater than 0');
+    }
+
+    if (!asset.useful_life || asset.useful_life <= 0) {
+      errors.push('Useful life must be greater than 0');
+    }
+
+    if (asset.salvage_value && asset.salvage_value < 0) {
+      errors.push('Salvage value cannot be negative');
+    }
+
+    if (asset.salvage_value && asset.purchase_price && asset.salvage_value >= asset.purchase_price) {
+      errors.push('Salvage value must be less than purchase price');
+    }
+
+    return errors;
+  }
+
+  // Export assets data (frontend processing)
+  exportToCSV(assets: Asset[]): void {
+    const headers = [
+      'Code',
+      'Name',
+      'Category',
+      'Status',
+      'Purchase Date',
+      'Purchase Price',
+      'Current Value',
+      'Depreciation Method',
+      'Useful Life',
+      'Notes'
+    ];
+
+    const csvData = assets.map(asset => [
+      asset.code,
+      asset.name,
+      asset.category,
+      asset.status,
+      this.formatDate(asset.purchase_date),
+      asset.purchase_price,
+      this.calculateBookValue(asset),
+      this.getDepreciationMethodName(asset.depreciation_method),
+      `${asset.useful_life} years`,
+      asset.notes || ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `assets_${new Date().getTime()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+export const assetService = new AssetService();

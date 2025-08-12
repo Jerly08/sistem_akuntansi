@@ -48,8 +48,8 @@ const MenuGroups = [
     title: 'Master Data',
     items: [
       { name: 'Accounts', icon: FiFileText, href: '/accounts', roles: ['ADMIN', 'FINANCE'] },
-      { name: 'Products', icon: FiLayers, href: '/products', roles: ['ADMIN', 'INVENTORY_MANAGER', 'EMPLOYEE'] },
-      { name: 'Contacts', icon: FiUsers, href: '/contacts', roles: ['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'EMPLOYEE'] },
+      { name: 'Products', icon: FiLayers, href: '/products', roles: ['ADMIN', 'INVENTORY_MANAGER', 'EMPLOYEE', 'DIRECTOR'] },
+      { name: 'Contacts', icon: FiUsers, href: '/contacts', roles: ['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'EMPLOYEE', 'DIRECTOR'] },
       { name: 'Assets', icon: FiStar, href: '/assets', roles: ['ADMIN', 'FINANCE', 'DIRECTOR'] },
     ]
   },
@@ -57,9 +57,9 @@ const MenuGroups = [
     title: 'Financial',
     items: [
       { name: 'Sales', icon: FiDollarSign, href: '/sales', roles: ['ADMIN', 'FINANCE', 'DIRECTOR', 'EMPLOYEE'] },
-      { name: 'Purchases', icon: FiShoppingCart, href: '/purchases', roles: ['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'EMPLOYEE'] },
+      { name: 'Purchases', icon: FiShoppingCart, href: '/purchases', roles: ['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'EMPLOYEE', 'DIRECTOR'] },
       { name: 'Payments', icon: FiTrendingUp, href: '/payments', roles: ['ADMIN', 'FINANCE', 'DIRECTOR'] },
-      { name: 'Cash & Bank', icon: FiCompass, href: '/cash-bank', roles: ['ADMIN', 'FINANCE', 'DIRECTOR'] },
+      { name: 'Cash \u0026 Bank', icon: FiCompass, href: '/cash-bank', roles: ['ADMIN', 'FINANCE', 'DIRECTOR'] },
     ]
   },
   {

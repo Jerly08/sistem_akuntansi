@@ -2,7 +2,20 @@
 
 import React, { useState, useEffect } from 'react';
 import FormField from '../common/FormField';
-import { Button } from '@chakra-ui/react';
+import { 
+  Button, 
+  Text, 
+  Badge, 
+  Tooltip, 
+  Icon, 
+  HStack,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  Box
+} from '@chakra-ui/react';
+import { FiInfo, FiLock, FiUnlock } from 'react-icons/fi';
 
 import { Account, AccountCreateRequest, AccountUpdateRequest } from '@/types/account';
 
@@ -13,6 +26,96 @@ interface AccountFormProps {
   onCancel: () => void;
   isSubmitting?: boolean;
 }
+
+// Helper function to determine smart category based on account type, account code, and parent
+const getSmartCategory = (type: string, parentAccounts: Account[], parentId: number | null, accountCode?: string, accountName?: string): string => {
+  // If no parent, use smart defaults based on account type
+  if (!parentId) {
+    const smartDefaults = {
+      ASSET: 'FIXED_ASSET',        // Assets without parent are typically fixed assets
+      LIABILITY: 'CURRENT_LIABILITY', 
+      EQUITY: 'EQUITY',
+      REVENUE: 'OPERATING_REVENUE',
+      EXPENSE: 'OPERATING_EXPENSE',
+    };
+    return smartDefaults[type as keyof typeof smartDefaults] || '';
+  }
+
+  // Find parent account
+  const parent = parentAccounts.find(p => p.id === parentId);
+  if (!parent) return '';
+
+  // Smart categorization based on parent account code/name and account code pattern
+  if (type === 'ASSET') {
+    // Use account code pattern for better accuracy
+    if (accountCode) {
+      const codeNum = parseInt(accountCode);
+      if (codeNum >= 1100 && codeNum < 1500) {
+        return 'CURRENT_ASSET';
+      }
+      if (codeNum >= 1500) {
+        return 'FIXED_ASSET';
+      }
+    }
+    
+    // Fallback to parent-based logic
+    if (parent.code === '1100' || parent.name.includes('CURRENT')) {
+      return 'CURRENT_ASSET';
+    }
+    if (parent.code === '1500' || parent.name.includes('FIXED')) {
+      return 'FIXED_ASSET';
+    }
+    
+    // Account name semantic analysis for better categorization
+    if (accountName) {
+      const nameLower = accountName.toLowerCase();
+      // Current asset indicators
+      if (nameLower.includes('kas') || nameLower.includes('bank') || nameLower.includes('piutang') || 
+          nameLower.includes('persediaan') || nameLower.includes('inventory')) {
+        return 'CURRENT_ASSET';
+      }
+      // Fixed asset indicators
+      if (nameLower.includes('tanah') || nameLower.includes('bangunan') || nameLower.includes('peralatan') || 
+          nameLower.includes('kendaraan') || nameLower.includes('mesin') || nameLower.includes('gedung')) {
+        return 'FIXED_ASSET';
+      }
+    }
+    
+    // If parent is main ASSETS (1000), default to CURRENT_ASSET for codes < 1500
+    // This is more logical as most sub-accounts under main assets are current assets
+    if (parent.code === '1000') {
+      return accountCode && parseInt(accountCode) >= 1500 ? 'FIXED_ASSET' : 'CURRENT_ASSET';
+    }
+    
+    return 'CURRENT_ASSET'; // Default to current asset
+  }
+
+  if (type === 'LIABILITY') {
+    if (parent.code === '2100' || parent.name.includes('CURRENT')) {
+      return 'CURRENT_LIABILITY';
+    }
+    if (parent.name.includes('LONG') || parent.name.includes('TERM')) {
+      return 'LONG_TERM_LIABILITY';
+    }
+    return 'CURRENT_LIABILITY';
+  }
+
+  if (type === 'REVENUE') {
+    if (parent.name.includes('OTHER') || parent.name.includes('NON')) {
+      return 'OTHER_REVENUE';
+    }
+    return 'OPERATING_REVENUE';
+  }
+
+  if (type === 'EXPENSE') {
+    if (parent.name.includes('OTHER') || parent.name.includes('NON')) {
+      return 'OTHER_EXPENSE';
+    }
+    return 'OPERATING_EXPENSE';
+  }
+
+  return 'EQUITY';
+};
 
 const AccountForm: React.FC<AccountFormProps> = ({
   account,
@@ -93,6 +196,9 @@ const AccountForm: React.FC<AccountFormProps> = ({
         fieldValue = parseInt(value);
       } else if (name === 'opening_balance') {
         fieldValue = parseFloat(value) || 0;
+      } else if (name === 'name') {
+        // Force account names to uppercase for uniformity
+        fieldValue = value.toUpperCase();
       }
       setFormData((prev) => ({ ...prev, [name]: fieldValue }));
     }
@@ -128,7 +234,16 @@ const AccountForm: React.FC<AccountFormProps> = ({
     e.preventDefault();
     
     if (validateForm()) {
-      onSubmit(formData);
+      // Auto-assign smart category before submitting
+      const smartCategory = getSmartCategory(formData.type, parentAccounts, formData.parent_id, formData.code, formData.name);
+      const dataWithSmartCategory = {
+        ...formData,
+        category: smartCategory
+      };
+      
+      console.log('Smart category assigned:', smartCategory, 'for type:', formData.type, 'parent:', formData.parent_id, 'code:', formData.code, 'name:', formData.name);
+      
+      onSubmit(dataWithSmartCategory);
     }
   };
 
@@ -175,14 +290,6 @@ const AccountForm: React.FC<AccountFormProps> = ({
           name="type"
         />
         
-        <FormField
-          id="category"
-          label="Category"
-          value={formData.category || ''}
-          onChange={handleChange}
-          placeholder="Enter category"
-          name="category"
-        />
         
         <FormField
           id="parent_id"
@@ -200,15 +307,44 @@ const AccountForm: React.FC<AccountFormProps> = ({
           name="parent_id"
         />
         
-        <FormField
-          id="opening_balance"
-          label="Opening Balance"
-          type="number"
-          value={formData.opening_balance || ''}
-          onChange={handleChange}
-          placeholder="Enter opening balance"
-          name="opening_balance"
-        />
+        <Box>
+          <HStack mb={2}>
+            <Text fontSize="sm" fontWeight="medium">Opening Balance</Text>
+            <Tooltip 
+              label="Opening balance is the initial balance when creating the account. It can only be edited if there are no transactions yet."
+              hasArrow
+            >
+              <span>
+                <Icon as={FiInfo} color="gray.500" boxSize={3} />
+              </span>
+            </Tooltip>
+            {account && (
+              <Badge 
+                colorScheme={account.id ? 'orange' : 'green'} 
+                size="sm"
+                variant="subtle"
+              >
+                <Icon as={account.id ? FiLock : FiUnlock} mr={1} />
+                {account.id ? 'Edit Restricted' : 'Editable'}
+              </Badge>
+            )}
+          </HStack>
+          <FormField
+            id="opening_balance"
+            label=""
+            type="number"
+            value={formData.opening_balance || ''}
+            onChange={handleChange}
+            placeholder="Enter opening balance"
+            name="opening_balance"
+            disabled={account?.id ? true : false}
+          />
+          {account?.id && (
+            <Text fontSize="xs" color="gray.500" mt={1}>
+              Note: Opening balance cannot be changed after account creation. Use journal entries to adjust balance.
+            </Text>
+          )}
+        </Box>
         
         <div className="md:col-span-2">
           <FormField
@@ -236,6 +372,34 @@ const AccountForm: React.FC<AccountFormProps> = ({
           </label>
         </div>
       </div>
+      
+      {/* Smart Category Indicator with Tooltip */}
+      {formData.type && (
+        <Alert status="info" variant="left-accent" mt={4}>
+          <AlertIcon />
+          <Box>
+            <AlertTitle fontSize="sm">Smart Category Assignment</AlertTitle>
+            <AlertDescription fontSize="xs">
+              <HStack spacing={2} mt={2}>
+                <Text>Category will be:</Text>
+                <Badge colorScheme="blue" variant="solid">
+                  {getSmartCategory(formData.type, parentAccounts, formData.parent_id, formData.code, formData.name).replace(/_/g, ' ')}
+                </Badge>
+              </HStack>
+              <Tooltip 
+                label="Categories help organize accounts for financial reporting. They are automatically assigned based on the account type and parent account to ensure consistency."
+                hasArrow
+                placement="top"
+              >
+                <HStack spacing={1} mt={2} cursor="help">
+                  <Icon as={FiInfo} color="blue.600" boxSize={3} />
+                  <Text color="blue.600">What is Category?</Text>
+                </HStack>
+              </Tooltip>
+            </AlertDescription>
+          </Box>
+        </Alert>
+      )}
       
       <div className="mt-6 flex justify-end space-x-3">
         <Button

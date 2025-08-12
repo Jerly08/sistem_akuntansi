@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
+import { normalizeRole, normalizeRoles } from '@/utils/roles';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: UserRole[];
+  allowedRoles?: (UserRole | string)[];
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
@@ -18,39 +19,38 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   useEffect(() => {
     if (!isLoading) {
-      // If not authenticated, redirect to login
       if (!isAuthenticated) {
         router.push('/login');
         return;
       }
-      
-      // If roles are specified, check if user has required role
+
       if (allowedRoles.length > 0 && user) {
-        const hasPermission = allowedRoles.includes(user.role);
+        const allowed = new Set(normalizeRoles(allowedRoles as string[]));
+        const userRoleNorm = normalizeRole(user.role as unknown as string);
+        const hasPermission = allowed.has(userRoleNorm);
         if (!hasPermission) {
-          // Redirect to unauthorized page
           router.push('/unauthorized');
         }
       }
     }
   }, [isAuthenticated, isLoading, user, router, allowedRoles]);
 
-  // Show loading state
   if (isLoading) {
     return <div>Loading...</div>;
   }
 
-  // If not authenticated, don't render children
   if (!isAuthenticated) {
     return null;
   }
 
-  // If roles are specified and user doesn't have required role, don't render children
-  if (allowedRoles.length > 0 && user && !allowedRoles.includes(user.role)) {
-    return null;
+  if (allowedRoles.length > 0 && user) {
+    const allowed = new Set(normalizeRoles(allowedRoles as string[]));
+    const userRoleNorm = normalizeRole(user.role as unknown as string);
+    if (!allowed.has(userRoleNorm)) {
+      return null;
+    }
   }
 
-  // Render children if authenticated and authorized
   return <>{children}</>;
 };
 

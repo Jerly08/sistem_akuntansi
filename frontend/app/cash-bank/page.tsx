@@ -183,7 +183,7 @@ const CashBankPage: React.FC = () => {
 
   if (loading) {
     return (
-      <Layout allowedRoles={['ADMIN', 'FINANCE']}>
+<Layout allowedRoles={['admin', 'finance', 'director']}>
         <Box>
           <Text>Loading cash & bank data...</Text>
         </Box>
@@ -192,7 +192,7 @@ const CashBankPage: React.FC = () => {
   }
 
   return (
-    <Layout allowedRoles={['ADMIN', 'FINANCE']}>
+<Layout allowedRoles={['admin', 'finance', 'director']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">Cash & Bank Management</Heading>

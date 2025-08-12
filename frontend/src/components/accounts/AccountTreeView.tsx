@@ -11,6 +11,7 @@ import {
   useDisclosure,
   Button,
   HStack,
+  VStack,
 } from '@chakra-ui/react';
 import { 
   FiChevronRight, 
@@ -106,7 +107,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               size="sm"
               variant="subtle"
             >
-              {accountService.getAccountTypeLabel(account.type)}
+              {accountService.getAccountTypeLabel(account.type, true)}
             </Badge>
 
             {!account.is_active && (
@@ -114,20 +115,45 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 Inactive
               </Badge>
             )}
+            
+            {/* Show child count for parent accounts */}
+            {account.is_header && account.child_count > 0 && (
+              <Badge colorScheme="blue" size="sm" variant="solid">
+                {account.child_count} child{account.child_count !== 1 ? 'ren' : ''}
+              </Badge>
+            )}
           </HStack>
 
           <HStack spacing={3}>
-            {showBalance && !account.is_header && (
-              <Text
-                fontSize="sm"
-                fontWeight="medium"
-                color={account.balance >= 0 ? 'green.600' : 'red.600'}
-              >
-                {accountService.formatBalance(account.balance)}
-              </Text>
-            )}
+            {showBalance && (() => {
+              // Use the same logic as in AccountsPage
+              const displayBalance = account.is_header && account.total_balance !== undefined 
+                ? account.total_balance 
+                : account.balance;
+              
+              const prefix = account.is_header && account.child_count && account.child_count > 0 
+                ? 'Total: '
+                : '';
+              
+              return (
+                <VStack spacing={0} align="end">
+                  <Text
+                    fontSize="sm"
+                    fontWeight={account.is_header ? "bold" : "medium"}
+                    color={displayBalance >= 0 ? 'green.600' : 'red.600'}
+                  >
+                    {prefix}{accountService.formatBalance(displayBalance)}
+                  </Text>
+                  {account.is_header && account.child_count && account.child_count > 0 && (
+                    <Text fontSize="xs" color="gray.500">
+                      (Sum of {account.child_count} children)
+                    </Text>
+                  )}
+                </VStack>
+              );
+            })()}
 
-            {showActions && (
+            {showActions && !account.is_header && (
               <HStack spacing={1}>
                 <Button
                   size="xs"
@@ -183,47 +209,6 @@ const AccountTreeView: React.FC<AccountTreeViewProps> = ({
   showActions = true,
   showBalance = true,
 }) => {
-  // Build hierarchical structure
-  const buildTree = (accounts: Account[]): Account[] => {
-    const accountMap = new Map<number, Account>();
-    const rootAccounts: Account[] = [];
-
-    // Create a map of all accounts
-    accounts.forEach(account => {
-      accountMap.set(account.id, { ...account, children: [] });
-    });
-
-    // Build the tree structure
-    accounts.forEach(account => {
-      const accountWithChildren = accountMap.get(account.id)!;
-      
-      if (account.parent_id) {
-        const parent = accountMap.get(account.parent_id);
-        if (parent) {
-          if (!parent.children) parent.children = [];
-          parent.children.push(accountWithChildren);
-        }
-      } else {
-        rootAccounts.push(accountWithChildren);
-      }
-    });
-
-    // Sort accounts by code
-    const sortByCode = (accounts: Account[]): Account[] => {
-      accounts.sort((a, b) => a.code.localeCompare(b.code));
-      accounts.forEach(account => {
-        if (account.children) {
-          account.children = sortByCode(account.children);
-        }
-      });
-      return accounts;
-    };
-
-    return sortByCode(rootAccounts);
-  };
-
-  const treeData = buildTree(accounts);
-
   if (accounts.length === 0) {
     return (
       <Box p={4} textAlign="center" color="gray.500">
@@ -234,7 +219,7 @@ const AccountTreeView: React.FC<AccountTreeViewProps> = ({
 
   return (
     <Box>
-      {treeData.map((account) => (
+      {accounts.map((account) => (
         <TreeNode
           key={account.id}
           account={account}

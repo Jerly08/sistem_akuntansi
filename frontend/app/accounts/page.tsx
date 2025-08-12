@@ -29,6 +29,7 @@ import {
   InputGroup,
   InputLeftElement,
   HStack,
+  VStack,
   Select,
   Text,
   Badge,
@@ -47,8 +48,8 @@ import accountService from '@/services/accountService';
 
 const AccountsPage = () => {
   const { token } = useAuth();
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [hierarchyAccounts, setHierarchyAccounts] = useState<Account[]>([]);
+  const [flatAccounts, setFlatAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tabIndex, setTabIndex] = useState(0);
@@ -60,14 +61,51 @@ const AccountsPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
 
-  // Fetch accounts from API
-  const fetchAccounts = async () => {
+  // Helper function to get balance for display
+  const getDisplayBalance = (account: Account): number => {
+    if (account.is_header && account.total_balance !== undefined) {
+      return account.total_balance;
+    }
+    return account.balance;
+  };
+
+  // Helper function to flatten hierarchy for List View
+  const flattenHierarchy = (accounts: Account[]): Account[] => {
+    const result: Account[] = [];
+    
+    const flatten = (accounts: Account[], level: number = 0) => {
+      accounts.sort((a, b) => a.code.localeCompare(b.code));
+      
+      for (const account of accounts) {
+        const accountWithLevel = { 
+          ...account, 
+          hierarchyLevel: level,
+          // Clear children to avoid circular references in JSON
+          children: undefined 
+        };
+        result.push(accountWithLevel);
+        
+        if (account.children && account.children.length > 0) {
+          flatten(account.children, level + 1);
+        }
+      }
+    };
+    
+    flatten(accounts);
+    return result;
+  };
+
+  // Unified fetch function using only hierarchy endpoint
+  const fetchAccountData = async () => {
     if (!token) return;
     
     setIsLoading(true);
     try {
-      const accountsData = await accountService.getAccounts(token);
-      setAccounts(accountsData);
+      const hierarchyData = await accountService.getAccountHierarchy(token);
+      console.log('📊 Unified Account Data:', hierarchyData);
+      
+      setHierarchyAccounts(hierarchyData);
+      setFlatAccounts(flattenHierarchy(hierarchyData));
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to load accounts');
@@ -77,23 +115,10 @@ const AccountsPage = () => {
     }
   };
 
-  // Get account hierarchy
-  const fetchHierarchy = async () => {
-    if (!token) return;
-    
-    try {
-      const hierarchyData = await accountService.getAccountHierarchy(token);
-      setHierarchyAccounts(hierarchyData);
-    } catch (err: any) {
-      console.error('Error fetching hierarchy:', err);
-    }
-  };
-
   // Load accounts on component mount
   useEffect(() => {
     if (token) {
-      fetchAccounts();
-      fetchHierarchy();
+      fetchAccountData();
     }
   }, [token]);
 
@@ -134,8 +159,7 @@ const AccountsPage = () => {
       }
       
       // Refresh accounts list
-      fetchAccounts();
-      fetchHierarchy();
+      fetchAccountData();
       
       // Close modal
       setIsModalOpen(false);
@@ -174,8 +198,7 @@ const AccountsPage = () => {
       });
       
       // Refresh accounts list
-      fetchAccounts();
-      fetchHierarchy();
+      fetchAccountData();
     } catch (err: any) {
       const errorMessage = err.message || 'Error deleting account';
       toast({
@@ -285,32 +308,63 @@ const AccountsPage = () => {
   };
 
   // Filter accounts based on search and type
-  const filteredAccounts = accounts.filter(account => {
+  const filteredAccounts = flatAccounts.filter(account => {
     const matchesSearch = account.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          account.code.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = !typeFilter || account.type === typeFilter;
     return matchesSearch && matchesType;
   });
 
-  // Table columns definition
+
+
+  // Use filtered accounts directly since they're already flattened
+  const hierarchicalAccounts = filteredAccounts;
+
+  // Table columns definition with hierarchy support
   const columns = [
     { header: 'Code', accessor: 'code' },
-    { header: 'Name', accessor: 'name' },
+    { 
+      header: 'Name', 
+      accessor: (account: Account & { hierarchyLevel?: number }) => {
+        const level = account.hierarchyLevel || 0;
+        const indentation = level * 20;
+        return (
+          <Flex align="center">
+            <Box w={`${indentation}px`} />
+            <Text 
+              fontWeight={account.is_header ? 'bold' : 'normal'}
+              color={account.is_header ? 'blue.600' : 'inherit'}
+            >
+              {account.name}
+            </Text>
+          </Flex>
+        );
+      }
+    },
     { 
       header: 'Type', 
       accessor: (account: Account) => (
         <Badge colorScheme={accountService.getAccountTypeColor(account.type)}>
-          {accountService.getAccountTypeLabel(account.type)}
+          {accountService.getAccountTypeLabel(account.type, true)}
         </Badge>
       )
     },
     { 
       header: 'Balance', 
-      accessor: (account: Account) => (
-        <Text color={account.balance >= 0 ? 'green.600' : 'red.600'}>
-          {accountService.formatBalance(account.balance)}
-        </Text>
-      )
+      accessor: (account: Account) => {
+        const displayBalance = getDisplayBalance(account);
+        const prefix = account.is_header && account.child_count && account.child_count > 0 
+          ? 'Total: ' 
+          : '';
+        return (
+          <Text 
+            color={displayBalance >= 0 ? 'green.600' : 'red.600'}
+            fontWeight={account.is_header ? 'bold' : 'normal'}
+          >
+            {prefix}{accountService.formatBalance(displayBalance)}
+          </Text>
+        );
+      }
     },
     { 
       header: 'Status', 
@@ -323,31 +377,44 @@ const AccountsPage = () => {
   ];
 
   // Action buttons for each row
-  const renderActions = (account: Account) => (
-    <HStack spacing={2}>
-      <Button
-        size="sm"
-        variant="outline"
-        leftIcon={<FiEdit />}
-        onClick={() => handleEdit(account)}
-      >
-        Edit
-      </Button>
-      <Button
-        size="sm"
-        colorScheme="red"
-        variant="outline"
-        leftIcon={<FiTrash2 />}
-        onClick={() => handleDelete(account)}
-        isDisabled={!account.is_active}
-      >
-        Delete
-      </Button>
-    </HStack>
-  );
+  const renderActions = (account: Account) => {
+    // Don't show actions for header/parent accounts
+    if (account.is_header) {
+      return (
+        <HStack spacing={2}>
+          <Text fontSize="sm" color="gray.500">
+            —
+          </Text>
+        </HStack>
+      );
+    }
+    
+    return (
+      <HStack spacing={2}>
+        <Button
+          size="sm"
+          variant="outline"
+          leftIcon={<FiEdit />}
+          onClick={() => handleEdit(account)}
+        >
+          Edit
+        </Button>
+        <Button
+          size="sm"
+          colorScheme="red"
+          variant="outline"
+          leftIcon={<FiTrash2 />}
+          onClick={() => handleDelete(account)}
+          isDisabled={!account.is_active}
+        >
+          Delete
+        </Button>
+      </HStack>
+    );
+  };
 
   return (
-    <Layout allowedRoles={['ADMIN', 'FINANCE']}>
+<Layout allowedRoles={['admin', 'finance']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">Chart of Accounts</Heading>
@@ -425,12 +492,12 @@ const AccountsPage = () => {
                 <Flex justify="center" py={10}>
                   <Spinner size="lg" />
                 </Flex>
-              ) : filteredAccounts.length === 0 ? (
+              ) : hierarchicalAccounts.length === 0 ? (
                 <Box textAlign="center" py={10}>
                   <Text color="gray.500" mb={4}>
-                    {accounts.length === 0 ? 'No accounts found. Try creating one!' : 'No accounts match your search criteria.'}
+                    {flatAccounts.length === 0 ? 'No accounts found. Try creating one!' : 'No accounts match your search criteria.'}
                   </Text>
-                  {accounts.length === 0 && (
+                  {flatAccounts.length === 0 && (
                     <Button colorScheme="brand" onClick={handleCreate}>
                       Create First Account
                     </Button>
@@ -439,7 +506,7 @@ const AccountsPage = () => {
               ) : (
                 <Table<Account>
                   columns={columns}
-                  data={filteredAccounts}
+                  data={hierarchicalAccounts}
                   keyField="id"
                   title="Accounts"
                   actions={renderActions}
@@ -463,6 +530,7 @@ const AccountsPage = () => {
                 />
               )}
             </TabPanel>
+
           </TabPanels>
         </Tabs>
         
@@ -476,7 +544,7 @@ const AccountsPage = () => {
             <ModalBody pb={6}>
               <AccountForm
                 account={selectedAccount || undefined}
-                parentAccounts={accounts.filter(a => a.id !== selectedAccount?.id)}
+                parentAccounts={flatAccounts.filter(a => a.id !== selectedAccount?.id)}
                 onSubmit={handleSubmit}
                 onCancel={() => setIsModalOpen(false)}
                 isSubmitting={isSubmitting}

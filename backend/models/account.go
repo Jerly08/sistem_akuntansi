@@ -7,7 +7,7 @@ import (
 
 type Account struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	Code        string         `json:"code" gorm:"unique;not null;size:20"`
+	Code        string         `json:"code" gorm:"not null;size:20;index"`
 	Name        string         `json:"name" gorm:"not null;size:100"`
 	Description string         `json:"description" gorm:"type:text"`
 	Type        string         `json:"type" gorm:"not null;size:20"` // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
@@ -20,6 +20,10 @@ type Account struct {
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Calculated fields (not stored in DB)
+	TotalBalance float64        `json:"total_balance" gorm:"-"` // Balance + sum of all children balances
+	ChildCount   int            `json:"child_count" gorm:"-"`   // Number of child accounts
 
 	// Relations
 	Parent       *Account          `json:"parent,omitempty" gorm:"foreignKey:ParentID"`
@@ -58,6 +62,14 @@ const (
 	AccountTypeExpense   = "EXPENSE"
 )
 
+// Normal Balance Types
+type NormalBalanceType string
+
+const (
+	NormalBalanceDebit  NormalBalanceType = "DEBIT"  // Assets, Expenses
+	NormalBalanceCredit NormalBalanceType = "CREDIT" // Liabilities, Equity, Revenue
+)
+
 // Account Categories Constants
 const (
 	CategoryCurrentAsset    = "CURRENT_ASSET"
@@ -91,6 +103,19 @@ func IsValidAccountType(accountType string) bool {
 	return false
 }
 
+// GetNormalBalance returns the normal balance type for the account
+func (a *Account) GetNormalBalance() NormalBalanceType {
+	switch a.Type {
+	case AccountTypeAsset, AccountTypeExpense:
+		return NormalBalanceDebit
+	case AccountTypeLiability, AccountTypeEquity, AccountTypeRevenue:
+		return NormalBalanceCredit
+	default:
+		return NormalBalanceDebit // Default to debit
+	}
+}
+
+
 // Request/Response structures
 type AccountCreateRequest struct {
 	Code           string      `json:"code" binding:"required,max=20"`
@@ -103,11 +128,13 @@ type AccountCreateRequest struct {
 }
 
 type AccountUpdateRequest struct {
-	Code        string `json:"code" binding:"max=20"`
-	Name        string `json:"name" binding:"required,max=100"`
-	Description string `json:"description"`
-	Category    string `json:"category"`
-	IsActive    *bool  `json:"is_active"`
+	Code           string      `json:"code" binding:"max=20"`
+	Name           string      `json:"name" binding:"required,max=100"`
+	Type           AccountType `json:"type"`
+	Description    string      `json:"description"`
+	Category       string      `json:"category"`
+	IsActive       *bool       `json:"is_active"`
+	OpeningBalance *float64    `json:"opening_balance"`
 }
 
 type AccountImportRequest struct {
@@ -126,3 +153,4 @@ type AccountSummaryResponse struct {
 	TotalBalance   float64     `json:"total_balance"`
 	ActiveAccounts int64       `json:"active_accounts"`
 }
+

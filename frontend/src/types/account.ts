@@ -10,11 +10,14 @@ export interface Account {
   is_header: boolean;
   is_active: boolean;
   balance: number;
+  total_balance?: number;  // Sum of this account and all children
+  child_count?: number;    // Number of child accounts
   created_at: string;
   updated_at: string;
   parent?: Account;
   children?: Account[];
 }
+
 
 export interface AccountCreateRequest {
   code: string;
@@ -29,9 +32,11 @@ export interface AccountCreateRequest {
 export interface AccountUpdateRequest {
   code?: string;
   name: string;
+  type?: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
   description?: string;
   category?: string;
   is_active?: boolean;
+  opening_balance?: number;
 }
 
 export interface AccountImportRequest {
@@ -61,6 +66,14 @@ export interface AccountTreeNode {
   is_active: boolean;
   has_children: boolean;
   children?: AccountTreeNode[];
+}
+
+// Minimal account data for catalog/combobox (used by EMPLOYEE role)
+export interface AccountCatalogItem {
+  id: number;
+  code: string;
+  name: string;
+  active: boolean;
 }
 
 export interface ApiResponse<T> {

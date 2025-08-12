@@ -6,25 +6,46 @@ import (
 )
 
 type Sale struct {
-	ID           uint           `json:"id" gorm:"primaryKey"`
-	Code         string         `json:"code" gorm:"unique;not null;size:20"`
-	CustomerID   uint           `json:"customer_id" gorm:"not null;index"`
-	UserID       uint           `json:"user_id" gorm:"not null;index"`
-	Date         time.Time      `json:"date"`
-	DueDate      time.Time      `json:"due_date"`
-	TotalAmount  float64        `json:"total_amount" gorm:"type:decimal(15,2);default:0"`
-	Discount     float64        `json:"discount" gorm:"type:decimal(8,2);default:0"`
-	Tax          float64        `json:"tax" gorm:"type:decimal(8,2);default:0"`
-	Status       string         `json:"status" gorm:"size:20"` // PENDING, COMPLETED, CANCELLED
-	Notes        string         `json:"notes" gorm:"type:text"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
+	ID                 uint            `json:"id" gorm:"primaryKey"`
+	Code               string          `json:"code" gorm:"unique;not null;size:20"`
+	CustomerID         uint            `json:"customer_id" gorm:"not null;index"`
+	UserID             uint            `json:"user_id" gorm:"not null;index"`
+	SalesPersonID      *uint           `json:"sales_person_id" gorm:"index"`
+	Type               string          `json:"type" gorm:"size:20;default:'INVOICE'"` // QUOTATION, ORDER, INVOICE
+	Date               time.Time       `json:"date"`
+	DueDate            time.Time       `json:"due_date"`
+	ValidUntil         *time.Time      `json:"valid_until"`
+	QuotationNumber    string          `json:"quotation_number" gorm:"size:50"`
+	InvoiceNumber      string          `json:"invoice_number" gorm:"size:50"`
+	Currency           string          `json:"currency" gorm:"size:5;default:'IDR'"`
+	ExchangeRate       float64         `json:"exchange_rate" gorm:"type:decimal(12,6);default:1"`
+	TotalAmount        float64         `json:"total_amount" gorm:"type:decimal(15,2);default:0"`
+	PaidAmount         float64         `json:"paid_amount" gorm:"type:decimal(15,2);default:0"`
+	OutstandingAmount  float64         `json:"outstanding_amount" gorm:"type:decimal(15,2);default:0"`
+	DiscountPercent    float64         `json:"discount_percent" gorm:"type:decimal(5,2);default:0"`
+	Tax                float64         `json:"tax" gorm:"type:decimal(8,2);default:0"`
+	PPNPercent         float64         `json:"ppn_percent" gorm:"type:decimal(5,2);default:11"`
+	PPhPercent         float64         `json:"pph_percent" gorm:"type:decimal(5,2);default:0"`
+	PPhType            string          `json:"pph_type" gorm:"size:20"`
+	PaymentTerms       string          `json:"payment_terms" gorm:"size:50"`
+	PaymentMethod      string          `json:"payment_method" gorm:"size:50"`
+	ShippingMethod     string          `json:"shipping_method" gorm:"size:50"`
+	ShippingCost       float64         `json:"shipping_cost" gorm:"type:decimal(15,2);default:0"`
+	BillingAddress     string          `json:"billing_address" gorm:"type:text"`
+	ShippingAddress    string          `json:"shipping_address" gorm:"type:text"`
+	Status             string          `json:"status" gorm:"size:20"` // DRAFT, PENDING, CONFIRMED, CANCELLED
+	Notes              string          `json:"notes" gorm:"type:text"`
+	InternalNotes      string          `json:"internal_notes" gorm:"type:text"`
+	Reference          string          `json:"reference" gorm:"size:100"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+	DeletedAt          gorm.DeletedAt  `json:"-" gorm:"index"`
 
 	// Relations
-	Customer  Contact    `json:"customer" gorm:"foreignKey:CustomerID"`
-	User      User       `json:"user" gorm:"foreignKey:UserID"`
-	SaleItems []SaleItem `json:"sale_items" gorm:"foreignKey:SaleID"`
+	Customer     Contact    `json:"customer" gorm:"foreignKey:CustomerID"`
+	User         User       `json:"user" gorm:"foreignKey:UserID"`
+	SalesPerson  *User      `json:"sales_person" gorm:"foreignKey:SalesPersonID"`
+	SaleItems    []SaleItem `json:"sale_items" gorm:"foreignKey:SaleID"`
 }
 
 type SaleItem struct {
@@ -47,9 +68,131 @@ type SaleItem struct {
 	RevenueAccount Account `json:"revenue_account" gorm:"foreignKey:RevenueAccountID"`
 }
 
+// Sale Type Constants
+const (
+	SaleTypeQuotation = "QUOTATION"
+	SaleTypeOrder     = "ORDER"
+	SaleTypeInvoice   = "INVOICE"
+)
+
 // Sale Status Constants
 const (
+	SaleStatusDraft     = "DRAFT"
 	SaleStatusPending   = "PENDING"
+	SaleStatusConfirmed = "CONFIRMED"
 	SaleStatusCompleted = "COMPLETED"
 	SaleStatusCancelled = "CANCELLED"
+	SaleStatusInvoiced  = "INVOICED"
+	SaleStatusOverdue   = "OVERDUE"
+	SaleStatusPaid      = "PAID"
 )
+
+// Filter and Request DTOs
+type SalesFilter struct {
+	Status     string `json:"status"`
+	CustomerID string `json:"customer_id"`
+	StartDate  string `json:"start_date"`
+	EndDate    string `json:"end_date"`
+	Search     string `json:"search"`
+	Page       int    `json:"page"`
+	Limit      int    `json:"limit"`
+}
+
+type SaleCreateRequest struct {
+	CustomerID       uint                `json:"customer_id" binding:"required"`
+	SalesPersonID    *uint               `json:"sales_person_id"`
+	Type             string              `json:"type" binding:"required"`
+	Date             time.Time           `json:"date" binding:"required"`
+	DueDate          time.Time           `json:"due_date"`
+	ValidUntil       *time.Time          `json:"valid_until"`
+	Currency         string              `json:"currency"`
+	ExchangeRate     *float64            `json:"exchange_rate"`
+	DiscountPercent  float64             `json:"discount_percent"`
+	PPNPercent       *float64            `json:"ppn_percent"`
+	PPhPercent       float64             `json:"pph_percent"`
+	PPhType          string              `json:"pph_type"`
+	PaymentTerms     string              `json:"payment_terms"`
+	PaymentMethod    string              `json:"payment_method"`
+	ShippingMethod   string              `json:"shipping_method"`
+	ShippingCost     float64             `json:"shipping_cost"`
+	BillingAddress   string              `json:"billing_address"`
+	ShippingAddress  string              `json:"shipping_address"`
+	Notes            string              `json:"notes"`
+	InternalNotes    string              `json:"internal_notes"`
+	Reference        string              `json:"reference"`
+	Items            []SaleItemRequest   `json:"items" binding:"required,min=1"`
+}
+
+type SaleUpdateRequest struct {
+	CustomerID       *uint               `json:"customer_id"`
+	SalesPersonID    *uint               `json:"sales_person_id"`
+	Date             *time.Time          `json:"date"`
+	DueDate          *time.Time          `json:"due_date"`
+	ValidUntil       *time.Time          `json:"valid_until"`
+	DiscountPercent  *float64            `json:"discount_percent"`
+	PPNPercent       *float64            `json:"ppn_percent"`
+	PPhPercent       *float64            `json:"pph_percent"`
+	PPhType          *string             `json:"pph_type"`
+	PaymentTerms     *string             `json:"payment_terms"`
+	PaymentMethod    *string             `json:"payment_method"`
+	ShippingMethod   *string             `json:"shipping_method"`
+	ShippingCost     *float64            `json:"shipping_cost"`
+	BillingAddress   *string             `json:"billing_address"`
+	ShippingAddress  *string             `json:"shipping_address"`
+	Notes            *string             `json:"notes"`
+	InternalNotes    *string             `json:"internal_notes"`
+	Reference        *string             `json:"reference"`
+	Items            []SaleItemRequest   `json:"items"`
+}
+
+type SaleItemRequest struct {
+	ProductID        uint    `json:"product_id" binding:"required"`
+	Quantity         int     `json:"quantity" binding:"required,min=1"`
+	UnitPrice        float64 `json:"unit_price" binding:"required,min=0"`
+	Discount         float64 `json:"discount"`
+	Tax              float64 `json:"tax"`
+	RevenueAccountID uint    `json:"revenue_account_id"`
+}
+
+// Payment and Return DTOs
+type SalePaymentRequest struct {
+	SaleID        uint      `json:"sale_id" binding:"required"`
+	Amount        float64   `json:"amount" binding:"required,min=0"`
+	PaymentDate   time.Time `json:"payment_date" binding:"required"`
+	PaymentMethod string    `json:"payment_method" binding:"required"`
+	Reference     string    `json:"reference"`
+	Notes         string    `json:"notes"`
+}
+
+type SaleReturnRequest struct {
+	SaleID      uint                    `json:"sale_id" binding:"required"`
+	ReturnDate  time.Time               `json:"return_date" binding:"required"`
+	Reason      string                  `json:"reason" binding:"required"`
+	Notes       string                  `json:"notes"`
+	ReturnItems []SaleReturnItemRequest `json:"return_items" binding:"required,min=1"`
+}
+
+type SaleReturnItemRequest struct {
+	SaleItemID uint `json:"sale_item_id" binding:"required"`
+	Quantity   int  `json:"quantity" binding:"required,min=1"`
+	Reason     string `json:"reason"`
+}
+
+// Item Create/Update DTOs
+type SaleItemCreateRequest struct {
+	SaleID           uint    `json:"sale_id" binding:"required"`
+	ProductID        uint    `json:"product_id" binding:"required"`
+	Quantity         int     `json:"quantity" binding:"required,min=1"`
+	UnitPrice        float64 `json:"unit_price" binding:"required,min=0"`
+	Discount         float64 `json:"discount"`
+	Tax              float64 `json:"tax"`
+	RevenueAccountID uint    `json:"revenue_account_id"`
+}
+
+type SaleItemUpdateRequest struct {
+	Quantity         *int     `json:"quantity"`
+	UnitPrice        *float64 `json:"unit_price"`
+	Discount         *float64 `json:"discount"`
+	Tax              *float64 `json:"tax"`
+	RevenueAccountID *uint    `json:"revenue_account_id"`
+}

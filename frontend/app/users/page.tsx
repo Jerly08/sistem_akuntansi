@@ -69,7 +69,7 @@ const UsersPage: React.FC = () => {
 
   if (loading) {
     return (
-      <Layout allowedRoles={['ADMIN']}>
+<Layout allowedRoles={['admin']}>
         <Box>
           <Spinner size="xl" thickness="4px" speed="0.65s" color="blue.500" />
           <Text ml={4}>Loading users...</Text>
@@ -79,7 +79,7 @@ const UsersPage: React.FC = () => {
   }
 
   return (
-    <Layout allowedRoles={['ADMIN']}>
+<Layout allowedRoles={['admin']}>
       <Box>
         <Heading as="h1" size="xl" mb={6}>Users Management</Heading>
         
