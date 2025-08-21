@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"strings"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"app-sistem-akuntansi/config"
@@ -10,6 +11,162 @@ import (
 )
 
 var DB *gorm.DB
+
+// cleanupConstraints removes problematic constraints that may cause migration issues
+func cleanupConstraints(db *gorm.DB) {
+	log.Println("Cleaning up problematic database constraints...")
+	
+	// First, check if accounts table exists
+	var tableExists bool
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'accounts'
+	)`).Scan(&tableExists)
+	
+	if !tableExists {
+		log.Println("Accounts table does not exist yet, skipping constraint cleanup")
+		return
+	}
+	
+	// Query all existing constraints and indexes on accounts table
+	var existingConstraints []string
+	db.Raw(`
+		SELECT constraint_name 
+		FROM information_schema.table_constraints 
+		WHERE table_name = 'accounts' 
+		AND constraint_type IN ('UNIQUE', 'PRIMARY KEY')
+		UNION
+		SELECT indexname as constraint_name
+		FROM pg_indexes 
+		WHERE tablename = 'accounts' 
+		AND indexname LIKE '%code%'
+	`).Scan(&existingConstraints)
+	
+	log.Printf("Found %d existing constraints/indexes on accounts table", len(existingConstraints))
+	
+	// List of potentially problematic constraint/index patterns
+	problematicPatterns := []string{
+		"uni_accounts_code",
+		"accounts_code_key",
+		"idx_accounts_code_unique",
+		"accounts_code_unique",
+		"accounts_code_idx",
+		"uq_accounts_code",
+	}
+	
+	// Remove existing problematic constraints/indexes
+	for _, existing := range existingConstraints {
+		for _, pattern := range problematicPatterns {
+			if existing == pattern || strings.Contains(existing, "code") {
+				// Try dropping as constraint first
+				err := db.Exec(fmt.Sprintf("ALTER TABLE accounts DROP CONSTRAINT IF EXISTS %s", existing)).Error
+				if err != nil {
+					// If constraint drop fails, try as index
+					err = db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS %s", existing)).Error
+					if err != nil {
+						log.Printf("Note: Failed to drop %s (may not exist): %v", existing, err)
+					} else {
+						log.Printf("✅ Dropped index %s", existing)
+					}
+				} else {
+					log.Printf("✅ Dropped constraint %s", existing)
+				}
+				break
+			}
+		}
+	}
+	
+	// Additional cleanup for known problematic constraint names that might not be detected
+	additionalCleanup := []string{
+		"uni_accounts_code",
+		"accounts_code_key", 
+		"idx_accounts_code_unique",
+		"accounts_code_unique",
+	}
+	
+	for _, constraint := range additionalCleanup {
+		// Try both constraint and index drop silently
+		db.Exec(fmt.Sprintf("ALTER TABLE accounts DROP CONSTRAINT IF EXISTS %s", constraint))
+		db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS %s", constraint))
+	}
+	
+	// Drop any remaining unique constraints on code column specifically
+	log.Println("Removing any remaining unique constraints on code column...")
+	var uniqueConstraints []string
+	db.Raw(`
+		SELECT tc.constraint_name
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu 
+			ON tc.constraint_name = kcu.constraint_name
+		WHERE tc.table_name = 'accounts' 
+			AND tc.constraint_type = 'UNIQUE'
+			AND kcu.column_name = 'code'
+	`).Scan(&uniqueConstraints)
+	
+	for _, constraint := range uniqueConstraints {
+		err := db.Exec(fmt.Sprintf("ALTER TABLE accounts DROP CONSTRAINT IF EXISTS %s", constraint)).Error
+		if err != nil {
+			log.Printf("Note: Failed to drop unique constraint %s: %v", constraint, err)
+		} else {
+			log.Printf("✅ Dropped unique constraint %s on code column", constraint)
+		}
+	}
+	
+	// Check if our target index already exists
+	var targetIndexExists bool
+	db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_indexes 
+			WHERE tablename = 'accounts' 
+			AND indexname = 'idx_accounts_code_active'
+		)
+	`).Scan(&targetIndexExists)
+	
+	if targetIndexExists {
+		log.Println("✅ Target partial unique index idx_accounts_code_active already exists")
+	} else {
+		// Create proper partial unique index for accounts code (only for non-deleted records)
+		log.Println("Creating partial unique index for active accounts...")
+		err := db.Exec(`
+			CREATE UNIQUE INDEX idx_accounts_code_active 
+			ON accounts (code) 
+			WHERE deleted_at IS NULL
+		`).Error
+		if err != nil {
+			log.Printf("Warning: Failed to create partial unique index on accounts.code: %v", err)
+			// Try alternative approach with IF NOT EXISTS
+			err2 := db.Exec(`
+				CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_code_active 
+				ON accounts (code) 
+				WHERE deleted_at IS NULL
+			`).Error
+			if err2 != nil {
+				log.Printf("Error: Still failed to create partial unique index: %v", err2)
+			} else {
+				log.Println("✅ Created proper partial unique index on accounts.code for active records")
+			}
+		} else {
+			log.Println("✅ Created proper partial unique index on accounts.code for active records")
+		}
+	}
+	
+	// Verify the final state
+	var finalConstraints []string
+	db.Raw(`
+		SELECT constraint_name 
+		FROM information_schema.table_constraints 
+		WHERE table_name = 'accounts' 
+		AND constraint_type = 'UNIQUE'
+		UNION
+		SELECT indexname as constraint_name
+		FROM pg_indexes 
+		WHERE tablename = 'accounts' 
+		AND indexname LIKE '%code%'
+	`).Scan(&finalConstraints)
+	
+	log.Printf("Final state: %d constraints/indexes on accounts table: %v", len(finalConstraints), finalConstraints)
+	log.Println("Database constraint cleanup completed")
+}
 
 func ConnectDB() *gorm.DB {
 	cfg := config.LoadConfig()
@@ -26,6 +183,9 @@ func ConnectDB() *gorm.DB {
 
 func AutoMigrate(db *gorm.DB) {
 	log.Println("Starting database migration...")
+	
+	// First, clean up any problematic constraints
+	cleanupConstraints(db)
 	
 	// Migrate models in order to respect foreign key constraints
 	err := db.AutoMigrate(

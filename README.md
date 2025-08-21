@@ -126,7 +126,7 @@ app_sistem_akuntansi/
 ### 1. Clone Repository
 ```bash
 git clone [repository-url]
-cd app_sistem_akuntansi
+cd sistem_akuntansi
 ```
 
 ### 2. Setup Backend
@@ -137,7 +137,7 @@ cd backend
 go mod tidy
 
 # Setup database PostgreSQL
-createdb app_sistem_akuntansi
+created sistem_akuntansi
 # atau untuk MySQL, buat database: CREATE DATABASE app_sistem_akuntansi;
 
 # Copy dan konfigurasi environment variables
@@ -179,12 +179,25 @@ yarn dev
 ### 4. Default Login Credentials
 ```
 Admin User:
-  Username: admin
-  Password: password
+  Username: admin@company.com
+  Password: password123
 
 Finance User:
-  Username: finance
-  Password: password
+  Username: finance@company.com
+  Password: password123
+
+Employee User:
+  Username: employee@company.com
+  Password: password123
+
+Director User:
+  Username: director@company.com
+  Password: password123
+
+Inventory User:
+  Username: inventory@company.com
+  Password: password123
+
 ```
 
 ## 📚 API Documentation
