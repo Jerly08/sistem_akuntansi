@@ -18,8 +18,30 @@ type Purchase struct {
 	Discount               float64 `json:"discount" gorm:"type:decimal(8,2);default:0"` // order-level discount percent
 	OrderDiscountAmount    float64 `json:"order_discount_amount" gorm:"type:decimal(15,2);default:0"`
 	NetBeforeTax           float64 `json:"net_before_tax" gorm:"type:decimal(15,2);default:0"`
+	
+	// Tax additions (Penambahan) - PPN, etc
+	PPNRate                float64 `json:"ppn_rate" gorm:"type:decimal(8,2);default:0"`                    // PPN percentage
+	PPNAmount              float64 `json:"ppn_amount" gorm:"type:decimal(15,2);default:0"`                  // Calculated PPN amount
+	OtherTaxAdditions      float64 `json:"other_tax_additions" gorm:"type:decimal(15,2);default:0"`         // Other tax additions
+	TotalTaxAdditions      float64 `json:"total_tax_additions" gorm:"type:decimal(15,2);default:0"`         // Total penambahan
+	
+	// Tax deductions (Pemotongan) - PPh, etc
+	PPh21Rate              float64 `json:"pph21_rate" gorm:"type:decimal(8,2);default:0"`                   // PPh 21 percentage
+	PPh21Amount            float64 `json:"pph21_amount" gorm:"type:decimal(15,2);default:0"`                 // Calculated PPh 21 amount
+	PPh23Rate              float64 `json:"pph23_rate" gorm:"type:decimal(8,2);default:0"`                   // PPh 23 percentage
+	PPh23Amount            float64 `json:"pph23_amount" gorm:"type:decimal(15,2);default:0"`                 // Calculated PPh 23 amount
+	OtherTaxDeductions     float64 `json:"other_tax_deductions" gorm:"type:decimal(15,2);default:0"`        // Other tax deductions
+	TotalTaxDeductions     float64 `json:"total_tax_deductions" gorm:"type:decimal(15,2);default:0"`        // Total pemotongan
+	
+	// Legacy tax field (kept for backward compatibility)
 	TaxAmount              float64 `json:"tax_amount" gorm:"type:decimal(15,2);default:0"`
 	TotalAmount            float64 `json:"total_amount" gorm:"type:decimal(15,2);default:0"` // kept for compatibility (grand total)
+	
+	// Payment tracking fields
+	PaidAmount        float64 `json:"paid_amount" gorm:"type:decimal(15,2);default:0"`
+	OutstandingAmount float64 `json:"outstanding_amount" gorm:"type:decimal(15,2);default:0"`
+	MatchingStatus    string  `json:"matching_status" gorm:"size:20;default:'PENDING'"`
+	
 	Status       string         `json:"status" gorm:"size:20"` // DRAFT, PENDING_APPROVAL, APPROVED, COMPLETED, CANCELLED
 	Notes        string         `json:"notes" gorm:"type:text"`
 	
@@ -83,6 +105,14 @@ const (
 	PurchaseApprovalRejected    = "REJECTED"
 )
 
+// Purchase Matching Status Constants
+const (
+	PurchaseMatchingPending  = "PENDING"
+	PurchaseMatchingPartial  = "PARTIAL"
+	PurchaseMatchingMatched  = "MATCHED"
+	PurchaseMatchingMismatch = "MISMATCH"
+)
+
 // Filter and Request DTOs
 type PurchaseFilter struct {
 	Status           string `json:"status"`
@@ -101,7 +131,19 @@ type PurchaseCreateRequest struct {
 	Date         time.Time                `json:"date" binding:"required"`
 	DueDate      time.Time                `json:"due_date"`
 	Discount     float64                  `json:"discount"`
+	
+	// Legacy tax field (for backward compatibility)
 	Tax          float64                  `json:"tax"`
+	
+	// Tax additions (Penambahan)
+	PPNRate              float64          `json:"ppn_rate"`
+	OtherTaxAdditions    float64          `json:"other_tax_additions"`
+	
+	// Tax deductions (Pemotongan) 
+	PPh21Rate            float64          `json:"pph21_rate"`
+	PPh23Rate            float64          `json:"pph23_rate"`
+	OtherTaxDeductions   float64          `json:"other_tax_deductions"`
+	
 	Notes        string                   `json:"notes"`
 	Items        []PurchaseItemRequest    `json:"items" binding:"required,min=1"`
 }
@@ -111,7 +153,19 @@ type PurchaseUpdateRequest struct {
 	Date         *time.Time               `json:"date"`
 	DueDate      *time.Time               `json:"due_date"`
 	Discount     *float64                 `json:"discount"`
+	
+	// Legacy tax field (for backward compatibility)
 	Tax          *float64                 `json:"tax"`
+	
+	// Tax additions (Penambahan)
+	PPNRate              *float64         `json:"ppn_rate"`
+	OtherTaxAdditions    *float64         `json:"other_tax_additions"`
+	
+	// Tax deductions (Pemotongan)
+	PPh21Rate            *float64         `json:"pph21_rate"`
+	PPh23Rate            *float64         `json:"pph23_rate"`
+	OtherTaxDeductions   *float64         `json:"other_tax_deductions"`
+	
 	Notes        *string                  `json:"notes"`
 	Items        []PurchaseItemRequest    `json:"items"`
 }

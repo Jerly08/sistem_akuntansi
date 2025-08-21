@@ -83,22 +83,29 @@ func main() {
 		},
 	}
 
-	// Workflow steps configuration
+	// Workflow steps configuration with Employee as first step
 	workflowSteps := map[string][]models.ApprovalStep{
 		"Small Purchase Approval": {
 			{
 				StepOrder:    1,
+				StepName:     "Employee Submission",
+				ApproverRole: "employee",
+				IsOptional:   false,
+				TimeLimit:    24, // 24 hours
+			},
+			{
+				StepOrder:    2,
 				StepName:     "Finance Approval",
 				ApproverRole: "finance",
 				IsOptional:   false,
-				TimeLimit:    24, // 24 hours
+				TimeLimit:    24,
 			},
 		},
 		"Medium Purchase Approval": {
 			{
 				StepOrder:    1,
-				StepName:     "Manager Approval",
-				ApproverRole: "manager",
+				StepName:     "Employee Submission",
+				ApproverRole: "employee",
 				IsOptional:   false,
 				TimeLimit:    24,
 			},
@@ -113,8 +120,8 @@ func main() {
 		"Large Purchase Approval": {
 			{
 				StepOrder:    1,
-				StepName:     "Manager Approval",
-				ApproverRole: "manager",
+				StepName:     "Employee Submission",
+				ApproverRole: "employee",
 				IsOptional:   false,
 				TimeLimit:    24,
 			},
@@ -136,8 +143,8 @@ func main() {
 		"Very Large Purchase Approval": {
 			{
 				StepOrder:    1,
-				StepName:     "Manager Approval",
-				ApproverRole: "manager",
+				StepName:     "Employee Submission",
+				ApproverRole: "employee",
 				IsOptional:   false,
 				TimeLimit:    24,
 			},

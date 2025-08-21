@@ -16,6 +16,9 @@ func InitializeDatabase(db *gorm.DB) {
 	// Seed initial data
 	SeedData(db)
 	
+	// Update existing purchase data with new payment tracking fields
+	UpdateExistingPurchaseData(db)
+	
 	log.Println("Database initialization completed")
 }
 
@@ -52,6 +55,7 @@ func RunMigrations(db *gorm.DB) {
 			
 			// Product & Inventory models
 			&models.ProductCategory{},
+			&models.ProductUnit{},
 			&models.Product{},
 			&models.Inventory{},
 			
@@ -64,6 +68,9 @@ func RunMigrations(db *gorm.DB) {
 			// Sales & Purchase models
 			&models.Sale{},
 			&models.SaleItem{},
+			&models.SalePayment{},
+			&models.SaleReturn{},
+			&models.SaleReturnItem{},
 			&models.Purchase{},
 			&models.PurchaseItem{},
 			
@@ -155,4 +162,28 @@ func CreateIndexes(db *gorm.DB) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_logs_user_action ON audit_logs(user_id, action)")
 	
 	log.Println("Additional database indexes created successfully")
+}
+
+// UpdateExistingPurchaseData updates existing purchase records with new payment tracking fields
+func UpdateExistingPurchaseData(db *gorm.DB) {
+	log.Println("Updating existing purchase data with payment tracking fields...")
+	
+	// Update existing purchases where outstanding_amount is 0 or null
+	// Set outstanding_amount to total_amount for unpaid purchases
+	result := db.Exec(`
+		UPDATE purchases 
+		SET outstanding_amount = total_amount,
+			paid_amount = 0,
+			matching_status = 'PENDING'
+		WHERE (outstanding_amount IS NULL OR outstanding_amount = 0)
+			AND total_amount > 0
+	`)
+	
+	if result.Error != nil {
+		log.Printf("Error updating existing purchase data: %v", result.Error)
+	} else {
+		log.Printf("Updated %d purchase records with payment tracking fields", result.RowsAffected)
+	}
+	
+	log.Println("Existing purchase data update completed")
 }

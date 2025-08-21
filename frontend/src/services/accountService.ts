@@ -10,18 +10,9 @@ import {
 } from '@/types/account';
 
 // Base API URL - should be moved to environment variables
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-// Type for the unauthorized handler callback
-type UnauthorizedHandler = () => void;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
 
 class AccountService {
-  private unauthorizedHandler?: UnauthorizedHandler;
-
-  // Set the unauthorized handler (to be called from components)
-  setUnauthorizedHandler(handler: UnauthorizedHandler) {
-    this.unauthorizedHandler = handler;
-  }
 
   private getHeaders(token?: string): HeadersInit {
     const headers: HeadersInit = {
@@ -46,10 +37,6 @@ class AccountService {
           code: 'NETWORK_ERROR',
         };
       }
-      
-      if (response.status === 401 && this.unauthorizedHandler) {
-        this.unauthorizedHandler();
-      }
 
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
@@ -59,7 +46,7 @@ class AccountService {
 
   // Get all accounts
   async getAccounts(token: string, type?: string): Promise<Account[]> {
-    const url = new URL(`${API_BASE_URL}/api/v1/accounts`);
+    const url = new URL(`${API_BASE_URL}/accounts`);
     if (type) {
       url.searchParams.append('type', type);
     }
@@ -75,7 +62,7 @@ class AccountService {
 
   // Get account catalog (minimal data for EXPENSE accounts) - for EMPLOYEE role
   async getAccountCatalog(token: string, type: string = 'EXPENSE'): Promise<AccountCatalogItem[]> {
-    const url = new URL(`${API_BASE_URL}/api/v1/accounts/catalog`);
+    const url = new URL(`${API_BASE_URL}/accounts/catalog`);
     url.searchParams.append('type', type);
     
     const response = await fetch(url.toString(), {
@@ -87,9 +74,43 @@ class AccountService {
     return result.data;
   }
 
+  // Get cash and bank accounts for payment purposes
+  async getPaymentAccounts(token: string): Promise<{
+    id: number;
+    code: string;
+    name: string;
+    type: string;
+    bank_name?: string;
+    account_no?: string;
+    currency: string;
+    balance: number;
+  }[]> {
+    const response = await fetch(`${API_BASE_URL}/cashbank/payment-accounts`, {
+      method: 'GET',
+      headers: this.getHeaders(token),
+    });
+    
+    const result = await this.handleResponse<{
+      success: boolean;
+      data: {
+        id: number;
+        code: string;
+        name: string;
+        type: string;
+        bank_name?: string;
+        account_no?: string;
+        currency: string;
+        balance: number;
+      }[];
+      message: string;
+    }>(response);
+    
+    return result.data;
+  }
+
   // Get single account by code
   async getAccount(token: string, code: string): Promise<Account> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts/${code}`, {
+    const response = await fetch(`${API_BASE_URL}/accounts/${code}`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -100,7 +121,7 @@ class AccountService {
 
   // Create new account
   async createAccount(token: string, accountData: AccountCreateRequest): Promise<Account> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts`, {
+    const response = await fetch(`${API_BASE_URL}/accounts`, {
       method: 'POST',
       headers: this.getHeaders(token),
       body: JSON.stringify(accountData),
@@ -112,7 +133,7 @@ class AccountService {
 
   // Update existing account
   async updateAccount(token: string, code: string, accountData: AccountUpdateRequest): Promise<Account> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts/${code}`, {
+    const response = await fetch(`${API_BASE_URL}/accounts/${code}`, {
       method: 'PUT',
       headers: this.getHeaders(token),
       body: JSON.stringify(accountData),
@@ -124,7 +145,7 @@ class AccountService {
 
   // Delete account
   async deleteAccount(token: string, code: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts/${code}`, {
+    const response = await fetch(`${API_BASE_URL}/accounts/${code}`, {
       method: 'DELETE',
       headers: this.getHeaders(token),
     });
@@ -134,7 +155,7 @@ class AccountService {
 
   // Get account hierarchy
   async getAccountHierarchy(token: string): Promise<Account[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts/hierarchy`, {
+    const response = await fetch(`${API_BASE_URL}/accounts/hierarchy`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -145,7 +166,7 @@ class AccountService {
 
   // Get balance summary
   async getBalanceSummary(token: string): Promise<AccountSummaryResponse[]> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts/balance-summary`, {
+    const response = await fetch(`${API_BASE_URL}/accounts/balance-summary`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -164,7 +185,7 @@ class AccountService {
       headers.Authorization = `Bearer ${token}`;
     }
     
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts/import`, {
+    const response = await fetch(`${API_BASE_URL}/accounts/import`, {
       method: 'POST',
       headers,
       body: formData,
@@ -188,7 +209,7 @@ class AccountService {
 
   // Export accounts to PDF
   async exportAccountsPDF(token: string): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts/export/pdf`, {
+    const response = await fetch(`${API_BASE_URL}/accounts/export/pdf`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -204,9 +225,6 @@ class AccountService {
         };
       }
       
-      if (response.status === 401 && this.unauthorizedHandler) {
-        this.unauthorizedHandler();
-      }
       
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
@@ -216,7 +234,7 @@ class AccountService {
 
   // Export accounts to Excel
   async exportAccountsExcel(token: string): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/api/v1/accounts/export/excel`, {
+    const response = await fetch(`${API_BASE_URL}/accounts/export/excel`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -232,9 +250,6 @@ class AccountService {
         };
       }
       
-      if (response.status === 401 && this.unauthorizedHandler) {
-        this.unauthorizedHandler();
-      }
       
       throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
@@ -315,7 +330,7 @@ class AccountService {
       name: string;
     };
   }> {
-    const url = new URL(`${API_BASE_URL}/api/v1/accounts/validate-code`);
+    const url = new URL(`${API_BASE_URL}/accounts/validate-code`);
     url.searchParams.append('code', code);
     if (excludeId) {
       url.searchParams.append('exclude_id', excludeId.toString());

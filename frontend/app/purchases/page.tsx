@@ -79,6 +79,7 @@ import { Account as GLAccount, AccountCatalogItem } from '@/types/account';
 import approvalService from '@/services/approvalService';
 import { normalizeRole } from '@/utils/roles';
 import SearchableSelect from '@/components/common/SearchableSelect';
+import CurrencyInput from '@/components/common/CurrencyInput';
 
 // Types for form data
 interface PurchaseFormData {
@@ -87,7 +88,19 @@ interface PurchaseFormData {
   due_date: string;
   notes: string;
   discount: string;
+  
+  // Legacy tax field (backward compatibility)
   tax: string;
+  
+  // Tax additions (Penambahan)
+  ppn_rate: string;
+  other_tax_additions: string;
+  
+  // Tax deductions (Pemotongan)
+  pph21_rate: string;
+  pph23_rate: string;
+  other_tax_deductions: string;
+  
   items: PurchaseItemFormData[];
 }
 
@@ -148,6 +161,7 @@ const formatCurrency = (amount: number) => {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
+    maximumFractionDigits: 0
   }).format(amount);
 };
 
@@ -242,11 +256,50 @@ const PurchasesPage: React.FC = () => {
     due_date: '',
     notes: '',
     discount: '0',
+    
+    // Legacy tax field
     tax: '0',
+    
+    // Tax additions (Penambahan)
+    ppn_rate: '11',
+    other_tax_additions: '0',
+    
+    // Tax deductions (Pemotongan)
+    pph21_rate: '0',
+    pph23_rate: '0', 
+    other_tax_deductions: '0',
+    
     items: []
   });
   const [loadingVendors, setLoadingVendors] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  
+  // Add Vendor Modal states
+  const { isOpen: isAddVendorOpen, onOpen: onAddVendorOpen, onClose: onAddVendorClose } = useDisclosure();
+  const [newVendorData, setNewVendorData] = useState({
+    name: '',
+    code: '',
+    email: '',
+    phone: '',
+    mobile: '',
+    address: '',
+    pic_name: '',
+    external_id: '',
+    notes: ''
+  });
+  const [savingVendor, setSavingVendor] = useState(false);
+
+  // Add Product Modal states
+  const { isOpen: isAddProductOpen, onOpen: onAddProductOpen, onClose: onAddProductClose } = useDisclosure();
+  const [newProductData, setNewProductData] = useState({
+    name: '',
+    code: '',
+    description: '',
+    unit: '',
+    purchase_price: '0',
+    sale_price: '0',
+  });
+  const [savingProduct, setSavingProduct] = useState(false);
 
   // Helper function to notify directors
   const notifyDirectors = async (purchase: Purchase) => {
@@ -256,6 +309,264 @@ const PurchasesPage: React.FC = () => {
       console.log('Director notification sent for purchase:', purchase.code);
     } catch (err) {
       console.error('Error sending director notification:', err);
+    }
+  };
+
+  // Handle add new vendor
+  const handleAddVendor = async () => {
+    if (!newVendorData.name.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Vendor name is required',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (!newVendorData.email.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Vendor email is required',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      setSavingVendor(true);
+      
+      // Generate unique vendor code if not provided
+      let vendorCode = newVendorData.code.trim();
+      if (!vendorCode) {
+        // Generate code based on name + timestamp + random to ensure uniqueness
+        const namePrefix = newVendorData.name.trim().substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
+        const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0'); // 3-digit random
+        vendorCode = `V${namePrefix}${timestamp}${random}`;
+      } else {
+        // Check if manually entered code already exists in current vendors list
+        const existingVendor = vendors.find(v => v.code.toLowerCase() === vendorCode.toLowerCase());
+        if (existingVendor) {
+          toast({
+            title: 'Error',
+            description: `Vendor code "${vendorCode}" already exists. Please use a different code or leave empty for auto-generation.`,
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          });
+          return;
+        }
+      }
+      
+      const vendorPayload = {
+        ...newVendorData,
+        code: vendorCode,
+        type: 'VENDOR',
+        is_active: true
+      };
+      
+      console.log('Creating vendor with payload:', vendorPayload);
+      
+      let newVendor;
+      try {
+        newVendor = await contactService.createContact(token!, vendorPayload);
+        console.log('Vendor creation response:', newVendor);
+        
+        // Check if the response indicates an error (some APIs return error in success response)
+        if (newVendor && typeof newVendor === 'object' && 'error' in newVendor) {
+          throw new Error(newVendor.error as string || 'Server returned an error');
+        }
+        
+      } catch (createError: any) {
+        console.error('API Error creating vendor:', createError);
+        throw new Error(
+          createError.message || 
+          createError.response?.data?.error || 
+          'Failed to create vendor: Server error'
+        );
+      }
+      
+      // Validate that the new vendor was created successfully
+      // Handle different response structures
+      let vendorData = newVendor;
+      if (newVendor?.data) {
+        vendorData = newVendor.data; // If response is wrapped in data object
+      }
+      
+      // Additional checks for undefined response
+      if (!newVendor) {
+        console.error('Vendor creation returned undefined response');
+        throw new Error('Failed to create vendor: Server returned no response. Please try again.');
+      }
+      
+      if (!vendorData || (!vendorData.id && !vendorData.ID)) {
+        console.error('Invalid vendor response:', newVendor);
+        console.error('Expected vendor data with id field, got:', vendorData);
+        throw new Error('Failed to create vendor: Invalid response structure from server. Please check console for details.');
+      }
+      
+      // Use the validated vendor data
+      const vendorId = vendorData.id || vendorData.ID;
+      const vendorName = vendorData.name || vendorData.Name;
+      const finalVendorCode = vendorData.code || vendorData.Code || `V${vendorId}`;
+      
+      // Add the new vendor to the vendors list
+      const formattedVendor = {
+        id: vendorId,
+        name: vendorName,
+        code: finalVendorCode,
+      };
+      
+      console.log('Adding formatted vendor to list:', formattedVendor);
+      setVendors(prev => [...prev, formattedVendor]);
+      
+      // Select the new vendor in the form
+      setFormData(prev => ({ ...prev, vendor_id: vendorId.toString() }));
+      
+      // Reset form and close modal
+      setNewVendorData({
+        name: '',
+        code: '',
+        email: '',
+        phone: '',
+        mobile: '',
+        address: '',
+        pic_name: '',
+        external_id: '',
+        notes: ''
+      });
+      
+      onAddVendorClose();
+      
+      toast({
+        title: 'Success',
+        description: `Vendor "${vendorName}" created successfully and selected`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
+    } catch (err: any) {
+      console.error('Error creating vendor:', err);
+      toast({
+        title: 'Error',
+        description: err.response?.data?.error || 'Failed to create vendor',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setSavingVendor(false);
+    }
+  };
+
+  // Handle add new product
+  const handleAddProduct = async () => {
+    if (!newProductData.name.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Product name is required',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (!newProductData.unit.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Product unit is required',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      setSavingProduct(true);
+      
+      const productPayload = {
+        name: newProductData.name,
+        code: newProductData.code || undefined,
+        description: newProductData.description || undefined,
+        unit: newProductData.unit,
+        purchase_price: parseFloat(newProductData.purchase_price) || 0,
+        sale_price: parseFloat(newProductData.sale_price) || 0,
+        stock: 0,
+        min_stock: 0,
+        max_stock: 0,
+        reorder_level: 0,
+        is_active: true,
+        is_service: false,
+        taxable: true
+      };
+      
+      const newProduct = await productService.createProduct(productPayload);
+      
+      // Add the new product to the products list
+      setProducts(prev => [...prev, newProduct.data]);
+      
+      // Select the new product in the form if we have items
+      if (formData.items.length > 0) {
+        const items = [...formData.items];
+        items[0] = { 
+          ...items[0], 
+          product_id: newProduct.data.id.toString(),
+          unit_price: newProduct.data.purchase_price?.toString() || '0'
+        };
+        setFormData({ ...formData, items });
+      } else {
+        // Add a new item with the created product
+        setFormData({
+          ...formData,
+          items: [{
+            product_id: newProduct.data.id.toString(),
+            quantity: '1',
+            unit_price: newProduct.data.purchase_price?.toString() || '0',
+            discount: '0',
+            tax: '0',
+            expense_account_id: defaultExpenseAccountId ? defaultExpenseAccountId.toString() : ''
+          }]
+        });
+      }
+      
+      // Reset form and close modal
+      setNewProductData({
+        name: '',
+        code: '',
+        description: '',
+        unit: '',
+        purchase_price: '0',
+        sale_price: '0',
+      });
+      
+      onAddProductClose();
+      
+      toast({
+        title: 'Success',
+        description: `Product "${newProduct.data.name}" created successfully and selected`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
+    } catch (err: any) {
+      console.error('Error creating product:', err);
+      toast({
+        title: 'Error',
+        description: err.response?.data?.error || 'Failed to create product',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setSavingProduct(false);
     }
   };
 
@@ -636,7 +947,7 @@ const PurchasesPage: React.FC = () => {
   };
 
   // Handle create new purchase
-  const handleCreate = async () => {
+const handleCreate = async () => {
     // Reset form data
     setFormData({
       vendor_id: '',
@@ -644,7 +955,19 @@ const PurchasesPage: React.FC = () => {
       due_date: '',
       notes: '',
       discount: '0',
+      
+      // Legacy tax field
       tax: '0',
+      
+      // Tax additions (Penambahan)
+      ppn_rate: '11',
+      other_tax_additions: '0',
+      
+      // Tax deductions (Pemotongan)
+      pph21_rate: '0',
+      pph23_rate: '0',
+      other_tax_deductions: '0',
+      
       items: []
     });
     setSelectedPurchase(null);
@@ -654,117 +977,76 @@ const PurchasesPage: React.FC = () => {
     onCreateOpen();
   };
 
-  // Handle save purchase (both create and edit)
+  // Handle save for both create and edit
   const handleSave = async () => {
+    if (!formData.vendor_id) {
+      toast({
+        title: 'Error',
+        description: 'Please select a vendor',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (formData.items.length === 0) {
+      toast({
+        title: 'Error',
+        description: 'Please add at least one item',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // Validate all items have product, quantity, and expense account
+    const invalidItems = formData.items.filter(item => 
+      !item.product_id || !item.quantity || !item.expense_account_id
+    );
+
+    if (invalidItems.length > 0) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all required fields for each item',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
     try {
-      // Validation
-      if (!formData.vendor_id) {
-        toast({
-          title: 'Validation Error',
-          description: 'Please select a vendor',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
-        return;
-      }
-
-      if (!formData.date) {
-        toast({
-          title: 'Validation Error',
-          description: 'Please select a purchase date',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
-        return;
-      }
-
-      if (formData.items.length === 0) {
-        toast({
-          title: 'Validation Error',
-          description: 'Please add at least one purchase item',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
-        return;
-      }
-
-      // Per-item validation to avoid sending invalid product_id/values
-      for (let i = 0; i < formData.items.length; i++) {
-        const it = formData.items[i];
-        const pid = parseInt(it.product_id);
-        const qty = parseInt(it.quantity);
-        const price = parseFloat(it.unit_price);
-        const expId = it.expense_account_id ? parseInt(it.expense_account_id) : (defaultExpenseAccountId ?? 0);
-
-        if (!pid || isNaN(pid) || pid <= 0) {
-          toast({
-            title: 'Validation Error',
-            description: `Item #${i + 1}: Please select a valid product`,
-            status: 'error',
-            duration: 3500,
-            isClosable: true,
-          });
-          return;
-        }
-        if (!qty || isNaN(qty) || qty <= 0) {
-          toast({
-            title: 'Validation Error',
-            description: `Item #${i + 1}: Quantity must be greater than 0`,
-            status: 'error',
-            duration: 3500,
-            isClosable: true,
-          });
-          return;
-        }
-        if (isNaN(price) || price < 0) {
-          toast({
-            title: 'Validation Error',
-            description: `Item #${i + 1}: Unit price must be a valid number (>= 0)`,
-            status: 'error',
-            duration: 3500,
-            isClosable: true,
-          });
-          return;
-        }
-        if (!expId || isNaN(expId) || expId <= 0) {
-          toast({
-            title: 'Validation Error',
-            description: `Item #${i + 1}: Expense account is required`,
-            status: 'error',
-            duration: 3500,
-            isClosable: true,
-          });
-          return;
-        }
-      }
-
-      // Prepare purchase data according to API requirements
-      const purchaseData = {
+      setLoading(true);
+      
+      // Format the payload
+      const payload = {
         vendor_id: parseInt(formData.vendor_id),
-        date: new Date(formData.date).toISOString(),
-        due_date: formData.due_date ? new Date(formData.due_date).toISOString() : undefined,
+        date: formData.date ? `${formData.date}T00:00:00Z` : new Date().toISOString(),
+        due_date: formData.due_date ? `${formData.due_date}T00:00:00Z` : undefined,
         notes: formData.notes,
         discount: parseFloat(formData.discount) || 0,
-        tax: parseFloat(formData.tax) || 0,
-        items: formData.items.map((item) => ({
+        // Only include legacy tax if PPN rate matches
+        tax: parseFloat(formData.ppn_rate) || 0, 
+        items: formData.items.map(item => ({
           product_id: parseInt(item.product_id),
-          quantity: parseInt(item.quantity),
+          quantity: parseFloat(item.quantity),
           unit_price: parseFloat(item.unit_price),
           discount: parseFloat(item.discount) || 0,
           tax: parseFloat(item.tax) || 0,
-          expense_account_id: item.expense_account_id ? parseInt(item.expense_account_id) : (defaultExpenseAccountId ?? undefined),
-        }))
+          expense_account_id: parseInt(item.expense_account_id),
+        })),
       };
 
+      let response;
+      
       if (selectedPurchase) {
         // Update existing purchase
-        await purchaseService.update(selectedPurchase.id, purchaseData);
+        response = await purchaseService.update(selectedPurchase.id, payload);
         toast({
           title: 'Success',
-          description: 'Purchase updated successfully',
+          description: `Purchase ${response.code} updated successfully`,
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -772,73 +1054,125 @@ const PurchasesPage: React.FC = () => {
         onEditClose();
       } else {
         // Create new purchase
-        await purchaseService.create(purchaseData);
+        response = await purchaseService.create(payload);
         toast({
           title: 'Success',
-          description: 'Purchase created successfully',
+          description: `Purchase ${response.code} created successfully. Use "Submit for Approval" button to submit when ready.`,
           status: 'success',
-          duration: 3000,
+          duration: 5000,
           isClosable: true,
         });
         onCreateClose();
+        
+        // NOTE: Purchase is now created as DRAFT - Employee must manually submit for approval
+        // This allows Employee to review the purchase details before submitting
       }
       
-      await fetchPurchases(); // Refresh data
+      // Refresh the list
+      await fetchPurchases();
+      
     } catch (err: any) {
-      console.error('Save error:', err);
-      
-      let errorMessage = `Failed to ${selectedPurchase ? 'update' : 'create'} purchase`;
-      
-      // Handle specific error cases
-      if (err.response?.status === 404) {
-        errorMessage = 'Purchase API endpoint not found. The purchase management feature is not yet fully implemented on the backend.';
-      } else if (err.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      } else if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
+      console.error('Error saving purchase:', err);
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || err.message || 'An error occurred';
       toast({
-        title: 'API Not Available',
+        title: 'Error',
         description: errorMessage,
-        status: 'warning',
-        duration: 8000,
+        status: 'error',
+        duration: 5000,
         isClosable: true,
       });
+    } finally {
+      setLoading(false);
     }
   };
+
 
   // Smart Action Button Logic
   const getActionButtonProps = (purchase: Purchase) => {
     const roleNorm = normalizeRole(user?.role as any);
     const status = (purchase.approval_status || '').toUpperCase();
+    const purchaseStatus = (purchase.status || '').toUpperCase();
     
-    // Check active step (simplified version, should be more robust in real-world)
-    // This is a placeholder logic. For a real app, the active step should come from the API.
-    const getActiveStep = () => {
-      if (status === 'PENDING') {
-        // A more robust check would look at the last history item
-        if (purchase.total_amount > 25000000) return 'director';
-        return 'finance';
+    // Helper function to get current active approval step
+    const getCurrentActiveStep = () => {
+      // Check if we have approval steps data from backend
+      if (purchase.approval_request?.approval_steps) {
+        // Find the active step that's pending - this is the most important check
+        const activeStep = purchase.approval_request.approval_steps.find(
+          step => step.is_active && step.status === 'PENDING'
+        );
+        
+        if (activeStep) {
+          return {
+            step_name: activeStep.step.step_name,
+            approver_role: normalizeRole(activeStep.step.approver_role),
+            step_order: activeStep.step.step_order,
+            is_escalated: activeStep.step.step_name?.includes('Escalated') || activeStep.step.step_name?.includes('Director') || false
+          };
+        }
+        
+        // If no active step found, check for any pending step (fallback)
+        const pendingStep = purchase.approval_request.approval_steps.find(
+          step => step.status === 'PENDING'
+        );
+        
+        if (pendingStep) {
+          return {
+            step_name: pendingStep.step.step_name,
+            approver_role: normalizeRole(pendingStep.step.approver_role),
+            step_order: pendingStep.step.step_order,
+            is_escalated: pendingStep.step.step_name?.includes('Escalated') || pendingStep.step.step_name?.includes('Director') || false
+          };
+        }
       }
-      if (status === 'NOT_STARTED' || status === 'DRAFT') return 'finance';
+      
+      // Fallback logic if no approval steps data available
+      if (purchaseStatus === 'DRAFT' && roleNorm === 'employee') {
+        return { step_name: 'Submit', approver_role: 'employee', step_order: 0, is_escalated: false };
+      }
+      
+      // Enhanced fallback logic based on status and amount
+      if (status === 'PENDING' || status === 'NOT_STARTED' || purchaseStatus === 'PENDING_APPROVAL') {
+        // For high amounts or when escalated, should go to director
+        if (purchase.total_amount > 25000000) {
+          return { step_name: 'Director Approval', approver_role: 'director', step_order: 2, is_escalated: true };
+        }
+        // Default to finance approval
+        return { step_name: 'Finance Approval', approver_role: 'finance', step_order: 1, is_escalated: false };
+      }
+      
       return null;
     };
     
-    const activeStep = getActiveStep();
-    const isUserTurn = activeStep === roleNorm;
+    const activeStep = getCurrentActiveStep();
+    const isUserTurn = activeStep?.approver_role === roleNorm;
 
-    if (status === 'APPROVED' || status === 'REJECTED' || status === 'CANCELLED') {
+    // Completed states
+    if (status === 'APPROVED' || status === 'REJECTED' || purchaseStatus === 'CANCELLED') {
       return { text: 'View', icon: <FiEye />, colorScheme: 'gray', variant: 'outline' };
     }
 
+    // User's turn to act
     if (isUserTurn) {
-      return { text: 'Action Required', icon: <FiAlertCircle />, colorScheme: 'orange', variant: 'solid' };
+      if (roleNorm === 'employee' && purchaseStatus === 'DRAFT') {
+        return { text: 'Submit for Approval', icon: <FiAlertCircle />, colorScheme: 'blue', variant: 'solid' };
+      }
+      
+      // Show appropriate text based on escalation
+      const actionText = activeStep?.is_escalated ? 'Action Required (Escalated)' : 'Action Required';
+      return { text: actionText, icon: <FiAlertCircle />, colorScheme: 'orange', variant: 'solid' };
     }
 
-    if (status === 'PENDING') {
+    // Waiting for others - show who needs to act
+    if (status === 'PENDING' || purchaseStatus === 'PENDING_APPROVAL') {
+      if (activeStep) {
+        const waitingForRole = activeStep.approver_role === 'finance' ? 'Finance' : 
+                              activeStep.approver_role === 'director' ? 'Director' :
+                              activeStep.approver_role === 'admin' ? 'Admin' : 'Approval';
+        
+        const waitingText = activeStep.is_escalated ? `Waiting for ${waitingForRole} (Escalated)` : `Waiting for ${waitingForRole}`;
+        return { text: waitingText, icon: <FiClock />, colorScheme: 'blue', variant: 'outline' };
+      }
       return { text: 'Review Progress', icon: <FiClock />, colorScheme: 'blue', variant: 'outline' };
     }
     
@@ -848,6 +1182,8 @@ const PurchasesPage: React.FC = () => {
   // Action buttons for each row
   const renderActions = (purchase: Purchase) => {
     const actionProps = getActionButtonProps(purchase);
+    const roleNorm = normalizeRole(user?.role as any);
+    const purchaseStatus = (purchase.status || '').toUpperCase();
     
     return (
       <HStack spacing={2}>
@@ -858,8 +1194,13 @@ const PurchasesPage: React.FC = () => {
           colorScheme={actionProps.colorScheme}
           leftIcon={actionProps.icon}
           onClick={() => {
-            setSelectedPurchase(purchase);
-            onViewOpen();
+            // Handle special case for employee submitting draft purchase
+            if (roleNorm === 'employee' && purchaseStatus === 'DRAFT' && actionProps.text === 'Submit for Approval') {
+              handleSubmitForApproval(purchase.id);
+            } else {
+              setSelectedPurchase(purchase);
+              onViewOpen();
+            }
           }}
           fontWeight={actionProps.variant === 'solid' ? 'semibold' : 'medium'}
           _hover={{
@@ -883,18 +1224,7 @@ const PurchasesPage: React.FC = () => {
           </Button>
         )}
         
-        {/* Delete button for DIRECTOR - only DRAFT purchases */}
-        {user?.role === 'DIRECTOR' && (purchase.status || '').toUpperCase() === 'DRAFT' && (
-          <Button
-            size="sm"
-            colorScheme="red"
-            variant="outline"
-            leftIcon={<FiTrash2 />}
-            onClick={() => handleDelete(purchase.id)}
-          >
-            Delete
-          </Button>
-        )}
+        {/* Delete button removed for DIRECTOR role per requirement */}
       </HStack>
     );
   };
@@ -1318,24 +1648,37 @@ const PurchasesPage: React.FC = () => {
               <VStack spacing={4} align="stretch">
                 <Text fontSize="md" fontWeight="semibold">Basic Info</Text>
                 <SimpleGrid columns={2} spacing={4}>
-                  <FormControl isRequired>
-                    <FormLabel>Vendor</FormLabel>
-                    {loadingVendors ? (
-                      <Spinner size="sm" />
-                    ) : (
-                      <Select
-                        placeholder="Select vendor"
-                        value={formData.vendor_id}
-                        onChange={(e) => setFormData({...formData, vendor_id: e.target.value})}
-                      >
-                        {vendors.map(vendor => (
-                          <option key={vendor.id} value={vendor.id}>
-                            {vendor.name} ({vendor.code})
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </FormControl>
+                      <FormControl isRequired>
+                        <FormLabel>Vendor</FormLabel>
+                        <HStack spacing={2}>
+                          {loadingVendors ? (
+                            <Spinner size="sm" />
+                          ) : (
+                            <Select
+                              placeholder="Select vendor"
+                              value={formData.vendor_id}
+                              onChange={(e) => setFormData({...formData, vendor_id: e.target.value})}
+                              flex={1}
+                            >
+                              {vendors.map(vendor => (
+                                <option key={vendor.id} value={vendor.id}>
+                                  {vendor.name} ({vendor.code})
+                                </option>
+                              ))}
+                            </Select>
+                          )}
+                          <IconButton
+                            aria-label="Add new vendor"
+                            icon={<FiPlus />}
+                            size="sm"
+                            colorScheme="green"
+                            variant="outline"
+                            onClick={onAddVendorOpen}
+                            title="Add New Vendor"
+                            _hover={{ bg: 'green.50' }}
+                          />
+                        </HStack>
+                      </FormControl>
                   
                   <FormControl isRequired>
                     <FormLabel>Purchase Date</FormLabel>
@@ -1447,22 +1790,35 @@ const PurchasesPage: React.FC = () => {
                                       <Spinner size="sm" />
                                     </Flex>
                                   ) : (
-                                    <Select
-                                      placeholder="Select product"
-                                      value={item.product_id}
-                                      onChange={(e) => {
-                                        const items = [...formData.items];
-                                        items[index] = { ...items[index], product_id: e.target.value };
-                                        setFormData({ ...formData, items });
-                                      }}
-                                      size="sm"
-                                    >
-                                      {products.map((p) => (
-                                        <option key={p.id} value={p.id?.toString()}>
-                                          {p?.id} - {p?.name || p?.code}
-                                        </option>
-                                      ))}
-                                    </Select>
+                                    <HStack spacing={2}>
+                                      <Select
+                                        placeholder="Select product"
+                                        value={item.product_id}
+                                        onChange={(e) => {
+                                          const items = [...formData.items];
+                                          items[index] = { ...items[index], product_id: e.target.value };
+                                          setFormData({ ...formData, items });
+                                        }}
+                                        size="sm"
+                                        maxW="280px"
+                                      >
+                                        {products.map((p) => (
+                                          <option key={p.id} value={p.id?.toString()}>
+                                            {p?.id} - {p?.name || p?.code}
+                                          </option>
+                                        ))}
+                                      </Select>
+                                      <IconButton 
+                                        aria-label="Add new product"
+                                        icon={<FiPlus />}
+                                        size="sm"
+                                        colorScheme="blue"
+                                        variant="outline"
+                                        onClick={onAddProductOpen}
+                                        title="Add New Product"
+                                        _hover={{ bg: 'blue.50' }}
+                                      />
+                                    </HStack>
                                   )}
                                 </Td>
                                 <Td isNumeric>
@@ -1485,34 +1841,20 @@ const PurchasesPage: React.FC = () => {
                                   </NumberInput>
                                 </Td>
                                 <Td isNumeric>
-                                  <NumberInput 
-                                    size="sm" 
-                                    min={0} 
-                                    precision={0} 
-                                    value={item.unit_price} 
-                                    onChange={(valueString) => {
-                                      const items = [...formData.items];
-                                      items[index] = { ...items[index], unit_price: valueString };
-                                      setFormData({ ...formData, items });
-                                    }} 
-                                    maxW="160px"
-                                    clampValueOnBlur={false}
-                                  >
-                                    <NumberInputField 
-                                      textAlign="right" 
-                                      fontSize="sm" 
-                                      placeholder="Masukkan harga"
-                                      inputMode="numeric"
-                                      bg="white"
-                                      borderColor="gray.200"
-                                      _hover={{ borderColor: 'gray.300' }}
-                                      _focus={{ borderColor: 'blue.400', boxShadow: '0 0 0 1px var(--chakra-colors-blue-400)' }}
+                                  <Box maxW="160px">
+                                    <CurrencyInput
+                                      value={parseFloat(item.unit_price) || 0}
+                                      onChange={(value) => {
+                                        const items = [...formData.items];
+                                        items[index] = { ...items[index], unit_price: value.toString() };
+                                        setFormData({ ...formData, items });
+                                      }}
+                                      placeholder="Rp 10.000"
+                                      size="sm"
+                                      min={0}
+                                      showLabel={false}
                                     />
-                                    <NumberInputStepper>
-                                      <NumberIncrementStepper />
-                                      <NumberDecrementStepper />
-                                    </NumberInputStepper>
-                                  </NumberInput>
+                                  </Box>
                                 </Td>
                                 <Td minW="240px">
                                   {canListExpenseAccounts ? (
@@ -1608,6 +1950,191 @@ const PurchasesPage: React.FC = () => {
                     </FormHelperText>
                   </CardBody>
                 </Card>
+
+                {/* Tax Configuration Section */}
+                <Card>
+                  <CardHeader pb={3}>
+                    <Text fontSize="md" fontWeight="semibold" color="gray.700">
+                      💰 Tax Configuration
+                    </Text>
+                  </CardHeader>
+                  <CardBody pt={0}>
+                    <VStack spacing={4} align="stretch">
+                      {/* Tax Additions (Penambahan) */}
+                      <Box>
+                        <Text fontSize="sm" fontWeight="medium" color="green.600" mb={3}>
+                          ➕ Tax Additions (Penambahan)
+                        </Text>
+                        <SimpleGrid columns={2} spacing={4}>
+                          <FormControl>
+                            <FormLabel fontSize="sm">PPN Rate (%)</FormLabel>
+                            <NumberInput
+                              value={formData.ppn_rate}
+                              onChange={(value) => setFormData({...formData, ppn_rate: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="11" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Pajak Pertambahan Nilai (default 11%)</FormHelperText>
+                          </FormControl>
+
+                          <FormControl>
+                            <FormLabel fontSize="sm">Other Tax Additions (%)</FormLabel>
+                            <NumberInput
+                              value={formData.other_tax_additions}
+                              onChange={(value) => setFormData({...formData, other_tax_additions: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="0" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Pajak tambahan lainnya (opsional)</FormHelperText>
+                          </FormControl>
+                        </SimpleGrid>
+                      </Box>
+
+                      <Divider />
+
+                      {/* Tax Deductions (Pemotongan) */}
+                      <Box>
+                        <Text fontSize="sm" fontWeight="medium" color="red.600" mb={3}>
+                          ➖ Tax Deductions (Pemotongan)
+                        </Text>
+                        <SimpleGrid columns={3} spacing={4}>
+                          <FormControl>
+                            <FormLabel fontSize="sm">PPh 21 Rate (%)</FormLabel>
+                            <NumberInput
+                              value={formData.pph21_rate}
+                              onChange={(value) => setFormData({...formData, pph21_rate: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="0" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Pajak Penghasilan Pasal 21</FormHelperText>
+                          </FormControl>
+
+                          <FormControl>
+                            <FormLabel fontSize="sm">PPh 23 Rate (%)</FormLabel>
+                            <NumberInput
+                              value={formData.pph23_rate}
+                              onChange={(value) => setFormData({...formData, pph23_rate: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="0" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Pajak Penghasilan Pasal 23</FormHelperText>
+                          </FormControl>
+
+                          <FormControl>
+                            <FormLabel fontSize="sm">Other Tax Deductions (%)</FormLabel>
+                            <NumberInput
+                              value={formData.other_tax_deductions}
+                              onChange={(value) => setFormData({...formData, other_tax_deductions: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="0" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Potongan pajak lainnya (opsional)</FormHelperText>
+                          </FormControl>
+                        </SimpleGrid>
+                      </Box>
+
+                      {/* Tax Summary Calculation */}
+                      {formData.items.length > 0 && (
+                        <Box mt={4} p={4} bg="gray.50" borderRadius="md" border="1px solid" borderColor="gray.200">
+                          <VStack spacing={2} align="stretch">
+                            <Text fontSize="sm" fontWeight="semibold" color="gray.700">Tax Summary:</Text>
+                            {(() => {
+                              const subtotal = formData.items.reduce((total, item) => {
+                                const qty = parseFloat(item.quantity || '0');
+                                const price = parseFloat(item.unit_price || '0');
+                                return total + ((isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price));
+                              }, 0);
+                              
+                              const discount = (parseFloat(formData.discount) || 0) / 100;
+                              const discountedSubtotal = subtotal * (1 - discount);
+                              
+                              const ppnAmount = discountedSubtotal * (parseFloat(formData.ppn_rate) || 0) / 100;
+                              const otherAdditions = discountedSubtotal * (parseFloat(formData.other_tax_additions) || 0) / 100;
+                              const totalAdditions = ppnAmount + otherAdditions;
+                              
+                              const pph21Amount = discountedSubtotal * (parseFloat(formData.pph21_rate) || 0) / 100;
+                              const pph23Amount = discountedSubtotal * (parseFloat(formData.pph23_rate) || 0) / 100;
+                              const otherDeductions = discountedSubtotal * (parseFloat(formData.other_tax_deductions) || 0) / 100;
+                              const totalDeductions = pph21Amount + pph23Amount + otherDeductions;
+                              
+                              const finalTotal = discountedSubtotal + totalAdditions - totalDeductions;
+                              
+                              return (
+                                <SimpleGrid columns={2} spacing={4} fontSize="xs">
+                                  <VStack align="start" spacing={1}>
+                                    <Text color="gray.600">Subtotal: {formatCurrency(subtotal)}</Text>
+                                    <Text color="gray.600">Discount ({formData.discount}%): -{formatCurrency(subtotal * discount)}</Text>
+                                    <Text color="gray.600">After Discount: {formatCurrency(discountedSubtotal)}</Text>
+                                  </VStack>
+                                  
+                                  <VStack align="start" spacing={1}>
+                                    <Text color="green.600">+ PPN ({formData.ppn_rate}%): {formatCurrency(ppnAmount)}</Text>
+                                    {parseFloat(formData.other_tax_additions) > 0 && (
+                                      <Text color="green.600">+ Other Additions ({formData.other_tax_additions}%): {formatCurrency(otherAdditions)}</Text>
+                                    )}
+                                    {parseFloat(formData.pph21_rate) > 0 && (
+                                      <Text color="red.600">- PPh 21 ({formData.pph21_rate}%): {formatCurrency(pph21Amount)}</Text>
+                                    )}
+                                    {parseFloat(formData.pph23_rate) > 0 && (
+                                      <Text color="red.600">- PPh 23 ({formData.pph23_rate}%): {formatCurrency(pph23Amount)}</Text>
+                                    )}
+                                    {parseFloat(formData.other_tax_deductions) > 0 && (
+                                      <Text color="red.600">- Other Deductions ({formData.other_tax_deductions}%): {formatCurrency(otherDeductions)}</Text>
+                                    )}
+                                    <Text fontWeight="bold" color="blue.700" borderTop="1px solid" borderColor="gray.300" pt={1}>
+                                      Final Total: {formatCurrency(finalTotal)}
+                                    </Text>
+                                  </VStack>
+                                </SimpleGrid>
+                              );
+                            })()}
+                          </VStack>
+                        </Box>
+                      )}
+                    </VStack>
+                  </CardBody>
+                </Card>
+
               </VStack>
             </ModalBody>
             <ModalFooter>
@@ -1626,8 +2153,8 @@ const PurchasesPage: React.FC = () => {
         {/* Create Purchase Modal */}
         <Modal isOpen={isCreateOpen} onClose={onCreateClose} size="6xl">
           <ModalOverlay />
-          <ModalContent maxW="90vw" maxH="90vh">
-            <ModalHeader bg="blue.50" borderRadius="md" mb={4}>
+          <ModalContent maxW="95vw" maxH="95vh">
+            <ModalHeader bg="blue.50" borderRadius="md" mx={4} mt={4} mb={2}>
               <HStack>
                 <Box w={1} h={6} bg="blue.500" borderRadius="full" />
                 <Text fontSize="lg" fontWeight="bold" color="blue.700">
@@ -1635,8 +2162,8 @@ const PurchasesPage: React.FC = () => {
                 </Text>
               </HStack>
             </ModalHeader>
-            <ModalCloseButton />
-            <ModalBody overflowY="visible" px={6}>
+            <ModalCloseButton top={6} right={6} />
+            <ModalBody overflowY="auto" px={6} pb={2}>
               <VStack spacing={6} align="stretch">
                 {/* Basic Information Section */}
                 <Card>
@@ -1649,22 +2176,35 @@ const PurchasesPage: React.FC = () => {
                     <SimpleGrid columns={3} spacing={4}>
                       <FormControl isRequired>
                         <FormLabel fontSize="sm" fontWeight="medium">Vendor</FormLabel>
-                        {loadingVendors ? (
-                          <Spinner size="sm" />
-                        ) : (
-                          <Select
-                            placeholder="Select vendor"
-                            value={formData.vendor_id}
-                            onChange={(e) => setFormData({...formData, vendor_id: e.target.value})}
+                        <HStack spacing={2}>
+                          {loadingVendors ? (
+                            <Spinner size="sm" />
+                          ) : (
+                            <Select
+                              placeholder="Select vendor"
+                              value={formData.vendor_id}
+                              onChange={(e) => setFormData({...formData, vendor_id: e.target.value})}
+                              size="sm"
+                              flex={1}
+                            >
+                              {vendors.map(vendor => (
+                                <option key={vendor.id} value={vendor.id}>
+                                  {vendor.name} ({vendor.code})
+                                </option>
+                              ))}
+                            </Select>
+                          )}
+                          <IconButton
+                            aria-label="Add new vendor"
+                            icon={<FiPlus />}
                             size="sm"
-                          >
-                            {vendors.map(vendor => (
-                              <option key={vendor.id} value={vendor.id}>
-                                {vendor.name} ({vendor.code})
-                              </option>
-                            ))}
-                          </Select>
-                        )}
+                            colorScheme="green"
+                            variant="outline"
+                            onClick={onAddVendorOpen}
+                            title="Add New Vendor"
+                            _hover={{ bg: 'green.50' }}
+                          />
+                        </HStack>
                       </FormControl>
                       
                       <FormControl isRequired>
@@ -1750,21 +2290,22 @@ const PurchasesPage: React.FC = () => {
                   </CardHeader>
                   <CardBody pt={0}>
                     <Box overflow="visible">
-                      <Table size="sm" variant="simple">
+                        <Table size="sm" variant="simple">
                         <Thead bg="gray.50">
                           <Tr>
                             <Th fontSize="xs" fontWeight="semibold" color="gray.600">Product</Th>
                             <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Qty</Th>
                             <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Unit Price (IDR)</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Discount (IDR)</Th>
                             <Th fontSize="xs" fontWeight="semibold" color="gray.600">Expense Account</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Total (IDR)</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Line Total (IDR)</Th>
                             <Th fontSize="xs" fontWeight="semibold" color="gray.600" w="60px">Action</Th>
                           </Tr>
                         </Thead>
                         <Tbody>
                           {formData.items.length === 0 ? (
                             <Tr>
-                              <Td colSpan={6} textAlign="center" py={8}>
+                              <Td colSpan={7} textAlign="center" py={8}>
                                 <VStack spacing={2}>
                                   <Text fontSize="sm" color="gray.500">No items added yet</Text>
                                   <Text fontSize="xs" color="gray.400">Click "Add Item" button to start adding purchase items</Text>
@@ -1780,22 +2321,35 @@ const PurchasesPage: React.FC = () => {
                                       <Spinner size="sm" />
                                     </Flex>
                                   ) : (
-                                    <Select
-                                      placeholder="Select product"
-                                      value={item.product_id}
-                                      onChange={(e) => {
-                                        const items = [...formData.items];
-                                        items[index] = { ...items[index], product_id: e.target.value };
-                                        setFormData({ ...formData, items });
-                                      }}
-                                      size="sm"
-                                    >
-                                      {products.map((p) => (
-                                        <option key={p.id} value={p.id?.toString()}>
-                                          {p?.id} - {p?.name || p?.code}
-                                        </option>
-                                      ))}
-                                    </Select>
+                                    <HStack spacing={2}>
+                                      <Select
+                                        placeholder="Select product"
+                                        value={item.product_id}
+                                        onChange={(e) => {
+                                          const items = [...formData.items];
+                                          items[index] = { ...items[index], product_id: e.target.value };
+                                          setFormData({ ...formData, items });
+                                        }}
+                                        size="sm"
+                                        maxW="280px"
+                                      >
+                                        {products.map((p) => (
+                                          <option key={p.id} value={p.id?.toString()}>
+                                            {p?.id} - {p?.name || p?.code}
+                                          </option>
+                                        ))}
+                                      </Select>
+                                      <IconButton 
+                                        aria-label="Add new product"
+                                        icon={<FiPlus />}
+                                        size="sm"
+                                        colorScheme="blue"
+                                        variant="outline"
+                                        onClick={onAddProductOpen}
+                                        title="Add New Product"
+                                        _hover={{ bg: 'blue.50' }}
+                                      />
+                                    </HStack>
                                   )}
                                 </Td>
                                 <Td isNumeric>
@@ -1818,34 +2372,36 @@ const PurchasesPage: React.FC = () => {
                                   </NumberInput>
                                 </Td>
                                 <Td isNumeric>
-                                  <NumberInput 
-                                    size="sm" 
-                                    min={0} 
-                                    precision={0} 
-                                    value={item.unit_price} 
-                                    onChange={(valueString) => {
-                                      const items = [...formData.items];
-                                      items[index] = { ...items[index], unit_price: valueString };
-                                      setFormData({ ...formData, items });
-                                    }} 
-                                    maxW="160px"
-                                    clampValueOnBlur={false}
-                                  >
-                                    <NumberInputField 
-                                      textAlign="right" 
-                                      fontSize="sm" 
-                                      placeholder="Masukkan harga"
-                                      inputMode="numeric"
-                                      bg="white"
-                                      borderColor="gray.200"
-                                      _hover={{ borderColor: 'gray.300' }}
-                                      _focus={{ borderColor: 'blue.400', boxShadow: '0 0 0 1px var(--chakra-colors-blue-400)' }}
+                                  <Box maxW="160px">
+                                    <CurrencyInput
+                                      value={parseFloat(item.unit_price) || 0}
+                                      onChange={(value) => {
+                                        const items = [...formData.items];
+                                        items[index] = { ...items[index], unit_price: value.toString() };
+                                        setFormData({ ...formData, items });
+                                      }}
+                                      placeholder="Rp 10.000"
+                                      size="sm"
+                                      min={0}
+                                      showLabel={false}
                                     />
-                                    <NumberInputStepper>
-                                      <NumberIncrementStepper />
-                                      <NumberDecrementStepper />
-                                    </NumberInputStepper>
-                                  </NumberInput>
+                                  </Box>
+                                </Td>
+                                <Td isNumeric>
+                                  <Box maxW="140px">
+                                    <CurrencyInput
+                                      value={parseFloat(item.discount) || 0}
+                                      onChange={(value) => {
+                                        const items = [...formData.items];
+                                        items[index] = { ...items[index], discount: value.toString() };
+                                        setFormData({ ...formData, items });
+                                      }}
+                                      placeholder="Rp 0"
+                                      size="sm"
+                                      min={0}
+                                      showLabel={false}
+                                    />
+                                  </Box>
                                 </Td>
                                 <Td minW="240px">
                                   {canListExpenseAccounts ? (
@@ -1942,6 +2498,190 @@ const PurchasesPage: React.FC = () => {
                     </FormControl>
                   </CardBody>
                 </Card>
+
+                {/* Tax Configuration Section */}
+                <Card>
+                  <CardHeader pb={3}>
+                    <Text fontSize="md" fontWeight="semibold" color="gray.700">
+                      💰 Tax Configuration
+                    </Text>
+                  </CardHeader>
+                  <CardBody pt={0}>
+                    <VStack spacing={4} align="stretch">
+                      {/* Tax Additions (Penambahan) */}
+                      <Box>
+                        <Text fontSize="sm" fontWeight="medium" color="green.600" mb={3}>
+                          ➕ Tax Additions (Penambahan)
+                        </Text>
+                        <SimpleGrid columns={2} spacing={4}>
+                          <FormControl>
+                            <FormLabel fontSize="sm">PPN Rate (%)</FormLabel>
+                            <NumberInput
+                              value={formData.ppn_rate}
+                              onChange={(value) => setFormData({...formData, ppn_rate: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="11" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Pajak Pertambahan Nilai (default 11%)</FormHelperText>
+                          </FormControl>
+
+                          <FormControl>
+                            <FormLabel fontSize="sm">Other Tax Additions (%)</FormLabel>
+                            <NumberInput
+                              value={formData.other_tax_additions}
+                              onChange={(value) => setFormData({...formData, other_tax_additions: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="0" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Pajak tambahan lainnya (opsional)</FormHelperText>
+                          </FormControl>
+                        </SimpleGrid>
+                      </Box>
+
+                      <Divider />
+
+                      {/* Tax Deductions (Pemotongan) */}
+                      <Box>
+                        <Text fontSize="sm" fontWeight="medium" color="red.600" mb={3}>
+                          ➖ Tax Deductions (Pemotongan)
+                        </Text>
+                        <SimpleGrid columns={3} spacing={4}>
+                          <FormControl>
+                            <FormLabel fontSize="sm">PPh 21 Rate (%)</FormLabel>
+                            <NumberInput
+                              value={formData.pph21_rate}
+                              onChange={(value) => setFormData({...formData, pph21_rate: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="0" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Pajak Penghasilan Pasal 21</FormHelperText>
+                          </FormControl>
+
+                          <FormControl>
+                            <FormLabel fontSize="sm">PPh 23 Rate (%)</FormLabel>
+                            <NumberInput
+                              value={formData.pph23_rate}
+                              onChange={(value) => setFormData({...formData, pph23_rate: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="0" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Pajak Penghasilan Pasal 23</FormHelperText>
+                          </FormControl>
+
+                          <FormControl>
+                            <FormLabel fontSize="sm">Other Tax Deductions (%)</FormLabel>
+                            <NumberInput
+                              value={formData.other_tax_deductions}
+                              onChange={(value) => setFormData({...formData, other_tax_deductions: value})}
+                              size="sm"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                            >
+                              <NumberInputField placeholder="0" />
+                              <NumberInputStepper>
+                                <NumberIncrementStepper />
+                                <NumberDecrementStepper />
+                              </NumberInputStepper>
+                            </NumberInput>
+                            <FormHelperText fontSize="xs">Potongan pajak lainnya (opsional)</FormHelperText>
+                          </FormControl>
+                        </SimpleGrid>
+                      </Box>
+
+                      {/* Tax Summary Calculation */}
+                      {formData.items.length > 0 && (
+                        <Box mt={4} p={4} bg="gray.50" borderRadius="md" border="1px solid" borderColor="gray.200">
+                          <VStack spacing={2} align="stretch">
+                            <Text fontSize="sm" fontWeight="semibold" color="gray.700">Tax Summary:</Text>
+                            {(() => {
+                              const subtotal = formData.items.reduce((total, item) => {
+                                const qty = parseFloat(item.quantity || '0');
+                                const price = parseFloat(item.unit_price || '0');
+                                return total + ((isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price));
+                              }, 0);
+                              
+                              const discount = (parseFloat(formData.discount) || 0) / 100;
+                              const discountedSubtotal = subtotal * (1 - discount);
+                              
+                              const ppnAmount = discountedSubtotal * (parseFloat(formData.ppn_rate) || 0) / 100;
+                              const otherAdditions = discountedSubtotal * (parseFloat(formData.other_tax_additions) || 0) / 100;
+                              const totalAdditions = ppnAmount + otherAdditions;
+                              
+                              const pph21Amount = discountedSubtotal * (parseFloat(formData.pph21_rate) || 0) / 100;
+                              const pph23Amount = discountedSubtotal * (parseFloat(formData.pph23_rate) || 0) / 100;
+                              const otherDeductions = discountedSubtotal * (parseFloat(formData.other_tax_deductions) || 0) / 100;
+                              const totalDeductions = pph21Amount + pph23Amount + otherDeductions;
+                              
+                              const finalTotal = discountedSubtotal + totalAdditions - totalDeductions;
+                              
+                              return (
+                                <SimpleGrid columns={2} spacing={4} fontSize="xs">
+                                  <VStack align="start" spacing={1}>
+                                    <Text color="gray.600">Subtotal: {formatCurrency(subtotal)}</Text>
+                                    <Text color="gray.600">Discount ({formData.discount}%): -{formatCurrency(subtotal * discount)}</Text>
+                                    <Text color="gray.600">After Discount: {formatCurrency(discountedSubtotal)}</Text>
+                                  </VStack>
+                                  
+                                  <VStack align="start" spacing={1}>
+                                    <Text color="green.600">+ PPN ({formData.ppn_rate}%): {formatCurrency(ppnAmount)}</Text>
+                                    {parseFloat(formData.other_tax_additions) > 0 && (
+                                      <Text color="green.600">+ Other Additions ({formData.other_tax_additions}%): {formatCurrency(otherAdditions)}</Text>
+                                    )}
+                                    {parseFloat(formData.pph21_rate) > 0 && (
+                                      <Text color="red.600">- PPh 21 ({formData.pph21_rate}%): {formatCurrency(pph21Amount)}</Text>
+                                    )}
+                                    {parseFloat(formData.pph23_rate) > 0 && (
+                                      <Text color="red.600">- PPh 23 ({formData.pph23_rate}%): {formatCurrency(pph23Amount)}</Text>
+                                    )}
+                                    {parseFloat(formData.other_tax_deductions) > 0 && (
+                                      <Text color="red.600">- Other Deductions ({formData.other_tax_deductions}%): {formatCurrency(otherDeductions)}</Text>
+                                    )}
+                                    <Text fontWeight="bold" color="blue.700" borderTop="1px solid" borderColor="gray.300" pt={1}>
+                                      Final Total: {formatCurrency(finalTotal)}
+                                    </Text>
+                                  </VStack>
+                                </SimpleGrid>
+                              );
+                            })()}
+                          </VStack>
+                        </Box>
+                      )}
+                    </VStack>
+                  </CardBody>
+                </Card>
               </VStack>
             </ModalBody>
             <ModalFooter>
@@ -1951,6 +2691,271 @@ const PurchasesPage: React.FC = () => {
                 </Button>
                 <Button colorScheme="blue" onClick={handleSave}>
                   Create Purchase
+                </Button>
+              </HStack>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* Add Vendor Modal */}
+        <Modal isOpen={isAddVendorOpen} onClose={onAddVendorClose} size="lg">
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>
+              <HStack>
+                <Box w={1} h={6} bg="green.500" borderRadius="full" />
+                <Text fontSize="lg" fontWeight="bold" color="green.700">
+                  Add New Vendor
+                </Text>
+              </HStack>
+            </ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <VStack spacing={4} align="stretch">
+                <SimpleGrid columns={2} spacing={4}>
+                  <FormControl isRequired>
+                    <FormLabel fontSize="sm">Vendor Name</FormLabel>
+                    <Input
+                      size="sm"
+                      placeholder="Enter vendor name"
+                      value={newVendorData.name}
+                      onChange={(e) => setNewVendorData({...newVendorData, name: e.target.value})}
+                    />
+                  </FormControl>
+                  
+                  <FormControl>
+                    <FormLabel fontSize="sm">Vendor Code</FormLabel>
+                    <Input
+                      size="sm"
+                      placeholder="Auto-generated if empty"
+                      value={newVendorData.code}
+                      onChange={(e) => setNewVendorData({...newVendorData, code: e.target.value})}
+                    />
+                  </FormControl>
+                </SimpleGrid>
+                
+                <SimpleGrid columns={2} spacing={4}>
+                  <FormControl isRequired>
+                    <FormLabel fontSize="sm">Email</FormLabel>
+                    <Input
+                      size="sm"
+                      type="email"
+                      placeholder="vendor@company.com"
+                      value={newVendorData.email}
+                      onChange={(e) => setNewVendorData({...newVendorData, email: e.target.value})}
+                    />
+                  </FormControl>
+                  
+                  <FormControl>
+                    <FormLabel fontSize="sm">Phone</FormLabel>
+                    <Input
+                      size="sm"
+                      placeholder="Enter phone number"
+                      value={newVendorData.phone}
+                      onChange={(e) => setNewVendorData({...newVendorData, phone: e.target.value})}
+                    />
+                  </FormControl>
+                </SimpleGrid>
+                
+                <SimpleGrid columns={2} spacing={4}>
+                  <FormControl>
+                    <FormLabel fontSize="sm">Mobile</FormLabel>
+                    <Input
+                      size="sm"
+                      placeholder="Enter mobile number"
+                      value={newVendorData.mobile}
+                      onChange={(e) => setNewVendorData({...newVendorData, mobile: e.target.value})}
+                    />
+                  </FormControl>
+                  
+                  <FormControl>
+                    <FormLabel fontSize="sm">PIC Name</FormLabel>
+                    <Input
+                      size="sm"
+                      placeholder="Person in charge"
+                      value={newVendorData.pic_name}
+                      onChange={(e) => setNewVendorData({...newVendorData, pic_name: e.target.value})}
+                    />
+                  </FormControl>
+                </SimpleGrid>
+                
+                <FormControl>
+                  <FormLabel fontSize="sm">Vendor ID</FormLabel>
+                  <Input
+                    size="sm"
+                    placeholder="External vendor ID (optional)"
+                    value={newVendorData.external_id}
+                    onChange={(e) => setNewVendorData({...newVendorData, external_id: e.target.value})}
+                  />
+                </FormControl>
+                
+                <FormControl>
+                  <FormLabel fontSize="sm">Address</FormLabel>
+                  <Textarea
+                    size="sm"
+                    placeholder="Enter vendor address"
+                    rows={3}
+                    value={newVendorData.address}
+                    onChange={(e) => setNewVendorData({...newVendorData, address: e.target.value})}
+                  />
+                </FormControl>
+                
+                <FormControl>
+                  <FormLabel fontSize="sm">Notes</FormLabel>
+                  <Textarea
+                    size="sm"
+                    placeholder="Additional notes (optional)"
+                    rows={2}
+                    value={newVendorData.notes}
+                    onChange={(e) => setNewVendorData({...newVendorData, notes: e.target.value})}
+                  />
+                </FormControl>
+              </VStack>
+            </ModalBody>
+            <ModalFooter>
+              <HStack spacing={3}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setNewVendorData({
+                      name: '',
+                      code: '',
+                      email: '',
+                      phone: '',
+                      mobile: '',
+                      address: '',
+                      pic_name: '',
+                      external_id: '',
+                      notes: ''
+                    });
+                    onAddVendorClose();
+                  }}
+                  disabled={savingVendor}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  colorScheme="green"
+                  onClick={handleAddVendor}
+                  isLoading={savingVendor}
+                  loadingText="Creating..."
+                >
+                  Create Vendor
+                </Button>
+              </HStack>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* Add Product Modal */}
+        <Modal isOpen={isAddProductOpen} onClose={onAddProductClose} size="lg">
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>
+              <HStack>
+                <Box w={1} h={6} bg="blue.500" borderRadius="full" />
+                <Text fontSize="lg" fontWeight="bold" color="blue.700">
+                  Add New Product
+                </Text>
+              </HStack>
+            </ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <VStack spacing={4} align="stretch">
+                <FormControl isRequired>
+                  <FormLabel fontSize="sm">Product Name</FormLabel>
+                  <Input
+                    size="sm"
+                    placeholder="Enter product name"
+                    value={newProductData.name}
+                    onChange={(e) => setNewProductData({ ...newProductData, name: e.target.value })}
+                  />
+                </FormControl>
+                
+                <FormControl>
+                  <FormLabel fontSize="sm">Product Code</FormLabel>
+                  <Input
+                    size="sm"
+                    placeholder="Enter product code (optional)"
+                    value={newProductData.code}
+                    onChange={(e) => setNewProductData({ ...newProductData, code: e.target.value })}
+                  />
+                </FormControl>
+                
+                <FormControl>
+                  <FormLabel fontSize="sm">Description</FormLabel>
+                  <Textarea
+                    size="sm"
+                    placeholder="Enter product description"
+                    value={newProductData.description}
+                    onChange={(e) => setNewProductData({ ...newProductData, description: e.target.value })}
+                  />
+                </FormControl>
+                
+                <SimpleGrid columns={3} spacing={4}>
+                  <FormControl isRequired>
+                    <FormLabel fontSize="sm">Unit</FormLabel>
+                    <Input
+                      size="sm"
+                      placeholder="e.g., pcs, kg, box"
+                      value={newProductData.unit}
+                      onChange={(e) => setNewProductData({ ...newProductData, unit: e.target.value })}
+                    />
+                  </FormControl>
+                  
+                  <FormControl>
+                    <FormLabel fontSize="sm">Purchase Price (IDR)</FormLabel>
+                    <CurrencyInput
+                      value={parseFloat(newProductData.purchase_price) || 0}
+                      onChange={(value) => setNewProductData({ ...newProductData, purchase_price: value.toString() })}
+                      placeholder="Rp 10.000"
+                      size="sm"
+                      min={0}
+                      showLabel={false}
+                    />
+                  </FormControl>
+                  
+                  <FormControl>
+                    <FormLabel fontSize="sm">Sale Price (IDR)</FormLabel>
+                    <CurrencyInput
+                      value={parseFloat(newProductData.sale_price) || 0}
+                      onChange={(value) => setNewProductData({ ...newProductData, sale_price: value.toString() })}
+                      placeholder="Rp 15.000"
+                      size="sm"
+                      min={0}
+                      showLabel={false}
+                    />
+                  </FormControl>
+                </SimpleGrid>
+              </VStack>
+            </ModalBody>
+            <ModalFooter>
+              <HStack spacing={3} w="100%">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setNewProductData({
+                      name: '',
+                      code: '',
+                      description: '',
+                      unit: '',
+                      purchase_price: '0',
+                      sale_price: '0',
+                    });
+                    onAddProductClose();
+                  }}
+                  flex={1}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  colorScheme="blue"
+                  onClick={handleAddProduct}
+                  isLoading={savingProduct}
+                  loadingText="Creating..."
+                  flex={1}
+                >
+                  Create Product
                 </Button>
               </HStack>
             </ModalFooter>

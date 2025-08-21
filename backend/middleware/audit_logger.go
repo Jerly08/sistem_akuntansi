@@ -1,0 +1,470 @@
+package middleware
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+// AuditLog represents an audit log entry
+type AuditLog struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	UserID      uint      `json:"user_id" gorm:"index"`
+	Username    string    `json:"username" gorm:"size:100"`
+	Action      string    `json:"action" gorm:"size:50"`          // CREATE, UPDATE, DELETE, VIEW, LOGIN, LOGOUT
+	TableName   string    `json:"table_name" gorm:"size:100"`     // Table name for database compatibility
+	Resource    string    `json:"resource" gorm:"size:50"`        // payment, user, product, etc.
+	ResourceID  string    `json:"resource_id" gorm:"size:100"`    // ID of the affected resource
+	RecordID    uint      `json:"record_id" gorm:"index"`         // For database compatibility
+	Method      string    `json:"method" gorm:"size:10"`          // HTTP method
+	Endpoint    string    `json:"endpoint" gorm:"size:255"`       // API endpoint
+	IPAddress   string    `json:"ip_address" gorm:"size:45"`
+	UserAgent   string    `json:"user_agent" gorm:"type:text"`
+	RequestData string    `json:"request_data" gorm:"type:text"`  // JSON string of request body
+	OldValues   string    `json:"old_values" gorm:"type:text"`    // For database compatibility
+	NewValues   string    `json:"new_values" gorm:"type:text"`    // For database compatibility
+	ResponseCode int      `json:"response_code"`
+	Duration    int64     `json:"duration"` // Response time in milliseconds
+	Success     bool      `json:"success"`
+	ErrorMessage string   `json:"error_message" gorm:"type:text"`
+	Timestamp   time.Time `json:"timestamp"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// AuditLogger manages audit logging
+type AuditLogger struct {
+	db     *gorm.DB
+	logger *log.Logger
+}
+
+// NewAuditLogger creates a new audit logger
+func NewAuditLogger(db *gorm.DB) *AuditLogger {
+	// Create logs directory if it doesn't exist
+	logDir := "logs"
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		os.MkdirAll(logDir, 0755)
+	}
+
+	// Create audit log file
+	logFile, err := os.OpenFile(
+		filepath.Join(logDir, "audit.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+		0666,
+	)
+	if err != nil {
+		log.Printf("Failed to create audit log file: %v", err)
+		logFile = os.Stdout
+	}
+
+	logger := log.New(logFile, "[AUDIT] ", log.LstdFlags|log.Lmicroseconds)
+
+	return &AuditLogger{
+		db:     db,
+		logger: logger,
+	}
+}
+
+// responseWriter wraps gin.ResponseWriter to capture response data
+type responseWriter struct {
+	gin.ResponseWriter
+	body       *bytes.Buffer
+	statusCode int
+}
+
+func (w *responseWriter) Write(b []byte) (int, error) {
+	w.body.Write(b)
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *responseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+// AuditMiddleware returns a middleware that logs all API activities
+func (al *AuditLogger) AuditMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		startTime := time.Now()
+
+		// Skip health checks and static files
+		if shouldSkipAudit(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
+
+		// Capture request body
+		var requestBody []byte
+		if c.Request.Body != nil {
+			requestBody, _ = io.ReadAll(c.Request.Body)
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
+		}
+
+		// Wrap response writer to capture response
+		respWriter := &responseWriter{
+			ResponseWriter: c.Writer,
+			body:           bytes.NewBufferString(""),
+			statusCode:     http.StatusOK,
+		}
+		c.Writer = respWriter
+
+		// Process request
+		c.Next()
+
+		// Calculate duration
+		duration := time.Since(startTime)
+
+		// Create audit log entry
+		resource := getResourceFromPath(c.Request.URL.Path)
+		resourceID := getResourceID(c.Request.URL.Path, c.Params)
+		auditLog := &AuditLog{
+			UserID:       c.GetUint("user_id"),
+			Username:     c.GetString("username"),
+			Action:       getActionFromMethod(c.Request.Method),
+			TableName:    getTableNameFromResource(resource),
+			Resource:     resource,
+			ResourceID:   resourceID,
+			RecordID:     parseRecordID(resourceID),
+			Method:       c.Request.Method,
+			Endpoint:     c.Request.URL.Path,
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.Request.UserAgent(),
+			RequestData:  sanitizeRequestData(string(requestBody)),
+			OldValues:    "", // Empty for API audit logs
+			NewValues:    "", // Empty for API audit logs
+			ResponseCode: respWriter.statusCode,
+			Duration:     duration.Milliseconds(),
+			Success:      respWriter.statusCode < 400,
+			ErrorMessage: getErrorMessage(respWriter.body.String(), respWriter.statusCode),
+			Timestamp:    startTime,
+		}
+
+		// Log to database (non-blocking)
+		go al.logToDatabase(auditLog)
+
+		// Log to file
+		al.logToFile(auditLog)
+	}
+}
+
+// PaymentAuditMiddleware specifically for payment operations
+func (al *AuditLogger) PaymentAuditMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		startTime := time.Now()
+
+		// Capture request body for payment operations
+		var requestBody []byte
+		if c.Request.Body != nil {
+			requestBody, _ = io.ReadAll(c.Request.Body)
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
+		}
+
+		// Process request
+		c.Next()
+
+		// Calculate duration
+		duration := time.Since(startTime)
+
+		// Create detailed payment audit log
+		resourceID := getResourceID(c.Request.URL.Path, c.Params)
+		auditLog := &AuditLog{
+			UserID:       c.GetUint("user_id"),
+			Username:     c.GetString("username"),
+			Action:       getPaymentAction(c.Request.Method, c.Request.URL.Path),
+			TableName:    "payments",
+			Resource:     "payment",
+			ResourceID:   resourceID,
+			RecordID:     parseRecordID(resourceID),
+			Method:       c.Request.Method,
+			Endpoint:     c.Request.URL.Path,
+			IPAddress:    c.ClientIP(),
+			UserAgent:    c.Request.UserAgent(),
+			RequestData:  sanitizePaymentData(string(requestBody)),
+			OldValues:    "", // Empty for API audit logs
+			NewValues:    "", // Empty for API audit logs
+			ResponseCode: c.Writer.Status(),
+			Duration:     duration.Milliseconds(),
+			Success:      c.Writer.Status() < 400,
+			Timestamp:    startTime,
+		}
+
+		// Log to database and file
+		go al.logToDatabase(auditLog)
+		al.logToFile(auditLog)
+
+		// Additional security logging for failed payment attempts
+		if !auditLog.Success {
+			al.logSecurityEvent(auditLog)
+		}
+	}
+}
+
+// logToDatabase saves audit log to database
+func (al *AuditLogger) logToDatabase(auditLog *AuditLog) {
+	if al.db != nil {
+		if err := al.db.Create(auditLog).Error; err != nil {
+			log.Printf("Failed to save audit log to database: %v", err)
+		}
+	}
+}
+
+// logToFile writes audit log to file
+func (al *AuditLogger) logToFile(auditLog *AuditLog) {
+	logData := map[string]interface{}{
+		"user_id":       auditLog.UserID,
+		"username":      auditLog.Username,
+		"action":        auditLog.Action,
+		"resource":      auditLog.Resource,
+		"resource_id":   auditLog.ResourceID,
+		"method":        auditLog.Method,
+		"endpoint":      auditLog.Endpoint,
+		"ip_address":    auditLog.IPAddress,
+		"response_code": auditLog.ResponseCode,
+		"duration_ms":   auditLog.Duration,
+		"success":       auditLog.Success,
+		"timestamp":     auditLog.Timestamp.Format(time.RFC3339),
+	}
+
+	if auditLog.ErrorMessage != "" {
+		logData["error"] = auditLog.ErrorMessage
+	}
+
+	jsonData, _ := json.Marshal(logData)
+	al.logger.Printf("%s\n", string(jsonData))
+}
+
+// logSecurityEvent logs security-related events
+func (al *AuditLogger) logSecurityEvent(auditLog *AuditLog) {
+	securityEvent := fmt.Sprintf("SECURITY_ALERT: Failed %s attempt on %s by user %s (%d) from %s - Response: %d",
+		auditLog.Action,
+		auditLog.Resource,
+		auditLog.Username,
+		auditLog.UserID,
+		auditLog.IPAddress,
+		auditLog.ResponseCode,
+	)
+
+	al.logger.Printf("SECURITY: %s\n", securityEvent)
+}
+
+// Helper functions
+func shouldSkipAudit(path string) bool {
+	skipPaths := []string{
+		"/health",
+		"/metrics",
+		"/static",
+		"/uploads",
+		"/favicon.ico",
+	}
+
+	for _, skipPath := range skipPaths {
+		if strings.HasPrefix(path, skipPath) {
+			return true
+		}
+	}
+	return false
+}
+
+func getActionFromMethod(method string) string {
+	switch method {
+	case "GET":
+		return "VIEW"
+	case "POST":
+		return "CREATE"
+	case "PUT", "PATCH":
+		return "UPDATE"
+	case "DELETE":
+		return "DELETE"
+	default:
+		return method
+	}
+}
+
+func getPaymentAction(method, path string) string {
+	if strings.Contains(path, "/cancel") {
+		return "CANCEL_PAYMENT"
+	}
+	if strings.Contains(path, "/receivable") {
+		return "CREATE_RECEIVABLE_PAYMENT"
+	}
+	if strings.Contains(path, "/payable") {
+		return "CREATE_PAYABLE_PAYMENT"
+	}
+	if strings.Contains(path, "/unpaid-invoices") {
+		return "VIEW_UNPAID_INVOICES"
+	}
+	if strings.Contains(path, "/unpaid-bills") {
+		return "VIEW_UNPAID_BILLS"
+	}
+	if strings.Contains(path, "/summary") {
+		return "VIEW_PAYMENT_SUMMARY"
+	}
+
+	return getActionFromMethod(method) + "_PAYMENT"
+}
+
+func getResourceFromPath(path string) string {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) >= 3 {
+		return parts[2] // /api/v1/resource
+	}
+	if len(parts) >= 1 {
+		return parts[0]
+	}
+	return "unknown"
+}
+
+func getResourceID(path string, params gin.Params) string {
+	for _, param := range params {
+		if param.Key == "id" {
+			return param.Value
+		}
+	}
+	return ""
+}
+
+// getTableNameFromResource maps resource names to table names
+func getTableNameFromResource(resource string) string {
+	switch resource {
+	case "payment", "payments":
+		return "payments"
+	case "user", "users":
+		return "users"
+	case "product", "products":
+		return "products"
+	case "contact", "contacts":
+		return "contacts"
+	case "sale", "sales":
+		return "sales"
+	case "purchase", "purchases":
+		return "purchases"
+	case "account", "accounts":
+		return "accounts"
+	case "cashbank":
+		return "cash_banks"
+	default:
+		return resource + "s" // Default pluralization
+	}
+}
+
+// parseRecordID converts string ID to uint, returns 0 if invalid
+func parseRecordID(resourceID string) uint {
+	if resourceID == "" {
+		return 0
+	}
+	
+	// Try to parse as uint
+	var id uint
+	if n, err := fmt.Sscanf(resourceID, "%d", &id); n == 1 && err == nil {
+		return id
+	}
+	
+	return 0
+}
+
+func sanitizeRequestData(data string) string {
+	if data == "" {
+		return ""
+	}
+
+	// Parse JSON and remove sensitive fields
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal([]byte(data), &jsonData); err != nil {
+		return "[invalid_json]"
+	}
+
+	// Remove sensitive fields
+	sensitiveFields := []string{"password", "confirm_password", "current_password", "new_password", "token", "refresh_token"}
+	for _, field := range sensitiveFields {
+		if _, exists := jsonData[field]; exists {
+			jsonData[field] = "[REDACTED]"
+		}
+	}
+
+	sanitized, _ := json.Marshal(jsonData)
+	return string(sanitized)
+}
+
+func sanitizePaymentData(data string) string {
+	if data == "" {
+		return ""
+	}
+
+	// For payment data, we might want to log more details but still sanitize sensitive info
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal([]byte(data), &jsonData); err != nil {
+		return "[invalid_json]"
+	}
+
+	// Keep payment details but remove any sensitive account info
+	sensitiveFields := []string{"account_number", "card_number", "cvv", "pin"}
+	for _, field := range sensitiveFields {
+		if _, exists := jsonData[field]; exists {
+			jsonData[field] = "[REDACTED]"
+		}
+	}
+
+	sanitized, _ := json.Marshal(jsonData)
+	return string(sanitized)
+}
+
+func getErrorMessage(responseBody string, statusCode int) string {
+	if statusCode >= 400 && responseBody != "" {
+		// Try to extract error message from JSON response
+		var response map[string]interface{}
+		if err := json.Unmarshal([]byte(responseBody), &response); err == nil {
+			if errorMsg, exists := response["error"]; exists {
+				return fmt.Sprintf("%v", errorMsg)
+			}
+		}
+		return fmt.Sprintf("HTTP %d", statusCode)
+	}
+	return ""
+}
+
+// GetAuditLogs retrieves audit logs with filters
+func (al *AuditLogger) GetAuditLogs(userID uint, resource string, limit int, offset int) ([]AuditLog, int64, error) {
+	var logs []AuditLog
+	var total int64
+
+	query := al.db.Model(&AuditLog{})
+
+	if userID > 0 {
+		query = query.Where("user_id = ?", userID)
+	}
+
+	if resource != "" {
+		query = query.Where("resource = ?", resource)
+	}
+
+	// Get total count
+	query.Count(&total)
+
+	// Get logs with pagination
+	err := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&logs).Error
+
+	return logs, total, err
+}
+
+// Global audit logger instance
+var GlobalAuditLogger *AuditLogger
+
+// InitAuditLogger initializes the global audit logger
+func InitAuditLogger(db *gorm.DB) {
+	GlobalAuditLogger = NewAuditLogger(db)
+	
+	// Auto-migrate audit log table
+	if err := db.AutoMigrate(&AuditLog{}); err != nil {
+		log.Printf("Failed to migrate audit log table: %v", err)
+	}
+}

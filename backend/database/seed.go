@@ -18,10 +18,13 @@ func SeedData(db *gorm.DB) {
 	}
 	
 	// Seed Contacts
-	seedContacts(db)
+	SeedContacts(db)
 	
 	// Seed Product Categories
 	seedProductCategories(db)
+	
+	// Seed Product Units
+	seedProductUnits(db)
 	
 	// Seed Products
 	seedProducts(db)
@@ -596,6 +599,55 @@ func seedRolePermissions(db *gorm.DB) {
 				db.Create(&rolePermission)
 			}
 		}
+	}
+}
+
+func seedProductUnits(db *gorm.DB) {
+	// Check if product units already exist
+	var count int64
+	db.Model(&models.ProductUnit{}).Count(&count)
+	if count > 0 {
+		return
+	}
+
+	units := []models.ProductUnit{
+		// Count units
+		{Code: "pcs", Name: "Pieces", Symbol: "pcs", Type: models.UnitTypeCount, Description: "Individual pieces or items", IsActive: true},
+		{Code: "unit", Name: "Unit", Symbol: "unit", Type: models.UnitTypeCount, Description: "Single unit of item", IsActive: true},
+		{Code: "set", Name: "Set", Symbol: "set", Type: models.UnitTypeCount, Description: "Set of items sold together", IsActive: true},
+		{Code: "pair", Name: "Pair", Symbol: "pr", Type: models.UnitTypeCount, Description: "Pair of items (2 pieces)", IsActive: true},
+		{Code: "dozen", Name: "Dozen", Symbol: "dz", Type: models.UnitTypeCount, Description: "12 pieces", IsActive: true},
+
+		// Weight units
+		{Code: "kg", Name: "Kilogram", Symbol: "kg", Type: models.UnitTypeWeight, Description: "Weight in kilograms", IsActive: true},
+		{Code: "g", Name: "Gram", Symbol: "g", Type: models.UnitTypeWeight, Description: "Weight in grams", IsActive: true},
+		{Code: "ton", Name: "Ton", Symbol: "t", Type: models.UnitTypeWeight, Description: "Weight in metric tons", IsActive: true},
+
+		// Volume units
+		{Code: "liter", Name: "Liter", Symbol: "L", Type: models.UnitTypeVolume, Description: "Volume in liters", IsActive: true},
+		{Code: "ml", Name: "Milliliter", Symbol: "mL", Type: models.UnitTypeVolume, Description: "Volume in milliliters", IsActive: true},
+
+		// Length units
+		{Code: "m", Name: "Meter", Symbol: "m", Type: models.UnitTypeLength, Description: "Length in meters", IsActive: true},
+		{Code: "cm", Name: "Centimeter", Symbol: "cm", Type: models.UnitTypeLength, Description: "Length in centimeters", IsActive: true},
+		{Code: "mm", Name: "Millimeter", Symbol: "mm", Type: models.UnitTypeLength, Description: "Length in millimeters", IsActive: true},
+
+		// Area units
+		{Code: "m2", Name: "Square Meter", Symbol: "m²", Type: models.UnitTypeArea, Description: "Area in square meters", IsActive: true},
+
+		// Office/stationery units
+		{Code: "rim", Name: "Rim", Symbol: "rim", Type: models.UnitTypeCount, Description: "500 sheets of paper", IsActive: true},
+		{Code: "box", Name: "Box", Symbol: "box", Type: models.UnitTypeCount, Description: "Box packaging", IsActive: true},
+		{Code: "pack", Name: "Pack", Symbol: "pack", Type: models.UnitTypeCount, Description: "Package of items", IsActive: true},
+
+		// Service units
+		{Code: "hour", Name: "Hour", Symbol: "hr", Type: models.UnitTypeTime, Description: "Service time in hours", IsActive: true},
+		{Code: "day", Name: "Day", Symbol: "day", Type: models.UnitTypeTime, Description: "Service time in days", IsActive: true},
+		{Code: "month", Name: "Month", Symbol: "mo", Type: models.UnitTypeTime, Description: "Service time in months", IsActive: true},
+	}
+
+	for _, unit := range units {
+		db.Create(&unit)
 	}
 }
 

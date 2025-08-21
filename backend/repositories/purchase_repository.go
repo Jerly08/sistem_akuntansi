@@ -376,3 +376,93 @@ func (r *PurchaseRepository) CodeExists(code string) (bool, error) {
 	}
 	return count > 0, nil
 }
+
+// CreateJournal creates journal entry
+func (r *PurchaseRepository) CreateJournal(journal *models.Journal) error {
+	return r.db.Create(journal).Error
+}
+
+// GetPurchaseItemByID gets purchase item by ID
+func (r *PurchaseRepository) GetPurchaseItemByID(id uint) (*models.PurchaseItem, error) {
+	var item models.PurchaseItem
+	err := r.db.Preload("Product").
+		Preload("ExpenseAccount").
+		First(&item, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// UpdateReceipt updates receipt
+func (r *PurchaseRepository) UpdateReceipt(receipt *models.PurchaseReceipt) (*models.PurchaseReceipt, error) {
+	err := r.db.Save(receipt).Error
+	if err != nil {
+		return nil, err
+	}
+	return r.FindReceiptByID(receipt.ID)
+}
+
+// CountReceiptsByMonth counts receipts by month
+func (r *PurchaseRepository) CountReceiptsByMonth(year, month int) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.PurchaseReceipt{}).
+		Where("EXTRACT(year FROM received_date) = ? AND EXTRACT(month FROM received_date) = ?", 
+			year, month).
+		Count(&count).Error
+	return count, err
+}
+
+// CountJournalsByMonth counts journals by month
+func (r *PurchaseRepository) CountJournalsByMonth(year, month int) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Journal{}).
+		Where("reference_type = ? AND EXTRACT(year FROM date) = ? AND EXTRACT(month FROM date) = ?", 
+			models.JournalRefTypePurchase, year, month).
+		Count(&count).Error
+	return count, err
+}
+
+// GetPurchaseSummary gets purchase summary
+func (r *PurchaseRepository) GetPurchaseSummary(startDate, endDate string) (*models.PurchaseSummary, error) {
+	return r.GetPurchasesSummary(startDate, endDate)
+}
+
+// GetPayablesReport gets payables report  
+func (r *PurchaseRepository) GetPayablesReport() (*models.PayablesReportResponse, error) {
+	// This is a placeholder implementation - you may need to adjust based on your models
+	var payables []models.PayablesReportData
+	
+	err := r.db.Model(&models.Purchase{}).
+		Select(`
+			purchases.id as purchase_id,
+			purchases.code as purchase_code,
+			contacts.name as vendor_name,
+			purchases.date,
+			purchases.due_date,
+			purchases.total_amount,
+			purchases.paid_amount,
+			purchases.outstanding_amount,
+			purchases.status
+		`).
+		Joins("JOIN contacts ON contacts.id = purchases.vendor_id").
+		Where("purchases.outstanding_amount > 0 AND purchases.status IN (?)", 
+			[]string{models.PurchaseStatusApproved, models.PurchaseStatusCompleted}).
+		Order("purchases.due_date ASC").
+		Scan(&payables).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate totals
+	var totalOutstanding float64
+	for _, item := range payables {
+		totalOutstanding += item.OutstandingAmount
+	}
+
+	return &models.PayablesReportResponse{
+		TotalOutstanding: totalOutstanding,
+		Payables:         payables,
+	}, nil
+}

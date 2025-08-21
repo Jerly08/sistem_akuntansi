@@ -15,6 +15,7 @@ type AccountRepository interface {
 	Update(ctx context.Context, code string, req *models.AccountUpdateRequest) (*models.Account, error)
 	Delete(ctx context.Context, code string) error
 	FindByCode(ctx context.Context, code string) (*models.Account, error)
+	GetAccountByCode(code string) (*models.Account, error)
 	FindByID(ctx context.Context, id uint) (*models.Account, error)
 	FindAll(ctx context.Context) ([]models.Account, error)
 	FindByType(ctx context.Context, accountType string) ([]models.Account, error)
@@ -32,6 +33,13 @@ type AccountRepo struct {
 
 // NewAccountRepository creates a new account repository
 func NewAccountRepository(db *gorm.DB) AccountRepository {
+	return &AccountRepo{
+		BaseRepo: &BaseRepo{DB: db},
+	}
+}
+
+// NewAccountRepo creates a new account repository returning concrete type
+func NewAccountRepo(db *gorm.DB) *AccountRepo {
 	return &AccountRepo{
 		BaseRepo: &BaseRepo{DB: db},
 	}
@@ -66,6 +74,11 @@ func (r *AccountRepo) Create(ctx context.Context, req *models.AccountCreateReque
 			return nil, utils.NewDatabaseError("find parent account", err)
 		}
 		level = parent.Level + 1
+		
+		// Set parent as header since it now has children
+		if err := r.DB.WithContext(ctx).Model(&parent).Update("is_header", true).Error; err != nil {
+			return nil, utils.NewDatabaseError("update parent header status", err)
+		}
 	}
 
 	account := &models.Account{
@@ -78,7 +91,7 @@ func (r *AccountRepo) Create(ctx context.Context, req *models.AccountCreateReque
 		Description: req.Description,
 		Balance:     req.OpeningBalance,
 		IsActive:    true,
-		IsHeader:    false,
+		IsHeader:    false, // New accounts start as non-header
 	}
 
 	if err := r.DB.WithContext(ctx).Create(account).Error; err != nil {
@@ -485,6 +498,64 @@ func (r *AccountRepo) buildAccountHierarchy(account *models.Account, accountMap 
 	result.ChildCount = len(result.Children)
 
 	return result
+}
+
+// GetAccountByCode is a convenience method that wraps FindByCode without requiring context
+func (r *AccountRepo) GetAccountByCode(code string) (*models.Account, error) {
+	return r.FindByCode(context.Background(), code)
+}
+
+// FixAccountHeaderStatus fixes is_header status for all accounts based on whether they have children
+func (r *AccountRepo) FixAccountHeaderStatus(ctx context.Context) error {
+	// Get all accounts that have children
+	var parentAccounts []struct {
+		ID       uint
+		IsHeader bool
+	}
+	
+	if err := r.DB.WithContext(ctx).Raw(`
+		SELECT a.id, a.is_header 
+		FROM accounts a 
+		WHERE EXISTS (
+			SELECT 1 FROM accounts child 
+			WHERE child.parent_id = a.id AND child.deleted_at IS NULL
+		) AND a.deleted_at IS NULL
+	`).Scan(&parentAccounts).Error; err != nil {
+		return utils.NewDatabaseError("find parent accounts", err)
+	}
+	
+	// Update accounts that should be headers but aren't
+	for _, parent := range parentAccounts {
+		if !parent.IsHeader {
+			if err := r.DB.WithContext(ctx).Model(&models.Account{}).Where("id = ?", parent.ID).Update("is_header", true).Error; err != nil {
+				return utils.NewDatabaseError("update header status", err)
+			}
+		}
+	}
+	
+	// Get all accounts that don't have children but are marked as headers
+	var nonParentHeaders []uint
+	if err := r.DB.WithContext(ctx).Raw(`
+		SELECT a.id 
+		FROM accounts a 
+		WHERE a.is_header = true 
+			AND NOT EXISTS (
+				SELECT 1 FROM accounts child 
+				WHERE child.parent_id = a.id AND child.deleted_at IS NULL
+			) 
+			AND a.deleted_at IS NULL
+	`).Pluck("id", &nonParentHeaders).Error; err != nil {
+		return utils.NewDatabaseError("find non-parent headers", err)
+	}
+	
+	// Update accounts that shouldn't be headers
+	for _, accountID := range nonParentHeaders {
+		if err := r.DB.WithContext(ctx).Model(&models.Account{}).Where("id = ?", accountID).Update("is_header", false).Error; err != nil {
+			return utils.NewDatabaseError("update non-header status", err)
+		}
+	}
+	
+	return nil
 }
 
 // calculateTotalBalanceRecursive recursively calculates balances for the entire hierarchy

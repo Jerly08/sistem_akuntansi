@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -18,8 +18,6 @@ import {
   Textarea,
   VStack,
   HStack,
-  Grid,
-  GridItem,
   Box,
   Divider,
   Text,
@@ -39,17 +37,28 @@ import {
   NumberDecrementStepper,
   Switch,
   Badge,
-  Flex
+  Flex,
+  Card,
+  CardHeader,
+  CardBody,
+  Heading,
+  Alert,
+  AlertIcon,
+  AlertDescription,
+  Icon
 } from '@chakra-ui/react';
+import CurrencyInput from '@/components/common/CurrencyInput';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { FiPlus, FiTrash2, FiSave } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiSave, FiX, FiDollarSign, FiShoppingCart, FiFileText } from 'react-icons/fi';
 import salesService, { 
   Sale, 
   SaleCreateRequest, 
   SaleUpdateRequest, 
-  SaleItemCreateRequest,
+  SaleItemRequest,
   SaleItemUpdateRequest 
 } from '@/services/salesService';
+import ErrorHandler from '@/utils/errorHandler';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SalesFormProps {
   isOpen: boolean;
@@ -104,7 +113,10 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const [products, setProducts] = useState<any[]>([]);
   const [salesPersons, setSalesPersons] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
   const toast = useToast();
+  const { user, token } = useAuth();
+  const modalBodyRef = useRef<HTMLDivElement>(null);
 
   const {
     register,
@@ -116,7 +128,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
     formState: { errors }
   } = useForm<FormData>({
     defaultValues: {
-      type: 'SALE',
+      type: 'INVOICE',
       currency: 'IDR',
       exchange_rate: 1,
       discount_percent: 0,
@@ -158,33 +170,111 @@ const SalesForm: React.FC<SalesFormProps> = ({
     }
   }, [isOpen, sale]);
 
+  // Ensure modal body is scrollable when content overflows
+  useEffect(() => {
+    if (isOpen) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        const modalBody = modalBodyRef.current;
+        if (modalBody) {
+          const isOverflowing = modalBody.scrollHeight > modalBody.clientHeight;
+          if (isOverflowing) {
+            modalBody.style.overflowY = 'scroll';
+          }
+        }
+      }, 100);
+    }
+  }, [isOpen, fields.length]);
+
   const loadFormData = async () => {
+    if (!token) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please login to access this feature.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true
+      });
+      return;
+    }
+
+    setLoadingData(true);
+    
     try {
-      // Load customers, products, sales persons, and accounts
-      // These would typically come from their respective services
-      setCustomers([
-        { id: 1, name: 'PT ABC Corp', code: 'CUST001' },
-        { id: 2, name: 'CV XYZ Ltd', code: 'CUST002' },
-        { id: 3, name: 'Toko Makmur', code: 'CUST003' }
+      // Load all data concurrently with proper error handling
+      const [customersResult, productsResult, salesPersonsResult, accountsResult] = await Promise.allSettled([
+        // Load customers
+        (async () => {
+          const contactService = await import('@/services/contactService');
+          return await contactService.default.getContacts(token, 'CUSTOMER');
+        })(),
+        
+        // Load products
+        (async () => {
+          const productService = await import('@/services/productService');
+          return await productService.default.getProducts();
+        })(),
+        
+        // Load sales persons from contacts (employees)
+        (async () => {
+          const contactService = await import('@/services/contactService');
+          return await contactService.default.getContacts(token, 'EMPLOYEE');
+        })(),
+        
+        // Load revenue accounts
+        (async () => {
+          const accountService = await import('@/services/accountService');
+          return await accountService.default.getAccounts(token, 'REVENUE');
+        })()
       ]);
 
-      setProducts([
-        { id: 1, name: 'Product A', code: 'PROD001', price: 100000 },
-        { id: 2, name: 'Product B', code: 'PROD002', price: 150000 },
-        { id: 3, name: 'Service C', code: 'SERV001', price: 200000 }
-      ]);
+      // Process customers
+      if (customersResult.status === 'fulfilled' && Array.isArray(customersResult.value)) {
+        setCustomers(customersResult.value);
+      } else {
+        console.warn('Failed to load customers:', customersResult.status === 'rejected' ? customersResult.reason : 'No data');
+        setCustomers([]);
+      }
 
-      setSalesPersons([
-        { id: 1, name: 'John Doe', email: 'john@company.com' },
-        { id: 2, name: 'Jane Smith', email: 'jane@company.com' }
-      ]);
+      // Process products
+      if (productsResult.status === 'fulfilled' && productsResult.value?.data && Array.isArray(productsResult.value.data)) {
+        setProducts(productsResult.value.data);
+      } else {
+        console.warn('Failed to load products:', productsResult.status === 'rejected' ? productsResult.reason : 'No data');
+        setProducts([]);
+      }
 
-      setAccounts([
-        { id: 1, name: 'Sales Revenue', code: '4000' },
-        { id: 2, name: 'Service Revenue', code: '4100' }
-      ]);
-    } catch (error) {
+      // Process sales persons
+      if (salesPersonsResult.status === 'fulfilled' && Array.isArray(salesPersonsResult.value)) {
+        const salesPersonsData = salesPersonsResult.value.map(contact => ({
+          ...contact,
+          name: contact.name || contact.company_name || 'Unknown Employee'
+        }));
+        setSalesPersons(salesPersonsData);
+      } else {
+        console.warn('Failed to load sales persons:', salesPersonsResult.status === 'rejected' ? salesPersonsResult.reason : 'No data');
+        setSalesPersons([]);
+      }
+
+      // Process accounts
+      if (accountsResult.status === 'fulfilled' && Array.isArray(accountsResult.value)) {
+        setAccounts(accountsResult.value);
+      } else {
+        console.warn('Failed to load accounts:', accountsResult.status === 'rejected' ? accountsResult.reason : 'No data');
+        setAccounts([]);
+      }
+
+    } catch (error: any) {
       console.error('Error loading form data:', error);
+      toast({
+        title: 'Loading Error',
+        description: 'Failed to load form data. Please try again.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true
+      });
+    } finally {
+      setLoadingData(false);
     }
   };
 
@@ -224,9 +314,10 @@ const SalesForm: React.FC<SalesFormProps> = ({
     });
   };
 
+
   const resetForm = () => {
     reset({
-      type: 'SALE',
+      type: 'INVOICE',
       date: new Date().toISOString().split('T')[0],
       currency: 'IDR',
       exchange_rate: 1,
@@ -297,26 +388,42 @@ const SalesForm: React.FC<SalesFormProps> = ({
     try {
       setLoading(true);
 
-      // Validate items
+      // Validate items using standardized validation
       const validItems = data.items.filter(item => item.product_id > 0);
       if (validItems.length === 0) {
-        toast({
-          title: 'Validation Error',
-          description: 'At least one item is required',
-          status: 'error',
-          duration: 3000
-        });
+        ErrorHandler.handleValidationError(['At least one item is required'], toast, 'sales form');
+        return;
+      }
+
+      // Additional validation
+      const validationErrors = salesService.validateSaleData({
+        ...data,
+        items: validItems.map(item => ({
+          product_id: item.product_id,
+          description: item.description || '',
+          quantity: Math.max(1, Math.floor(item.quantity || 1)), // Ensure positive integer
+          unit_price: Math.min(999999999999.99, Math.max(0, item.unit_price || 0)), // Cap to prevent overflow
+          discount: Math.min(999999.99, Math.max(0, item.discount_percent || 0)), // Legacy field as flat amount
+          discount_percent: Math.min(100, Math.max(0, item.discount_percent || 0)), // New field as percentage
+          tax: 0, // Tax will be calculated by backend based on taxable flag
+          taxable: item.taxable !== false, // Default to true if not specified
+          revenue_account_id: item.revenue_account_id || 0
+        }))
+      });
+
+      if (validationErrors.length > 0) {
+        ErrorHandler.handleValidationError(validationErrors, toast, 'sales form');
         return;
       }
 
       if (sale) {
-        // Update existing sale
-        const updateData: SaleUpdateRequest = {
-          customer_id: data.customer_id,
-          sales_person_id: data.sales_person_id,
-          date: new Date(data.date),
-          due_date: data.due_date ? new Date(data.due_date) : undefined,
-          valid_until: data.valid_until ? new Date(data.valid_until) : undefined,
+      // Update existing sale
+      const updateData: SaleUpdateRequest = {
+        customer_id: data.customer_id,
+        sales_person_id: data.sales_person_id,
+        date: data.date ? `${data.date}T00:00:00Z` : undefined, // Convert to ISO datetime format
+        due_date: data.due_date ? `${data.due_date}T00:00:00Z` : undefined,
+        valid_until: data.valid_until ? `${data.valid_until}T00:00:00Z` : undefined,
           discount_percent: data.discount_percent,
           ppn_percent: data.ppn_percent,
           pph_percent: data.pph_percent,
@@ -336,29 +443,24 @@ const SalesForm: React.FC<SalesFormProps> = ({
             description: item.description,
             quantity: item.quantity,
             unit_price: item.unit_price,
-            discount_percent: item.discount_percent,
-            taxable: item.taxable,
+            discount: item.discount_percent || item.discount || 0, // Map to backend field
+            tax: 0, // Tax will be calculated by backend based on taxable flag
             revenue_account_id: item.revenue_account_id,
             delete: item.delete || false
           }))
         };
 
         await salesService.updateSale(sale.id, updateData);
-        toast({
-          title: 'Sale Updated',
-          description: 'Sale has been updated successfully',
-          status: 'success',
-          duration: 3000
-        });
+        ErrorHandler.handleSuccess('Sale has been updated successfully', toast, 'update sale');
       } else {
         // Create new sale
         const createData: SaleCreateRequest = {
           customer_id: data.customer_id,
           sales_person_id: data.sales_person_id,
           type: data.type,
-          date: new Date(data.date),
-          due_date: data.due_date ? new Date(data.due_date) : undefined,
-          valid_until: data.valid_until ? new Date(data.valid_until) : undefined,
+          date: `${data.date}T00:00:00Z`, // Convert to ISO datetime format for Go backend
+          due_date: data.due_date ? `${data.due_date}T00:00:00Z` : undefined,
+          valid_until: data.valid_until ? `${data.valid_until}T00:00:00Z` : undefined,
           currency: data.currency,
           exchange_rate: data.exchange_rate,
           discount_percent: data.discount_percent,
@@ -376,33 +478,25 @@ const SalesForm: React.FC<SalesFormProps> = ({
           reference: data.reference,
           items: validItems.map(item => ({
             product_id: item.product_id,
-            description: item.description,
-            quantity: item.quantity,
-            unit_price: item.unit_price,
-            discount_percent: item.discount_percent,
-            taxable: item.taxable,
-            revenue_account_id: item.revenue_account_id
+            description: item.description || '',
+            quantity: Math.max(1, Math.floor(item.quantity || 1)), // Ensure positive integer
+            unit_price: Math.min(999999999999.99, Math.max(0, item.unit_price || 0)), // Cap to prevent overflow
+            discount: Math.min(999999.99, Math.max(0, item.discount_percent || 0)), // Legacy field as flat amount
+            discount_percent: Math.min(100, Math.max(0, item.discount_percent || 0)), // New field as percentage
+            tax: 0, // Tax will be calculated by backend based on taxable flag
+            taxable: item.taxable !== false, // Default to true if not specified
+            revenue_account_id: item.revenue_account_id || 0
           }))
         };
 
         await salesService.createSale(createData);
-        toast({
-          title: 'Sale Created',
-          description: 'Sale has been created successfully',
-          status: 'success',
-          duration: 3000
-        });
+        ErrorHandler.handleSuccess('Sale has been created successfully', toast, 'create sale');
       }
 
       onSave();
       onClose();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.response?.data?.message || `Failed to ${sale ? 'update' : 'create'} sale`,
-        status: 'error',
-        duration: 5000
-      });
+      ErrorHandler.handleSaveError('sale', error, toast, !!sale);
     } finally {
       setLoading(false);
     }
@@ -414,116 +508,192 @@ const SalesForm: React.FC<SalesFormProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="6xl">
-      <ModalOverlay bg="blackAlpha.600" />
-      <ModalContent maxH="95vh" mx={4}>
-        <ModalHeader bg="blue.50" borderBottomWidth={1} borderColor="gray.200">
-          <VStack align="start" spacing={1}>
-            <Text fontSize="xl" fontWeight="bold" color="blue.700">
-              {sale ? 'Edit Sale Transaction' : 'Create New Sale'}
-            </Text>
-            <Text fontSize="sm" color="gray.600">
-              {sale ? 'Modify existing sale details and items' : 'Create a new sales transaction with items and pricing'}
-            </Text>
-          </VStack>
+    <Modal 
+      isOpen={isOpen} 
+      onClose={handleClose} 
+      size="6xl" 
+      isCentered
+      closeOnOverlayClick={false}
+      scrollBehavior="inside"
+      motionPreset="slideInBottom"
+      blockScrollOnMount={false}
+    >
+      <ModalOverlay 
+        bg="blackAlpha.700" 
+        backdropFilter="blur(4px)"
+        onWheel={(e) => e.stopPropagation()}
+      />
+      <ModalContent 
+        maxH="95vh" 
+        minH="80vh"
+        mx={4} 
+        my={2} 
+        borderRadius="xl"
+        bg="white"
+        shadow="2xl"
+        overflow="hidden"
+        display="flex"
+        flexDirection="column"
+        w="full"
+        maxW="6xl"
+      >
+        <ModalHeader 
+          bg="blue.50" 
+          borderBottomWidth={1} 
+          borderColor="gray.200"
+          pb={4}
+          pt={6}
+        >
+          <HStack justify="space-between" align="center">
+            <Box>
+              <Heading size="lg" color="blue.700">
+                {sale ? 'Edit Sale Transaction' : 'Create New Sale'}
+              </Heading>
+              <Text color="gray.600" fontSize="sm" mt={1}>
+                {sale ? 'Modify existing sale details and items' : 'Create a new sales transaction with items and pricing'}
+              </Text>
+            </Box>
+            <Badge colorScheme="blue" variant="solid" px={3} py={1} borderRadius="md">
+              <Icon as={FiShoppingCart} mr={1} />
+              Sale Form
+            </Badge>
+          </HStack>
         </ModalHeader>
         <ModalCloseButton />
 
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <ModalBody overflowY="auto">
+        <form onSubmit={handleSubmit(onSubmit)} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          {/* Hidden type field with default value */}
+          <input type="hidden" {...register('type')} value="INVOICE" />
+          
+          <ModalBody 
+            ref={modalBodyRef}
+            flex="1" 
+            overflowY="auto" 
+            px={6} 
+            py={4}
+            pb={8}
+            maxH="calc(95vh - 200px)"
+            minH="400px"
+            sx={{
+              // Enable mouse wheel scrolling
+              overscrollBehavior: 'contain',
+              WebkitOverflowScrolling: 'touch',
+              scrollBehavior: 'smooth',
+              
+              // Force scrollbar to be visible
+              overflowY: 'scroll !important',
+              
+              // Custom scrollbar styles
+              '&::-webkit-scrollbar': {
+                width: '8px',
+                display: 'block',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: '#f7fafc',
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: '#cbd5e0',
+                borderRadius: '4px',
+                '&:hover': {
+                  background: '#a0aec0',
+                },
+              },
+            }}
+            onWheel={(e) => {
+              // Allow natural scroll behavior
+              const target = e.currentTarget;
+              const isScrollable = target.scrollHeight > target.clientHeight;
+              if (isScrollable) {
+                // Let the natural scroll happen
+                return;
+              }
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
             <VStack spacing={6} align="stretch">
               {/* Basic Information */}
               <Box>
-                <Text fontSize="lg" fontWeight="bold" mb={4}>Basic Information</Text>
-                <Grid templateColumns="repeat(3, 1fr)" gap={4}>
-                  <GridItem>
-                    <FormControl isRequired isInvalid={!!errors.customer_id}>
-                      <FormLabel>Customer</FormLabel>
-                      <Select
-                        {...register('customer_id', {
-                          required: 'Customer is required',
-                          setValueAs: value => parseInt(value) || 0
-                        })}
-                      >
-                        <option value="">Select customer</option>
-                        {customers.map(customer => (
-                          <option key={customer.id} value={customer.id}>
-                            {customer.code} - {customer.name}
-                          </option>
-                        ))}
-                      </Select>
-                      <FormErrorMessage>{errors.customer_id?.message}</FormErrorMessage>
-                    </FormControl>
-                  </GridItem>
+                <Heading size="md" mb={4} color="gray.600">
+                  📋 Basic Information
+                </Heading>
+                <VStack spacing={4}>
+                  <HStack w="full" spacing={4}>
+                      <FormControl isRequired isInvalid={!!errors.customer_id}>
+                        <FormLabel>Customer</FormLabel>
+                        <Select
+                          {...register('customer_id', {
+                            required: 'Customer is required',
+                            setValueAs: value => parseInt(value) || 0
+                          })}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
+                        >
+                          <option value="">Select customer</option>
+                          {customers.map(customer => (
+                            <option key={customer.id} value={customer.id}>
+                              {customer.code} - {customer.name}
+                            </option>
+                          ))}
+                        </Select>
+                        <FormErrorMessage>{errors.customer_id?.message}</FormErrorMessage>
+                      </FormControl>
 
-                  <GridItem>
-                    <FormControl>
-                      <FormLabel>Sales Person</FormLabel>
-                      <Select
-                        {...register('sales_person_id', {
-                          setValueAs: value => value ? parseInt(value) : undefined
-                        })}
-                      >
-                        <option value="">Select sales person</option>
-                        {salesPersons.map(person => (
-                          <option key={person.id} value={person.id}>
-                            {person.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </GridItem>
+                      <FormControl>
+                        <FormLabel>Sales Person</FormLabel>
+                        <Select
+                          {...register('sales_person_id', {
+                            setValueAs: value => value ? parseInt(value) : undefined
+                          })}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
+                        >
+                          <option value="">Select sales person</option>
+                          {salesPersons.map(person => (
+                            <option key={person.id} value={person.id}>
+                              {person.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </FormControl>
+                  </HStack>
+                  
+                  <HStack w="full" spacing={4}>
+                      <FormControl isRequired isInvalid={!!errors.date}>
+                        <FormLabel>Date</FormLabel>
+                        <Input
+                          type="date"
+                          {...register('date', {
+                            required: 'Date is required'
+                          })}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
+                        />
+                        <FormErrorMessage>{errors.date?.message}</FormErrorMessage>
+                      </FormControl>
 
-                  <GridItem>
-                    <FormControl isRequired isInvalid={!!errors.type}>
-                      <FormLabel>Type</FormLabel>
-                      <Select
-                        {...register('type', {
-                          required: 'Sale type is required'
-                        })}
-                      >
-                        <option value="QUOTATION">Quotation</option>
-                        <option value="ORDER">Order</option>
-                        <option value="INVOICE">Invoice</option>
-                        <option value="SALE">Sale</option>
-                      </Select>
-                      <FormErrorMessage>{errors.type?.message}</FormErrorMessage>
-                    </FormControl>
-                  </GridItem>
+                      <FormControl>
+                        <FormLabel>Due Date</FormLabel>
+                        <Input
+                          type="date"
+                          {...register('due_date')}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
+                        />
+                      </FormControl>
 
-                  <GridItem>
-                    <FormControl isRequired isInvalid={!!errors.date}>
-                      <FormLabel>Date</FormLabel>
-                      <Input
-                        type="date"
-                        {...register('date', {
-                          required: 'Date is required'
-                        })}
-                      />
-                      <FormErrorMessage>{errors.date?.message}</FormErrorMessage>
-                    </FormControl>
-                  </GridItem>
-
-                  <GridItem>
-                    <FormControl>
-                      <FormLabel>Due Date</FormLabel>
-                      <Input
-                        type="date"
-                        {...register('due_date')}
-                      />
-                    </FormControl>
-                  </GridItem>
-
-                  <GridItem>
-                    <FormControl>
-                      <FormLabel>Valid Until</FormLabel>
-                      <Input
-                        type="date"
-                        {...register('valid_until')}
-                      />
-                    </FormControl>
-                  </GridItem>
-                </Grid>
+                      <FormControl>
+                        <FormLabel>Valid Until</FormLabel>
+                        <Input
+                          type="date"
+                          {...register('valid_until')}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
+                        />
+                      </FormControl>
+                  </HStack>
+                </VStack>
               </Box>
 
               <Divider />
@@ -531,7 +701,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
               {/* Items Section */}
               <Box>
                 <Flex justify="space-between" align="center" mb={4}>
-                  <Text fontSize="lg" fontWeight="bold">Items</Text>
+                  <Heading size="md" color="gray.600">
+                    🛍️ Sale Items
+                  </Heading>
                   <Button
                     size="sm"
                     colorScheme="blue"
@@ -542,7 +714,30 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   </Button>
                 </Flex>
 
-                <TableContainer>
+                <Box 
+                  overflowX="auto" 
+                  border="1px" 
+                  borderColor="gray.200" 
+                  borderRadius="md"
+                  bg="white"
+                  shadow="sm"
+                  css={{
+                    '&::-webkit-scrollbar': {
+                      height: '8px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                      background: '#f7fafc',
+                      borderRadius: '4px',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      background: '#cbd5e0',
+                      borderRadius: '4px',
+                    },
+                    '&::-webkit-scrollbar-thumb:hover': {
+                      background: '#a0aec0',
+                    },
+                  }}
+                >
                   <Table variant="simple" size="sm">
                     <Thead>
                       <Tr>
@@ -567,6 +762,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                                 setValueAs: value => parseInt(value) || 0
                               })}
                               onChange={(e) => handleProductChange(index, parseInt(e.target.value))}
+                              bg="gray.50"
+                              _focus={{ bg: 'white' }}
                             >
                               <option value="">Select product</option>
                               {products.map(product => (
@@ -581,6 +778,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                               size="sm"
                               {...register(`items.${index}.description`)}
                               placeholder="Item description"
+                              bg="gray.50"
+                              _focus={{ bg: 'white' }}
                             />
                           </Td>
                           <Td>
@@ -599,15 +798,14 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             </NumberInput>
                           </Td>
                           <Td>
-                            <NumberInput size="sm" min={0}>
-                              <NumberInputField
-                                {...register(`items.${index}.unit_price`, {
-                                  required: 'Unit price is required',
-                                  min: 0,
-                                  setValueAs: value => parseFloat(value) || 0
-                                })}
-                              />
-                            </NumberInput>
+                            <CurrencyInput
+                              value={watchItems[index]?.unit_price || 0}
+                              onChange={(value) => setValue(`items.${index}.unit_price`, value)}
+                              placeholder="Rp 10.000"
+                              size="sm"
+                              min={0}
+                              showLabel={false}
+                            />
                           </Td>
                           <Td>
                             <NumberInput size="sm" min={0} max={100}>
@@ -644,16 +842,17 @@ const SalesForm: React.FC<SalesFormProps> = ({
                       ))}
                     </Tbody>
                   </Table>
-                </TableContainer>
+                </Box>
               </Box>
 
               <Divider />
 
               {/* Pricing & Taxes */}
               <Box>
-                <Text fontSize="lg" fontWeight="bold" mb={4}>Pricing & Taxes</Text>
-                <Grid templateColumns="repeat(3, 1fr)" gap={4}>
-                  <GridItem>
+                <Heading size="md" mb={4} color="gray.600">
+                  💰 Pricing & Taxes
+                </Heading>
+                <HStack w="full" spacing={4}>
                     <FormControl>
                       <FormLabel>Global Discount (%)</FormLabel>
                       <NumberInput min={0} max={100}>
@@ -661,12 +860,12 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           {...register('discount_percent', {
                             setValueAs: value => parseFloat(value) || 0
                           })}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
                         />
                       </NumberInput>
                     </FormControl>
-                  </GridItem>
 
-                  <GridItem>
                     <FormControl>
                       <FormLabel>PPN (%)</FormLabel>
                       <NumberInput min={0} max={100}>
@@ -674,12 +873,12 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           {...register('ppn_percent', {
                             setValueAs: value => parseFloat(value) || 0
                           })}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
                         />
                       </NumberInput>
                     </FormControl>
-                  </GridItem>
 
-                  <GridItem>
                     <FormControl>
                       <FormLabel>Shipping Cost</FormLabel>
                       <NumberInput min={0}>
@@ -687,96 +886,159 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           {...register('shipping_cost', {
                             setValueAs: value => parseFloat(value) || 0
                           })}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
                         />
                       </NumberInput>
                     </FormControl>
-                  </GridItem>
-                </Grid>
+                </HStack>
 
-                <Box mt={4} p={4} bg="gray.50" borderRadius="md">
-                  <Grid templateColumns="repeat(2, 1fr)" gap={4}>
-                    <Box>
-                      <Text fontSize="sm" color="gray.600">Subtotal:</Text>
-                      <Text fontWeight="medium">{salesService.formatCurrency(calculateSubtotal())}</Text>
-                    </Box>
-                    <Box>
-                      <Text fontSize="sm" color="gray.600">Total Amount:</Text>
-                      <Text fontSize="lg" fontWeight="bold" color="blue.500">
-                        {salesService.formatCurrency(calculateTotal())}
-                      </Text>
-                    </Box>
-                  </Grid>
-                </Box>
+                
+                {/* Total Calculation Alert */}
+                {calculateSubtotal() > 0 && (
+                  <Alert status="info" borderRadius="lg" mt={4} bg="blue.50" borderColor="blue.200">
+                    <AlertIcon color="blue.500" />
+                    <AlertDescription fontSize="sm">
+                      <VStack align="stretch" spacing={3} w="full">
+                        <HStack justify="space-between">
+                          <Text color="gray.700"><strong>Subtotal:</strong></Text>
+                          <Text fontWeight="medium" color="gray.800">
+                            {salesService.formatCurrency(calculateSubtotal())}
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text color="gray.700"><strong>Total Amount:</strong></Text>
+                          <Text fontSize="lg" fontWeight="bold" color="blue.600">
+                            {salesService.formatCurrency(calculateTotal())}
+                          </Text>
+                        </HStack>
+                      </VStack>
+                    </AlertDescription>
+                  </Alert>
+                )}
               </Box>
 
               <Divider />
 
               {/* Additional Information */}
               <Box>
-                <Text fontSize="lg" fontWeight="bold" mb={4}>Additional Information</Text>
-                <Grid templateColumns="repeat(2, 1fr)" gap={4}>
-                  <GridItem>
-                    <FormControl>
-                      <FormLabel>Payment Terms</FormLabel>
-                      <Select {...register('payment_terms')}>
-                        <option value="COD">COD (Cash on Delivery)</option>
-                        <option value="NET_15">NET 15</option>
-                        <option value="NET_30">NET 30</option>
-                        <option value="NET_60">NET 60</option>
-                        <option value="NET_90">NET 90</option>
-                      </Select>
-                    </FormControl>
-                  </GridItem>
+                <Heading size="md" mb={4} color="gray.600">
+                  📝 Additional Information
+                </Heading>
+                <VStack spacing={4}>
+                  <HStack w="full" spacing={4}>
+                      <FormControl>
+                        <FormLabel>Payment Terms</FormLabel>
+                        <Select 
+                          {...register('payment_terms')}
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
+                        >
+                          <option value="COD">COD (Cash on Delivery)</option>
+                          <option value="NET_15">NET 15</option>
+                          <option value="NET_30">NET 30</option>
+                          <option value="NET_60">NET 60</option>
+                          <option value="NET_90">NET 90</option>
+                        </Select>
+                      </FormControl>
 
-                  <GridItem>
-                    <FormControl>
-                      <FormLabel>Reference</FormLabel>
-                      <Input
-                        {...register('reference')}
-                        placeholder="External reference number"
-                      />
-                    </FormControl>
-                  </GridItem>
+                      <FormControl>
+                        <FormLabel>Reference</FormLabel>
+                        <Input
+                          {...register('reference')}
+                          placeholder="External reference number"
+                          bg="gray.50"
+                          _focus={{ bg: 'white' }}
+                        />
+                      </FormControl>
+                  </HStack>
 
-                  <GridItem colSpan={2}>
-                    <FormControl>
-                      <FormLabel>Notes</FormLabel>
-                      <Textarea
-                        {...register('notes')}
-                        placeholder="Customer-visible notes"
-                        rows={3}
-                      />
-                    </FormControl>
-                  </GridItem>
+                  <FormControl>
+                    <FormLabel>Notes</FormLabel>
+                    <Textarea
+                      {...register('notes')}
+                      placeholder="Customer-visible notes"
+                      rows={3}
+                      bg="gray.50"
+                      _focus={{ bg: 'white' }}
+                    />
+                  </FormControl>
 
-                  <GridItem colSpan={2}>
-                    <FormControl>
-                      <FormLabel>Internal Notes</FormLabel>
-                      <Textarea
-                        {...register('internal_notes')}
-                        placeholder="Internal notes (not visible to customer)"
-                        rows={3}
-                      />
-                    </FormControl>
-                  </GridItem>
-                </Grid>
+                  <FormControl>
+                    <FormLabel>Internal Notes</FormLabel>
+                    <Textarea
+                      {...register('internal_notes')}
+                      placeholder="Internal notes (not visible to customer)"
+                      rows={3}
+                      bg="gray.50"
+                      _focus={{ bg: 'white' }}
+                    />
+                  </FormControl>
+                </VStack>
               </Box>
             </VStack>
           </ModalBody>
 
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              colorScheme="blue"
-              isLoading={loading}
-              loadingText={sale ? "Updating..." : "Creating..."}
-              leftIcon={<FiSave />}
-            >
-              {sale ? 'Update Sale' : 'Create Sale'}
-            </Button>
+          <ModalFooter 
+            position="sticky"
+            bottom={0}
+            borderTopWidth={2} 
+            borderColor="gray.300" 
+            bg="white"
+            boxShadow="0 -4px 12px rgba(0, 0, 0, 0.1)"
+            px={6}
+            py={4}
+            mt={6}
+            flexShrink={0}
+            zIndex={10}
+          >
+            <HStack justify="space-between" spacing={4} w="full">
+              {/* Left side - Form info */}
+              <HStack spacing={2}>
+                <Text fontSize="sm" color="gray.500">
+                  {loadingData ? 'Loading...' : `${fields.length} item${fields.length !== 1 ? 's' : ''}`}
+                </Text>
+                {calculateSubtotal() > 0 && (
+                  <Text fontSize="sm" color="blue.600" fontWeight="medium">
+                    Total: {salesService.formatCurrency(calculateTotal())}
+                  </Text>
+                )}
+              </HStack>
+              
+              {/* Right side - Action buttons */}
+              <HStack spacing={3}>
+                <Button
+                  leftIcon={<FiX />}
+                  onClick={handleClose}
+                  variant="outline"
+                  size="lg"
+                  isDisabled={loading}
+                  colorScheme="gray"
+                  minW="120px"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  leftIcon={loading ? undefined : <FiSave />}
+                  type="submit"
+                  colorScheme="blue"
+                  size="lg"
+                  isLoading={loading}
+                  loadingText={sale ? "Updating..." : "Creating..."}
+                  minW="150px"
+                  shadow="md"
+                  _hover={{
+                    shadow: "lg",
+                    transform: "translateY(-1px)",
+                  }}
+                  _active={{
+                    transform: "translateY(0)",
+                  }}
+                >
+                  {sale ? 'Update Sale' : 'Create Sale'}
+                </Button>
+              </HStack>
+            </HStack>
           </ModalFooter>
         </form>
       </ModalContent>

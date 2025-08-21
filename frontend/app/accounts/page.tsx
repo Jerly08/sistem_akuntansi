@@ -40,7 +40,7 @@ import {
   MenuItem,
   MenuDivider,
 } from '@chakra-ui/react';
-import { FiPlus, FiEdit, FiTrash2, FiDownload, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiDownload, FiSearch, FiSettings } from 'react-icons/fi';
 import AccountForm from '@/components/accounts/AccountForm';
 import AccountTreeView from '@/components/accounts/AccountTreeView';
 import { Account, AccountCreateRequest, AccountUpdateRequest } from '@/types/account';
@@ -121,6 +121,48 @@ const AccountsPage = () => {
       fetchAccountData();
     }
   }, [token]);
+
+  // Handle fix account header status
+  const handleFixHeaderStatus = async () => {
+    if (!token) return;
+    
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'}/accounts/fix-header-status`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fix header status');
+      }
+      
+      const result = await response.json();
+      console.log('Header status fix result:', result);
+      
+      toast({
+        title: 'Header Status Fixed',
+        description: 'Account hierarchy has been corrected successfully.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
+      // Refresh accounts list
+      fetchAccountData();
+    } catch (err: any) {
+      console.error('Fix header status error:', err);
+      toast({
+        title: 'Error',
+        description: err.message || 'Failed to fix header status',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
 
   // Handle form submission for create/update
   const handleSubmit = async (accountData: AccountCreateRequest | AccountUpdateRequest) => {
@@ -436,6 +478,15 @@ const AccountsPage = () => {
                 </MenuItem>
               </MenuList>
             </Menu>
+            <Button
+              variant="outline"
+              leftIcon={<FiSettings />}
+              onClick={handleFixHeaderStatus}
+              colorScheme="orange"
+              size="sm"
+            >
+              Fix Hierarchy
+            </Button>
             <Button
               colorScheme="brand"
               leftIcon={<FiPlus />}

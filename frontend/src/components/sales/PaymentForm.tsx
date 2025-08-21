@@ -29,7 +29,9 @@ import {
   NumberDecrementStepper
 } from '@chakra-ui/react';
 import { useForm } from 'react-hook-form';
+import { useAuth } from '@/contexts/AuthContext';
 import salesService, { Sale, SalePaymentRequest } from '@/services/salesService';
+import cashbankService from '@/services/cashbankService';
 
 interface PaymentFormProps {
   isOpen: boolean;
@@ -54,8 +56,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   sale,
   onSave
 }) => {
+  const { token, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const toast = useToast();
 
   const {
@@ -85,16 +90,70 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   }, [sale, isOpen, setValue]);
 
   const loadAccounts = async () => {
+    // Check if user is authenticated and has required permissions
+    if (!token || !user) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please log in to access payment accounts.',
+        status: 'error',
+        duration: 5000
+      });
+      return;
+    }
+
+    // Check if user has permission to view accounts (based on RBAC)
+    const allowedRoles = ['ADMIN', 'FINANCE', 'DIRECTOR', 'EMPLOYEE'];
+    if (!allowedRoles.includes(user.role)) {
+      toast({
+        title: 'Access Denied',
+        description: 'You do not have permission to view payment accounts.',
+        status: 'error',
+        duration: 5000
+      });
+      return;
+    }
+
     try {
-      // This would typically load cash/bank accounts
-      // For now, using mock data
-      setAccounts([
-        { id: 1, name: 'Cash', code: '1000' },
-        { id: 2, name: 'Bank - BCA', code: '1001' },
-        { id: 3, name: 'Bank - BNI', code: '1002' }
-      ]);
-    } catch (error) {
-      console.error('Error loading accounts:', error);
+      setAccountsLoading(true);
+      
+      // Use cashbank service to get payment accounts (cash and bank accounts)
+      const paymentAccounts = await cashbankService.getPaymentAccounts();
+      setAccounts(paymentAccounts || []);
+
+      if (paymentAccounts.length === 0) {
+        toast({
+          title: 'No Payment Accounts',
+          description: 'No cash or bank accounts available for payments. Please contact your administrator.',
+          status: 'warning',
+          duration: 5000
+        });
+      }
+      
+    } catch (error: any) {
+      console.error('Error loading payment accounts:', error);
+      
+      // Set empty accounts if service fails
+      setAccounts([]);
+      
+      // Provide more specific error messages based on the error
+      let errorMessage = 'Could not load payment accounts. Please contact your administrator.';
+      
+      if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+        errorMessage = 'You do not have permission to view payment accounts.';
+      } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        errorMessage = 'Your session has expired. Please log in again.';
+      } else if (error.message?.includes('Network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      toast({
+        title: 'Error Loading Payment Accounts',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000
+      });
+    } finally {
+      setAccountsLoading(false);
     }
   };
 
@@ -104,14 +163,27 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     try {
       setLoading(true);
 
+      // Validate required fields
+      if (!data.account_id || data.account_id === 0) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please select a payment account',
+          status: 'error',
+          duration: 3000
+        });
+        return;
+      }
+
+      // Convert date to proper ISO datetime format for backend
+      const paymentDateTime = new Date(data.date).toISOString();
+      
       const paymentData: SalePaymentRequest = {
-        date: data.date,
+        payment_date: paymentDateTime, // Send full datetime in ISO format
         amount: data.amount,
-        method: data.method,
-        reference: data.reference,
-        account_id: data.account_id,
-        cash_bank_id: data.cash_bank_id,
-        notes: data.notes
+        payment_method: data.method, // Use correct field name
+        reference: data.reference || '', // Ensure it's not undefined
+        cash_bank_id: data.account_id, // Use the selected account ID as cash_bank_id
+        notes: data.notes || '' // Ensure it's not undefined
       };
 
       await salesService.createSalePayment(sale.id, paymentData);
@@ -197,29 +269,77 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
               </Box>
             )}
 
+            {/* Payment History Section */}
+            {sale?.sale_payments && sale.sale_payments.length > 0 && (
+              <Box mb={4} p={4} bg="blue.50" borderRadius="md" borderLeft="4px" borderColor="blue.400">
+                <Text fontSize="sm" fontWeight="bold" color="blue.700" mb={2}>
+                  📋 Previous Payments
+                </Text>
+                <VStack spacing={2} align="stretch">
+                  {sale.sale_payments.slice(-3).map((payment, index) => (
+                    <HStack key={index} justify="space-between" fontSize="sm">
+                      <Text color="gray.600">
+                        {salesService.formatDate(payment.date)} • {payment.method}
+                        {payment.reference && ` • Ref: ${payment.reference}`}
+                      </Text>
+                      <Text fontWeight="medium" color="green.600">
+                        +{salesService.formatCurrency(payment.amount)}
+                      </Text>
+                    </HStack>
+                  ))}
+                  {sale.sale_payments.length > 3 && (
+                    <Text fontSize="xs" color="gray.500" textAlign="center">
+                      ... and {sale.sale_payments.length - 3} more payments
+                    </Text>
+                  )}
+                </VStack>
+              </Box>
+            )}
+
             <VStack spacing={4} align="stretch">
               <HStack spacing={4}>
                 <FormControl isRequired isInvalid={!!errors.date}>
-                  <FormLabel>Payment Date</FormLabel>
+                  <FormLabel>Payment Date *</FormLabel>
                   <Input
                     type="date"
+                    max={new Date().toISOString().split('T')[0]} // Prevent future dates
                     {...register('date', {
-                      required: 'Payment date is required'
+                      required: 'Payment date is required',
+                      validate: {
+                        notFuture: (value) => {
+                          const today = new Date();
+                          const inputDate = new Date(value);
+                          return inputDate <= today || 'Payment date cannot be in the future';
+                        }
+                      }
                     })}
                   />
                   <FormErrorMessage>{errors.date?.message}</FormErrorMessage>
                 </FormControl>
 
                 <FormControl isRequired isInvalid={!!errors.amount}>
-                  <FormLabel>Amount</FormLabel>
-                  <NumberInput min={0} max={sale?.outstanding_amount}>
+                  <FormLabel>Amount *</FormLabel>
+                  <NumberInput 
+                    min={0.01} 
+                    max={sale?.outstanding_amount}
+                    precision={2}
+                    step={0.01}
+                  >
                     <NumberInputField
+                      placeholder="0.00"
                       {...register('amount', {
                         required: 'Amount is required',
                         min: { value: 0.01, message: 'Amount must be greater than 0' },
                         max: {
                           value: sale?.outstanding_amount || 0,
                           message: 'Amount cannot exceed outstanding amount'
+                        },
+                        validate: {
+                          notZero: (value) => value > 0 || 'Amount must be greater than zero',
+                          hasDecimals: (value) => {
+                            const decimals = value.toString().split('.')[1];
+                            return !decimals || decimals.length <= 2 || 'Maximum 2 decimal places allowed';
+                          }
                         }
                       })}
                     />
@@ -228,10 +348,58 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                       <NumberDecrementStepper />
                     </NumberInputStepper>
                   </NumberInput>
+                  
+                  {/* Quick Amount Selection Buttons */}
+                  <HStack spacing={2} mt={2}>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => setValue('amount', (sale?.outstanding_amount || 0) * 0.25)}
+                      disabled={!sale?.outstanding_amount}
+                    >
+                      25%
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => setValue('amount', (sale?.outstanding_amount || 0) * 0.5)}
+                      disabled={!sale?.outstanding_amount}
+                    >
+                      50%
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() => setValue('amount', (sale?.outstanding_amount || 0) * 0.75)}
+                      disabled={!sale?.outstanding_amount}
+                    >
+                      75%
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="solid"
+                      colorScheme="blue"
+                      onClick={() => setValue('amount', sale?.outstanding_amount || 0)}
+                      disabled={!sale?.outstanding_amount}
+                    >
+                      Full Payment
+                    </Button>
+                  </HStack>
+                  
                   <FormErrorMessage>{errors.amount?.message}</FormErrorMessage>
                   {watchAmount > (sale?.outstanding_amount || 0) && (
                     <Text fontSize="sm" color="red.500" mt={1}>
-                      Amount exceeds outstanding balance
+                      ⚠️ Amount exceeds outstanding balance of {salesService.formatCurrency(sale?.outstanding_amount || 0)}
+                    </Text>
+                  )}
+                  {watchAmount > 0 && watchAmount <= (sale?.outstanding_amount || 0) && (
+                    <Text fontSize="sm" color="green.600" mt={1}>
+                      ✓ Remaining balance: {salesService.formatCurrency((sale?.outstanding_amount || 0) - watchAmount)}
+                    </Text>
+                  )}
+                  {watchAmount === (sale?.outstanding_amount || 0) && watchAmount > 0 && (
+                    <Text fontSize="sm" color="blue.600" mt={1} fontWeight="medium">
+                      🎉 This will fully pay the invoice!
                     </Text>
                   )}
                 </FormControl>
@@ -256,21 +424,38 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                 </FormControl>
 
                 <FormControl isRequired isInvalid={!!errors.account_id}>
-                  <FormLabel>Account</FormLabel>
+                  <FormLabel>Account *</FormLabel>
                   <Select
                     {...register('account_id', {
                       required: 'Account is required',
                       setValueAs: value => parseInt(value) || 0
                     })}
+                    disabled={accountsLoading || accounts.length === 0}
                   >
-                    <option value="">Select account</option>
-                    {accounts.map(account => (
-                      <option key={account.id} value={account.id}>
-                        {account.code} - {account.name}
-                      </option>
-                    ))}
+                    {accountsLoading ? (
+                      <option value="">Loading accounts...</option>
+                    ) : accounts.length === 0 ? (
+                      <option value="">No accounts available</option>
+                    ) : (
+                      <>
+                        <option value="">Select payment account</option>
+                        {accounts.map(account => (
+                          <option key={account.id} value={account.id}>
+                            {account.type === 'BANK' && account.bank_name 
+                              ? `${account.code} - ${account.name} (${account.bank_name} - ${account.account_no})`
+                              : `${account.code} - ${account.name} (${account.type})`
+                            }
+                          </option>
+                        ))}
+                      </>
+                    )}
                   </Select>
                   <FormErrorMessage>{errors.account_id?.message}</FormErrorMessage>
+                  {accounts.length === 0 && !accountsLoading && (
+                    <Text fontSize="xs" color="orange.500" mt={1}>
+                      ⚠️ No payment accounts loaded. Contact your administrator if this persists.
+                    </Text>
+                  )}
                 </FormControl>
               </HStack>
 

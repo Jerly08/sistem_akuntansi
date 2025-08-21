@@ -114,24 +114,52 @@ function Table<T>({ columns, data, keyField, title, actions, isLoading, emptyMes
               <Thead bg="gray.50">
                 <Tr>
                   {columns.map((column, index) => (
-                    <Th key={index} fontWeight="bold">
+                    <Th 
+                      key={index} 
+                      fontWeight="bold"
+                      whiteSpace="nowrap"
+                      px={4}
+                      py={3}
+                      fontSize="sm"
+                      color="gray.700"
+                    >
                       {column.header}
                     </Th>
                   ))}
-                  {actions && <Th>Actions</Th>}
+                  {actions && (
+                    <Th 
+                      whiteSpace="nowrap"
+                      px={4}
+                      py={3}
+                      fontSize="sm"
+                      color="gray.700"
+                    >
+                      Actions
+                    </Th>
+                  )}
                 </Tr>
               </Thead>
               <Tbody>
                 {data.map((item) => (
                   <Tr key={String(item[keyField])} _hover={{ bg: 'gray.50' }}>
                     {columns.map((column, index) => (
-                      <Td key={index}>
+                      <Td 
+                        key={index}
+                        px={4}
+                        py={3}
+                        fontSize="sm"
+                        verticalAlign="middle"
+                      >
                         {renderCellContent(renderCell(item, column))}
                       </Td>
                     ))}
                     {actions && (
-                      <Td>
-                        <Flex gap={2} justify="flex-end">
+                      <Td
+                        px={4}
+                        py={3}
+                        verticalAlign="middle"
+                      >
+                        <Flex gap={2} justify="flex-end" wrap="wrap">
                           {actions(item)}
                         </Flex>
                       </Td>

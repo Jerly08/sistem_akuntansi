@@ -50,6 +50,16 @@ export interface Category {
   children?: Category[];
 }
 
+export interface ProductUnit {
+  id?: number;
+  code: string;
+  name: string;
+  symbol?: string;
+  type?: string;
+  description?: string;
+  is_active: boolean;
+}
+
 export interface InventoryMovement {
   id: number;
   product_id: number;
@@ -155,6 +165,35 @@ class ProductService {
     const response = await api.get(`/categories/${id}/products`, {
       params: { search }
     });
+    return response.data;
+  }
+
+  // Product Units
+  async getProductUnits(params?: {
+    search?: string;
+    type?: string;
+  }) {
+    const response = await api.get('/product-units', { params });
+    return response.data;
+  }
+
+  async getProductUnit(id: number) {
+    const response = await api.get(`/product-units/${id}`);
+    return response.data;
+  }
+
+  async createProductUnit(unit: ProductUnit) {
+    const response = await api.post('/product-units', unit);
+    return response.data;
+  }
+
+  async updateProductUnit(id: number, unit: Partial<ProductUnit>) {
+    const response = await api.put(`/product-units/${id}`, unit);
+    return response.data;
+  }
+
+  async deleteProductUnit(id: number) {
+    const response = await api.delete(`/product-units/${id}`);
     return response.data;
   }
 

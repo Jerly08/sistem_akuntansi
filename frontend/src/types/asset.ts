@@ -12,6 +12,12 @@ export interface Asset {
   accumulated_depreciation: number;
   is_active: boolean;
   notes: string;
+  location?: string;
+  coordinates?: string;         // "lat,lng" format
+  maps_url?: string;           // Generated Google Maps URL
+  serial_number?: string;
+  condition?: string;
+  image_path?: string;          // Path to asset image
   asset_account_id?: number;
   depreciation_account_id?: number;
   created_at: string;
@@ -42,6 +48,10 @@ export interface AssetFormData {
   depreciationMethod?: 'STRAIGHT_LINE' | 'DECLINING_BALANCE';
   isActive?: boolean;
   notes?: string;
+  location?: string;
+  coordinates?: string;         // "lat,lng" format for maps
+  serialNumber?: string;
+  condition?: string;
   assetAccountId?: number;
   depreciationAccountId?: number;
 }

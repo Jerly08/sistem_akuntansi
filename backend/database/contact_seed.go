@@ -24,6 +24,9 @@ func SeedContacts(db *gorm.DB) {
 			CreditLimit:  50000000,
 			PaymentTerms: 30,
 			IsActive:     true,
+			PICName:      "Budi Santoso",
+			ExternalID:   "CUST-001",
+			Address:      "Jl. Sudirman No. 123, Menteng, Jakarta Pusat 10220, DKI Jakarta, Indonesia",
 			Notes:        "Customer utama untuk produk elektronik",
 		},
 		{
@@ -39,6 +42,9 @@ func SeedContacts(db *gorm.DB) {
 			CreditLimit:  0,
 			PaymentTerms: 14,
 			IsActive:     true,
+			PICName:      "Sari Wulandari",
+			ExternalID:   "VEND-001",
+			Address:      "Jl. Gatot Subroto No. 456, Setiabudi, Jakarta Selatan 12950, DKI Jakarta, Indonesia",
 			Notes:        "Supplier utama untuk bahan baku",
 		},
 		{
@@ -51,6 +57,8 @@ func SeedContacts(db *gorm.DB) {
 			CreditLimit:  0,
 			PaymentTerms: 0,
 			IsActive:     true,
+			ExternalID:   "EMP-001",
+			Address:      "Jl. Kebon Jeruk No. 789, Kebon Jeruk, Jakarta Barat 11530, DKI Jakarta, Indonesia",
 			Notes:        "Manager Keuangan",
 		},
 		{
@@ -66,6 +74,9 @@ func SeedContacts(db *gorm.DB) {
 			CreditLimit:  75000000,
 			PaymentTerms: 45,
 			IsActive:     true,
+			PICName:      "Andi Wijaya",
+			ExternalID:   "CUST-002",
+			Address:      "Jl. HR Rasuna Said No. 321, Setiabudi, Jakarta Selatan 12940, DKI Jakarta, Indonesia",
 			Notes:        "Customer wholesale teknologi",
 		},
 		{
@@ -80,6 +91,9 @@ func SeedContacts(db *gorm.DB) {
 			CreditLimit:  0,
 			PaymentTerms: 7,
 			IsActive:     true,
+			PICName:      "Rudi Hermawan",
+			ExternalID:   "VEND-002",
+			Address:      "Jl. Mangga Besar No. 88, Tamansari, Jakarta Barat 11150, DKI Jakarta, Indonesia",
 			Notes:        "Supplier komponen elektronik",
 		},
 		{
@@ -92,6 +106,8 @@ func SeedContacts(db *gorm.DB) {
 			CreditLimit:  0,
 			PaymentTerms: 0,
 			IsActive:     true,
+			ExternalID:   "EMP-002",
+			Address:      "Jl. Cempaka Putih No. 55, Cempaka Putih, Jakarta Pusat 10570, DKI Jakarta, Indonesia",
 			Notes:        "Supervisor Inventory",
 		},
 	}

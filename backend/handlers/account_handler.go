@@ -390,3 +390,22 @@ func (h *AccountHandler) ValidateAccountCode(c *gin.Context) {
 		},
 	})
 }
+
+// FixAccountHeaderStatus fixes the is_header status for all accounts
+func (h *AccountHandler) FixAccountHeaderStatus(c *gin.Context) {
+	err := h.repo.(*repositories.AccountRepo).FixAccountHeaderStatus(c.Request.Context())
+	if err != nil {
+		if appErr := utils.GetAppError(err); appErr != nil {
+			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))
+		} else {
+			internalErr := utils.NewInternalError("Failed to fix account header status", err)
+			c.JSON(internalErr.StatusCode, internalErr.ToErrorResponse(""))
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Account header status fixed successfully",
+		"success": true,
+	})
+}

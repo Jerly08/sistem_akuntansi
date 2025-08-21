@@ -5,6 +5,7 @@ import (
 	"app-sistem-akuntansi/config"
 	"app-sistem-akuntansi/database"
 	"app-sistem-akuntansi/routes"
+	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-contrib/cors"
 )
@@ -21,6 +22,10 @@ func main() {
 	
 	// Seed database with initial data
 	database.SeedData(db)
+	
+	// Run startup tasks including fix account header status
+	startupService := services.NewStartupService(db)
+	startupService.RunStartupTasks()
 
 	// Initialize Gin router
 	r := gin.Default()
@@ -35,7 +40,7 @@ func main() {
 	}))
 
 	// Setup routes
-	routes.SetupRoutes(r, db)
+	routes.SetupRoutes(r, db, startupService)
 
 	// Start server
 	port := cfg.ServerPort

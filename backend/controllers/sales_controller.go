@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
 
@@ -213,21 +214,59 @@ func (sc *SalesController) GetSalePayments(c *gin.Context) {
 func (sc *SalesController) CreateSalePayment(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid sale ID"})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid sale ID",
+			"details": err.Error(),
+		})
 		return
 	}
 
 	var request models.SalePaymentRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request data",
+			"details": err.Error(),
+			"validation_error": true,
+		})
 		return
 	}
 
-	userID := c.MustGet("user_id").(uint)
+	// Set the sale ID from the URL parameter
+	request.SaleID = uint(id)
+
+	// Get user ID from context - handle potential panic
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+			"details": "user_id not found in context",
+		})
+		return
+	}
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid user authentication",
+			"details": "user_id has invalid type",
+		})
+		return
+	}
 
 	payment, err := sc.salesService.CreateSalePayment(uint(id), request, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// Determine appropriate HTTP status based on error
+		status := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "not found") {
+			status = http.StatusNotFound
+		} else if strings.Contains(err.Error(), "status") || strings.Contains(err.Error(), "validation") || strings.Contains(err.Error(), "exceeds") {
+			status = http.StatusBadRequest
+		}
+		
+		c.JSON(status, gin.H{
+			"error": "Failed to create payment",
+			"details": err.Error(),
+			"sale_id": id,
+		})
 		return
 	}
 
@@ -352,6 +391,7 @@ func (sc *SalesController) ExportSalesReportPDF(c *gin.Context) {
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	c.Data(http.StatusOK, "application/pdf", pdfData)
 }
+
 
 // Customer Portal
 

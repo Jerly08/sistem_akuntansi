@@ -450,6 +450,16 @@ func (s *ApprovalService) canUserApprove(userID uint, requiredRole string) bool 
 		return true
 	}
 
+	// Employee can approve employee steps (when they submit the purchase)
+	if userRole == "employee" && reqRole == "employee" {
+		return true
+	}
+
+	// Manager can approve manager steps
+	if userRole == "manager" && reqRole == "manager" {
+		return true
+	}
+
 	// Director can approve director and finance steps
 	if userRole == "director" && (reqRole == "director" || reqRole == "finance") {
 		return true

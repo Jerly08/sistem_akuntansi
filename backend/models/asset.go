@@ -19,8 +19,11 @@ type Asset struct {
     IsActive      bool           `json:"is_active" gorm:"default:true"`
     Notes         string         `json:"notes" gorm:"type:text"`
     Location      string         `json:"location" gorm:"size:100"`
+    Coordinates   string         `json:"coordinates" gorm:"size:50"` // "lat,lng" format
+    MapsURL       string         `json:"maps_url" gorm:"size:500"`  // Generated Google Maps URL
     SerialNumber  string         `json:"serial_number" gorm:"size:50"`
     Condition     string         `json:"condition" gorm:"size:20;default:'Good'"`
+    ImagePath     string         `json:"image_path" gorm:"size:255"`
     CreatedAt     time.Time      `json:"created_at"`
     UpdatedAt     time.Time      `json:"updated_at"`
     DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`

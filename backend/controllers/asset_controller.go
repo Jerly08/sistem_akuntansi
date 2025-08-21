@@ -4,8 +4,11 @@ import (
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
 	"app-sistem-akuntansi/services"
+	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +32,7 @@ type AssetCreateRequest struct {
 	IsActive           bool      `json:"is_active"`
 	Notes              string    `json:"notes"`
 	Location           string    `json:"location"`
+	Coordinates        string    `json:"coordinates"`
 	SerialNumber       string    `json:"serial_number"`
 	Condition          string    `json:"condition"`
 	AssetAccountID     *uint     `json:"asset_account_id"`
@@ -47,6 +51,7 @@ type AssetUpdateRequest struct {
 	IsActive           bool      `json:"is_active"`
 	Notes              string    `json:"notes"`
 	Location           string    `json:"location"`
+	Coordinates        string    `json:"coordinates"`
 	SerialNumber       string    `json:"serial_number"`
 	Condition          string    `json:"condition"`
 	AssetAccountID     *uint     `json:"asset_account_id"`
@@ -129,6 +134,8 @@ func (ac *AssetController) CreateAsset(c *gin.Context) {
 		IsActive:              req.IsActive,
 		Notes:                 req.Notes,
 		Location:              req.Location,
+		Coordinates:           req.Coordinates,
+		MapsURL:               generateMapsURL(req.Coordinates),
 		SerialNumber:          req.SerialNumber,
 		Condition:             req.Condition,
 		AssetAccountID:        req.AssetAccountID,
@@ -198,6 +205,8 @@ func (ac *AssetController) UpdateAsset(c *gin.Context) {
 	existingAsset.IsActive = req.IsActive
 	existingAsset.Notes = req.Notes
 	existingAsset.Location = req.Location
+	existingAsset.Coordinates = req.Coordinates
+	existingAsset.MapsURL = generateMapsURL(req.Coordinates)
 	existingAsset.SerialNumber = req.SerialNumber
 	existingAsset.Condition = req.Condition
 	existingAsset.AssetAccountID = req.AssetAccountID
@@ -365,7 +374,100 @@ func (ac *AssetController) CalculateCurrentDepreciation(c *gin.Context) {
 			"accumulated_depreciation":    depreciation,
 			"current_book_value":          currentBookValue,
 			"depreciation_method":         asset.DepreciationMethod,
-			"useful_life_years":           asset.UsefulLife,
+		"useful_life_years":           asset.UsefulLife,
 		},
 	})
+}
+
+// UploadAssetImage handles asset image upload
+func (ac *AssetController) UploadAssetImage(c *gin.Context) {
+	assetID, err := strconv.Atoi(c.PostForm("asset_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid asset ID"})
+		return
+	}
+
+	// Check if asset exists
+	asset, err := ac.assetService.GetAssetByID(uint(assetID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Asset not found"})
+		return
+	}
+
+	// Get uploaded file
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get uploaded file"})
+		return
+	}
+
+	// Validate file type
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/jpg":  true,
+		"image/png":  true,
+		"image/gif":  true,
+		"image/webp": true,
+	}
+
+	if !allowedTypes[file.Header.Get("Content-Type")] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed"})
+		return
+	}
+
+	// Validate file size (max 5MB)
+	maxSize := int64(5 * 1024 * 1024) // 5MB
+	if file.Size > maxSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File size too large. Maximum 5MB allowed"})
+		return
+	}
+
+	// Create uploads directory if it doesn't exist
+	uploadPath := "./uploads/assets/"
+	if err := os.MkdirAll(uploadPath, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
+		return
+	}
+
+	// Generate unique filename
+	filename := fmt.Sprintf("%d_%d_%s", assetID, time.Now().Unix(), file.Filename)
+	filePath := uploadPath + filename
+
+	// Save the file
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		return
+	}
+
+	// Update asset with image path
+	relativeImagePath := "/uploads/assets/" + filename
+	asset.ImagePath = relativeImagePath
+
+	if err := ac.assetService.UpdateAsset(asset); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update asset image path"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Image uploaded successfully",
+		"filename": filename,
+		"path": relativeImagePath,
+		"asset": asset,
+	})
+}
+
+// Helper function to generate Google Maps URL from coordinates
+func generateMapsURL(coordinates string) string {
+	if coordinates == "" {
+		return ""
+	}
+	
+	// Validate coordinate format (lat,lng)
+	parts := strings.Split(coordinates, ",")
+	if len(parts) != 2 {
+		return ""
+	}
+	
+	// Generate Google Maps URL
+	return fmt.Sprintf("https://www.google.com/maps?q=%s", coordinates)
 }

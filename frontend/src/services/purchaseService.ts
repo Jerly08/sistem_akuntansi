@@ -81,6 +81,22 @@ export interface Purchase {
   approved_by?: number;
   vendor?: Vendor;
   purchase_items?: PurchaseItem[];
+  approval_request?: {
+    id: number;
+    status: string;
+    approval_steps: Array<{
+      id: number;
+      step_id: number;
+      status: string;
+      is_active: boolean;
+      step: {
+        id: number;
+        step_order: number;
+        step_name: string;
+        approver_role: string;
+      };
+    }>;
+  };
   created_at: string;
   updated_at: string;
 }

@@ -16,8 +16,10 @@ export interface Sale {
   currency: string;
   exchange_rate: number;
   subtotal: number;
+  sub_total: number; // Read-only alias for backend compatibility
   discount_percent: number;
   discount_amount: number;
+  discount: number; // Legacy field for compatibility
   taxable_amount: number;
   ppn: number;
   ppn_percent: number;
@@ -25,6 +27,7 @@ export interface Sale {
   pph_percent: number;
   pph_type?: string;
   total_tax: number;
+  tax: number; // Backend legacy field
   total_amount: number;
   paid_amount: number;
   outstanding_amount: number;
@@ -47,6 +50,10 @@ export interface Sale {
   sale_items?: SaleItem[];
   sale_payments?: SalePayment[];
   sale_returns?: SaleReturn[];
+  
+  // Backward compatibility
+  items?: SaleItem[];
+  
 }
 
 export interface SaleItem {
@@ -67,6 +74,11 @@ export interface SaleItem {
   revenue_account_id?: number;
   tax_account_id?: number;
   
+  // Legacy fields for backward compatibility
+  total_price: number; // Same as line_total
+  discount: number;    // Legacy discount field
+  tax: number;         // Legacy tax field
+  
   // Relations
   product?: any;
 }
@@ -80,7 +92,7 @@ export interface SalePayment {
   method: string;
   reference?: string;
   cash_bank_id?: number;
-  account_id: number;
+  account_id?: number; // Make optional to match backend
   notes?: string;
   user_id: number;
   
@@ -123,7 +135,7 @@ export interface SaleCreateRequest {
   customer_id: number;
   sales_person_id?: number;
   type: string;
-  date: string;
+  date: string; // ISO datetime string format for Go backend (e.g., '2025-08-15T00:00:00Z')
   due_date?: string;
   valid_until?: string;
   currency?: string;
@@ -141,23 +153,25 @@ export interface SaleCreateRequest {
   notes?: string;
   internal_notes?: string;
   reference?: string;
-  items: SaleItemCreateRequest[];
+  items: SaleItemRequest[]; // Use consistent interface
 }
 
-export interface SaleItemCreateRequest {
+export interface SaleItemRequest {
   product_id: number;
   description?: string;
   quantity: number;
   unit_price: number;
-  discount_percent?: number;
-  taxable?: boolean;
+  discount?: number; // Legacy field - will be mapped to discount_percent
+  discount_percent?: number; // New field to match backend
+  tax?: number; // Legacy field
+  taxable?: boolean; // New field to match backend
   revenue_account_id?: number;
 }
 
 export interface SaleUpdateRequest {
   customer_id?: number;
   sales_person_id?: number;
-  date?: string;
+  date?: string; // ISO datetime string format for Go backend (e.g., '2025-08-15T00:00:00Z')
   due_date?: string;
   valid_until?: string;
   discount_percent?: number;
@@ -182,28 +196,32 @@ export interface SaleItemUpdateRequest {
   description?: string;
   quantity: number;
   unit_price: number;
-  discount_percent?: number;
+  discount?: number; // Legacy field - will be mapped to discount_percent
+  discount_percent?: number; // New field to match backend
+  tax?: number; // Legacy field
   taxable?: boolean;
   revenue_account_id?: number;
   delete?: boolean;
 }
 
 export interface SalePaymentRequest {
-  date: string;
+  payment_date: string; // Align with backend field name
   amount: number;
-  method: string;
+  payment_method: string; // Align with backend field name
   reference?: string;
   cash_bank_id?: number;
-  account_id: number;
+  account_id?: number; // Make optional to match backend
   notes?: string;
 }
 
 export interface SaleReturnRequest {
-  date: string;
-  type: string;
+  return_date: string; // Match backend field name
+  date?: string; // Deprecated, use return_date instead
+  type?: string; // Optional in backend
   reason: string;
   notes?: string;
-  items: SaleReturnItemRequest[];
+  return_items: SaleReturnItemRequest[]; // Match backend field name
+  items?: SaleReturnItemRequest[]; // Deprecated, use return_items instead
 }
 
 export interface SaleReturnItemRequest {
@@ -334,14 +352,33 @@ class SalesService {
   }
 
   async createSalePayment(saleId: number, data: SalePaymentRequest): Promise<SalePayment> {
-    const response = await api.post(`/sales/${saleId}/payments`, data);
+    // Transform frontend format to backend format
+    const backendData = {
+      sale_id: saleId,
+      amount: data.amount,
+      payment_date: data.payment_date,
+      payment_method: data.payment_method,
+      reference: data.reference,
+      notes: data.notes,
+      cash_bank_id: data.cash_bank_id,
+      account_id: data.account_id
+    };
+    const response = await api.post(`/sales/${saleId}/payments`, backendData);
     return response.data;
   }
 
   // Returns and Credit Notes
   
   async createSaleReturn(saleId: number, data: SaleReturnRequest): Promise<SaleReturn> {
-    const response = await api.post(`/sales/${saleId}/returns`, data);
+    // Transform frontend format to backend format
+    const backendData = {
+      sale_id: saleId,
+      return_date: data.return_date || data.date || new Date().toISOString(),
+      reason: data.reason,
+      notes: data.notes,
+      return_items: data.return_items || data.items || []
+    };
+    const response = await api.post(`/sales/${saleId}/returns`, backendData);
     return response.data;
   }
 

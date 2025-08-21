@@ -16,7 +16,7 @@ import {
   Spinner,
 } from '@chakra-ui/react';
 import { FiBell, FiCheckCircle, FiXCircle, FiClock, FiShoppingCart } from 'react-icons/fi';
-import approvalService from '@/services/approvalService';
+import approvalService from '../../services/approvalService';
 
 interface NotificationItem {
   id: number;
@@ -57,8 +57,13 @@ const ApprovalNotifications: React.FC = () => {
     try {
       const response = await approvalService.getUnreadNotificationCount();
       setUnreadCount(response.count || 0);
-    } catch (error) {
-      console.error('Failed to fetch unread count:', error);
+    } catch (error: any) {
+      // Only log error if it's not a network/auth issue
+      if (error.response?.status !== 401 && error.code !== 'NETWORK_ERROR') {
+        console.error('Failed to fetch unread count:', error);
+      }
+      // Gracefully handle by setting count to 0
+      setUnreadCount(0);
     }
   };
 

@@ -3,7 +3,7 @@ import { Box, VStack, HStack, Badge, Text, Spinner, Alert, AlertIcon, Divider, B
 import { useApproval } from '@/hooks/useApproval';
 import { useAuth } from '@/contexts/AuthContext';
 import approvalService from '@/services/approvalService';
-import { normalizeRole } from '@/utils/roles';
+import { normalizeRole, formatRoleForApproval } from '@/utils/roles';
 
 interface ApprovalPanelProps {
   purchaseId?: number;
@@ -100,18 +100,47 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({ purchaseId, approv
       return null; // Process completed
     }
     
+    // For new approval workflow starting from Employee
     if (history.length === 0 || isNotStarted) {
-      return 'finance'; // Start with finance
+      // Employee creates the purchase but approval process starts from Finance
+      return 'finance'; // First approval step is Finance
     }
     
     // Check the last approval action
     const lastApproval = history[history.length - 1];
-    if (lastApproval.action === 'APPROVED' && lastApproval.comments?.includes('Escalated to Director')) {
-      return 'director'; // Escalated to director
+    
+    // If last action was Employee submitting/creating, next step is Finance
+    if (lastApproval.action === 'CREATED' || lastApproval.action === 'SUBMITTED' || 
+        lastApproval.action === 'APPROVED' && lastApproval.comments?.includes('Purchase submitted by Employee')) {
+      return 'finance';
     }
     
-    if (lastApproval.action === 'CREATED') {
-      return 'finance'; // Initial creation, finance should approve
+    // If Finance approved and escalated to Director
+    if (lastApproval.action === 'APPROVED' && lastApproval.comments?.includes('Escalated to Director')) {
+      return 'director';
+    }
+    
+    // If we're in pending status, determine who should act next based on history
+    if (isPendingApproval) {
+      // Check if there's an escalation or director approval needed
+      const financeApproval = history.find(h => 
+        h.action === 'APPROVED' && 
+        (h.comments?.includes('Escalated') || h.comments?.includes('Director'))
+      );
+      if (financeApproval) {
+        return 'director';
+      }
+      
+      // Check if employee step is completed
+      const employeeSubmission = history.find(h => 
+        h.action === 'CREATED' || h.action === 'SUBMITTED' ||
+        (h.action === 'APPROVED' && h.comments?.includes('Purchase submitted by Employee'))
+      );
+      if (employeeSubmission) {
+        return 'finance';
+      }
+      
+      return 'finance'; // Default to finance if no clear employee submission found
     }
     
     return null; // Default fallback
@@ -155,7 +184,21 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({ purchaseId, approv
             <Box key={i} p={3} borderRadius="md" bg={h.action === 'REJECTED' ? 'red.50' : 'gray.50'} borderLeft="3px solid" borderLeftColor={h.action === 'REJECTED' ? 'red.500' : statusColor(h.action) + '.500'}>
               <HStack justify="space-between" mb={1}>
                 <Text fontSize="sm" fontWeight="medium">
-                  {h.user ? `${h.user.first_name} ${h.user.last_name}` : 'Unknown User'}
+                  {h.user ? (
+                    <>
+                      <Text as="span" color="blue.600" fontWeight="semibold">
+                        {formatRoleForApproval(h.user.role)}
+                      </Text>
+                      <Text as="span" color="gray.600" mx={1}>
+                        -
+                      </Text>
+                      <Text as="span">
+                        {h.user.first_name} {h.user.last_name}
+                      </Text>
+                    </>
+                  ) : (
+                    'Unknown User'
+                  )}
                 </Text>
                 <Badge colorScheme={statusColor(h.action)}>{h.action}</Badge>
               </HStack>
@@ -186,7 +229,7 @@ export const ApprovalPanel: React.FC<ApprovalPanelProps> = ({ purchaseId, approv
               <Alert status="info" size="sm" borderRadius="md">
                 <AlertIcon />
                 <Text fontSize="sm">
-                  Menunggu persetujuan dari: <Text as="span" fontWeight="bold" textTransform="capitalize">{activeStep}</Text>
+                  Menunggu persetujuan dari: <Text as="span" fontWeight="bold">{formatRoleForApproval(activeStep)}</Text>
                   {activeStep === 'director' && ' (sudah di-escalate ke Director)'}
                 </Text>
               </Alert>

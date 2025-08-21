@@ -22,6 +22,9 @@ export interface Contact {
   credit_limit?: number;
   payment_terms?: number;
   is_active: boolean;
+  pic_name?: string;        // Person In Charge (for Customer/Vendor)
+  external_id?: string;     // Employee ID, Vendor ID, Customer ID
+  address?: string;         // Simple address field
   notes?: string;
   created_at: string;
   updated_at: string;

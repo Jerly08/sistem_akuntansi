@@ -36,3 +36,13 @@ func RoleRequired(roles ...string) gin.HandlerFunc {
 		c.Abort()
 	}
 }
+
+// AuthMiddleware is an alias for AuthRequired (backward compatibility)
+func AuthMiddleware() gin.HandlerFunc {
+	return AuthRequired()
+}
+
+// RequireRoles is an alias for RoleRequired (backward compatibility)
+func RequireRoles(roles ...string) gin.HandlerFunc {
+	return RoleRequired(roles...)
+}

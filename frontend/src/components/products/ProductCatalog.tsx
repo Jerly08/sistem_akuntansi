@@ -32,18 +32,24 @@ import {
   AlertDialogOverlay,
   useDisclosure,
   Text,
-  Grid
+  Grid,
+  HStack
 } from '@chakra-ui/react';
-import { FiSearch, FiEdit, FiTrash2, FiUpload, FiEye } from 'react-icons/fi';
+import { FiSearch, FiEdit, FiTrash2, FiUpload, FiEye, FiPlus, FiGrid, FiPackage } from 'react-icons/fi';
 import ProductService, { Product, Category } from '@/services/productService';
 import ProductForm from './ProductForm';
+import CategoryForm from './CategoryForm';
+import UnitForm, { ProductUnit } from './UnitForm';
 
 const ProductCatalog: React.FC = () => {
   const { user } = useAuth();
   const canEdit = user?.role === 'ADMIN' || user?.role === 'INVENTORY_MANAGER';
+  const isAdmin = user?.role === 'ADMIN';
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [selectedUnit, setSelectedUnit] = useState<ProductUnit | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -54,6 +60,8 @@ const ProductCatalog: React.FC = () => {
   const [pendingUpload, setPendingUpload] = useState<{productId: number, file: File} | null>(null);
   const { isOpen: isAlertOpen, onOpen: onAlertOpen, onClose: onAlertClose } = useDisclosure();
   const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
+  const { isOpen: isCategoryModalOpen, onOpen: onCategoryModalOpen, onClose: onCategoryModalClose } = useDisclosure();
+  const { isOpen: isUnitModalOpen, onOpen: onUnitModalOpen, onClose: onUnitModalClose } = useDisclosure();
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const toast = useToast();
 
@@ -218,6 +226,43 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     }
   };
 
+  // Category handlers
+  const handleAddCategoryClick = () => {
+    if (!isAdmin) return;
+    setSelectedCategory(null);
+    onCategoryModalOpen();
+  };
+
+  const handleSaveCategory = (category: Category) => {
+    fetchCategories(); // Refresh categories list
+    onCategoryModalClose();
+    setSelectedCategory(null);
+  };
+
+  const handleCancelCategory = () => {
+    onCategoryModalClose();
+    setSelectedCategory(null);
+  };
+
+  // Unit handlers
+  const handleAddUnitClick = () => {
+    if (!isAdmin) return;
+    setSelectedUnit(null);
+    onUnitModalOpen();
+  };
+
+  const handleSaveUnit = (unit: ProductUnit) => {
+    // Since we don't have a units state to update, we just close the modal
+    // The ProductForm will refresh its units when it needs them
+    onUnitModalClose();
+    setSelectedUnit(null);
+  };
+
+  const handleCancelUnit = () => {
+    onUnitModalClose();
+    setSelectedUnit(null);
+  };
+
   // Filtered and sorted products using useMemo for performance
   const filteredAndSortedProducts = useMemo(() => {
     return products
@@ -253,11 +298,42 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           <Box>
             <Heading as="h1" size="xl" mb={2}>Product Catalog</Heading>
           </Box>
-          {canEdit && (
-            <Button leftIcon={<FiUpload />} colorScheme="brand" size="lg" onClick={handleAddProductClick}>
-              Add Product
-            </Button>
-          )}
+          
+          {/* Management Buttons */}
+          <HStack spacing={3}>
+            {isAdmin && (
+              <>
+                <Button 
+                  leftIcon={<FiGrid />} 
+                  colorScheme="green" 
+                  size="lg" 
+                  onClick={handleAddCategoryClick}
+                  variant="outline"
+                >
+                  Add Category
+                </Button>
+                <Button 
+                  leftIcon={<FiPackage />} 
+                  colorScheme="purple" 
+                  size="lg" 
+                  onClick={handleAddUnitClick}
+                  variant="outline"
+                >
+                  Add Unit
+                </Button>
+              </>
+            )}
+            {canEdit && (
+              <Button 
+                leftIcon={<FiPlus />} 
+                colorScheme="brand" 
+                size="lg" 
+                onClick={handleAddProductClick}
+              >
+                Add Product
+              </Button>
+            )}
+          </HStack>
         </Flex>
 
         {/* Search and Filters */}
@@ -625,6 +701,46 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
             </ModalBody>
           </ModalContent>
         </Modal>
+
+        {/* Add/Edit Category Modal */}
+        {isAdmin && (
+          <Modal isOpen={isCategoryModalOpen} onClose={onCategoryModalClose} size="4xl">
+            <ModalOverlay />
+            <ModalContent>
+              <ModalHeader>
+                {selectedCategory ? "Edit Category" : "Add Category"}
+              </ModalHeader>
+              <ModalCloseButton />
+              <ModalBody pb={6}>
+                <CategoryForm 
+                  category={selectedCategory || undefined} 
+                  onSave={handleSaveCategory} 
+                  onCancel={handleCancelCategory} 
+                />
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        )}
+
+        {/* Add/Edit Unit Modal */}
+        {isAdmin && (
+          <Modal isOpen={isUnitModalOpen} onClose={onUnitModalClose} size="3xl">
+            <ModalOverlay />
+            <ModalContent>
+              <ModalHeader>
+                {selectedUnit ? "Edit Unit" : "Add Unit"}
+              </ModalHeader>
+              <ModalCloseButton />
+              <ModalBody pb={6}>
+                <UnitForm 
+                  unit={selectedUnit || undefined} 
+                  onSave={handleSaveUnit} 
+                  onCancel={handleCancelUnit} 
+                />
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        )}
 
         {/* Image Update Confirmation Dialog */}
         <AlertDialog

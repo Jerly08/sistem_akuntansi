@@ -1,12 +1,16 @@
 package services
 
 import (
+	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
+	"gorm.io/gorm"
 )
 
 type SalesService struct {
@@ -16,7 +20,6 @@ type SalesService struct {
 	accountRepo     repositories.AccountRepository
 	journalService  JournalServiceInterface
 	pdfService      PDFServiceInterface
-	approvalService *ApprovalService
 }
 
 // Define interface types to avoid dependency issues
@@ -29,6 +32,8 @@ type JournalServiceInterface interface {
 type PDFServiceInterface interface {
 	GenerateInvoicePDF(sale *models.Sale) ([]byte, error)
 	GenerateSalesReportPDF(sales []models.Sale, startDate, endDate string) ([]byte, error)
+	GeneratePaymentReportPDF(payments []models.Payment, startDate, endDate string) ([]byte, error)
+	GeneratePaymentDetailPDF(payment *models.Payment) ([]byte, error)
 }
 
 type SalesResult struct {
@@ -39,7 +44,7 @@ type SalesResult struct {
 	TotalPages int           `json:"total_pages"`
 }
 
-func NewSalesService(salesRepo *repositories.SalesRepository, productRepo *repositories.ProductRepository, contactRepo repositories.ContactRepository, accountRepo repositories.AccountRepository, journalService JournalServiceInterface, pdfService PDFServiceInterface, approvalService *ApprovalService) *SalesService {
+func NewSalesService(salesRepo *repositories.SalesRepository, productRepo *repositories.ProductRepository, contactRepo repositories.ContactRepository, accountRepo repositories.AccountRepository, journalService JournalServiceInterface, pdfService PDFServiceInterface) *SalesService {
 	return &SalesService{
 		salesRepo:       salesRepo,
 		productRepo:     productRepo,
@@ -47,7 +52,6 @@ func NewSalesService(salesRepo *repositories.SalesRepository, productRepo *repos
 		accountRepo:     accountRepo,
 		journalService:  journalService,
 		pdfService:      pdfService,
-		approvalService: approvalService,
 	}
 }
 
@@ -83,7 +87,24 @@ func (s *SalesService) CreateSale(request models.SaleCreateRequest, userID uint)
 
 	// Validate sales person if provided
 	if request.SalesPersonID != nil {
-		// Check if sales person exists (implement user repository check)
+		// Check if sales person exists in contacts with type EMPLOYEE
+		salesPerson, err := s.contactRepo.GetByID(*request.SalesPersonID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("sales person with ID %d not found", *request.SalesPersonID)
+			}
+			return nil, fmt.Errorf("error validating sales person: %v", err)
+		}
+		
+		// Validate that the contact is an employee
+		if salesPerson.Type != "EMPLOYEE" {
+			return nil, fmt.Errorf("contact with ID %d is not an employee", *request.SalesPersonID)
+		}
+		
+		// Check if employee is active
+		if !salesPerson.IsActive {
+			return nil, fmt.Errorf("sales person with ID %d is inactive", *request.SalesPersonID)
+		}
 	}
 
 	// Generate sale code and numbers
@@ -170,6 +191,28 @@ func (s *SalesService) UpdateSale(id uint, request models.SaleUpdateRequest, use
 	// Check if sale can be updated (only drafts and pending)
 	if sale.Status != models.SaleStatusDraft && sale.Status != models.SaleStatusPending {
 		return nil, errors.New("sale cannot be updated in current status")
+	}
+
+	// Validate sales person if provided in update
+	if request.SalesPersonID != nil {
+		// Check if sales person exists in contacts with type EMPLOYEE
+		salesPerson, err := s.contactRepo.GetByID(*request.SalesPersonID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("sales person with ID %d not found", *request.SalesPersonID)
+			}
+			return nil, fmt.Errorf("error validating sales person: %v", err)
+		}
+		
+		// Validate that the contact is an employee
+		if salesPerson.Type != "EMPLOYEE" {
+			return nil, fmt.Errorf("contact with ID %d is not an employee", *request.SalesPersonID)
+		}
+		
+		// Check if employee is active
+		if !salesPerson.IsActive {
+			return nil, fmt.Errorf("sales person with ID %d is inactive", *request.SalesPersonID)
+		}
 	}
 
 	// Update fields if provided
@@ -273,12 +316,22 @@ func (s *SalesService) ConfirmSale(id uint, userID uint) error {
 		return err
 	}
 
-	if sale.Status != models.SaleStatusDraft && sale.Status != models.SaleStatusPending {
-		return errors.New("sale cannot be confirmed in current status")
+	if sale.Status != models.SaleStatusDraft {
+		return errors.New("only draft sales can be confirmed")
 	}
 
-	// Update status
-	sale.Status = models.SaleStatusConfirmed
+	// Update status directly to invoiced with invoice number generation
+	sale.Status = models.SaleStatusInvoiced
+	sale.InvoiceNumber = s.generateInvoiceNumber()
+
+	// Calculate due date if not set
+	if sale.DueDate.IsZero() {
+		dueDate := s.calculateDueDate(sale.Date, sale.PaymentTerms)
+		sale.DueDate = dueDate
+	}
+
+	// Update outstanding amount
+	sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
 
 	// Update inventory
 	err = s.updateInventoryForSale(sale)
@@ -286,7 +339,7 @@ func (s *SalesService) ConfirmSale(id uint, userID uint) error {
 		return err
 	}
 
-	// Create journal entries
+	// Create journal entries for the sale
 	err = s.createJournalEntriesForSale(sale, userID)
 	if err != nil {
 		return err
@@ -367,15 +420,20 @@ func (s *SalesService) GetSalePayments(saleID uint) ([]models.SalePayment, error
 func (s *SalesService) CreateSalePayment(saleID uint, request models.SalePaymentRequest, userID uint) (*models.SalePayment, error) {
 	sale, err := s.salesRepo.FindByID(saleID)
 	if err != nil {
+		log.Printf("Error finding sale %d: %v", saleID, err)
 		return nil, err
 	}
 
+	log.Printf("Sale %d status: %s, Outstanding: %.2f, Payment amount: %.2f", saleID, sale.Status, sale.OutstandingAmount, request.Amount)
+
 	if sale.Status != models.SaleStatusInvoiced && sale.Status != models.SaleStatusOverdue {
-		return nil, errors.New("payments can only be recorded for invoiced sales")
+		log.Printf("Sale status validation failed. Current status: %s, Expected: %s or %s", sale.Status, models.SaleStatusInvoiced, models.SaleStatusOverdue)
+		return nil, errors.New(fmt.Sprintf("payments can only be recorded for invoiced sales. Current status: %s", sale.Status))
 	}
 
 	if request.Amount > sale.OutstandingAmount {
-		return nil, errors.New("payment amount exceeds outstanding amount")
+		log.Printf("Payment amount validation failed. Amount: %.2f, Outstanding: %.2f", request.Amount, sale.OutstandingAmount)
+		return nil, errors.New(fmt.Sprintf("payment amount %.2f exceeds outstanding amount %.2f", request.Amount, sale.OutstandingAmount))
 	}
 
 	// Create payment record
@@ -387,6 +445,8 @@ func (s *SalesService) CreateSalePayment(saleID uint, request models.SalePayment
 		Method:        request.PaymentMethod,
 		Reference:     request.Reference,
 		Notes:         request.Notes,
+		CashBankID:    request.CashBankID,
+		AccountID:     request.AccountID,
 		UserID:        userID,
 	}
 
@@ -570,12 +630,33 @@ func (s *SalesService) generateSaleCode(saleType string) (string, error) {
 	}
 
 	year := time.Now().Year()
-	count, err := s.salesRepo.CountByTypeAndYear(saleType, year)
-	if err != nil {
-		return "", err
+	
+	// Use database-level unique code generation with retry logic
+	for attempt := 0; attempt < 100; attempt++ {
+		// Get a base timestamp for uniqueness
+		timestamp := time.Now().UnixMicro()
+		baseNumber := (timestamp % 9999) + 1 // Get last 4 digits, avoid 0
+		
+		// Create code with timestamp-based number to avoid collisions
+		code := fmt.Sprintf("%s-%d-%04d", prefix, year, baseNumber)
+		
+		// Check if this code already exists - use a more direct approach
+		exists, err := s.salesRepo.ExistsByCode(code)
+		if err != nil {
+			return "", fmt.Errorf("error checking code existence: %v", err)
+		}
+		
+		// If code doesn't exist, we can use it
+		if !exists {
+			return code, nil
+		}
+		
+		// If code exists, add a small random delay and try again
+		time.Sleep(time.Millisecond * time.Duration(attempt+1))
 	}
-
-	return fmt.Sprintf("%s-%d-%04d", prefix, year, count+1), nil
+	
+	// Fallback: use UUID-based approach if all attempts failed
+	return s.generateUniqueCodeWithUUID(prefix, year)
 }
 
 func (s *SalesService) generateInvoiceNumber() string {
@@ -672,6 +753,76 @@ func (s *SalesService) dereferenceFloat64(ptr *float64) float64 {
 	return 0
 }
 
+// validateSaleItemsStock validates that all items have sufficient stock
+func (s *SalesService) validateSaleItemsStock(items []models.SaleItemRequest) error {
+	for _, item := range items {
+		product, err := s.productRepo.FindByID(item.ProductID)
+		if err != nil {
+			return fmt.Errorf("product %d not found", item.ProductID)
+		}
+		
+		// Check stock availability for stockable products (non-service products need stock tracking)
+		if !product.IsService && product.Stock < item.Quantity {
+			return fmt.Errorf("insufficient stock for product %s. Available: %d, Required: %d", 
+				product.Name, product.Stock, item.Quantity)
+		}
+	}
+	return nil
+}
+
+// validateBusinessRules validates business rules for sales
+func (s *SalesService) validateBusinessRules(customer *models.Contact, request models.SaleCreateRequest) error {
+	// Check if customer is active
+	if !customer.IsActive {
+		return errors.New("cannot create sale for inactive customer")
+	}
+	
+	// Validate items stock
+	if err := s.validateSaleItemsStock(request.Items); err != nil {
+		return err
+	}
+	
+	// Calculate total for credit limit check
+	totalAmount := s.calculateEstimatedTotal(request.Items, request.DiscountPercent, request.ShippingCost)
+	
+	// Check customer credit limit if applicable
+	if customer.CreditLimit > 0 {
+		outstandingAmount, err := s.salesRepo.GetCustomerOutstandingAmount(customer.ID)
+		if err != nil {
+			return fmt.Errorf("failed to check customer credit limit: %v", err)
+		}
+		
+		if (outstandingAmount + totalAmount) > customer.CreditLimit {
+			return fmt.Errorf("credit limit exceeded. Available credit: %.2f, Required: %.2f", 
+				customer.CreditLimit - outstandingAmount, totalAmount)
+		}
+	}
+	
+	return nil
+}
+
+// calculateEstimatedTotal calculates estimated total for validation purposes
+func (s *SalesService) calculateEstimatedTotal(items []models.SaleItemRequest, discountPercent, shippingCost float64) float64 {
+	subtotal := 0.0
+	for _, item := range items {
+		lineTotal := float64(item.Quantity) * item.UnitPrice
+		// Apply item-level discount
+		if item.DiscountPercent > 0 {
+			lineTotal -= lineTotal * (item.DiscountPercent / 100)
+		} else if item.Discount > 0 {
+			lineTotal -= item.Discount
+		}
+		subtotal += lineTotal
+	}
+	
+	// Apply order-level discount
+	if discountPercent > 0 {
+		subtotal -= subtotal * (discountPercent / 100)
+	}
+	
+	return subtotal + shippingCost
+}
+
 // Helper function to safely dereference time pointer
 func (s *SalesService) dereferenceTime(ptr *time.Time) time.Time {
 	if ptr != nil {
@@ -682,37 +833,117 @@ func (s *SalesService) dereferenceTime(ptr *time.Time) time.Time {
 
 func (s *SalesService) calculateSaleItemsFromRequest(sale *models.Sale, items []models.SaleItemRequest) error {
 	subtotal := 0.0
+	totalTax := 0.0
 
 	// Clear existing items
 	sale.SaleItems = []models.SaleItem{}
 
 	for _, itemReq := range items {
 		// Validate product exists
-		_, err := s.productRepo.FindByID(itemReq.ProductID)
+		product, err := s.productRepo.FindByID(itemReq.ProductID)
 		if err != nil {
 			return fmt.Errorf("product %d not found", itemReq.ProductID)
 		}
 
-		// Create sale item
-		item := models.SaleItem{
-			ProductID:        itemReq.ProductID,
-			Quantity:         itemReq.Quantity,
-			UnitPrice:        itemReq.UnitPrice,
-			Discount:         itemReq.Discount,
-			Tax:              itemReq.Tax,
-			RevenueAccountID: itemReq.RevenueAccountID,
+		// Set default revenue account if not provided
+		revenueAccountID := itemReq.RevenueAccountID
+		if revenueAccountID == 0 {
+			// Get default sales revenue account
+			defaultAccount, err := s.getDefaultSalesRevenueAccount()
+			if err != nil {
+				return fmt.Errorf("failed to get default sales revenue account: %v", err)
+			}
+			revenueAccountID = defaultAccount.ID
 		}
 
-		// Calculate totals
-		item.TotalPrice = float64(item.Quantity) * item.UnitPrice
-		subtotal += item.TotalPrice
+		// Handle description - use from request or fallback to product name
+		description := itemReq.Description
+		if description == "" {
+			description = product.Name
+		}
+
+		// Handle discount percent - use new field or map from legacy field
+		discountPercent := itemReq.DiscountPercent
+		if discountPercent == 0 && itemReq.Discount > 0 {
+			// If legacy discount is provided as flat amount, convert to percentage
+			lineSubtotal := float64(itemReq.Quantity) * itemReq.UnitPrice
+			if lineSubtotal > 0 {
+				discountPercent = (itemReq.Discount / lineSubtotal) * 100
+				// Cap discount percent to prevent overflow
+				if discountPercent > 100 {
+					discountPercent = 100
+				}
+			}
+		}
+
+		// Validate and cap numeric values to prevent overflow
+		unitPrice := itemReq.UnitPrice
+		if unitPrice > 999999999999.99 { // Max for decimal(15,2)
+			unitPrice = 999999999999.99
+		}
+
+		if discountPercent > 100 {
+			discountPercent = 100
+		}
+
+		// Create sale item with enhanced calculation
+		item := models.SaleItem{
+			ProductID:        itemReq.ProductID,
+			Description:      description,
+			Quantity:         itemReq.Quantity,
+			UnitPrice:        unitPrice,
+			DiscountPercent:  discountPercent,
+			Taxable:          itemReq.Taxable, // Use field from request
+			RevenueAccountID: revenueAccountID,
+			// Legacy fields for backward compatibility
+			Discount:         itemReq.Discount,
+			Tax:              itemReq.Tax,
+		}
+
+		// Calculate line totals with proper precedence
+		lineSubtotal := float64(item.Quantity) * item.UnitPrice
+		discountAmount := item.Discount
+		if discountAmount == 0 && item.DiscountPercent > 0 {
+			discountAmount = lineSubtotal * (item.DiscountPercent / 100)
+		}
+		item.DiscountAmount = discountAmount
+		item.LineTotal = lineSubtotal - discountAmount
+
+		// Calculate taxes only if item is taxable
+		if item.Taxable {
+			item.PPNAmount = item.LineTotal * (sale.PPNPercent / 100)
+			item.PPhAmount = item.LineTotal * (sale.PPhPercent / 100)
+			item.TotalTax = item.PPNAmount - item.PPhAmount // PPN is added, PPh is deducted
+		} else {
+			item.PPNAmount = 0
+			item.PPhAmount = 0
+			item.TotalTax = 0
+		}
+		item.FinalAmount = item.LineTotal + item.TotalTax
+
+		// Set computed fields for frontend compatibility
+		item.TotalPrice = item.LineTotal // Frontend expects this field
+
+		// Accumulate totals
+		subtotal += item.LineTotal
+		totalTax += item.TotalTax
 
 		sale.SaleItems = append(sale.SaleItems, item)
 	}
 
-	// Calculate sale totals
-	sale.TotalAmount = subtotal - (subtotal * sale.DiscountPercent / 100) + sale.ShippingCost
+	// Calculate sale totals with enhanced logic
+	sale.Subtotal = subtotal
+	sale.DiscountAmount = subtotal * (sale.DiscountPercent / 100)
+	sale.TaxableAmount = subtotal - sale.DiscountAmount
+	sale.PPN = sale.TaxableAmount * (sale.PPNPercent / 100)
+	sale.PPh = sale.TaxableAmount * (sale.PPhPercent / 100)
+	sale.TotalTax = sale.PPN - sale.PPh // PPN is added, PPh is deducted
+	sale.TotalAmount = sale.TaxableAmount + sale.TotalTax + sale.ShippingCost
 	sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
+
+	// Set computed/legacy fields for frontend compatibility
+	sale.Tax = sale.TotalTax
+	sale.SubTotal = sale.Subtotal // Frontend compatibility alias
 
 	return nil
 }
@@ -729,13 +960,24 @@ func (s *SalesService) updateSaleItemsFromRequest(sale *models.Sale, items []mod
 		}
 
 		// Create sale item
+		// Set default revenue account if not provided
+		revenueAccountID := itemReq.RevenueAccountID
+		if revenueAccountID == 0 {
+			// Get default sales revenue account
+			defaultAccount, err := s.getDefaultSalesRevenueAccount()
+			if err != nil {
+				return fmt.Errorf("failed to get default sales revenue account: %v", err)
+			}
+			revenueAccountID = defaultAccount.ID
+		}
+
 		item := models.SaleItem{
 			ProductID:        itemReq.ProductID,
 			Quantity:         itemReq.Quantity,
 			UnitPrice:        itemReq.UnitPrice,
 			Discount:         itemReq.Discount,
 			Tax:              itemReq.Tax,
-			RevenueAccountID: itemReq.RevenueAccountID,
+			RevenueAccountID: revenueAccountID,
 		}
 
 		// Calculate totals
@@ -761,13 +1003,24 @@ func (s *SalesService) calculateSaleTotals(sale *models.Sale, items []models.Sal
 		}
 
 	// Create sale item
+		// Set default revenue account if not provided
+		revenueAccountID := itemReq.RevenueAccountID
+		if revenueAccountID == 0 {
+			// Get default sales revenue account
+			defaultAccount, err := s.getDefaultSalesRevenueAccount()
+			if err != nil {
+				return fmt.Errorf("failed to get default sales revenue account: %v", err)
+			}
+			revenueAccountID = defaultAccount.ID
+		}
+
 		item := models.SaleItem{
 			ProductID:        itemReq.ProductID,
 			Quantity:         itemReq.Quantity,
 			UnitPrice:        itemReq.UnitPrice,
 			Discount:         itemReq.Discount,
 			Tax:              itemReq.Tax,
-			RevenueAccountID: itemReq.RevenueAccountID,
+			RevenueAccountID: revenueAccountID,
 		}
 
 		// Note: Description field not available in current SaleItem model
@@ -859,6 +1112,13 @@ func (s *SalesService) createJournalEntriesForSale(sale *models.Sale, userID uin
 	// Debit: Accounts Receivable (or Cash if COD)
 	// Credit: Sales Revenue
 	// Credit/Debit: Tax accounts
+	
+	// Skip journal entries if journal service is not available
+	if s.journalService == nil {
+		log.Printf("Warning: Journal service not available, skipping journal entries for sale %d", sale.ID)
+		return nil
+	}
+	
 	return s.journalService.CreateSaleJournalEntries(sale, userID)
 }
 
@@ -866,96 +1126,101 @@ func (s *SalesService) createJournalEntriesForPayment(payment *models.SalePaymen
 	// Create journal entries for payment
 	// Debit: Cash/Bank Account
 	// Credit: Accounts Receivable
+	
+	// Skip journal entries if journal service is not available
+	if s.journalService == nil {
+		log.Printf("Warning: Journal service not available, skipping journal entries for payment %d", payment.ID)
+		return nil
+	}
+	
 	return s.journalService.CreatePaymentJournalEntries(payment, userID)
 }
 
 func (s *SalesService) createReversalJournalEntries(sale *models.Sale, userID uint, reason string) error {
 	// Create reversal journal entries
+	
+	// Skip journal entries if journal service is not available
+	if s.journalService == nil {
+		log.Printf("Warning: Journal service not available, skipping reversal journal entries for sale %d", sale.ID)
+		return nil
+	}
+	
 	return s.journalService.CreateSaleReversalJournalEntries(sale, userID, reason)
 }
 
-// Approval Integration Methods
 
-// SubmitForApproval submits a sale for approval if required
-func (s *SalesService) SubmitForApproval(id uint, userID uint) error {
-	sale, err := s.salesRepo.FindByID(id)
+// getDefaultSalesRevenueAccount gets the default sales revenue account
+func (s *SalesService) getDefaultSalesRevenueAccount() (*models.Account, error) {
+	// Try to find a sales revenue account
+	// First, try to find an account with "Sales" in the name and type REVENUE
+	accounts, err := s.accountRepo.FindByType(context.Background(), "REVENUE")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if sale.Status != models.SaleStatusDraft {
-		return errors.New("only draft sales can be submitted for approval")
+	// Look for an account with "Sales" or "Revenue" in the name
+	for _, account := range accounts {
+		if account.Name == "Sales Revenue" || account.Name == "Sales" || 
+		   account.Code == "4000" || account.Code == "400" {
+			return &account, nil
+		}
 	}
 
-	// Check if approval is required based on amount and workflow configuration
-	requiresApproval := s.checkIfApprovalRequired(sale.TotalAmount)
+	// If no specific sales account found, return the first revenue account
+	if len(accounts) > 0 {
+		return &accounts[0], nil
+	}
+
+	// If no revenue accounts exist, create a default one
+	return s.createDefaultSalesRevenueAccount()
+}
+
+// createDefaultSalesRevenueAccount creates a default sales revenue account if none exists
+func (s *SalesService) createDefaultSalesRevenueAccount() (*models.Account, error) {
+	// Create a default sales revenue account request
+	defaultAccountReq := &models.AccountCreateRequest{
+		Code:           "4000",
+		Name:           "Sales Revenue",
+		Type:           models.AccountType(models.AccountTypeRevenue),
+		Description:    "Default sales revenue account",
+		OpeningBalance: 0,
+	}
+
+	// Use account repository to create the account
+	createdAccount, err := s.accountRepo.Create(context.Background(), defaultAccountReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create default sales revenue account: %v", err)
+	}
+
+	return createdAccount, nil
+}
+
+// generateUniqueCodeWithUUID creates a unique code using a UUID-based approach as fallback
+func (s *SalesService) generateUniqueCodeWithUUID(prefix string, year int) (string, error) {
+	// Generate 4 random bytes for uniqueness
+	randomBytes := make([]byte, 4)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %v", err)
+	}
 	
-	if !requiresApproval {
-		// No approval required, move directly to confirmed
-		sale.Status = models.SaleStatusConfirmed
-		_, err = s.salesRepo.Update(sale)
-		return err
+	// Convert to a 4-digit number
+	randomNumber := uint32(randomBytes[0])<<24 | uint32(randomBytes[1])<<16 | uint32(randomBytes[2])<<8 | uint32(randomBytes[3])
+	randomNumber = (randomNumber % 9999) + 1
+	
+	// Try multiple variations if needed
+	for attempt := 0; attempt < 50; attempt++ {
+		code := fmt.Sprintf("%s-%d-%04d", prefix, year, (randomNumber+uint32(attempt))%10000)
+		
+		exists, err := s.salesRepo.ExistsByCode(code)
+		if err != nil {
+			return "", fmt.Errorf("error checking UUID-based code existence: %v", err)
+		}
+		
+		if !exists {
+			return code, nil
+		}
 	}
-
-	// Create approval request
-	approvalReq := models.CreateApprovalRequestDTO{
-		EntityType:     models.EntityTypeSale,
-		EntityID:       sale.ID,
-		Amount:         sale.TotalAmount,
-		Priority:       models.ApprovalPriorityNormal,
-		RequestTitle:   fmt.Sprintf("Sale Approval - %s", sale.Code),
-		RequestMessage: fmt.Sprintf("Approval request for sale %s with total amount %.2f", sale.Code, sale.TotalAmount),
-	}
-
-	// Determine priority based on amount
-	if sale.TotalAmount > 100000000 { // 100M IDR
-		approvalReq.Priority = models.ApprovalPriorityUrgent
-	} else if sale.TotalAmount > 50000000 { // 50M IDR
-		approvalReq.Priority = models.ApprovalPriorityHigh
-	}
-
-	_, err = s.approvalService.CreateApprovalRequest(approvalReq, userID)
-	if err != nil {
-		return err
-	}
-
-	// Update sale status
-	now := time.Now()
-	sale.Status = models.SaleStatusPending
-	sale.UpdatedAt = now
-
-	_, err = s.salesRepo.Update(sale)
-	return err
-}
-
-// checkIfApprovalRequired determines if approval is required based on amount
-func (s *SalesService) checkIfApprovalRequired(amount float64) bool {
-	// Check if there's an active workflow for this amount
-	workflow, err := s.approvalService.GetWorkflowByAmount(models.ApprovalModuleSales, amount)
-	return err == nil && workflow != nil
-}
-
-// ProcessSaleApproval handles the approval/rejection of a sale
-func (s *SalesService) ProcessSaleApproval(saleID uint, approved bool, userID uint) error {
-	sale, err := s.salesRepo.FindByID(saleID)
-	if err != nil {
-		return err
-	}
-
-	if sale.Status != models.SaleStatusPending {
-		return errors.New("sale is not pending approval")
-	}
-
-	now := time.Now()
-	if approved {
-		// Sale approved - can proceed to confirmation
-		sale.Status = models.SaleStatusConfirmed
-	} else {
-		// Sale rejected - back to draft or cancelled
-		sale.Status = models.SaleStatusCancelled
-	}
-
-	sale.UpdatedAt = now
-	_, err = s.salesRepo.Update(sale)
-	return err
+	
+	return "", fmt.Errorf("failed to generate unique code even with UUID fallback")
 }

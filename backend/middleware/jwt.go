@@ -146,8 +146,27 @@ func (jm *JWTManager) GenerateTokenPair(user models.User, deviceInfo, ipAddress 
 	}, nil
 }
 
-// RefreshAccessToken generates a new access token using refresh token
-func (jm *JWTManager) RefreshAccessToken(refreshTokenString string) (*models.TokenResponse, error) {
+	// RefreshAccessToken generates a new access token using refresh token
+	func (jm *JWTManager) RefreshAccessToken(refreshTokenString string) (*models.TokenResponse, error) {
+		// Track refresh attempt for monitoring
+		var userID uint
+		var username string
+		var sessionID string
+		var success bool
+		var failureReason string
+		var refreshCount int
+		
+		defer func() {
+			if GlobalTokenMonitor != nil {
+				GlobalTokenMonitor.LogRefreshAttempt(
+					userID, username, sessionID, 
+					"", "", // IP and UserAgent will be empty here, should be passed from controller
+					success, failureReason,
+					time.Now().Add(15*time.Minute), // New token expiry
+					refreshCount,
+				)
+			}
+		}()
 	cfg := config.LoadConfig()
 
 	// Parse refresh token

@@ -169,8 +169,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 // Handle unauthorized access (e.g., invalid token)
   const handleUnauthorized = () => {
-    console.error('Unauthorized access, logging out...');
-    logout();
+    console.warn('Unauthorized access detected');
+    // Don't auto-logout immediately, let components handle 401s gracefully
+    // Only logout if the user is actually not authenticated
+    if (!token || !user) {
+      console.error('No valid auth tokens found, logging out...');
+      logout();
+    } else {
+      console.warn('Auth tokens present but 401 received - might be a permission issue');
+    }
   };
 
   // Logout function
@@ -212,13 +219,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           
           return true;
+        } else {
+          // If refresh fails, clear auth data
+          clearAuthData();
+          return false;
         }
       }
       
       return !!token;
     } catch (error) {
       console.error('Token refresh error:', error);
-      logout();
+      clearAuthData();
       return false;
     }
   };

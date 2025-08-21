@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import FormField from '../common/FormField';
+import CurrencyInput from '../common/CurrencyInput';
 import { 
   Button, 
   Text, 
@@ -299,10 +300,25 @@ const AccountForm: React.FC<AccountFormProps> = ({
           onChange={handleChange}
           options={[
             { value: '', label: 'No Parent (Top Level)' },
-            ...parentAccounts.map((parent) => ({
-              value: parent.id.toString(),
-              label: `${parent.code} - ${parent.name}`,
-            })),
+            ...parentAccounts
+              .filter(parent => {
+                // Don't show the current account itself as a parent option
+                if (account && parent.id === account.id) return false;
+                
+                // Don't show accounts that would create circular references
+                // Only allow accounts of the same type or header accounts to be parents
+                if (formData.type && parent.type !== formData.type && !parent.is_header) {
+                  return false;
+                }
+                
+                // Prefer header accounts as parents
+                return true;
+              })
+              .map((parent) => ({
+                value: parent.id.toString(),
+                label: `${parent.code} - ${parent.name}${parent.is_header ? ' (Header)' : ''}`,
+                disabled: parent.type !== formData.type && !parent.is_header
+              })),
           ]}
           name="parent_id"
         />
@@ -329,15 +345,13 @@ const AccountForm: React.FC<AccountFormProps> = ({
               </Badge>
             )}
           </HStack>
-          <FormField
-            id="opening_balance"
-            label=""
-            type="number"
-            value={formData.opening_balance || ''}
-            onChange={handleChange}
-            placeholder="Enter opening balance"
-            name="opening_balance"
-            disabled={account?.id ? true : false}
+          <CurrencyInput
+            value={formData.opening_balance || 0}
+            onChange={(value) => setFormData((prev) => ({ ...prev, opening_balance: value }))}
+            placeholder="Contoh: Rp 1.000.000"
+            size="md"
+            min={0}
+            isDisabled={account?.id ? true : false}
           />
           {account?.id && (
             <Text fontSize="xs" color="gray.500" mt={1}>

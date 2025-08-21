@@ -34,24 +34,6 @@ type Account struct {
 	Assets       []Asset           `json:"-" gorm:"foreignKey:AssetAccountID"`
 }
 
-type Transaction struct {
-	ID            uint           `json:"id" gorm:"primaryKey"`
-	AccountID     uint           `json:"account_id" gorm:"not null;index"`
-	JournalID     *uint          `json:"journal_id" gorm:"index"`
-	ReferenceType string         `json:"reference_type" gorm:"size:50"` // SALE, PURCHASE, PAYMENT, etc.
-	ReferenceID   uint           `json:"reference_id" gorm:"index"`
-	Description   string         `json:"description" gorm:"type:text"`
-	DebitAmount   float64        `json:"debit_amount" gorm:"type:decimal(20,2);default:0"`
-	CreditAmount  float64        `json:"credit_amount" gorm:"type:decimal(20,2);default:0"`
-	TransactionDate time.Time    `json:"transaction_date"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
-
-	// Relations
-	Account Account `json:"account" gorm:"foreignKey:AccountID"`
-	Journal *Journal `json:"journal,omitempty" gorm:"foreignKey:JournalID"`
-}
 
 // Account Types Constants
 const (

@@ -14,6 +14,12 @@ export interface Asset {
   accumulated_depreciation: number;
   is_active: boolean;
   notes: string;
+  location?: string;
+  coordinates?: string;
+  maps_url?: string;
+  serial_number?: string;
+  condition?: string;
+  image_path?: string;
   asset_account_id?: number;
   depreciation_account_id?: number;
   created_at: string;
@@ -32,6 +38,10 @@ export interface AssetCreateRequest {
   depreciation_method?: string;
   is_active?: boolean;
   notes?: string;
+  location?: string;
+  coordinates?: string;
+  serial_number?: string;
+  condition?: string;
   asset_account_id?: number;
   depreciation_account_id?: number;
 }
@@ -47,6 +57,10 @@ export interface AssetUpdateRequest {
   depreciation_method?: string;
   is_active?: boolean;
   notes?: string;
+  location?: string;
+  coordinates?: string;
+  serial_number?: string;
+  condition?: string;
   asset_account_id?: number;
   depreciation_account_id?: number;
 }
@@ -155,6 +169,25 @@ class AssetService {
     return response.data;
   }
 
+  // Upload asset image
+  async uploadAssetImage(assetId: number, imageFile: File): Promise<{
+    message: string;
+    filename: string;
+    path: string;
+    asset: Asset;
+  }> {
+    const formData = new FormData();
+    formData.append('asset_id', assetId.toString());
+    formData.append('image', imageFile);
+
+    const response = await api.post('/assets/upload-image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  }
+
   // Helper method to format currency
   formatCurrency(amount: number): string {
     return new Intl.NumberFormat('id-ID', {
@@ -217,6 +250,26 @@ class AssetService {
       default:
         return method;
     }
+  }
+
+  // Helper method to generate Google Maps URL
+  generateMapsURL(coordinates: string): string {
+    if (!coordinates) return '';
+    return `https://www.google.com/maps?q=${coordinates}`;
+  }
+
+  // Helper method to open location in maps
+  openInMaps(coordinates: string): void {
+    if (!coordinates) return;
+    const mapsURL = this.generateMapsURL(coordinates);
+    window.open(mapsURL, '_blank');
+  }
+
+  // Helper method to validate coordinates format (lat,lng)
+  validateCoordinates(coordinates: string): boolean {
+    if (!coordinates) return true; // Optional field
+    const coordRegex = /^-?\d+\.?\d*,-?\d+\.?\d*$/;
+    return coordRegex.test(coordinates.trim());
   }
 
   // Validate asset data

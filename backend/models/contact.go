@@ -21,6 +21,11 @@ type Contact struct {
 	PaymentTerms int            `json:"payment_terms" gorm:"default:30"` // Days
 	IsActive     bool           `json:"is_active" gorm:"default:true"`
 	
+	// Additional fields
+	PICName      string         `json:"pic_name" gorm:"size:100"`        // Person In Charge (for Customer/Vendor)
+	ExternalID   string         `json:"external_id" gorm:"size:50"`      // Employee ID, Vendor ID, Customer ID
+	Address      string         `json:"address" gorm:"type:text"`        // Simple address field
+	
 	// Default Expense Account for purchases from this vendor
 	DefaultExpenseAccountID *uint `json:"default_expense_account_id" gorm:"index"`
 	

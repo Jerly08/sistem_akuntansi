@@ -22,6 +22,7 @@ type Product struct {
 	Model         string         `json:"model" gorm:"size:50"`
 	Unit          string         `json:"unit" gorm:"not null;size:20"` // pcs, kg, liter, etc
 	PurchasePrice float64        `json:"purchase_price" gorm:"type:decimal(15,2);default:0"`
+	CostPrice     float64        `json:"cost_price" gorm:"type:decimal(15,2);default:0"`
 	SalePrice     float64        `json:"sale_price" gorm:"type:decimal(15,2);default:0"`
 	PricingTier   string         `json:"pricing_tier" gorm:"size:100"`
 	Stock         int            `json:"stock" gorm:"default:0"`

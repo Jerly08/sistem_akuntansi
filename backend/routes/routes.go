@@ -11,18 +11,24 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRoutes(r *gin.Engine, db *gorm.DB) {
+func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupService) {
 	// Controllers
 	authController := controllers.NewAuthController(db)
 	productController := controllers.NewProductController(db)
 	categoryController := controllers.NewCategoryController(db)
+	unitController := controllers.NewProductUnitController(db)
 	inventoryController := controllers.NewInventoryController(db)
 	assetController := controllers.NewAssetController(db)
+	debugController := controllers.NewDebugController()
+	monitoringController := controllers.NewMonitoringController()
 	
 	// Initialize repositories, services and handlers
 	accountRepo := repositories.NewAccountRepository(db)
 	exportService := services.NewExportService(accountRepo)
 	accountHandler := handlers.NewAccountHandler(accountRepo, exportService)
+	
+	// Initialize startup handler for startup service monitoring
+	startupHandler := handlers.NewStartupHandler(startupService)
 	
 	// Contact repositories, services and controllers
 	contactRepo := repositories.NewContactRepository(db)
@@ -51,6 +57,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	// Handlers that depend on services
 	purchaseApprovalHandler := handlers.NewPurchaseApprovalHandler(purchaseService, approvalService)
 	
+	// Initialize security middleware
+	middleware.InitAuditLogger(db)       // Initialize audit logging
+	middleware.InitTokenMonitor(db)      // Initialize token monitoring
+	
 	// Initialize JWT Manager
 	jwtManager := middleware.NewJWTManager(db)
 
@@ -59,6 +69,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	{
 		// Public routes (no auth required)
 		auth := v1.Group("/auth")
+		auth.Use(middleware.AuthRateLimit()) // Apply auth rate limiting
 		{
 			auth.POST("/login", authController.Login)
 			auth.POST("/register", authController.Register)
@@ -77,7 +88,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 			{
 				products.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), productController.GetProducts)
 				products.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), productController.GetProduct)
-				products.POST("", middleware.RoleRequired("admin", "inventory_manager"), productController.CreateProduct)
+products.POST("", middleware.RoleRequired("admin", "inventory_manager", "employee"), productController.CreateProduct)
 				products.PUT("/:id", middleware.RoleRequired("admin", "inventory_manager"), productController.UpdateProduct)
 				products.DELETE("/:id", middleware.RoleRequired("admin"), productController.DeleteProduct)
 				products.POST("/adjust-stock", middleware.RoleRequired("admin", "inventory_manager"), productController.AdjustStock)
@@ -97,6 +108,16 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				categories.DELETE("/:id", middleware.RoleRequired("admin"), categoryController.DeleteCategory)
 			}
 
+			// Product Units routes
+			units := protected.Group("/product-units")
+			{
+				units.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), unitController.GetProductUnits)
+				units.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), unitController.GetProductUnit)
+				units.POST("", middleware.RoleRequired("admin"), unitController.CreateProductUnit)
+				units.PUT("/:id", middleware.RoleRequired("admin"), unitController.UpdateProductUnit)
+				units.DELETE("/:id", middleware.RoleRequired("admin"), unitController.DeleteProductUnit)
+			}
+
 			// Account routes (Chart of Accounts)
 			accounts := protected.Group("/accounts")
 			{
@@ -108,6 +129,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				accounts.GET("/hierarchy", middleware.RoleRequired("admin", "finance"), accountHandler.GetAccountHierarchy)
 				accounts.GET("/balance-summary", middleware.RoleRequired("admin", "finance"), accountHandler.GetBalanceSummary)
 				accounts.GET("/validate-code", middleware.RoleRequired("admin", "finance"), accountHandler.ValidateAccountCode)
+				
+				// Fix account header status
+				accounts.POST("/fix-header-status", middleware.RoleRequired("admin"), accountHandler.FixAccountHeaderStatus)
+				
 				accounts.GET("/:code", middleware.RoleRequired("admin", "finance"), accountHandler.GetAccount)
 				accounts.POST("", middleware.RoleRequired("admin", "finance"), accountHandler.CreateAccount)
 				accounts.PUT("/:code", middleware.RoleRequired("admin", "finance"), accountHandler.UpdateAccount)
@@ -125,7 +150,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				// Basic CRUD operations
 				contacts.GET("", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), contactController.GetContacts)
 				contacts.GET("/:id", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), contactController.GetContact)
-				contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.CreateContact)
+contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee"), contactController.CreateContact)
 				contacts.PUT("/:id", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.UpdateContact)
 				contacts.DELETE("/:id", middleware.RoleRequired("admin"), contactController.DeleteContact)
 				
@@ -137,6 +162,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				contacts.POST("/import", middleware.RoleRequired("admin"), contactController.ImportContacts)
 				contacts.GET("/export", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.ExportContacts)
 			}
+
+			// Sales repositories, services and controllers
+			salesRepo := repositories.NewSalesRepository(db)
+			productRepo := repositories.NewProductRepository(db)
+			pdfService := services.NewPDFService()
+		salesService := services.NewSalesService(salesRepo, productRepo, contactRepo, accountRepo, nil, pdfService)
+			salesController := controllers.NewSalesController(salesService)
 
 			// Notification routes
 			notifs := protected.Group("/notifications")
@@ -152,18 +184,50 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 			// Sales routes
 			sales := protected.Group("/sales")
 			{
-				sales.GET("", middleware.RoleRequired("admin", "finance", "director", "employee"), func(c *gin.Context) {
-					c.JSON(200, gin.H{"message": "Sales endpoint - coming soon"})
-				})
+				// Basic CRUD operations
+				sales.GET("", middleware.RoleRequired("admin", "finance", "director", "employee", "inventory_manager"), salesController.GetSales)
+				sales.GET("/:id", middleware.RoleRequired("admin", "finance", "director", "employee", "inventory_manager"), salesController.GetSale)
+				sales.POST("", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateSale)
+				sales.PUT("/:id", middleware.RoleRequired("admin", "finance", "director"), salesController.UpdateSale)
+				sales.DELETE("/:id", middleware.RoleRequired("admin"), salesController.DeleteSale)
+
+				// Status management
+				sales.POST("/:id/confirm", middleware.RoleRequired("admin", "finance", "director"), salesController.ConfirmSale)
+				sales.POST("/:id/invoice", middleware.RoleRequired("admin", "finance", "director"), salesController.InvoiceSale)
+				sales.POST("/:id/cancel", middleware.RoleRequired("admin", "finance", "director"), salesController.CancelSale)
+
+				// Payment management
+				sales.GET("/:id/payments", middleware.RoleRequired("admin", "finance", "director", "employee"), salesController.GetSalePayments)
+				sales.POST("/:id/payments", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateSalePayment)
+
+				// Returns management
+				sales.POST("/:id/returns", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateSaleReturn)
+				sales.GET("/returns", middleware.RoleRequired("admin", "finance", "director"), salesController.GetSaleReturns)
+
+				// Analytics and reporting
+				sales.GET("/summary", middleware.RoleRequired("admin", "finance", "director"), salesController.GetSalesSummary)
+				sales.GET("/analytics", middleware.RoleRequired("admin", "finance", "director"), salesController.GetSalesAnalytics)
+				sales.GET("/receivables", middleware.RoleRequired("admin", "finance", "director"), salesController.GetReceivablesReport)
+
+				// PDF exports
+				sales.GET("/:id/invoice/pdf", middleware.RoleRequired("admin", "finance", "director"), salesController.ExportSaleInvoicePDF)
+				sales.GET("/report/pdf", middleware.RoleRequired("admin", "finance", "director"), salesController.ExportSalesReportPDF)
+
+				// Customer portal
+				sales.GET("/customer/:customer_id", middleware.RoleRequired("admin", "finance", "director"), salesController.GetCustomerSales)
+				sales.GET("/customer/:customer_id/invoices", middleware.RoleRequired("admin", "finance", "director"), salesController.GetCustomerInvoices)
 			}
 
-			// Payments routes
-			payments := protected.Group("/payments")
-			{
-				payments.GET("", middleware.RoleRequired("admin", "finance", "director"), func(c *gin.Context) {
-					c.JSON(200, gin.H{"message": "Payments endpoint - coming soon"})
-				})
-			}
+			// Initialize Payment repositories, services and controllers
+			paymentRepo := repositories.NewPaymentRepository(db)
+			cashBankRepo := repositories.NewCashBankRepository(db)
+			paymentService := services.NewPaymentService(db, paymentRepo, salesRepo, purchaseRepo, cashBankRepo, accountRepo, contactRepo)
+			paymentController := controllers.NewPaymentController(paymentService)
+			cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
+			cashBankController := controllers.NewCashBankController(cashBankService)
+			
+			// Setup Payment routes
+			SetupPaymentRoutes(protected, paymentController, cashBankController, cashBankService, jwtManager)
 
 			// Purchases routes
 			purchases := protected.Group("/purchases")
@@ -223,6 +287,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				assets.POST("", middleware.RoleRequired("admin"), assetController.CreateAsset)
 				assets.PUT("/:id", middleware.RoleRequired("admin"), assetController.UpdateAsset)
 				assets.DELETE("/:id", middleware.RoleRequired("admin"), assetController.DeleteAsset)
+				assets.POST("/upload-image", middleware.RoleRequired("admin"), assetController.UploadAssetImage)
 				
 				// Reports and calculations
 				assets.GET("/summary", middleware.RoleRequired("admin", "finance", "director"), assetController.GetAssetsSummary)
@@ -231,13 +296,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				assets.GET("/:id/calculate-depreciation", middleware.RoleRequired("admin", "finance"), assetController.CalculateCurrentDepreciation)
 			}
 
-			// Cash Bank routes
-			cashBank := protected.Group("/cash-bank")
-			{
-				cashBank.GET("", middleware.RoleRequired("admin", "finance", "director"), func(c *gin.Context) {
-					c.JSON(200, gin.H{"message": "Cash Bank endpoint - coming soon"})
-				})
-			}
+		// Note: CashBank routes are already set up via SetupPaymentRoutes
 
 			// Inventory routes
 			inventory := protected.Group("/inventory")
@@ -256,12 +315,35 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 				workflows.POST("", middleware.RoleRequired("admin"), purchaseApprovalHandler.CreateApprovalWorkflow)
 			}
 
-			// Reports routes
-			reports := protected.Group("/reports")
+			// Initialize Report service and controller
+			reportService := services.NewReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
+			reportController := controllers.NewReportController(reportService)
+			
+			// Setup Report routes
+			SetupReportRoutes(protected, reportController)
+
+			// Monitoring routes (admin only)
+			monitoring := protected.Group("/monitoring")
+			monitoring.Use(middleware.RoleRequired("admin")) // Only admins can access monitoring
 			{
-				reports.GET("", middleware.RoleRequired("admin", "director", "finance"), func(c *gin.Context) {
-					c.JSON(200, gin.H{"message": "Reports endpoint - coming soon"})
-				})
+				// System monitoring
+				monitoring.GET("/status", monitoringController.GetSystemSecurityStatus)
+				monitoring.GET("/rate-limits", monitoringController.GetRateLimitStatus)
+				monitoring.GET("/security-alerts", monitoringController.GetSecurityAlerts)
+
+				// Audit logging
+				monitoring.GET("/audit-logs", monitoringController.GetAuditLogs)
+
+				// Token monitoring
+				monitoring.GET("/token-stats", monitoringController.GetTokenStats)
+				monitoring.GET("/refresh-events", monitoringController.GetRecentRefreshEvents)
+
+				// User-specific monitoring
+				monitoring.GET("/users/:user_id/security-summary", monitoringController.GetUserSecuritySummary)
+				
+				// Startup service monitoring
+				monitoring.GET("/startup-status", startupHandler.GetStartupStatus)
+				monitoring.POST("/fix-account-headers", startupHandler.TriggerAccountHeaderFix)
 			}
 		}
 	}
@@ -274,4 +356,27 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB) {
 	v1.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	// Debug routes for token validation testing
+	debug := v1.Group("/debug")
+	{
+		// Route with JWT middleware to test context
+		debugWithAuth := debug.Group("/auth")
+		debugWithAuth.Use(jwtManager.AuthRequired())
+		{
+			debugWithAuth.GET("/context", debugController.TestJWTContext)
+			
+			// This checks the role directly
+			debugWithAuth.GET("/role", debugController.TestRolePermission)
+			
+			// This uses the RoleRequired middleware
+			debugWithAuth.GET("/admin-only", middleware.RoleRequired("admin"), func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"message": "You have admin role!"})
+			})
+			
+			debugWithAuth.GET("/finance-only", middleware.RoleRequired("finance"), func(c *gin.Context) {
+				c.JSON(http.StatusOK, gin.H{"message": "You have finance role!"})
+			})
+		}
+	}
 }

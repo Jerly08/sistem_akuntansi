@@ -96,6 +96,15 @@ type CompanyProfile struct {
 	DeletedAt       gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
+// Report Template Request DTO
+type ReportTemplateRequest struct {
+	Name        string `json:"name" binding:"required,max=100"`
+	Type        string `json:"type" binding:"required,max=30"`
+	Description string `json:"description"`
+	Template    string `json:"template" binding:"required"`
+	IsDefault   bool   `json:"is_default"`
+}
+
 // Report Types Constants
 const (
 	ReportTypeBalanceSheet    = "BALANCE_SHEET"

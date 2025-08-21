@@ -19,6 +19,11 @@ func NewSalesRepository(db *gorm.DB) *SalesRepository {
 	}
 }
 
+// DB returns the database instance for direct access
+func (r *SalesRepository) DB() *gorm.DB {
+	return r.db
+}
+
 // Basic CRUD Operations
 
 func (r *SalesRepository) Create(sale *models.Sale) (*models.Sale, error) {
@@ -72,44 +77,60 @@ func (r *SalesRepository) FindWithFilter(filter models.SalesFilter) ([]models.Sa
 	var sales []models.Sale
 	var total int64
 
-	query := r.db.Model(&models.Sale{}).
+	// Base query for counting
+	countQuery := r.db.Model(&models.Sale{})
+
+	// Base query for fetching data
+	dataQuery := r.db.Model(&models.Sale{}).
 		Preload("Customer").
 		Preload("User").
 		Preload("SalesPerson").
 		Preload("SaleItems").
 		Preload("SalePayments")
 
-	// Apply filters
+	// Apply filters to both queries
 	if filter.Status != "" {
-		query = query.Where("status = ?", filter.Status)
+		countQuery = countQuery.Where("status = ?", filter.Status)
+		dataQuery = dataQuery.Where("status = ?", filter.Status)
 	}
 
 	if filter.CustomerID != "" {
-		query = query.Where("customer_id = ?", filter.CustomerID)
+		countQuery = countQuery.Where("customer_id = ?", filter.CustomerID)
+		dataQuery = dataQuery.Where("customer_id = ?", filter.CustomerID)
 	}
 
 	if filter.StartDate != "" {
-		query = query.Where("date >= ?", filter.StartDate)
+		countQuery = countQuery.Where("date >= ?", filter.StartDate)
+		dataQuery = dataQuery.Where("date >= ?", filter.StartDate)
 	}
 
 	if filter.EndDate != "" {
-		query = query.Where("date <= ?", filter.EndDate)
+		countQuery = countQuery.Where("date <= ?", filter.EndDate)
+		dataQuery = dataQuery.Where("date <= ?", filter.EndDate)
 	}
 
 	if filter.Search != "" {
 		searchPattern := "%" + strings.ToLower(filter.Search) + "%"
-		query = query.Joins("JOIN contacts ON contacts.id = sales.customer_id").
+		// Apply search to count query
+		countQuery = countQuery.Joins("JOIN contacts ON contacts.id = sales.customer_id").
+			Where("LOWER(sales.code) LIKE ? OR LOWER(sales.invoice_number) LIKE ? OR LOWER(contacts.name) LIKE ?",
+				searchPattern, searchPattern, searchPattern)
+		// Apply search to data query
+		dataQuery = dataQuery.Joins("JOIN contacts ON contacts.id = sales.customer_id").
 			Where("LOWER(sales.code) LIKE ? OR LOWER(sales.invoice_number) LIKE ? OR LOWER(contacts.name) LIKE ?",
 				searchPattern, searchPattern, searchPattern)
 	}
 
 	// Count total records
-	query.Count(&total)
+	err := countQuery.Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
 
-	// Apply pagination
+	// Apply pagination and fetch data
 	offset := (filter.Page - 1) * filter.Limit
-	err := query.Offset(offset).Limit(filter.Limit).
-		Order("date DESC, created_at DESC").
+	err = dataQuery.Offset(offset).Limit(filter.Limit).
+		Order("sales.date DESC, sales.created_at DESC").
 		Find(&sales).Error
 
 	return sales, total, err
@@ -252,6 +273,23 @@ func (r *SalesRepository) CountByTypeAndYear(saleType string, year int) (int64, 
 		Count(&count).Error
 
 	return count, err
+}
+
+// FindByCode checks if a sale with the given code exists
+func (r *SalesRepository) FindByCode(code string) (*models.Sale, error) {
+	var sale models.Sale
+	err := r.db.Where("code = ?", code).First(&sale).Error
+	if err != nil {
+		return nil, err
+	}
+	return &sale, nil
+}
+
+// ExistsByCode checks if a sale with the given code exists
+func (r *SalesRepository) ExistsByCode(code string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Sale{}).Where("code = ?", code).Count(&count).Error
+	return count > 0, err
 }
 
 func (r *SalesRepository) CountInvoicesByMonth(year, month int) (int64, error) {
@@ -509,4 +547,39 @@ func (r *ProductRepository) FindByID(id uint) (*models.Product, error) {
 	var product models.Product
 	err := r.db.First(&product, id).Error
 	return &product, err
+}
+
+// GetCustomerOutstandingAmount gets customer outstanding amount
+func (r *SalesRepository) GetCustomerOutstandingAmount(customerID uint) (float64, error) {
+	var totalOutstanding float64
+	err := r.db.Model(&models.Sale{}).
+		Where("customer_id = ? AND outstanding_amount > 0", customerID).
+		Select("COALESCE(SUM(outstanding_amount), 0)").
+		Scan(&totalOutstanding).Error
+	return totalOutstanding, err
+}
+
+// CreateJournal creates journal entry
+func (r *SalesRepository) CreateJournal(journal *models.Journal) error {
+	return r.db.Create(journal).Error
+}
+
+// CountOrdersByMonth counts orders by month
+func (r *SalesRepository) CountOrdersByMonth(year, month int) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Sale{}).
+		Where("type = ? AND EXTRACT(year FROM created_at) = ? AND EXTRACT(month FROM created_at) = ?", 
+			"ORDER", year, month).
+		Count(&count).Error
+	return count, err
+}
+
+// CountJournalsByMonth counts journals by month
+func (r *SalesRepository) CountJournalsByMonth(year, month int) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Journal{}).
+		Where("reference_type = ? AND EXTRACT(year FROM date) = ? AND EXTRACT(month FROM date) = ?", 
+			models.JournalRefTypeSale, year, month).
+		Count(&count).Error
+	return count, err
 }

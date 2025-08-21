@@ -97,6 +97,10 @@ func (s *PurchaseService) CreatePurchase(request models.PurchaseCreateRequest, u
 		Notes:            request.Notes,
 		ApprovalStatus:   models.PurchaseApprovalNotStarted,
 		RequiresApproval: false,
+		// Initialize payment tracking fields
+		PaidAmount:        0,
+		OutstandingAmount: 0, // Will be set after total calculation
+		MatchingStatus:    models.PurchaseMatchingPending,
 	}
 
 	// Calculate totals and create purchase items
@@ -217,6 +221,21 @@ func (s *PurchaseService) SubmitForApproval(id uint, userID uint) error {
 	err = s.createApprovalRequest(purchase, models.ApprovalPriorityNormal, userID)
 	if err != nil {
 		return err
+	}
+
+	// The approval workflow now starts from Employee step (step 1)
+	// When Employee submits, we immediately progress to the next step (Finance/Manager)
+	// This mimics the Employee "submitting" the purchase for approval
+	if purchase.ApprovalRequestID != nil {
+		// Automatically approve the Employee step since the Employee is submitting
+		action := models.ApprovalActionDTO{
+			Action:   "APPROVE",
+			Comments: "Purchase submitted by Employee for approval",
+		}
+		err = s.approvalService.ProcessApprovalAction(*purchase.ApprovalRequestID, userID, action)
+		if err != nil {
+			return fmt.Errorf("failed to process employee submission step: %v", err)
+		}
 	}
 
 	// Update purchase status
@@ -438,10 +457,7 @@ func (s *PurchaseService) CreatePurchaseReceipt(request models.PurchaseReceiptRe
 	}
 
 	// Generate receipt number
-	receiptNumber, err := s.generateReceiptNumber()
-	if err != nil {
-		return nil, err
-	}
+	receiptNumber := s.generateReceiptNumber()
 
 	// Create receipt
 	receipt := &models.PurchaseReceipt{
@@ -583,68 +599,12 @@ func (s *PurchaseService) GetVendorPurchaseSummary(vendorID uint) (*models.Vendo
 
 // Private helper methods
 
-func (s *PurchaseService) generatePurchaseCode() (string, error) {
-	now := time.Now()
-	year := now.Year()
-	month := now.Month()
-	
-	// Use microsecond timestamp for uniqueness
-	microseconds := now.UnixMicro()
-	timestampSuffix := microseconds % 100000 // Get last 5 digits
-	
-	// Generate code with timestamp to ensure uniqueness
-	code := fmt.Sprintf("PO-%04d-%02d-%05d", year, month, timestampSuffix)
-	
-	// Double-check uniqueness
-	for attempt := 0; attempt < 5; attempt++ {
-		exists, err := s.purchaseRepo.CodeExists(code)
-		if err != nil {
-			return "", err
-		}
-		
-		if !exists {
-			return code, nil
-		}
-		
-		// If exists, add attempt number and retry
-		code = fmt.Sprintf("PO-%04d-%02d-%05d%d", year, month, timestampSuffix, attempt+1)
-	}
-	
-	return code, nil
-}
-
-func (s *PurchaseService) generateReceiptNumber() (string, error) {
-	year := time.Now().Year()
-	month := time.Now().Month()
-	count, err := s.purchaseRepo.CountByMonth(year, int(month))
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("RCP-%04d-%02d-%04d", year, month, count+1), nil
-}
-
 func (s *PurchaseService) checkIfApprovalRequired(amount float64) bool {
 	// Check if there's an active workflow for this amount
 	workflow, err := s.approvalService.GetWorkflowByAmount(models.ApprovalModulePurchase, amount)
 	return err == nil && workflow != nil
 }
 
-// setApprovalBasisAndBase determines approval basis from env/config and sets base amount
-func (s *PurchaseService) setApprovalBasisAndBase(p *models.Purchase) {
-	basis := getApprovalBasis()
-	p.ApprovalAmountBasis = basis
-	switch basis {
-	case "SUBTOTAL_BEFORE_DISCOUNT":
-		p.ApprovalBaseAmount = p.SubtotalBeforeDiscount
-	case "NET_AFTER_DISCOUNT_BEFORE_TAX":
-		p.ApprovalBaseAmount = p.NetBeforeTax
-	case "GRAND_TOTAL_AFTER_TAX":
-		p.ApprovalBaseAmount = p.TotalAmount
-	default:
-		p.ApprovalBaseAmount = p.SubtotalBeforeDiscount
-	}
-}
 
 func (s *PurchaseService) createApprovalRequest(purchase *models.Purchase, priority string, userID uint) error {
 	// Ensure vendor is loaded
@@ -697,138 +657,6 @@ func (s *PurchaseService) createApprovalRequest(purchase *models.Purchase, prior
 	return err
 }
 
-func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, items []models.PurchaseItemRequest) error {
-	subtotalRaw := 0.0
-	itemDiscountTotal := 0.0
-	totalItemTax := 0.0
-
-	// Clear existing items
-	purchase.PurchaseItems = []models.PurchaseItem{}
-
-	for _, itemReq := range items {
-		// Validate product exists
-		_, err := s.productRepo.FindByID(itemReq.ProductID)
-		if err != nil {
-			return fmt.Errorf("product %d not found", itemReq.ProductID)
-		}
-
-		// Get product details for auto expense account assignment
-		product, err := s.productRepo.FindByID(itemReq.ProductID)
-		if err != nil {
-			return fmt.Errorf("product %d not found", itemReq.ProductID)
-		}
-
-		// Determine expense account ID with priority:
-		// 1. Explicitly provided in request
-		// 2. Product's default expense account
-		// 3. Product category's default expense account
-		// 4. Vendor's default expense account
-		var expenseAccountID uint
-		if itemReq.ExpenseAccountID != 0 {
-			// Priority 1: Explicitly provided
-			expenseAccountID = itemReq.ExpenseAccountID
-		} else if product.DefaultExpenseAccountID != nil {
-			// Priority 2: Product's default
-			expenseAccountID = *product.DefaultExpenseAccountID
-		} else if product.Category != nil && product.Category.DefaultExpenseAccountID != nil {
-			// Priority 3: Product category's default
-			expenseAccountID = *product.Category.DefaultExpenseAccountID
-		} else {
-			// Priority 4: Get vendor's default expense account
-			vendor, err := s.contactRepo.GetByID(purchase.VendorID)
-			if err == nil && vendor.DefaultExpenseAccountID != nil {
-				expenseAccountID = *vendor.DefaultExpenseAccountID
-			}
-			// If still no account found, validation will catch this later
-		}
-
-		// Create purchase item
-		item := models.PurchaseItem{
-			ProductID:        itemReq.ProductID,
-			Quantity:         itemReq.Quantity,
-			UnitPrice:        itemReq.UnitPrice,
-			Discount:         itemReq.Discount,
-			Tax:              itemReq.Tax,
-			ExpenseAccountID: expenseAccountID,
-		}
-
-		// Calculate line totals
-		lineSubtotal := float64(item.Quantity) * item.UnitPrice
-		discountAmount := lineSubtotal * (item.Discount / 100)
-		item.TotalPrice = (lineSubtotal - discountAmount) // exclude tax here; tax handled separately
-
-		subtotalRaw += lineSubtotal
-		itemDiscountTotal += discountAmount
-		totalItemTax += item.Tax
-
-		purchase.PurchaseItems = append(purchase.PurchaseItems, item)
-	}
-
-	// Calculate purchase totals
-	purchase.SubtotalBeforeDiscount = subtotalRaw
-	purchase.ItemDiscountAmount = itemDiscountTotal
-	// Subtotal after item-level discount
-	subtotalAfterItem := subtotalRaw - itemDiscountTotal
-	globalDiscountAmount := subtotalAfterItem * (purchase.Discount / 100)
-	purchase.OrderDiscountAmount = globalDiscountAmount
-	purchase.NetBeforeTax = subtotalAfterItem - globalDiscountAmount
-	// Total tax = item taxes + order-level tax amount (TaxAmount treated as absolute)
-	purchase.TaxAmount = totalItemTax + purchase.TaxAmount
-	purchase.TotalAmount = purchase.NetBeforeTax + purchase.TaxAmount
-
-	return nil
-}
-
-func (s *PurchaseService) recalculatePurchaseTotals(purchase *models.Purchase) error {
-	subtotalRaw := 0.0
-	itemDiscountTotal := 0.0
-	totalItemTax := 0.0
-
-	for i := range purchase.PurchaseItems {
-		item := &purchase.PurchaseItems[i]
-
-		// Calculate line totals
-		lineSubtotal := float64(item.Quantity) * item.UnitPrice
-		discountAmount := lineSubtotal * (item.Discount / 100)
-		item.TotalPrice = (lineSubtotal - discountAmount)
-
-		subtotalRaw += lineSubtotal
-		itemDiscountTotal += discountAmount
-		totalItemTax += item.Tax
-	}
-
-	// Calculate purchase totals
-	purchase.SubtotalBeforeDiscount = subtotalRaw
-	purchase.ItemDiscountAmount = itemDiscountTotal
-	subtotalAfterItem := subtotalRaw - itemDiscountTotal
-	globalDiscountAmount := subtotalAfterItem * (purchase.Discount / 100)
-	purchase.OrderDiscountAmount = globalDiscountAmount
-	purchase.NetBeforeTax = subtotalAfterItem - globalDiscountAmount
-	purchase.TaxAmount = totalItemTax + purchase.TaxAmount
-	purchase.TotalAmount = purchase.NetBeforeTax + purchase.TaxAmount
-
-	return nil
-}
-
-func (s *PurchaseService) updatePurchaseItems(purchase *models.Purchase, items []models.PurchaseItemRequest) error {
-	// Clear existing items and recreate
-	purchase.PurchaseItems = []models.PurchaseItem{}
-
-	for _, itemReq := range items {
-		item := models.PurchaseItem{
-			ProductID:        itemReq.ProductID,
-			Quantity:         itemReq.Quantity,
-			UnitPrice:        itemReq.UnitPrice,
-			Discount:         itemReq.Discount,
-			Tax:              itemReq.Tax,
-			ExpenseAccountID: itemReq.ExpenseAccountID,
-		}
-
-		purchase.PurchaseItems = append(purchase.PurchaseItems, item)
-	}
-
-	return nil
-}
 
 func (s *PurchaseService) validateReceiptItems(receiptItems []models.PurchaseReceiptItemRequest, purchaseItems []models.PurchaseItem) error {
 	for _, receiptItem := range receiptItems {
@@ -904,3 +732,4 @@ func getApprovalBasis() string {
 	}
 	return basis
 }
+

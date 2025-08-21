@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Layout from '@/components/layout/Layout';
-import Table from '@/components/common/Table';
+import GroupedTable from '@/components/common/GroupedTable';
 import {
   Box,
   Flex,
@@ -31,7 +31,7 @@ import {
   VStack,
   HStack,
 } from '@chakra-ui/react';
-import { FiPlus, FiEdit, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiEye } from 'react-icons/fi';
 
 // Define the Contact type
 interface Contact {
@@ -49,6 +49,9 @@ interface Contact {
   credit_limit?: number;
   payment_terms?: number;
   is_active: boolean;
+  pic_name?: string;        // Person In Charge (for Customer/Vendor)
+  external_id?: string;     // Employee ID, Vendor ID, Customer ID
+  address?: string;         // Simple address field
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -70,7 +73,7 @@ interface ContactAddress {
 
 const ContactsPage = () => {
   const { token, user } = useAuth();
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'FINANCE' || user?.role === 'INVENTORY_MANAGER';
+  const canEdit = user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'finance' || user?.role?.toLowerCase() === 'inventory_manager';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +90,9 @@ const ContactsPage = () => {
     phone: '',
     mobile: '',
     notes: '',
+    pic_name: '',
+    external_id: '',
+    address: '',
     is_active: true
   });
   // Fetch contacts from API
@@ -105,7 +111,8 @@ const ContactsPage = () => {
       }
 
       const data = await response.json();
-      setContacts(data);
+      // Backend returns direct array, not wrapped in data field
+      setContacts(Array.isArray(data) ? data : data.data || []);
     } catch (err) {
       setError('Failed to fetch contacts. Please try again.');
       console.error('Error fetching contacts:', err);
@@ -169,6 +176,9 @@ const ContactsPage = () => {
         phone: '',
         mobile: '',
         notes: '',
+        pic_name: '',
+        external_id: '',
+        address: '',
         is_active: true
       });
     } catch (err) {
@@ -229,6 +239,9 @@ const ContactsPage = () => {
       phone: '',
       mobile: '',
       notes: '',
+      pic_name: '',
+      external_id: '',
+      address: '',
       is_active: true
     });
     setIsModalOpen(true);
@@ -249,36 +262,112 @@ const ContactsPage = () => {
     }));
   };
 
-  // Table columns definition
+  // Table columns definition (removed Type column since we're grouping by type)
   const columns = [
-    { header: 'Name', accessor: 'name' },
-    { header: 'Type', accessor: 'type' },
-    { header: 'Email', accessor: 'email' },
-    { header: 'Phone', accessor: 'phone' },
-    { header: 'Status', accessor: (contact: Contact) => (contact.is_active ? 'Active' : 'Inactive') },
+    { 
+      header: 'Name', 
+      accessor: 'name',
+      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
+      cellStyle: { padding: '12px 8px', fontSize: '14px' }
+    },
+    { 
+      header: 'External ID', 
+      accessor: (contact: Contact) => contact.external_id || '-',
+      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
+      cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
+    },
+    { 
+      header: 'PIC Name', 
+      accessor: (contact: Contact) => {
+        // Only show PIC for Customer/Vendor, show '-' for Employee
+        if (contact.type === 'CUSTOMER' || contact.type === 'VENDOR') {
+          return contact.pic_name || '-';
+        }
+        return '-';
+      },
+      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
+      cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
+    },
+    { 
+      header: 'Email', 
+      accessor: 'email',
+      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
+      cellStyle: { padding: '12px 8px', fontSize: '14px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+    },
+    { 
+      header: 'Phone', 
+      accessor: 'phone',
+      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
+      cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
+    },
+    { 
+      header: 'Address', 
+      accessor: (contact: Contact) => {
+        if (contact.address) {
+          // Truncate long address for table display
+          return contact.address.length > 50 
+            ? contact.address.substring(0, 50) + '...' 
+            : contact.address;
+        }
+        return '-';
+      },
+      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
+      cellStyle: { padding: '12px 8px', fontSize: '14px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+    },
+    { 
+      header: 'Status', 
+      accessor: (contact: Contact) => (contact.is_active ? 'Active' : 'Inactive'),
+      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
+      cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
+    },
   ];
 
   const toast = useToast();
 
+  // New state for view modal
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewContact, setViewContact] = useState<Contact | null>(null);
+
+  // Handler to open view modal
+  const handleView = (contact: Contact) => {
+    setViewContact(contact);
+    setIsViewModalOpen(true);
+  };
+
   // Action buttons for each row
   const renderActions = (contact: Contact) => (
     <>
+      <Button
+        size="xs"
+        variant="outline"
+        leftIcon={<FiEye />}
+        onClick={() => handleView(contact)}
+        colorScheme="blue"
+        minW="auto"
+        px={2}
+      >
+        View
+      </Button>
       {canEdit && (
         <>
           <Button
-            size="sm"
+            size="xs"
             variant="outline"
             leftIcon={<FiEdit />}
             onClick={() => handleEdit(contact)}
+            minW="auto"
+            px={2}
           >
             Edit
           </Button>
           <Button
-            size="sm"
+            size="xs"
             colorScheme="red"
             variant="outline"
             leftIcon={<FiTrash2 />}
             onClick={() => handleDelete(contact.id)}
+            minW="auto"
+            px={2}
           >
             Delete
           </Button>
@@ -311,13 +400,19 @@ const ContactsPage = () => {
           </Alert>
         )}
         
-        <Table<Contact>
+        <GroupedTable<Contact>
           columns={columns}
           data={contacts}
           keyField="id"
+          groupBy="type"
           title="Contacts"
           actions={renderActions}
           isLoading={isLoading}
+          groupLabels={{
+            VENDOR: 'Vendors',
+            CUSTOMER: 'Customers', 
+            EMPLOYEE: 'Employees'
+          }}
         />
         
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="lg">
@@ -351,6 +446,31 @@ const ContactsPage = () => {
                     </Select>
                   </FormControl>
                   
+                  <FormControl>
+                    <FormLabel>
+                      {formData.type === 'CUSTOMER' ? 'Customer ID' : 
+                       formData.type === 'VENDOR' ? 'Vendor ID' : 
+                       formData.type === 'EMPLOYEE' ? 'Employee ID' : 'External ID'}
+                    </FormLabel>
+                    <Input
+                      value={formData.external_id || ''}
+                      onChange={(e) => handleInputChange('external_id', e.target.value)}
+                      placeholder={`Enter ${formData.type?.toLowerCase() || 'external'} ID`}
+                    />
+                  </FormControl>
+                  
+                  {/* PIC Name - only show for Customer/Vendor */}
+                  {(formData.type === 'CUSTOMER' || formData.type === 'VENDOR') && (
+                    <FormControl>
+                      <FormLabel>PIC Name (Person In Charge)</FormLabel>
+                      <Input
+                        value={formData.pic_name || ''}
+                        onChange={(e) => handleInputChange('pic_name', e.target.value)}
+                        placeholder="Enter person in charge name"
+                      />
+                    </FormControl>
+                  )}
+                  
                   <FormControl isRequired>
                     <FormLabel>Email</FormLabel>
                     <Input
@@ -376,6 +496,16 @@ const ContactsPage = () => {
                       value={formData.mobile || ''}
                       onChange={(e) => handleInputChange('mobile', e.target.value)}
                       placeholder="Enter mobile number"
+                    />
+                  </FormControl>
+                  
+                  <FormControl>
+                    <FormLabel>Address</FormLabel>
+                    <Textarea
+                      value={formData.address || ''}
+                      onChange={(e) => handleInputChange('address', e.target.value)}
+                      placeholder="Enter complete address"
+                      rows={3}
                     />
                   </FormControl>
                   
@@ -414,6 +544,65 @@ const ContactsPage = () => {
                 </Button>
               </ModalFooter>
             </form>
+          </ModalContent>
+        </Modal>
+        
+        {/* View Modal */}
+        <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} size="lg">
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>Contact Details</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              {viewContact && (
+                <VStack spacing={3} align="stretch">
+                  <Box>
+                    <strong>Name:</strong> {viewContact.name}
+                  </Box>
+                  <Box>
+                    <strong>Type:</strong> {viewContact.type}
+                  </Box>
+                  <Box>
+                    <strong>Code:</strong> {viewContact.code || '-'}
+                  </Box>
+                  <Box>
+                    <strong>External ID:</strong> {viewContact.external_id || '-'}
+                  </Box>
+                  {(viewContact.type === 'CUSTOMER' || viewContact.type === 'VENDOR') && (
+                    <Box>
+                      <strong>PIC Name:</strong> {viewContact.pic_name || '-'}
+                    </Box>
+                  )}
+                  <Box>
+                    <strong>Email:</strong> {viewContact.email}
+                  </Box>
+                  <Box>
+                    <strong>Phone:</strong> {viewContact.phone}
+                  </Box>
+                  <Box>
+                    <strong>Mobile:</strong> {viewContact.mobile || '-'}
+                  </Box>
+                  <Box>
+                    <strong>Address:</strong> {viewContact.address || '-'}
+                  </Box>
+                  <Box>
+                    <strong>Status:</strong> {viewContact.is_active ? 'Active' : 'Inactive'}
+                  </Box>
+                  <Box>
+                    <strong>Notes:</strong> {viewContact.notes || '-'}
+                  </Box>
+                  <Box>
+                    <strong>Created:</strong> {new Date(viewContact.created_at).toLocaleDateString()}
+                  </Box>
+                  <Box>
+                    <strong>Updated:</strong> {new Date(viewContact.updated_at).toLocaleDateString()}
+                  </Box>
+                </VStack>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <Button onClick={() => setIsViewModalOpen(false)}>Close</Button>
+            </ModalFooter>
           </ModalContent>
         </Modal>
       </Box>

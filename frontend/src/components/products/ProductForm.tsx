@@ -9,22 +9,25 @@ import {
   Textarea,
   Grid,
   GridItem,
-  Switch,
-  useToast,
-  VStack,
-  HStack,
   Divider,
-  Text,
+  Switch,
   NumberInput,
   NumberInputField,
   NumberInputStepper,
   NumberIncrementStepper,
   NumberDecrementStepper,
+  useToast,
+  VStack,
+  HStack,
+  Text,
   Image,
-  Flex,
+  AspectRatio,
+  IconButton,
+  SimpleGrid
 } from '@chakra-ui/react';
-import { FiSave, FiX } from 'react-icons/fi';
-import ProductService, { Product, Category } from '@/services/productService';
+import { FiSave, FiX, FiUpload, FiTrash2 } from 'react-icons/fi';
+import ProductService, { Product, Category, ProductUnit } from '@/services/productService';
+import CurrencyInput from '@/components/common/CurrencyInput';
 
 interface ProductFormProps {
   product?: Product;
@@ -60,6 +63,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
   });
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [units, setUnits] = useState<ProductUnit[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -67,6 +71,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
 
   useEffect(() => {
     fetchCategories();
+    fetchUnits();
     if (product) {
       setFormData(product);
     }
@@ -79,6 +84,19 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
     } catch (error) {
       toast({
         title: 'Failed to fetch categories',
+        status: 'error',
+        isClosable: true,
+      });
+    }
+  };
+
+  const fetchUnits = async () => {
+    try {
+      const data = await ProductService.getProductUnits();
+      setUnits(data.data);
+    } catch (error) {
+      toast({
+        title: 'Failed to fetch units',
         status: 'error',
         isClosable: true,
       });
@@ -167,11 +185,6 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
     }
   };
 
-  const units = [
-    'pcs', 'kg', 'gram', 'ton', 'liter', 'ml', 'meter', 'cm', 'mm',
-    'box', 'pack', 'bottle', 'can', 'bag', 'roll', 'sheet'
-  ];
-
   const pricingTiers = [
     'Standard', 'Premium', 'VIP', 'Wholesale', 'Retail'
   ];
@@ -238,7 +251,9 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
                   placeholder="Pilih unit"
                 >
                   {units.map(unit => (
-                    <option key={unit} value={unit}>{unit}</option>
+                    <option key={unit.code} value={unit.code}>
+                      {unit.name} ({unit.code})
+                    </option>
                   ))}
                 </Select>
               </FormControl>
@@ -329,38 +344,26 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
           <Text fontSize="lg" fontWeight="bold" mb={4}>Harga</Text>
           <Grid templateColumns="repeat(4, 1fr)" gap={4}>
             <GridItem>
-              <FormControl isRequired>
-                <FormLabel>Harga Beli</FormLabel>
-                <NumberInput
-                  value={formData.purchase_price || 0}
-                  onChange={(_, value) => handleInputChange('purchase_price', isNaN(value) ? 0 : value)}
-                  min={0}
-                  precision={2}
-                >
-                  <NumberInputField />
-                  <NumberInputStepper>
-                    <NumberIncrementStepper />
-                    <NumberDecrementStepper />
-                  </NumberInputStepper>
-                </NumberInput>
-              </FormControl>
+              <CurrencyInput
+                value={formData.purchase_price || 0}
+                onChange={(value) => handleInputChange('purchase_price', value)}
+                label="Harga Beli"
+                placeholder="Contoh: Rp 50.000"
+                isRequired={true}
+                size="md"
+                min={0}
+              />
             </GridItem>
             <GridItem>
-              <FormControl isRequired>
-                <FormLabel>Harga Jual</FormLabel>
-                <NumberInput
-                  value={formData.sale_price || 0}
-                  onChange={(_, value) => handleInputChange('sale_price', isNaN(value) ? 0 : value)}
-                  min={0}
-                  precision={2}
-                >
-                  <NumberInputField />
-                  <NumberInputStepper>
-                    <NumberIncrementStepper />
-                    <NumberDecrementStepper />
-                  </NumberInputStepper>
-                </NumberInput>
-              </FormControl>
+              <CurrencyInput
+                value={formData.sale_price || 0}
+                onChange={(value) => handleInputChange('sale_price', value)}
+                label="Harga Jual"
+                placeholder="Contoh: Rp 75.000"
+                isRequired={true}
+                size="md"
+                min={0}
+              />
             </GridItem>
             <GridItem colSpan={2}>
               <FormControl>
