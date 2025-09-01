@@ -1,6 +1,7 @@
 FROM bitnami/node:22.12.0 as builder 
 
 COPY . /app 
+COPY ./.env.example /app/.env
 WORKDIR /app 
 RUN npm install 
 

@@ -19,7 +19,7 @@ spec:
   ingressClassName: nginx
 
   rules:
-    - host: accounting.project.digitalberkahmandiri.com 
+    - host: dev-accounting.digitalberkahmandiri.com
       http:
         paths:
           - pathType: Prefix
