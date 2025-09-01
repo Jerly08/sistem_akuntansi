@@ -53,7 +53,7 @@ export default function DashboardPage() {
 
     const fetchAnalytics = async () => {
       try {
-        const res = await fetch('http://localhost:8080/api/v1/dashboard/analytics', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/dashboard/analytics`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },

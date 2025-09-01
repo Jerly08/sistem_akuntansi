@@ -41,7 +41,7 @@ const UsersPage: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch('http://localhost:8080/api/v1/users', {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
           },

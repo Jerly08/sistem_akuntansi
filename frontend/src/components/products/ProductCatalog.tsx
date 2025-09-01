@@ -526,7 +526,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                   <Flex justify="center" mb={6}>
                     {detailProduct.image_path ? (
                       <Image 
-                        src={`http://localhost:8080${detailProduct.image_path}`} 
+                        src={`${process.env.NEXT_PUBLIC_STATIC_URL}${detailProduct.image_path}`} 
                         alt={detailProduct.name}
                         maxH="250px"
                         maxW="350px"

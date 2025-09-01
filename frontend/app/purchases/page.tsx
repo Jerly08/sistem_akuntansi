@@ -770,7 +770,7 @@ const PurchasesPage: React.FC = () => {
     try {
       setLoadingVendors(true);
       
-      const response = await fetch('http://localhost:8080/api/v1/contacts?type=VENDOR', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contacts?type=VENDOR`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

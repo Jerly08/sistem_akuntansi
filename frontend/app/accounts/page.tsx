@@ -127,7 +127,7 @@ const AccountsPage = () => {
     if (!token) return;
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'}/accounts/fix-header-status`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/accounts/fix-header-status`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

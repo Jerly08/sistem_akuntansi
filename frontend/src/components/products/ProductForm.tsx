@@ -467,7 +467,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
                 <FormLabel>Gambar Saat Ini</FormLabel>
                 {formData.image_path ? (
                   <Image 
-                    src={`http://localhost:8080${formData.image_path}`} 
+                    src={`${process.env.NEXT_PUBLIC_STATIC_URL}${formData.image_path}`} 
                     alt={formData.name || 'Product image'}
                     maxH="150px"
                     maxW="200px"

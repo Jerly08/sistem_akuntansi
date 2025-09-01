@@ -6,7 +6,7 @@ import {
 } from '@/types/contact';
 
 // Base API URL - should be moved to environment variables
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 class ContactService {
 

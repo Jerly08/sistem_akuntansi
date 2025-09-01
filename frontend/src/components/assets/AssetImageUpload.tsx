@@ -164,7 +164,7 @@ const AssetImageUpload: React.FC<AssetImageUploadProps> = ({
     }
     
     // Get the static file base URL
-    const staticBaseURL = process.env.NEXT_PUBLIC_STATIC_URL || 'http://localhost:8080';
+    const staticBaseURL = process.env.NEXT_PUBLIC_STATIC_URL;
     
     // Ensure path starts with /
     const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;

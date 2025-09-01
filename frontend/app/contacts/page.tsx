@@ -98,7 +98,7 @@ const ContactsPage = () => {
   // Fetch contacts from API
   const fetchContacts = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/contacts`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contacts`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -136,8 +136,8 @@ const ContactsPage = () => {
     
     try {
       const url = formData.id
-        ? `http://localhost:8080/api/v1/contacts/${formData.id}`
-        : 'http://localhost:8080/api/v1/contacts';
+        ? `${process.env.NEXT_PUBLIC_API_URL}/contacts/${formData.id}`
+        : `${process.env.NEXT_PUBLIC_API_URL}/contacts`;
         
       const method = formData.id ? 'PUT' : 'POST';
       
@@ -199,7 +199,7 @@ const ContactsPage = () => {
     setError(null);
     
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/contacts/${id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contacts/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
