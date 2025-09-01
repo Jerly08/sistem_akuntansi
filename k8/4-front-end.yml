@@ -18,25 +18,14 @@ spec:
         - name: dbm-accounting-fe
           image: registry.digitalocean.com/registry-tigapilar/dbm/account-fe:latest
           imagePullPolicy: Always
-          # securityContext:
-          #     runAsNonRoot: true
-          #     allowPrivilegeEscalation: false
-          #     capabilities:
-          #       drop: ["ALL"]
-          #     seccompProfile:
-          #       type: RuntimeDefault
           resources:
             limits:
-              cpu: "250m"
+              cpu: "1000m"
               memory: "256Mi"
             requests:
-              cpu: "100m"
-              memory: "53Mi"
-          ports:
-            - name: http
-              containerPort: 8080
-              protocol: TCP
-
+              cpu: "500m"
+              memory: "128Mi"
+           
          
 
       

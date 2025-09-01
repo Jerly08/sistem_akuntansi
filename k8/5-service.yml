@@ -11,3 +11,20 @@ spec:
       targetPort: 8080
       protocol: TCP
       name: http
+
+
+--- 
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-dbm-accounting-fe
+  namespace: dbm-accounting
+spec:
+  selector:
+    app: dbm-accounting-fe
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP
+      name: http
+
