@@ -1,0 +1,5 @@
+## Build Backend
+
+```
+ docker build --push  --platform linux/amd64  -t registry.digitalocean.com/registry-tigapilar/dbm/account-backend:latest .
+```
