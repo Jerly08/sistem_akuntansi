@@ -10,7 +10,7 @@ import {
     DirectorDashboard,
     EmployeeDashboard
 } from '@/components/dashboard';
-import DynamicLayout from '@/components/layout/DynamicLayout';
+import SimpleLayout from '@/components/layout/SimpleLayout';
 import {
   Flex,
   VStack,
@@ -183,8 +183,8 @@ export default function DashboardPage() {
   };
 
   return (
-<DynamicLayout allowedRoles={['admin', 'finance', 'director', 'inventory_manager', 'employee']}>
+<SimpleLayout allowedRoles={['admin', 'finance', 'director', 'inventory_manager', 'employee']}>
       {renderDashboardByRole()}
-    </DynamicLayout>
+    </SimpleLayout>
   );
 }
