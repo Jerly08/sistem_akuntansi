@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import Layout from '@/components/layout/Layout';
+import SimpleLayout from '@/components/layout/SimpleLayout';
 import { DataTable } from '@/components/common/DataTable';
+import EnhancedPurchaseTable from '@/components/purchase/EnhancedPurchaseTable';
 import {
   Box,
   Flex,
@@ -78,6 +79,7 @@ import accountService from '@/services/accountService';
 import { Account as GLAccount, AccountCatalogItem } from '@/types/account';
 import approvalService from '@/services/approvalService';
 import { normalizeRole } from '@/utils/roles';
+import { useColorModeValue } from '@chakra-ui/react';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import CurrencyInput from '@/components/common/CurrencyInput';
 
@@ -101,6 +103,12 @@ interface PurchaseFormData {
   pph23_rate: string;
   other_tax_deductions: string;
   
+  // Payment method fields
+  payment_method: string;
+  bank_account_id: string;
+  credit_account_id: string;  // New field for liability account
+  payment_reference: string;
+  
   items: PurchaseItemFormData[];
 }
 
@@ -117,6 +125,15 @@ interface Vendor {
   id: number;
   name: string;
   code: string;
+}
+
+interface BankAccount {
+  id: number;
+  name: string;
+  code: string;
+  type: string;
+  balance?: number;
+  currency: string;
 }
 
 // Status color mapping
@@ -165,6 +182,11 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+// Format date
+const formatDate = (date: string) => {
+  return new Date(date).toLocaleDateString('id-ID');
+};
+
 const columns = [
   { header: 'Purchase #', accessor: 'code' as keyof Purchase },
   { 
@@ -208,6 +230,49 @@ const PurchasesPage: React.FC = () => {
   const toast = useToast();
   const { isOpen: isFilterOpen, onOpen: onFilterOpen, onClose: onFilterClose } = useDisclosure();
   
+  // Theme colors for enhanced styling - MUST be at top to follow Rules of Hooks
+  const bgColor = useColorModeValue('gray.50', 'gray.900');
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const headingColor = useColorModeValue('gray.800', 'gray.100');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  
+  // Pre-calculate all useColorModeValue calls to avoid conditional hook calls
+  const textSecondary = useColorModeValue('gray.600', 'gray.400');
+  const textPrimary = useColorModeValue('gray.700', 'gray.200');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const hoverBorder = useColorModeValue('gray.300', 'gray.500');
+  const buttonBlueBg = useColorModeValue('blue.500', 'blue.600');
+  const buttonBlueHover = useColorModeValue('blue.600', 'blue.500');
+  const statColors = {
+    orange: useColorModeValue('orange.600', 'orange.400'),
+    green: useColorModeValue('green.600', 'green.400'),
+    red: useColorModeValue('red.600', 'red.400'),
+    purple: useColorModeValue('purple.600', 'purple.400'),
+    blue: useColorModeValue('blue.600', 'blue.300')
+  };
+  const statBgColors = {
+    orange: useColorModeValue('orange.50', 'orange.900'),
+    green: useColorModeValue('green.50', 'green.900'),
+    red: useColorModeValue('red.50', 'red.900'),
+    purple: useColorModeValue('purple.50', 'purple.900'),
+    blue: useColorModeValue('blue.50', 'blue.900')
+  };
+  const modalBg = useColorModeValue('white', 'gray.900');
+  const modalFilterBg = useColorModeValue('blue.50', 'blue.900');
+  const modalFilterColor = useColorModeValue('blue.600', 'blue.300');
+  const modalHoverBg = useColorModeValue('gray.100', 'gray.700');
+  const inputHoverBorder = useColorModeValue('gray.300', 'gray.500');
+  const inputFocusBorder = useColorModeValue('blue.500', 'blue.400');
+  const inputFocusShadow = `0 0 0 1px ${useColorModeValue('blue.500', 'blue.400')}`;
+  const ghostHoverBg = useColorModeValue('gray.50', 'gray.700');
+  
+  // Additional colors for view modal
+  const modalContentBg = useColorModeValue('white', 'gray.800');
+  const modalHeaderBg = useColorModeValue('gray.50', 'gray.700');
+  const notesBoxBg = useColorModeValue('gray.50', 'gray.600');
+  const tableBg = useColorModeValue('white', 'gray.700');
+  const tableHeaderBg = useColorModeValue('gray.50', 'gray.600');
+  
   // State management
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -236,6 +301,7 @@ const PurchasesPage: React.FC = () => {
     rejected: 0,
     needingApproval: 0,
     totalValue: 0,
+    totalApprovedAmount: 0,
   });
 
   // View and Edit Modal states
@@ -247,9 +313,13 @@ const PurchasesPage: React.FC = () => {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [expenseAccounts, setExpenseAccounts] = useState<GLAccount[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [creditAccounts, setCreditAccounts] = useState<GLAccount[]>([]);  // New state for liability accounts
   const [loadingExpenseAccounts, setLoadingExpenseAccounts] = useState(false);
   const [defaultExpenseAccountId, setDefaultExpenseAccountId] = useState<number | null>(null);
   const [canListExpenseAccounts, setCanListExpenseAccounts] = useState(true);
+  const [loadingBankAccounts, setLoadingBankAccounts] = useState(false);
+  const [loadingCreditAccounts, setLoadingCreditAccounts] = useState(false);  // New loading state
   const [formData, setFormData] = useState<PurchaseFormData>({
     vendor_id: '',
     date: new Date().toISOString().split('T')[0],
@@ -268,6 +338,12 @@ const PurchasesPage: React.FC = () => {
     pph21_rate: '0',
     pph23_rate: '0', 
     other_tax_deductions: '0',
+    
+    // Payment method fields
+    payment_method: 'CREDIT',
+    bank_account_id: '',
+    credit_account_id: '',  // New field for liability account
+    payment_reference: '',
     
     items: []
   });
@@ -300,6 +376,11 @@ const PurchasesPage: React.FC = () => {
     sale_price: '0',
   });
   const [savingProduct, setSavingProduct] = useState(false);
+
+  // Role-based permissions
+  const roleNorm = normalizeRole(user?.role as any);
+  const canEdit = roleNorm === 'employee' || roleNorm === 'admin';
+  const canDelete = roleNorm === 'admin';
 
   // Helper function to notify directors
   const notifyDirectors = async (purchase: Purchase) => {
@@ -613,6 +694,16 @@ const PurchasesPage: React.FC = () => {
         return sum + (typeof amount === 'number' ? amount : parseFloat(amount) || 0);
       }, 0);
       
+      // Fetch purchase summary to get approved amount
+      let totalApprovedAmount = 0;
+      try {
+        const summaryResponse = await purchaseService.getSummary();
+        totalApprovedAmount = summaryResponse.total_approved_amount || 0;
+      } catch (summaryErr) {
+        console.warn('Failed to fetch purchase summary:', summaryErr);
+        // Continue without approved amount if summary fetch fails
+      }
+      
       setStats({
         total: response?.total || totalPurchases, // Use API total if available, otherwise current page count
         pending: pendingApproval,
@@ -620,6 +711,7 @@ const PurchasesPage: React.FC = () => {
         rejected: rejected,
         needingApproval: pendingApproval, // Same as pending for now
         totalValue: totalValue, // Add total value to stats
+        totalApprovedAmount: totalApprovedAmount, // Add approved amount from summary
       });
       
       setError(null);
@@ -642,6 +734,7 @@ const PurchasesPage: React.FC = () => {
         rejected: 0,
         needingApproval: 0,
         totalValue: 0,
+        totalApprovedAmount: 0,
       });
       
       const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch purchases';
@@ -827,6 +920,107 @@ const PurchasesPage: React.FC = () => {
     }
   };
 
+  // Fetch bank accounts for payment method selection
+  const fetchBankAccounts = async () => {
+    if (!token) return;
+    try {
+      setLoadingBankAccounts(true);
+      
+      const response = await fetch('http://localhost:8080/api/v1/cashbank/payment-accounts', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch bank accounts');
+      }
+
+      const data = await response.json();
+      
+      // API returns { success: true, data: [...] }
+      // The data array already contains both bank and cash accounts
+      const allAccounts = data.data || [];
+      
+      setBankAccounts(allAccounts);
+    } catch (err: any) {
+      console.error('Error fetching bank accounts:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch bank accounts',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoadingBankAccounts(false);
+    }
+  };
+
+  // Fetch credit accounts (liability) for credit payment method selection
+  const fetchCreditAccounts = async () => {
+    if (!token) return;
+    try {
+      setLoadingCreditAccounts(true);
+      
+      // Try catalog endpoint first for EMPLOYEE role, fallback to regular endpoint
+      if (user?.role === 'EMPLOYEE') {
+        try {
+          const catalogData = await accountService.getAccountCatalog(token, 'LIABILITY');
+          const formattedAccounts: GLAccount[] = catalogData.map(item => ({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+            type: 'LIABILITY' as const,
+            is_active: item.active,
+            level: 1,
+            is_header: false,
+            balance: 0,
+            created_at: '',
+            updated_at: '',
+            description: '',
+          }));
+          console.log('Formatted credit accounts from catalog:', formattedAccounts);
+          setCreditAccounts(formattedAccounts);
+          return; // Success, exit early
+        } catch (catalogError: any) {
+          console.log('Catalog endpoint not available, trying regular endpoint:', catalogError.message);
+          // Fall through to try regular endpoint
+        }
+      }
+      
+      // Use full account data for other roles or as fallback for EMPLOYEE
+      try {
+        const data = await accountService.getAccounts(token, 'LIABILITY');
+        const list: GLAccount[] = Array.isArray(data) ? data : [];
+        console.log('Formatted credit accounts from regular endpoint:', list);
+        setCreditAccounts(list);
+      } catch (regularError: any) {
+        console.error('Regular accounts endpoint also failed:', regularError);
+        throw regularError; // Re-throw to be caught by outer catch
+      }
+    } catch (err: any) {
+      console.error('Error fetching credit accounts:', err);
+      // If both endpoints fail, fall back to manual entry mode
+      setCreditAccounts([]);
+      
+      // Only show warning for non-EMPLOYEE users or if it's not a permission error
+      if (user?.role !== 'EMPLOYEE' || !err.message?.includes('Insufficient permissions')) {
+        toast({
+          title: 'Limited Access',
+          description: 'Unable to load credit accounts list. Credit payment will use default liability account.',
+          status: 'warning',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    } finally {
+      setLoadingCreditAccounts(false);
+    }
+  };
+
   // Fetch expense accounts (GL) for item expense_account_id
   const fetchExpenseAccounts = async () => {
     if (!token) return;
@@ -914,6 +1108,18 @@ const PurchasesPage: React.FC = () => {
         notes: detailResponse.notes || '',
         discount: detailResponse.discount?.toString() || '0',
         tax: detailResponse.tax?.toString() || '0',
+        // Tax additions (Penambahan)
+        ppn_rate: detailResponse.ppn_rate?.toString() || '11',
+        other_tax_additions: detailResponse.other_tax_additions?.toString() || '0',
+        // Tax deductions (Pemotongan)
+        pph21_rate: detailResponse.pph21_rate?.toString() || '0',
+        pph23_rate: detailResponse.pph23_rate?.toString() || '0',
+        other_tax_deductions: detailResponse.other_tax_deductions?.toString() || '0',
+        // Payment method fields
+        payment_method: detailResponse.payment_method || 'CREDIT',
+        bank_account_id: detailResponse.bank_account_id?.toString() || '',
+        credit_account_id: detailResponse.credit_account_id?.toString() || '',
+        payment_reference: detailResponse.payment_reference || '',
         items: detailResponse.purchase_items?.map(item => ({
           product_id: item.product_id.toString(),
           quantity: item.quantity.toString(),
@@ -934,6 +1140,8 @@ const PurchasesPage: React.FC = () => {
     await fetchVendors(); // Load vendors for dropdown
     await fetchProductsList(); // Load products for dropdown
     await fetchExpenseAccounts(); // Load expense accounts for dropdown
+    await fetchBankAccounts(); // Load bank accounts for dropdown
+    await fetchCreditAccounts(); // Load credit accounts (liability) for dropdown
     onEditOpen();
     } catch (err: any) {
       toast({
@@ -968,12 +1176,20 @@ const handleCreate = async () => {
       pph23_rate: '0',
       other_tax_deductions: '0',
       
+      // Payment method fields
+      payment_method: 'CREDIT',
+      bank_account_id: '',
+      credit_account_id: '',
+      payment_reference: '',
+      
       items: []
     });
     setSelectedPurchase(null);
     await fetchVendors(); // Load vendors for dropdown
     await fetchProductsList(); // Load products for dropdown
     await fetchExpenseAccounts(); // Load expense accounts for dropdown
+    await fetchBankAccounts(); // Load bank accounts for dropdown
+    await fetchCreditAccounts(); // Load credit accounts (liability) for dropdown
     onCreateOpen();
   };
 
@@ -1020,15 +1236,24 @@ const handleCreate = async () => {
     try {
       setLoading(true);
       
-      // Format the payload
+      // Format the payload with proper tax rates
       const payload = {
         vendor_id: parseInt(formData.vendor_id),
         date: formData.date ? `${formData.date}T00:00:00Z` : new Date().toISOString(),
         due_date: formData.due_date ? `${formData.due_date}T00:00:00Z` : undefined,
         notes: formData.notes,
         discount: parseFloat(formData.discount) || 0,
-        // Only include legacy tax if PPN rate matches
-        tax: parseFloat(formData.ppn_rate) || 0, 
+        // Send proper tax rates (not legacy tax field)
+        ppn_rate: parseFloat(formData.ppn_rate) || 11,
+        other_tax_additions: parseFloat(formData.other_tax_additions) || 0,
+        pph21_rate: parseFloat(formData.pph21_rate) || 0,
+        pph23_rate: parseFloat(formData.pph23_rate) || 0,
+        other_tax_deductions: parseFloat(formData.other_tax_deductions) || 0,
+        // Payment method fields
+        payment_method: formData.payment_method,
+        bank_account_id: formData.bank_account_id ? parseInt(formData.bank_account_id) : undefined,
+        credit_account_id: formData.credit_account_id ? parseInt(formData.credit_account_id) : undefined,
+        payment_reference: formData.payment_reference,
         items: formData.items.map(item => ({
           product_id: parseInt(item.product_id),
           quantity: parseFloat(item.quantity),
@@ -1133,10 +1358,18 @@ const handleCreate = async () => {
       
       // Enhanced fallback logic based on status and amount
       if (status === 'PENDING' || status === 'NOT_STARTED' || purchaseStatus === 'PENDING_APPROVAL') {
-        // For high amounts or when escalated, should go to director
-        if (purchase.total_amount > 25000000) {
+        // Check if this purchase requires director approval based on amount or other criteria
+        const requiresDirectorApproval = purchase.total_amount > 25000000;
+        
+        // Check if purchase has been escalated to director (look for director-related indicators)
+        const isEscalatedToDirector = purchase.approval_request?.approval_steps?.some(
+          step => normalizeRole(step.step.approver_role) === 'director' && step.status === 'PENDING'
+        ) || purchase.approval_request?.current_step_name?.toLowerCase().includes('director');
+        
+        if (requiresDirectorApproval || isEscalatedToDirector) {
           return { step_name: 'Director Approval', approver_role: 'director', step_order: 2, is_escalated: true };
         }
+        
         // Default to finance approval
         return { step_name: 'Finance Approval', approver_role: 'finance', step_order: 1, is_escalated: false };
       }
@@ -1212,7 +1445,7 @@ const handleCreate = async () => {
         </Button>
         
         {/* Delete button for ADMIN - can delete any status */}
-        {user?.role === 'ADMIN' && (
+        {normalizeRole(user?.role as any) === 'admin' && (
           <Button
             size="sm"
             colorScheme="red"
@@ -1231,110 +1464,374 @@ const handleCreate = async () => {
 
   if (loading) {
     return (
-<Layout allowedRoles={['admin', 'finance', 'inventory_manager', 'employee', 'director']}>
+<SimpleLayout allowedRoles={['admin', 'finance', 'inventory_manager', 'employee', 'director']}>
         <Box>
           <Text>Loading purchases...</Text>
         </Box>
-      </Layout>
+      </SimpleLayout>
     );
   }
 
   return (
-<Layout allowedRoles={['admin', 'finance', 'inventory_manager', 'employee', 'director']}>
-      <VStack spacing={6} align="stretch">
-        {/* Header */}
-        <Flex justify="space-between" align="center">
-          <Heading size="lg">Purchase Management</Heading>
-          <HStack spacing={3}>
-            <Button
-              variant="outline"
-              leftIcon={<FiFilter />}
-              onClick={onFilterOpen}
-            >
-              Filters
-            </Button>
-            <Button
-              variant="outline"
-              leftIcon={<FiRefreshCw />}
-              onClick={handleRefresh}
-              isLoading={loading}
-            >
-              Refresh
-            </Button>
-            {/* New Purchase button only for Employee role */}
-            {normalizeRole(user?.role as any) === 'employee' && (
-              <Button
-                colorScheme="blue"
-                leftIcon={<FiPlus />}
-                onClick={handleCreate}
-              >
-                New Purchase
-              </Button>
-            )}
-          </HStack>
-        </Flex>
+    <SimpleLayout allowedRoles={['admin', 'finance', 'inventory_manager', 'employee', 'director']}>
+      <Box 
+        bg={bgColor}
+        minH="100vh"
+        p={6}
+      >
+        <VStack spacing={6} align="stretch">
+        {/* Enhanced Header */}
+        <Card 
+          bg={cardBg}
+          borderWidth="1px"
+          borderColor={borderColor}
+          boxShadow="sm"
+          borderRadius="lg"
+          mb={2}
+        >
+          <CardBody p={6}>
+            <Flex justify="space-between" align="center">
+              <Box>
+                <Heading 
+                  size="lg" 
+                  color={headingColor}
+                  fontWeight="bold"
+                  mb={1}
+                >
+                  Purchase Management
+                </Heading>
+                <Text 
+                  fontSize="sm" 
+                  color={textSecondary}
+                >
+                  Manage purchase orders and approvals
+                </Text>
+              </Box>
+              <HStack spacing={3}>
+                <Button
+                  variant="outline"
+                  size="md"
+                  leftIcon={<FiFilter />}
+                  onClick={onFilterOpen}
+                  borderColor={borderColor}
+                  color={textPrimary}
+                  _hover={{
+                    bg: hoverBg,
+                    borderColor: hoverBorder,
+                    transform: 'translateY(-1px)'
+                  }}
+                  transition="all 0.2s ease"
+                >
+                  Filters
+                </Button>
+                <Button
+                  variant="outline"
+                  size="md"
+                  leftIcon={<FiRefreshCw />}
+                  onClick={handleRefresh}
+                  isLoading={loading}
+                  borderColor={borderColor}
+                  color={textPrimary}
+                  _hover={{
+                    bg: hoverBg,
+                    borderColor: hoverBorder,
+                    transform: 'translateY(-1px)'
+                  }}
+                  transition="all 0.2s ease"
+                >
+                  Refresh
+                </Button>
+                {/* New Purchase button only for Employee role */}
+                {normalizeRole(user?.role as any) === 'employee' && (
+                  <Button
+                    colorScheme="blue"
+                    size="md"
+                    leftIcon={<FiPlus />}
+                    onClick={handleCreate}
+                    bg={buttonBlueBg}
+                    color="white"
+                    _hover={{
+                      bg: buttonBlueHover,
+                      transform: 'translateY(-1px)',
+                      boxShadow: 'md'
+                    }}
+                    _active={{
+                      transform: 'translateY(0)'
+                    }}
+                    transition="all 0.2s ease"
+                    fontWeight="semibold"
+                  >
+                    New Purchase
+                  </Button>
+                )}
+              </HStack>
+            </Flex>
+          </CardBody>
+        </Card>
 
-        {/* Statistics Cards */}
-        <Grid templateColumns="repeat(auto-fit, minmax(250px, 1fr))" gap={4}>
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel>Total Purchases</StatLabel>
-                <StatNumber>{stats.total}</StatNumber>
-              </Stat>
+        {/* Enhanced Statistics Cards */}
+        <Grid templateColumns="repeat(auto-fit, minmax(280px, 1fr))" gap={6}>
+          <Card 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            borderRadius="lg"
+            _hover={{ 
+              boxShadow: 'md',
+              transform: 'translateY(-2px)',
+              transition: 'all 0.2s ease'
+            }}
+            transition="all 0.2s ease"
+          >
+            <CardBody p={6}>
+              <Flex align="center" justify="space-between">
+                <Stat>
+                  <StatLabel 
+                    color={textSecondary}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    mb={2}
+                  >
+                    Total Purchases
+                  </StatLabel>
+                  <StatNumber 
+                    color={headingColor}
+                    fontSize="2xl"
+                    fontWeight="bold"
+                  >
+                    {stats.total}
+                  </StatNumber>
+                </Stat>
+                <Box 
+                  p={3} 
+                  borderRadius="lg"
+                  bg={statBgColors.blue}
+                  color={statColors.blue}
+                >
+                  <FiRefreshCw size={20} />
+                </Box>
+              </Flex>
             </CardBody>
           </Card>
           
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel>Pending Approval</StatLabel>
-                <StatNumber color="orange.500">
-                  <HStack>
-                    <FiClock />
-                    <Text>{stats.needingApproval}</Text>
-                  </HStack>
-                </StatNumber>
-              </Stat>
+          <Card 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            borderRadius="lg"
+            _hover={{ 
+              boxShadow: 'md',
+              transform: 'translateY(-2px)',
+              transition: 'all 0.2s ease'
+            }}
+            transition="all 0.2s ease"
+          >
+            <CardBody p={6}>
+              <Flex align="center" justify="space-between">
+                <Stat>
+                  <StatLabel 
+                    color={textSecondary}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    mb={2}
+                  >
+                    Pending Approval
+                  </StatLabel>
+                  <StatNumber 
+                    color={statColors.orange}
+                    fontSize="2xl"
+                    fontWeight="bold"
+                  >
+                    {stats.needingApproval}
+                  </StatNumber>
+                </Stat>
+                <Box 
+                  p={3} 
+                  borderRadius="lg"
+                  bg={statBgColors.orange}
+                  color={statColors.orange}
+                >
+                  <FiClock size={20} />
+                </Box>
+              </Flex>
             </CardBody>
           </Card>
           
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel>Approved</StatLabel>
-                <StatNumber color="green.500">
-                  <HStack>
-                    <FiCheckCircle />
-                    <Text>{stats.approved}</Text>
-                  </HStack>
-                </StatNumber>
-              </Stat>
+          <Card 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            borderRadius="lg"
+            _hover={{ 
+              boxShadow: 'md',
+              transform: 'translateY(-2px)',
+              transition: 'all 0.2s ease'
+            }}
+            transition="all 0.2s ease"
+          >
+            <CardBody p={6}>
+              <Flex align="center" justify="space-between">
+                <Stat>
+                  <StatLabel 
+                    color={textSecondary}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    mb={2}
+                  >
+                    Approved
+                  </StatLabel>
+                  <StatNumber 
+                    color={statColors.green}
+                    fontSize="2xl"
+                    fontWeight="bold"
+                  >
+                    {stats.approved}
+                  </StatNumber>
+                </Stat>
+                <Box 
+                  p={3} 
+                  borderRadius="lg"
+                  bg={statBgColors.green}
+                  color={statColors.green}
+                >
+                  <FiCheckCircle size={20} />
+                </Box>
+              </Flex>
             </CardBody>
           </Card>
           
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel>Rejected</StatLabel>
-                <StatNumber color="red.500">
-                  <HStack>
-                    <FiXCircle />
-                    <Text>{stats.rejected}</Text>
-                  </HStack>
-                </StatNumber>
-              </Stat>
+          <Card 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            borderRadius="lg"
+            _hover={{ 
+              boxShadow: 'md',
+              transform: 'translateY(-2px)',
+              transition: 'all 0.2s ease'
+            }}
+            transition="all 0.2s ease"
+          >
+            <CardBody p={6}>
+              <Flex align="center" justify="space-between">
+                <Stat>
+                  <StatLabel 
+                    color={textSecondary}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    mb={2}
+                  >
+                    Rejected
+                  </StatLabel>
+                  <StatNumber 
+                    color={statColors.red}
+                    fontSize="2xl"
+                    fontWeight="bold"
+                  >
+                    {stats.rejected}
+                  </StatNumber>
+                </Stat>
+                <Box 
+                  p={3} 
+                  borderRadius="lg"
+                  bg={statBgColors.red}
+                  color={statColors.red}
+                >
+                  <FiXCircle size={20} />
+                </Box>
+              </Flex>
             </CardBody>
           </Card>
           
-          <Card>
-            <CardBody>
-              <Stat>
-                <StatLabel>Total Value</StatLabel>
-                <StatNumber fontSize="sm">
-                  {formatCurrency(stats.totalValue || 0)}
-                </StatNumber>
-              </Stat>
+          <Card 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            borderRadius="lg"
+            _hover={{ 
+              boxShadow: 'md',
+              transform: 'translateY(-2px)',
+              transition: 'all 0.2s ease'
+            }}
+            transition="all 0.2s ease"
+          >
+            <CardBody p={6}>
+              <Flex align="center" justify="space-between">
+                <Stat>
+                  <StatLabel 
+                    color={textSecondary}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    mb={2}
+                  >
+                    Total Value
+                  </StatLabel>
+                  <StatNumber 
+                    color={headingColor}
+                    fontSize="lg"
+                    fontWeight="bold"
+                  >
+                    {formatCurrency(stats.totalValue || 0)}
+                  </StatNumber>
+                </Stat>
+                <Box 
+                  p={3} 
+                  borderRadius="lg"
+                  bg={statBgColors.purple}
+                  color={statColors.purple}
+                >
+                  <FiAlertCircle size={20} />
+                </Box>
+              </Flex>
+            </CardBody>
+          </Card>
+          
+          <Card 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            borderRadius="lg"
+            _hover={{ 
+              boxShadow: 'md',
+              transform: 'translateY(-2px)',
+              transition: 'all 0.2s ease'
+            }}
+            transition="all 0.2s ease"
+          >
+            <CardBody p={6}>
+              <Flex align="center" justify="space-between">
+                <Stat>
+                  <StatLabel 
+                    color={textSecondary}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    mb={2}
+                  >
+                    Total Approved Amount
+                  </StatLabel>
+                  <StatNumber 
+                    color={statColors.green}
+                    fontSize="lg"
+                    fontWeight="bold"
+                  >
+                    {formatCurrency(stats.totalApprovedAmount || 0)}
+                  </StatNumber>
+                </Stat>
+                <Box 
+                  p={3} 
+                  borderRadius="lg"
+                  bg={statBgColors.green}
+                  color={statColors.green}
+                >
+                  <FiCheckCircle size={20} />
+                </Box>
+              </Flex>
             </CardBody>
           </Card>
         </Grid>
@@ -1348,48 +1845,107 @@ const handleCreate = async () => {
         )}
 
         {/* Main Data Table */}
-        <Card>
-          <CardBody p={0}>
-            <DataTable<Purchase>
-              columns={columns}
-              data={purchases}
-              keyField="id"
-              title="Purchase Transactions"
-              actions={renderActions}
-              searchable={true}
-              pagination={true}
-              pageSize={pagination.limit}
-              totalPages={pagination.totalPages}
-              currentPage={pagination.page}
-              onPageChange={handlePageChange}
-              isLoading={loading}
-            />
-          </CardBody>
-        </Card>
+        <EnhancedPurchaseTable
+          purchases={purchases}
+          loading={loading}
+          onViewDetails={handleView}
+          onEdit={canEdit ? handleEdit : undefined}
+          onSubmitForApproval={handleSubmitForApproval}
+          onDelete={canDelete ? handleDelete : undefined}
+          renderActions={renderActions}
+          title="Purchase Transactions"
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          userRole={normalizeRole(user?.role as any)}
+        />
 
-        {/* Filter Modal */}
+        {/* Enhanced Filter Modal */}
         <Modal isOpen={isFilterOpen} onClose={onFilterClose} size="md">
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>Filter Purchases</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              <VStack spacing={4}>
+          <ModalOverlay bg="blackAlpha.300" backdropFilter="blur(10px)" />
+          <ModalContent 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            borderRadius="lg"
+            boxShadow="xl"
+          >
+            <ModalHeader 
+              color={headingColor}
+              fontSize="lg"
+              fontWeight="bold"
+              borderBottom="1px solid"
+              borderColor={borderColor}
+              pb={4}
+            >
+              <HStack>
+                <Box 
+                  p={2} 
+                  borderRadius="md"
+                  bg={modalFilterBg}
+                  color={modalFilterColor}
+                >
+                  <FiFilter size={16} />
+                </Box>
+                <Text>Filter Purchases</Text>
+              </HStack>
+            </ModalHeader>
+            <ModalCloseButton 
+              color={textSecondary}
+              _hover={{
+                bg: modalHoverBg
+              }}
+            />
+            <ModalBody py={6}>
+              <VStack spacing={5}>
                 <FormControl>
-                  <FormLabel>Search</FormLabel>
+                  <FormLabel 
+                    fontSize="sm"
+                    fontWeight="semibold"
+                    color={textPrimary}
+                    mb={2}
+                  >
+                    Search
+                  </FormLabel>
                   <Input
                     placeholder="Search by purchase number, vendor..."
                     value={filters.search || ''}
                     onChange={(e) => handleFilterChange({ search: e.target.value })}
+                    bg={modalBg}
+                    borderColor={borderColor}
+                    _hover={{
+                      borderColor: inputHoverBorder
+                    }}
+                    _focus={{
+                      borderColor: inputFocusBorder,
+                      boxShadow: inputFocusShadow
+                    }}
                   />
                 </FormControl>
                 
                 <FormControl>
-                  <FormLabel>Status</FormLabel>
+                  <FormLabel 
+                    fontSize="sm"
+                    fontWeight="semibold"
+                    color={textPrimary}
+                    mb={2}
+                  >
+                    Status
+                  </FormLabel>
                   <Select
                     placeholder="All Statuses"
                     value={filters.status || ''}
                     onChange={(e) => handleFilterChange({ status: e.target.value })}
+                    bg={modalBg}
+                    borderColor={borderColor}
+                    _hover={{
+                      borderColor: inputHoverBorder
+                    }}
+                    _focus={{
+                      borderColor: inputFocusBorder,
+                      boxShadow: inputFocusShadow
+                    }}
                   >
                     <option value="draft">Draft</option>
                     <option value="pending_approval">Pending Approval</option>
@@ -1399,11 +1955,27 @@ const handleCreate = async () => {
                 </FormControl>
                 
                 <FormControl>
-                  <FormLabel>Approval Status</FormLabel>
+                  <FormLabel 
+                    fontSize="sm"
+                    fontWeight="semibold"
+                    color={textPrimary}
+                    mb={2}
+                  >
+                    Approval Status
+                  </FormLabel>
                   <Select
                     placeholder="All Approval Statuses"
                     value={filters.approval_status || ''}
                     onChange={(e) => handleFilterChange({ approval_status: e.target.value })}
+                    bg={modalBg}
+                    borderColor={borderColor}
+                    _hover={{
+                      borderColor: inputHoverBorder
+                    }}
+                    _focus={{
+                      borderColor: inputFocusBorder,
+                      boxShadow: inputFocusShadow
+                    }}
                   >
                     <option value="not_required">Not Required</option>
                     <option value="pending">Pending</option>
@@ -1413,32 +1985,49 @@ const handleCreate = async () => {
                 </FormControl>
               </VStack>
             </ModalBody>
-            <Box p={6}>
-              <HStack spacing={3}>
-                <Button variant="ghost" onClick={onFilterClose} flex={1}>
+            <ModalFooter 
+              borderTop="1px solid"
+              borderColor={borderColor}
+              pt={4}
+            >
+              <HStack spacing={3} w="100%">
+                <Button 
+                  variant="ghost" 
+                  onClick={onFilterClose}
+                  flex={1}
+                  color={textSecondary}
+                  _hover={{
+                    bg: ghostHoverBg
+                  }}
+                >
                   Close
                 </Button>
                 <Button 
-                  colorScheme="blue" 
+                  colorScheme="blue"
                   onClick={() => {
                     setFilters({ page: 1, limit: 10 });
                     fetchPurchases({ page: 1, limit: 10 });
                     onFilterClose();
                   }}
                   flex={1}
+                  bg={buttonBlueBg}
+                  _hover={{
+                    bg: buttonBlueHover
+                  }}
+                  fontWeight="semibold"
                 >
                   Clear Filters
                 </Button>
               </HStack>
-            </Box>
+            </ModalFooter>
           </ModalContent>
         </Modal>
 
         {/* View Purchase Modal */}
         <Modal isOpen={isViewOpen} onClose={onViewClose} size="xl">
           <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>
+          <ModalContent bg={modalContentBg}>
+            <ModalHeader bg={modalHeaderBg} borderBottomWidth={1} borderColor={borderColor}>
               View Purchase - {selectedPurchase?.code}
             </ModalHeader>
             <ModalCloseButton />
@@ -1499,11 +2088,52 @@ const handleCreate = async () => {
                     </FormControl>
                   </SimpleGrid>
                   
+                  {/* Payment Information */}
+                  {selectedPurchase.payment_method && (
+                    <Box>
+                      <FormLabel mb={3}>Payment Information</FormLabel>
+                      <SimpleGrid columns={3} spacing={4}>
+                        <FormControl>
+                          <FormLabel fontSize="sm">Payment Method</FormLabel>
+                          <Badge 
+                            colorScheme={
+                              selectedPurchase.payment_method === 'CREDIT' ? 'orange' :
+                              selectedPurchase.payment_method === 'CASH' ? 'green' :
+                              selectedPurchase.payment_method === 'BANK_TRANSFER' ? 'blue' :
+                              selectedPurchase.payment_method === 'CHECK' ? 'purple' : 'gray'
+                            } 
+                            variant="subtle" 
+                            w="fit-content"
+                          >
+                            {selectedPurchase.payment_method.replace('_', ' ')}
+                          </Badge>
+                        </FormControl>
+                        
+                        {selectedPurchase.bank_account_id && (
+                          <FormControl>
+                            <FormLabel fontSize="sm">Bank Account</FormLabel>
+                            <Text fontWeight="medium">
+                              {selectedPurchase.bank_account?.name || 'Unknown Account'}
+                              {selectedPurchase.bank_account?.code && ` (${selectedPurchase.bank_account.code})`}
+                            </Text>
+                          </FormControl>
+                        )}
+                        
+                        {selectedPurchase.payment_reference && (
+                          <FormControl>
+                            <FormLabel fontSize="sm">Payment Reference</FormLabel>
+                            <Text fontWeight="medium">{selectedPurchase.payment_reference}</Text>
+                          </FormControl>
+                        )}
+                      </SimpleGrid>
+                    </Box>
+                  )}
+                  
                   {/* Notes */}
                   {selectedPurchase.notes && (
                     <FormControl>
                       <FormLabel>Notes</FormLabel>
-                      <Text p={3} bg="gray.50" borderRadius="md">{selectedPurchase.notes}</Text>
+                      <Text p={3} bg={notesBoxBg} borderRadius="md">{selectedPurchase.notes}</Text>
                     </FormControl>
                   )}
                   
@@ -1604,8 +2234,8 @@ const handleCreate = async () => {
                     <FormControl>
                       <FormLabel>Purchase Items</FormLabel>
                       <TableContainer>
-                        <Table size="sm">
-                          <Thead>
+                        <Table size="sm" bg={tableBg}>
+                          <Thead bg={tableHeaderBg}>
                             <Tr>
                               <Th>Product</Th>
                               <Th isNumeric>Quantity</Th>
@@ -1639,14 +2269,14 @@ const handleCreate = async () => {
         {/* Edit Purchase Modal */}
         <Modal isOpen={isEditOpen} onClose={onEditClose} size="2xl">
           <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>
+          <ModalContent bg={modalContentBg}>
+            <ModalHeader bg={modalHeaderBg} borderBottomWidth={1} borderColor={borderColor}>
               Edit Purchase - {selectedPurchase?.code}
             </ModalHeader>
             <ModalCloseButton />
             <ModalBody>
               <VStack spacing={4} align="stretch">
-                <Text fontSize="md" fontWeight="semibold">Basic Info</Text>
+                <Text fontSize="md" fontWeight="semibold" color={headingColor}>Basic Info</Text>
                 <SimpleGrid columns={2} spacing={4}>
                       <FormControl isRequired>
                         <FormLabel>Vendor</FormLabel>
@@ -1736,7 +2366,7 @@ const handleCreate = async () => {
                 <Card>
                   <CardHeader pb={3}>
                     <Flex justify="space-between" align="center">
-                      <Text fontSize="md" fontWeight="semibold" color="gray.700">
+                      <Text fontSize="md" fontWeight="semibold" color={textPrimary}>
                         🛒 Purchase Items
                       </Text>
                       <Button 
@@ -1761,14 +2391,14 @@ const handleCreate = async () => {
                   <CardBody pt={0}>
                     <Box overflow="visible">
                       <Table size="sm" variant="simple">
-                        <Thead bg="gray.50">
+                        <Thead bg={tableHeaderBg}>
                           <Tr>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600">Product</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Qty</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Unit Price (IDR)</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600">Expense Account</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Total (IDR)</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" w="60px">Action</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary}>Product</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Qty</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Unit Price (IDR)</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary}>Expense Account</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Total (IDR)</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} w="60px">Action</Th>
                           </Tr>
                         </Thead>
                         <Tbody>
@@ -1776,14 +2406,14 @@ const handleCreate = async () => {
                             <Tr>
                               <Td colSpan={6} textAlign="center" py={8}>
                                 <VStack spacing={2}>
-                                  <Text fontSize="sm" color="gray.500">No items added yet</Text>
-                                  <Text fontSize="xs" color="gray.400">Click "Add Item" button to start adding purchase items</Text>
+                                  <Text fontSize="sm" color={textSecondary}>No items added yet</Text>
+                                  <Text fontSize="xs" color={textSecondary}>Click "Add Item" button to start adding purchase items</Text>
                                 </VStack>
                               </Td>
                             </Tr>
                           ) : (
                             formData.items.map((item, index) => (
-                              <Tr key={index} _hover={{ bg: 'gray.50' }}>
+                              <Tr key={index} _hover={{ bg: hoverBg }}>
                                 <Td minW="200px">
                                   {loadingProducts ? (
                                     <Flex align="center" justify="center" h="32px">
@@ -1927,12 +2557,12 @@ const handleCreate = async () => {
                     
                     {/* Summary Row */}
                     {formData.items.length > 0 && (
-                      <Box mt={4} p={4} bg="blue.50" borderRadius="md" borderLeft="4px solid" borderLeftColor="blue.400">
+                      <Box mt={4} p={4} bg={statBgColors.blue} borderRadius="md" borderLeft="4px solid" borderLeftColor={statColors.blue}>
                         <Flex justify="space-between" align="center">
-                          <Text fontSize="sm" fontWeight="medium" color="gray.700">
+                          <Text fontSize="sm" fontWeight="medium" color={textPrimary}>
                             Total Items: {formData.items.length}
                           </Text>
-                          <Text fontSize="lg" fontWeight="bold" color="blue.600">
+                          <Text fontSize="lg" fontWeight="bold" color={statColors.blue}>
                             Subtotal: {formatCurrency(
                               formData.items.reduce((total, item) => {
                                 const qty = parseFloat(item.quantity || '0');
@@ -1954,7 +2584,7 @@ const handleCreate = async () => {
                 {/* Tax Configuration Section */}
                 <Card>
                   <CardHeader pb={3}>
-                    <Text fontSize="md" fontWeight="semibold" color="gray.700">
+                    <Text fontSize="md" fontWeight="semibold" color={textPrimary}>
                       💰 Tax Configuration
                     </Text>
                   </CardHeader>
@@ -1962,7 +2592,7 @@ const handleCreate = async () => {
                     <VStack spacing={4} align="stretch">
                       {/* Tax Additions (Penambahan) */}
                       <Box>
-                        <Text fontSize="sm" fontWeight="medium" color="green.600" mb={3}>
+                        <Text fontSize="sm" fontWeight="medium" color={statColors.green} mb={3}>
                           ➕ Tax Additions (Penambahan)
                         </Text>
                         <SimpleGrid columns={2} spacing={4}>
@@ -2010,7 +2640,7 @@ const handleCreate = async () => {
 
                       {/* Tax Deductions (Pemotongan) */}
                       <Box>
-                        <Text fontSize="sm" fontWeight="medium" color="red.600" mb={3}>
+                        <Text fontSize="sm" fontWeight="medium" color={statColors.red} mb={3}>
                           ➖ Tax Deductions (Pemotongan)
                         </Text>
                         <SimpleGrid columns={3} spacing={4}>
@@ -2075,14 +2705,17 @@ const handleCreate = async () => {
 
                       {/* Tax Summary Calculation */}
                       {formData.items.length > 0 && (
-                        <Box mt={4} p={4} bg="gray.50" borderRadius="md" border="1px solid" borderColor="gray.200">
+                        <Box mt={4} p={4} bg={notesBoxBg} borderRadius="md" border="1px solid" borderColor={borderColor}>
                           <VStack spacing={2} align="stretch">
-                            <Text fontSize="sm" fontWeight="semibold" color="gray.700">Tax Summary:</Text>
+                            <Text fontSize="sm" fontWeight="semibold" color={textPrimary}>Tax Summary:</Text>
                             {(() => {
                               const subtotal = formData.items.reduce((total, item) => {
                                 const qty = parseFloat(item.quantity || '0');
                                 const price = parseFloat(item.unit_price || '0');
-                                return total + ((isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price));
+                                const discount = parseFloat(item.discount || '0');
+                                const itemSubtotal = (isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price);
+                                const lineTotal = itemSubtotal - (isNaN(discount) ? 0 : discount);
+                                return total + lineTotal;
                               }, 0);
                               
                               const discount = (parseFloat(formData.discount) || 0) / 100;
@@ -2102,26 +2735,26 @@ const handleCreate = async () => {
                               return (
                                 <SimpleGrid columns={2} spacing={4} fontSize="xs">
                                   <VStack align="start" spacing={1}>
-                                    <Text color="gray.600">Subtotal: {formatCurrency(subtotal)}</Text>
-                                    <Text color="gray.600">Discount ({formData.discount}%): -{formatCurrency(subtotal * discount)}</Text>
-                                    <Text color="gray.600">After Discount: {formatCurrency(discountedSubtotal)}</Text>
+                                    <Text color={textSecondary}>Subtotal: {formatCurrency(subtotal)}</Text>
+                                    <Text color={textSecondary}>Discount ({formData.discount}%): -{formatCurrency(subtotal * discount)}</Text>
+                                    <Text color={textSecondary}>After Discount: {formatCurrency(discountedSubtotal)}</Text>
                                   </VStack>
                                   
                                   <VStack align="start" spacing={1}>
-                                    <Text color="green.600">+ PPN ({formData.ppn_rate}%): {formatCurrency(ppnAmount)}</Text>
+                                    <Text color={statColors.green}>+ PPN ({formData.ppn_rate}%): {formatCurrency(ppnAmount)}</Text>
                                     {parseFloat(formData.other_tax_additions) > 0 && (
-                                      <Text color="green.600">+ Other Additions ({formData.other_tax_additions}%): {formatCurrency(otherAdditions)}</Text>
+                                      <Text color={statColors.green}>+ Other Additions ({formData.other_tax_additions}%): {formatCurrency(otherAdditions)}</Text>
                                     )}
                                     {parseFloat(formData.pph21_rate) > 0 && (
-                                      <Text color="red.600">- PPh 21 ({formData.pph21_rate}%): {formatCurrency(pph21Amount)}</Text>
+                                      <Text color={statColors.red}>- PPh 21 ({formData.pph21_rate}%): {formatCurrency(pph21Amount)}</Text>
                                     )}
                                     {parseFloat(formData.pph23_rate) > 0 && (
-                                      <Text color="red.600">- PPh 23 ({formData.pph23_rate}%): {formatCurrency(pph23Amount)}</Text>
+                                      <Text color={statColors.red}>- PPh 23 ({formData.pph23_rate}%): {formatCurrency(pph23Amount)}</Text>
                                     )}
                                     {parseFloat(formData.other_tax_deductions) > 0 && (
-                                      <Text color="red.600">- Other Deductions ({formData.other_tax_deductions}%): {formatCurrency(otherDeductions)}</Text>
+                                      <Text color={statColors.red}>- Other Deductions ({formData.other_tax_deductions}%): {formatCurrency(otherDeductions)}</Text>
                                     )}
-                                    <Text fontWeight="bold" color="blue.700" borderTop="1px solid" borderColor="gray.300" pt={1}>
+                                    <Text fontWeight="bold" color={statColors.blue} borderTop="1px solid" borderColor={borderColor} pt={1}>
                                       Final Total: {formatCurrency(finalTotal)}
                                     </Text>
                                   </VStack>
@@ -2132,6 +2765,112 @@ const handleCreate = async () => {
                         </Box>
                       )}
                     </VStack>
+                  </CardBody>
+                </Card>
+
+                {/* Payment Method Section */}
+                <Card>
+                  <CardHeader pb={3}>
+                    <Text fontSize="md" fontWeight="semibold" color={textPrimary}>
+                      💳 Payment Method
+                    </Text>
+                  </CardHeader>
+                  <CardBody pt={0}>
+                    <SimpleGrid columns={2} spacing={4}>
+                      <FormControl isRequired>
+                        <FormLabel fontSize="sm" fontWeight="medium">Payment Method</FormLabel>
+                        <Select
+                          value={formData.payment_method}
+                          onChange={(e) => setFormData({
+                            ...formData, 
+                            payment_method: e.target.value,
+                            bank_account_id: (e.target.value === 'CASH' || e.target.value === 'CREDIT') ? '' : formData.bank_account_id
+                          })}
+                          size="sm"
+                        >
+                          <option value="CREDIT">Credit</option>
+                          <option value="CASH">Cash</option>
+                          <option value="BANK_TRANSFER">Bank Transfer</option>
+                          <option value="CHECK">Check</option>
+                        </Select>
+                        <FormHelperText fontSize="xs">
+                          {formData.payment_method === 'CREDIT' && 'Purchase on credit - payment due later'}
+                          {formData.payment_method === 'CASH' && 'Direct cash payment'}
+                          {formData.payment_method === 'BANK_TRANSFER' && 'Electronic bank transfer'}
+                          {formData.payment_method === 'CHECK' && 'Payment by check'}
+                        </FormHelperText>
+                      </FormControl>
+
+                      {/* Bank Account dropdown for Bank Transfer, Cash, Check */}
+                      {formData.payment_method !== 'CREDIT' && formData.payment_method !== 'CASH' && (
+                        <FormControl isRequired>
+                          <FormLabel fontSize="sm" fontWeight="medium">
+                            Bank Account
+                          </FormLabel>
+                          <Select
+                            value={formData.bank_account_id}
+                            onChange={(e) => setFormData({...formData, bank_account_id: e.target.value})}
+                            size="sm"
+                            disabled={loadingBankAccounts}
+                            placeholder={loadingBankAccounts ? 'Loading accounts...' : 'Select bank account'}
+                          >
+                            {bankAccounts.map((account) => (
+                              <option key={account.id} value={account.id.toString()}>
+                                {account.name} ({account.code}) - {account.currency} {account.balance?.toLocaleString() || '0'}
+                              </option>
+                            ))}
+                          </Select>
+                          <FormHelperText fontSize="xs">
+                            Required: Select account for payment processing
+                          </FormHelperText>
+                        </FormControl>
+                      )}
+                      
+                      {/* Credit Account dropdown for Credit payment */}
+                      {formData.payment_method === 'CREDIT' && (
+                        <FormControl isRequired>
+                          <FormLabel fontSize="sm" fontWeight="medium">
+                            Liability Account
+                          </FormLabel>
+                          <Select
+                            value={formData.credit_account_id}
+                            onChange={(e) => setFormData({...formData, credit_account_id: e.target.value})}
+                            size="sm"
+                            disabled={loadingCreditAccounts}
+                            placeholder={loadingCreditAccounts ? 'Loading accounts...' : 'Select liability account'}
+                          >
+                            {creditAccounts.map((account) => (
+                              <option key={account.id} value={account.id?.toString()}>
+                                {account.code} - {account.name}
+                              </option>
+                            ))}
+                          </Select>
+                          <FormHelperText fontSize="xs">
+                            Required: Select liability account for tracking credit purchases
+                          </FormHelperText>
+                        </FormControl>
+                      )}
+                    </SimpleGrid>
+
+                    {/* Payment Reference (for non-credit and non-cash payments) */}
+                    {formData.payment_method !== 'CREDIT' && formData.payment_method !== 'CASH' && (
+                      <FormControl mt={4}>
+                        <FormLabel fontSize="sm" fontWeight="medium">Payment Reference</FormLabel>
+                        <Input
+                          value={formData.payment_reference}
+                          onChange={(e) => setFormData({...formData, payment_reference: e.target.value})}
+                          placeholder={
+                            formData.payment_method === 'CHECK' ? 'Check number' :
+                            formData.payment_method === 'BANK_TRANSFER' ? 'Transaction ID or reference number' :
+                            'Payment reference number'
+                          }
+                          size="sm"
+                        />
+                        <FormHelperText fontSize="xs">
+                          Optional reference for tracking this payment
+                        </FormHelperText>
+                      </FormControl>
+                    )}
                   </CardBody>
                 </Card>
 
@@ -2153,11 +2892,11 @@ const handleCreate = async () => {
         {/* Create Purchase Modal */}
         <Modal isOpen={isCreateOpen} onClose={onCreateClose} size="6xl">
           <ModalOverlay />
-          <ModalContent maxW="95vw" maxH="95vh">
-            <ModalHeader bg="blue.50" borderRadius="md" mx={4} mt={4} mb={2}>
+          <ModalContent maxW="95vw" maxH="95vh" bg={modalContentBg}>
+            <ModalHeader bg={modalHeaderBg} borderRadius="md" mx={4} mt={4} mb={2} borderBottomWidth={1} borderColor={borderColor}>
               <HStack>
-                <Box w={1} h={6} bg="blue.500" borderRadius="full" />
-                <Text fontSize="lg" fontWeight="bold" color="blue.700">
+                <Box w={1} h={6} bg={statColors.blue} borderRadius="full" />
+                <Text fontSize="lg" fontWeight="bold" color={statColors.blue}>
                   Create New Purchase
                 </Text>
               </HStack>
@@ -2168,7 +2907,7 @@ const handleCreate = async () => {
                 {/* Basic Information Section */}
                 <Card>
                   <CardHeader pb={3}>
-                    <Text fontSize="md" fontWeight="semibold" color="gray.700">
+                    <Text fontSize="md" fontWeight="semibold" color={textPrimary}>
                       📋 Basic Information
                     </Text>
                   </CardHeader>
@@ -2266,7 +3005,7 @@ const handleCreate = async () => {
                 <Card>
                   <CardHeader pb={3}>
                     <Flex justify="space-between" align="center">
-                      <Text fontSize="md" fontWeight="semibold" color="gray.700">
+                      <Text fontSize="md" fontWeight="semibold" color={textPrimary}>
                         🛒 Purchase Items
                       </Text>
                       <Button 
@@ -2291,15 +3030,15 @@ const handleCreate = async () => {
                   <CardBody pt={0}>
                     <Box overflow="visible">
                         <Table size="sm" variant="simple">
-                        <Thead bg="gray.50">
+                        <Thead bg={tableHeaderBg}>
                           <Tr>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600">Product</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Qty</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Unit Price (IDR)</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Discount (IDR)</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600">Expense Account</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" isNumeric>Line Total (IDR)</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color="gray.600" w="60px">Action</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary}>Product</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Qty</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Unit Price (IDR)</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Discount (IDR)</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary}>Expense Account</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Line Total (IDR)</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary} w="60px">Action</Th>
                           </Tr>
                         </Thead>
                         <Tbody>
@@ -2307,14 +3046,14 @@ const handleCreate = async () => {
                             <Tr>
                               <Td colSpan={7} textAlign="center" py={8}>
                                 <VStack spacing={2}>
-                                  <Text fontSize="sm" color="gray.500">No items added yet</Text>
-                                  <Text fontSize="xs" color="gray.400">Click "Add Item" button to start adding purchase items</Text>
+                                  <Text fontSize="sm" color={textSecondary}>No items added yet</Text>
+                                  <Text fontSize="xs" color={textSecondary}>Click "Add Item" button to start adding purchase items</Text>
                                 </VStack>
                               </Td>
                             </Tr>
                           ) : (
                             formData.items.map((item, index) => (
-                              <Tr key={index} _hover={{ bg: 'gray.50' }}>
+                              <Tr key={index} _hover={{ bg: hoverBg }}>
                                 <Td minW="200px">
                                   {loadingProducts ? (
                                     <Flex align="center" justify="center" h="32px">
@@ -2441,11 +3180,14 @@ const handleCreate = async () => {
                                   )}
                                 </Td>
                                 <Td isNumeric>
-                                  <Text fontSize="sm" fontWeight="medium" color="green.600">
+                                  <Text fontSize="sm" fontWeight="medium" color={statColors.green}>
                                     {(() => {
                                       const qty = parseFloat(item.quantity || '0');
                                       const price = parseFloat(item.unit_price || '0');
-                                      return formatCurrency((isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price));
+                                      const discount = parseFloat(item.discount || '0');
+                                      const subtotal = (isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price);
+                                      const lineTotal = subtotal - (isNaN(discount) ? 0 : discount);
+                                      return formatCurrency(lineTotal);
                                     })()}
                                   </Text>
                                 </Td>
@@ -2473,17 +3215,20 @@ const handleCreate = async () => {
                     
                     {/* Summary Row */}
                     {formData.items.length > 0 && (
-                      <Box mt={4} p={4} bg="blue.50" borderRadius="md" borderLeft="4px solid" borderLeftColor="blue.400">
+                      <Box mt={4} p={4} bg={statBgColors.blue} borderRadius="md" borderLeft="4px solid" borderLeftColor={statColors.blue}>
                         <Flex justify="space-between" align="center">
-                          <Text fontSize="sm" fontWeight="medium" color="gray.700">
+                          <Text fontSize="sm" fontWeight="medium" color={textPrimary}>
                             Total Items: {formData.items.length}
                           </Text>
-                          <Text fontSize="lg" fontWeight="bold" color="blue.600">
+                          <Text fontSize="lg" fontWeight="bold" color={statColors.blue}>
                             Subtotal: {formatCurrency(
                               formData.items.reduce((total, item) => {
                                 const qty = parseFloat(item.quantity || '0');
                                 const price = parseFloat(item.unit_price || '0');
-                                return total + ((isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price));
+                                const discount = parseFloat(item.discount || '0');
+                                const subtotal = (isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price);
+                                const lineTotal = subtotal - (isNaN(discount) ? 0 : discount);
+                                return total + lineTotal;
                               }, 0)
                             )}
                           </Text>
@@ -2502,7 +3247,7 @@ const handleCreate = async () => {
                 {/* Tax Configuration Section */}
                 <Card>
                   <CardHeader pb={3}>
-                    <Text fontSize="md" fontWeight="semibold" color="gray.700">
+                    <Text fontSize="md" fontWeight="semibold" color={textPrimary}>
                       💰 Tax Configuration
                     </Text>
                   </CardHeader>
@@ -2510,7 +3255,7 @@ const handleCreate = async () => {
                     <VStack spacing={4} align="stretch">
                       {/* Tax Additions (Penambahan) */}
                       <Box>
-                        <Text fontSize="sm" fontWeight="medium" color="green.600" mb={3}>
+                        <Text fontSize="sm" fontWeight="medium" color={statColors.green} mb={3}>
                           ➕ Tax Additions (Penambahan)
                         </Text>
                         <SimpleGrid columns={2} spacing={4}>
@@ -2558,7 +3303,7 @@ const handleCreate = async () => {
 
                       {/* Tax Deductions (Pemotongan) */}
                       <Box>
-                        <Text fontSize="sm" fontWeight="medium" color="red.600" mb={3}>
+                        <Text fontSize="sm" fontWeight="medium" color={statColors.red} mb={3}>
                           ➖ Tax Deductions (Pemotongan)
                         </Text>
                         <SimpleGrid columns={3} spacing={4}>
@@ -2572,13 +3317,13 @@ const handleCreate = async () => {
                               max={100}
                               step={0.1}
                             >
-                              <NumberInputField placeholder="0" />
+                            <NumberInputField placeholder="2" />
                               <NumberInputStepper>
                                 <NumberIncrementStepper />
                                 <NumberDecrementStepper />
                               </NumberInputStepper>
                             </NumberInput>
-                            <FormHelperText fontSize="xs">Pajak Penghasilan Pasal 21</FormHelperText>
+                            <FormHelperText fontSize="xs">PPh 21: 2% jasa konstruksi, 15% dividen/bunga</FormHelperText>
                           </FormControl>
 
                           <FormControl>
@@ -2591,13 +3336,13 @@ const handleCreate = async () => {
                               max={100}
                               step={0.1}
                             >
-                              <NumberInputField placeholder="0" />
+                              <NumberInputField placeholder="2" />
                               <NumberInputStepper>
                                 <NumberIncrementStepper />
                                 <NumberDecrementStepper />
                               </NumberInputStepper>
                             </NumberInput>
-                            <FormHelperText fontSize="xs">Pajak Penghasilan Pasal 23</FormHelperText>
+                            <FormHelperText fontSize="xs">PPh 23: 2% jasa umum, 15% dividen/bunga/royalti</FormHelperText>
                           </FormControl>
 
                           <FormControl>
@@ -2623,14 +3368,17 @@ const handleCreate = async () => {
 
                       {/* Tax Summary Calculation */}
                       {formData.items.length > 0 && (
-                        <Box mt={4} p={4} bg="gray.50" borderRadius="md" border="1px solid" borderColor="gray.200">
+                        <Box mt={4} p={4} bg={notesBoxBg} borderRadius="md" border="1px solid" borderColor={borderColor}>
                           <VStack spacing={2} align="stretch">
-                            <Text fontSize="sm" fontWeight="semibold" color="gray.700">Tax Summary:</Text>
+                            <Text fontSize="sm" fontWeight="semibold" color={textPrimary}>Tax Summary:</Text>
                             {(() => {
                               const subtotal = formData.items.reduce((total, item) => {
                                 const qty = parseFloat(item.quantity || '0');
                                 const price = parseFloat(item.unit_price || '0');
-                                return total + ((isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price));
+                                const discount = parseFloat(item.discount || '0');
+                                const itemSubtotal = (isNaN(qty) ? 0 : qty) * (isNaN(price) ? 0 : price);
+                                const lineTotal = itemSubtotal - (isNaN(discount) ? 0 : discount);
+                                return total + lineTotal;
                               }, 0);
                               
                               const discount = (parseFloat(formData.discount) || 0) / 100;
@@ -2650,26 +3398,26 @@ const handleCreate = async () => {
                               return (
                                 <SimpleGrid columns={2} spacing={4} fontSize="xs">
                                   <VStack align="start" spacing={1}>
-                                    <Text color="gray.600">Subtotal: {formatCurrency(subtotal)}</Text>
-                                    <Text color="gray.600">Discount ({formData.discount}%): -{formatCurrency(subtotal * discount)}</Text>
-                                    <Text color="gray.600">After Discount: {formatCurrency(discountedSubtotal)}</Text>
+                                    <Text color={textSecondary}>Subtotal: {formatCurrency(subtotal)}</Text>
+                                    <Text color={textSecondary}>Discount ({formData.discount}%): -{formatCurrency(subtotal * discount)}</Text>
+                                    <Text color={textSecondary}>After Discount: {formatCurrency(discountedSubtotal)}</Text>
                                   </VStack>
                                   
                                   <VStack align="start" spacing={1}>
-                                    <Text color="green.600">+ PPN ({formData.ppn_rate}%): {formatCurrency(ppnAmount)}</Text>
+                                    <Text color={statColors.green}>+ PPN ({formData.ppn_rate}%): {formatCurrency(ppnAmount)}</Text>
                                     {parseFloat(formData.other_tax_additions) > 0 && (
-                                      <Text color="green.600">+ Other Additions ({formData.other_tax_additions}%): {formatCurrency(otherAdditions)}</Text>
+                                      <Text color={statColors.green}>+ Other Additions ({formData.other_tax_additions}%): {formatCurrency(otherAdditions)}</Text>
                                     )}
                                     {parseFloat(formData.pph21_rate) > 0 && (
-                                      <Text color="red.600">- PPh 21 ({formData.pph21_rate}%): {formatCurrency(pph21Amount)}</Text>
+                                      <Text color={statColors.red}>- PPh 21 ({formData.pph21_rate}%): {formatCurrency(pph21Amount)}</Text>
                                     )}
                                     {parseFloat(formData.pph23_rate) > 0 && (
-                                      <Text color="red.600">- PPh 23 ({formData.pph23_rate}%): {formatCurrency(pph23Amount)}</Text>
+                                      <Text color={statColors.red}>- PPh 23 ({formData.pph23_rate}%): {formatCurrency(pph23Amount)}</Text>
                                     )}
                                     {parseFloat(formData.other_tax_deductions) > 0 && (
-                                      <Text color="red.600">- Other Deductions ({formData.other_tax_deductions}%): {formatCurrency(otherDeductions)}</Text>
+                                      <Text color={statColors.red}>- Other Deductions ({formData.other_tax_deductions}%): {formatCurrency(otherDeductions)}</Text>
                                     )}
-                                    <Text fontWeight="bold" color="blue.700" borderTop="1px solid" borderColor="gray.300" pt={1}>
+                                    <Text fontWeight="bold" color={statColors.blue} borderTop="1px solid" borderColor={borderColor} pt={1}>
                                       Final Total: {formatCurrency(finalTotal)}
                                     </Text>
                                   </VStack>
@@ -2680,6 +3428,112 @@ const handleCreate = async () => {
                         </Box>
                       )}
                     </VStack>
+                  </CardBody>
+                </Card>
+
+                {/* Payment Method Section */}
+                <Card>
+                  <CardHeader pb={3}>
+                    <Text fontSize="md" fontWeight="semibold" color={textPrimary}>
+                      💳 Payment Method
+                    </Text>
+                  </CardHeader>
+                  <CardBody pt={0}>
+                    <SimpleGrid columns={2} spacing={4}>
+                      <FormControl isRequired>
+                        <FormLabel fontSize="sm" fontWeight="medium">Payment Method</FormLabel>
+                        <Select
+                          value={formData.payment_method}
+                          onChange={(e) => setFormData({
+                            ...formData, 
+                            payment_method: e.target.value,
+                            bank_account_id: (e.target.value === 'CASH' || e.target.value === 'CREDIT') ? '' : formData.bank_account_id
+                          })}
+                          size="sm"
+                        >
+                          <option value="CREDIT">Credit</option>
+                          <option value="CASH">Cash</option>
+                          <option value="BANK_TRANSFER">Bank Transfer</option>
+                          <option value="CHECK">Check</option>
+                        </Select>
+                        <FormHelperText fontSize="xs">
+                          {formData.payment_method === 'CREDIT' && 'Purchase on credit - payment due later'}
+                          {formData.payment_method === 'CASH' && 'Direct cash payment'}
+                          {formData.payment_method === 'BANK_TRANSFER' && 'Electronic bank transfer'}
+                          {formData.payment_method === 'CHECK' && 'Payment by check'}
+                        </FormHelperText>
+                      </FormControl>
+
+                      {/* Bank Account dropdown for Bank Transfer, Cash, Check */}
+                      {formData.payment_method !== 'CREDIT' && formData.payment_method !== 'CASH' && (
+                        <FormControl isRequired>
+                          <FormLabel fontSize="sm" fontWeight="medium">
+                            Bank Account
+                          </FormLabel>
+                          <Select
+                            value={formData.bank_account_id}
+                            onChange={(e) => setFormData({...formData, bank_account_id: e.target.value})}
+                            size="sm"
+                            disabled={loadingBankAccounts}
+                            placeholder={loadingBankAccounts ? 'Loading accounts...' : 'Select bank account'}
+                          >
+                            {bankAccounts.map((account) => (
+                              <option key={account.id} value={account.id.toString()}>
+                                {account.name} ({account.code}) - {account.currency} {account.balance?.toLocaleString() || '0'}
+                              </option>
+                            ))}
+                          </Select>
+                          <FormHelperText fontSize="xs">
+                            Required: Select account for payment processing
+                          </FormHelperText>
+                        </FormControl>
+                      )}
+                      
+                      {/* Credit Account dropdown for Credit payment */}
+                      {formData.payment_method === 'CREDIT' && (
+                        <FormControl isRequired>
+                          <FormLabel fontSize="sm" fontWeight="medium">
+                            Liability Account
+                          </FormLabel>
+                          <Select
+                            value={formData.credit_account_id}
+                            onChange={(e) => setFormData({...formData, credit_account_id: e.target.value})}
+                            size="sm"
+                            disabled={loadingCreditAccounts}
+                            placeholder={loadingCreditAccounts ? 'Loading accounts...' : 'Select liability account'}
+                          >
+                            {creditAccounts.map((account) => (
+                              <option key={account.id} value={account.id?.toString()}>
+                                {account.code} - {account.name}
+                              </option>
+                            ))}
+                          </Select>
+                          <FormHelperText fontSize="xs">
+                            Required: Select liability account for tracking credit purchases
+                          </FormHelperText>
+                        </FormControl>
+                      )}
+                    </SimpleGrid>
+
+                    {/* Payment Reference (for non-credit and non-cash payments) */}
+                    {formData.payment_method !== 'CREDIT' && formData.payment_method !== 'CASH' && (
+                      <FormControl mt={4}>
+                        <FormLabel fontSize="sm" fontWeight="medium">Payment Reference</FormLabel>
+                        <Input
+                          value={formData.payment_reference}
+                          onChange={(e) => setFormData({...formData, payment_reference: e.target.value})}
+                          placeholder={
+                            formData.payment_method === 'CHECK' ? 'Check number' :
+                            formData.payment_method === 'BANK_TRANSFER' ? 'Transaction ID or reference number' :
+                            'Payment reference number'
+                          }
+                          size="sm"
+                        />
+                        <FormHelperText fontSize="xs">
+                          Optional reference for tracking this payment
+                        </FormHelperText>
+                      </FormControl>
+                    )}
                   </CardBody>
                 </Card>
               </VStack>
@@ -2700,11 +3554,11 @@ const handleCreate = async () => {
         {/* Add Vendor Modal */}
         <Modal isOpen={isAddVendorOpen} onClose={onAddVendorClose} size="lg">
           <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>
+          <ModalContent bg={modalContentBg}>
+            <ModalHeader bg={modalHeaderBg} borderBottomWidth={1} borderColor={borderColor}>
               <HStack>
-                <Box w={1} h={6} bg="green.500" borderRadius="full" />
-                <Text fontSize="lg" fontWeight="bold" color="green.700">
+                <Box w={1} h={6} bg={statColors.green} borderRadius="full" />
+                <Text fontSize="lg" fontWeight="bold" color={statColors.green}>
                   Add New Vendor
                 </Text>
               </HStack>
@@ -2850,11 +3704,11 @@ const handleCreate = async () => {
         {/* Add Product Modal */}
         <Modal isOpen={isAddProductOpen} onClose={onAddProductClose} size="lg">
           <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>
+          <ModalContent bg={modalContentBg}>
+            <ModalHeader bg={modalHeaderBg} borderBottomWidth={1} borderColor={borderColor}>
               <HStack>
-                <Box w={1} h={6} bg="blue.500" borderRadius="full" />
-                <Text fontSize="lg" fontWeight="bold" color="blue.700">
+                <Box w={1} h={6} bg={statColors.blue} borderRadius="full" />
+                <Text fontSize="lg" fontWeight="bold" color={statColors.blue}>
                   Add New Product
                 </Text>
               </HStack>
@@ -2961,8 +3815,9 @@ const handleCreate = async () => {
             </ModalFooter>
           </ModalContent>
         </Modal>
-      </VStack>
-    </Layout>
+        </VStack>
+      </Box>
+    </SimpleLayout>
   );
 };
 

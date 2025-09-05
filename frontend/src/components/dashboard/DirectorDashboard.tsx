@@ -18,6 +18,7 @@ import {
   FiShoppingCart,
   FiTrendingUp,
   FiPlus,
+  FiBarChart2,
 } from 'react-icons/fi';
 
 export const DirectorDashboard = () => {
@@ -101,10 +102,19 @@ export const DirectorDashboard = () => {
             leftIcon={<FiTrendingUp />}
             colorScheme="blue"
             variant="outline"
-            onClick={() => router.push('/payments')}
+            onClick={() => router.push('/cash-bank')}
             size="md"
           >
-            Kelola Pembayaran
+            Kelola Kas & Bank
+          </Button>
+          <Button
+            leftIcon={<FiBarChart2 />}
+            colorScheme="purple"
+            variant="outline"
+            onClick={() => router.push('/reports')}
+            size="md"
+          >
+            Laporan Keuangan
           </Button>
         </HStack>
       </CardBody>

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"app-sistem-akuntansi/models"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -175,4 +176,179 @@ func (uc *UserController) GetUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// CreateUser creates a new user
+func (uc *UserController) CreateUser(c *gin.Context) {
+	var req models.RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check if user already exists
+	var existingUser models.User
+	if err := uc.db.Where("username = ? OR email = ?", req.Username, req.Email).First(&existingUser).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "User with this username or email already exists"})
+		return
+	}
+
+	// Create new user
+	user := models.User{
+		Username:  req.Username,
+		Email:     req.Email,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Role:      req.Role,
+		IsActive:  true,
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+	user.Password = string(hashedPassword)
+
+	if err := uc.db.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		return
+	}
+
+	// Return user without sensitive information
+	response := map[string]interface{}{
+		"id":            user.ID,
+		"username":      user.Username,
+		"email":         user.Email,
+		"role":          user.Role,
+		"first_name":    user.FirstName,
+		"last_name":     user.LastName,
+		"is_active":     user.IsActive,
+		"created_at":    user.CreatedAt,
+		"updated_at":    user.UpdatedAt,
+	}
+
+	c.JSON(http.StatusCreated, response)
+}
+
+// UpdateUser updates an existing user
+func (uc *UserController) UpdateUser(c *gin.Context) {
+	id := c.Param("id")
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	var user models.User
+	if err := uc.db.First(&user, userID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user"})
+		return
+	}
+
+	var updateData map[string]interface{}
+	if err := c.ShouldBindJSON(&updateData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Remove sensitive fields that shouldn't be updated directly
+	delete(updateData, "id")
+	delete(updateData, "created_at")
+	delete(updateData, "updated_at")
+
+	// Handle password update separately if provided
+	if password, exists := updateData["password"]; exists {
+		if passwordStr, ok := password.(string); ok && passwordStr != "" {
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(passwordStr), bcrypt.DefaultCost)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+				return
+			}
+			updateData["password"] = string(hashedPassword)
+		} else {
+			delete(updateData, "password")
+		}
+	}
+
+	if err := uc.db.Model(&user).Updates(updateData).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update user"})
+		return
+	}
+
+	// Fetch updated user
+	if err := uc.db.Select("id, username, email, role, first_name, last_name, phone, address, department, position, hire_date, is_active, last_login_at, created_at, updated_at").First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated user"})
+		return
+	}
+
+	// Calculate full name
+	fullName := ""
+	if user.FirstName != "" {
+		fullName = user.FirstName
+	}
+	if user.LastName != "" {
+		if fullName != "" {
+			fullName += " " + user.LastName
+		} else {
+			fullName = user.LastName
+		}
+	}
+	if fullName == "" {
+		fullName = user.Username
+	}
+
+	response := map[string]interface{}{
+		"id":            user.ID,
+		"username":      user.Username,
+		"email":         user.Email,
+		"role":          user.Role,
+		"first_name":    user.FirstName,
+		"last_name":     user.LastName,
+		"full_name":     fullName,
+		"phone":         user.Phone,
+		"address":       user.Address,
+		"department":    user.Department,
+		"position":      user.Position,
+		"hire_date":     user.HireDate,
+		"is_active":     user.IsActive,
+		"last_login_at": user.LastLoginAt,
+		"created_at":    user.CreatedAt,
+		"updated_at":    user.UpdatedAt,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// DeleteUser soft deletes a user
+func (uc *UserController) DeleteUser(c *gin.Context) {
+	id := c.Param("id")
+	userID, err := strconv.Atoi(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	var user models.User
+	if err := uc.db.First(&user, userID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user"})
+		return
+	}
+
+	// Soft delete the user
+	if err := uc.db.Delete(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
 }

@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import Layout from '@/components/layout/Layout';
+import SimpleLayout from '@/components/layout/SimpleLayout';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   Box,
   Heading,
@@ -17,6 +17,19 @@ import {
   Icon,
   Flex,
   Badge,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  FormControl,
+  FormLabel,
+  Input,
+  Select,
+  Spinner,
+  useDisclosure,
   useColorModeValue
 } from '@chakra-ui/react';
 import { 
@@ -24,45 +37,64 @@ import {
   FiBarChart, 
   FiTrendingUp, 
   FiShoppingCart, 
-  FiActivity
+  FiActivity,
+  FiDownload,
+  FiEye,
+  FiList,
+  FiBook
 } from 'react-icons/fi';
+import { reportService, ReportParameters } from '../../src/services/reportService';
 
 // Define reports data matching the UI design
-const availableReports = [
+const getAvailableReports = (t: any) => [
   {
     id: 'profit-loss',
-    name: 'Profit and Loss Statement',
-    description: 'Comprehensive profit and loss statements provides a detailed view of financial transactions on a specific period',
+    name: t('reports.profitLossStatement'),
+    description: t('reports.description.profitLoss'),
     type: 'FINANCIAL',
     icon: FiTrendingUp
   },
   {
     id: 'balance-sheet',
-    name: 'Balance Sheet',
-    description: 'Provides a company\'s assets, liabilities, and shareholders\' equity at a specific point in time',
+    name: t('reports.balanceSheet'),
+    description: t('reports.description.balanceSheet'),
     type: 'FINANCIAL', 
     icon: FiBarChart
   },
   {
     id: 'cash-flow',
-    name: 'Cash Flow Statement',
-    description: 'Measures how well a company generates cash to pay its debt obligations and fund its operating expenditures',
+    name: t('reports.cashFlowStatement'),
+    description: t('reports.description.cashFlow'),
     type: 'FINANCIAL',
     icon: FiActivity
   },
   {
     id: 'sales-summary',
-    name: 'Sales Summary Report',
-    description: 'Provides a summary of sales transactions over a period',
+    name: t('reports.salesSummaryReport'),
+    description: t('reports.description.salesSummary'),
     type: 'OPERATIONAL',
     icon: FiShoppingCart
   },
   {
-    id: 'purchase-summary',
-    name: 'Purchase Summary Report',
-    description: 'Provides a summary of purchase transactions over a period',
+    id: 'vendor-analysis',
+    name: t('reports.vendorAnalysisReport'),
+    description: t('reports.description.vendorAnalysis'),
     type: 'OPERATIONAL',
     icon: FiShoppingCart
+  },
+  {
+    id: 'trial-balance',
+    name: t('reports.trialBalance'),
+    description: t('reports.description.trialBalance') || 'Summary of all account balances to ensure debits equal credits and verify accounting equation',
+    type: 'FINANCIAL',
+    icon: FiList
+  },
+  {
+    id: 'general-ledger',
+    name: t('reports.generalLedger'),
+    description: t('reports.description.generalLedger'),
+    type: 'FINANCIAL',
+    icon: FiBook
   }
 ];
 
@@ -75,35 +107,526 @@ interface Report {
 }
 
 const ReportsPage: React.FC = () => {
-  const { user } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [reportParams, setReportParams] = useState<ReportParameters>({});
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [previewReport, setPreviewReport] = useState<any>(null);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isPreviewOpen, onOpen: onPreviewOpen, onClose: onPreviewClose } = useDisclosure();
   const toast = useToast();
 
-  const handleGenerateReport = (reportId: string) => {
-    toast({
-      title: 'Report Generation',
-      description: `Generating ${reportId} report...`,
-      status: 'info',
-      duration: 3000,
-      isClosable: true,
-    });
+  // Color mode values
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const headingColor = useColorModeValue('gray.700', 'white');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const descriptionColor = useColorModeValue('gray.600', 'gray.300');
+  const modalContentBg = useColorModeValue('white', 'gray.800');
+  const modalHeaderBg = useColorModeValue('white', 'gray.800');
+  const sectionBorderColor = useColorModeValue('gray.200', 'gray.600');
+  const evenRowBg = useColorModeValue('gray.50', 'gray.700');
+  const oddRowBg = useColorModeValue('white', 'gray.800');
+  const sectionTotalBg = useColorModeValue('blue.50', 'blue.900');
+  const sectionTotalBorderColor = useColorModeValue('blue.200', 'blue.700');
+  const sectionTotalTextColor = useColorModeValue('blue.700', 'blue.200');
+  const summaryBg = useColorModeValue('gray.50', 'gray.700');
+  const summaryTextColor = useColorModeValue('gray.500', 'gray.400');
+  const loadingTextColor = useColorModeValue('gray.700', 'gray.300');
+  const loadingDescColor = useColorModeValue('gray.500', 'gray.400');
+  const errorIconColor = useColorModeValue('red.400', 'red.300');
+  const errorTextColor = useColorModeValue('red.600', 'red.300');
+  const noDataIconColor = useColorModeValue('gray.400', 'gray.500');
+  const noDataTextColor = useColorModeValue('gray.500', 'gray.400');
+  const previewPeriodTextColor = useColorModeValue('gray.500', 'gray.400');
+  
+  const availableReports = getAvailableReports(t);
+
+  const resetParams = () => {
+    setReportParams({});
+  };
+
+  const handleViewReport = async (report: any) => {
+    setLoading(true);
+    setPreviewReport(report);
+    
+    try {
+      // Set default parameters for quick view
+      let quickViewParams: ReportParameters = { format: 'json' };
+      
+      if (report.id === 'balance-sheet') {
+        quickViewParams = { 
+          as_of_date: new Date().toISOString().split('T')[0],
+          format: 'json'
+        };
+      } else if (report.id === 'profit-loss') {
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        quickViewParams = {
+          start_date: firstDayOfMonth.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          format: 'json'
+        };
+      } else if (report.id === 'cash-flow') {
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        quickViewParams = {
+          start_date: firstDayOfMonth.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          format: 'json'
+        };
+      } else if (report.id === 'sales-summary' || report.id === 'vendor-analysis') {
+        const today = new Date();
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        quickViewParams = {
+          start_date: thirtyDaysAgo.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          group_by: 'month',
+          format: 'json'
+        };
+      } else if (report.id === 'trial-balance') {
+        quickViewParams = { 
+          as_of_date: new Date().toISOString().split('T')[0],
+          format: 'json'
+        };
+      } else if (report.id === 'general-ledger') {
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        quickViewParams = {
+          start_date: firstDayOfMonth.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          format: 'json'
+        };
+      }
+      
+      // Get real preview data from API
+      const previewData = await reportService.generateReportPreview(report.id, quickViewParams);
+      setPreviewData(convertApiDataToPreviewFormat(previewData, report));
+      
+      // Open preview modal
+      onPreviewOpen();
+      
+    } catch (error) {
+      console.error('Failed to load report preview:', error);
+      
+      // Set error state for preview
+      setPreviewData({ 
+        error: true, 
+        message: error instanceof Error ? error.message : 'Failed to load report data from server'
+      });
+      
+      toast({
+        title: 'Preview Error',
+        description: `Unable to load preview: ${error instanceof Error ? error.message : 'Server connection failed'}`,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      
+      // Still open preview to show error state
+      onPreviewOpen();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Convert API response data to preview format - Now handles real data from UnifiedReportController
+  const convertApiDataToPreviewFormat = (apiData: any, report: any) => {
+    if (!apiData) {
+      throw new Error('No data received from API');
+    }
+
+    // Handle standardized response structure from UnifiedReportController
+    let reportData = apiData;
+    if (apiData.data) {
+      reportData = apiData.data; // Extract from StandardReportResponse wrapper
+    }
+
+    try {
+      // Handle different report types based on real API response structure
+      switch (report.id) {
+        case 'balance-sheet':
+          // Handle BalanceSheetData structure from backend
+          if (reportData.company || reportData.sections || reportData.assets) {
+            const sections = [];
+            
+            if (reportData.assets) {
+              sections.push({
+                name: 'ASSETS',
+                items: reportData.assets.items || [],
+                total: reportData.assets.total || 0
+              });
+            }
+            
+            if (reportData.liabilities) {
+              sections.push({
+                name: 'LIABILITIES', 
+                items: reportData.liabilities.items || [],
+                total: reportData.liabilities.total || 0
+              });
+            }
+            
+            if (reportData.equity) {
+              sections.push({
+                name: 'EQUITY',
+                items: reportData.equity.items || [],
+                total: reportData.equity.total || 0
+              });
+            }
+            
+            return {
+              title: 'Balance Sheet',
+              period: reportData.period || `As of ${new Date().toLocaleDateString('id-ID')}`,
+              sections
+            };
+          }
+          throw new Error('Invalid balance sheet data structure');
+
+        case 'profit-loss':
+          // Handle ProfitLossData structure from backend
+          if (reportData.company || reportData.revenue || reportData.total_revenue !== undefined) {
+            const sections = [];
+            
+            // Revenue section
+            if (reportData.revenue) {
+              sections.push({
+                name: 'REVENUE',
+                items: reportData.revenue.items || [],
+                total: reportData.revenue.subtotal || reportData.total_revenue || 0
+              });
+            }
+            
+            // Cost of Goods Sold section
+            if (reportData.cost_of_goods_sold) {
+              sections.push({
+                name: 'COST OF GOODS SOLD',
+                items: reportData.cost_of_goods_sold.items || [],
+                total: reportData.cost_of_goods_sold.subtotal || 0
+              });
+            }
+            
+            // Operating Expenses section
+            if (reportData.operating_expenses) {
+              sections.push({
+                name: 'OPERATING EXPENSES',
+                items: reportData.operating_expenses.items || [],
+                total: reportData.operating_expenses.subtotal || 0
+              });
+            }
+            
+            // Net Income section
+            sections.push({
+              name: 'NET INCOME',
+              items: [{ name: 'Net Income', amount: reportData.net_income || 0 }],
+              total: reportData.net_income || 0
+            });
+
+            return {
+              title: 'Profit and Loss Statement',
+              period: reportData.period || `${new Date().toLocaleDateString('id-ID')}`,
+              sections
+            };
+          }
+          throw new Error('Invalid profit & loss data structure');
+
+        case 'cash-flow':
+          if (reportData.company && reportData.operating_activities) {
+            const sections = [];
+            
+            if (reportData.operating_activities) {
+              sections.push({
+                name: 'OPERATING ACTIVITIES',
+                items: reportData.operating_activities.items || [],
+                total: reportData.operating_activities.total || 0
+              });
+            }
+            
+            if (reportData.investing_activities) {
+              sections.push({
+                name: 'INVESTING ACTIVITIES',
+                items: reportData.investing_activities.items || [],
+                total: reportData.investing_activities.total || 0
+              });
+            }
+            
+            if (reportData.financing_activities) {
+              sections.push({
+                name: 'FINANCING ACTIVITIES',
+                items: reportData.financing_activities.items || [],
+                total: reportData.financing_activities.total || 0
+              });
+            }
+
+            return {
+              title: 'Cash Flow Statement',
+              period: `${new Date(reportData.start_date || Date.now()).toLocaleDateString('id-ID')} - ${new Date(reportData.end_date || Date.now()).toLocaleDateString('id-ID')}`,
+              sections
+            };
+          }
+          throw new Error('Invalid cash flow data structure');
+
+        case 'trial-balance':
+          // Handle TrialBalanceData structure from UnifiedReportController
+          if (reportData.accounts && Array.isArray(reportData.accounts)) {
+            return {
+              title: 'Trial Balance',
+              period: reportData.period || `As of ${new Date().toLocaleDateString('id-ID')}`,
+              sections: [
+                {
+                  name: 'ACCOUNTS',
+                  items: reportData.accounts.map((account: any) => ({
+                    name: `${account.account_code || account.code || ''} - ${account.account_name || account.name || ''}`,
+                    amount: (account.debit_balance || 0) - (account.credit_balance || 0),
+                    debit: account.debit_balance || 0,
+                    credit: account.credit_balance || 0
+                  })),
+                  total: reportData.total_debits || 0,
+                  totalDebits: reportData.total_debits || 0,
+                  totalCredits: reportData.total_credits || 0,
+                  isBalanced: reportData.is_balanced || false
+                }
+              ],
+              isBalanced: reportData.is_balanced || false,
+              totalDebits: reportData.total_debits || 0,
+              totalCredits: reportData.total_credits || 0,
+              hasData: reportData.accounts.length > 0
+            };
+          }
+          
+          // If no accounts data, return empty state  
+          return {
+            title: 'Trial Balance',
+            period: reportData.period || `As of ${new Date().toLocaleDateString('id-ID')}`,
+            sections: [],
+            hasData: false,
+            message: 'No accounts found for trial balance'
+          };
+
+        case 'general-ledger':
+          // Handle both possible data structures from different backend endpoints
+          // Check if accounts field exists (from both endpoints)
+          if (reportData.accounts && Array.isArray(reportData.accounts)) {
+            return {
+              title: 'General Ledger',
+              period: `${new Date(reportData.start_date || Date.now()).toLocaleDateString('id-ID')} - ${new Date(reportData.end_date || Date.now()).toLocaleDateString('id-ID')}`,
+              sections: reportData.accounts.map((account: any) => {
+                // Handle different field names for account properties
+                const accountCode = account.account_code || account.code || '';
+                const accountName = account.account_name || account.name || '';
+                
+                // Handle different field names for transactions
+                const transactions = account.transactions || account.entries || [];
+                
+                // Handle different field names for balance
+                const closingBalance = account.closing_balance || account.ending_balance || 
+                                       account.closingBalance || account.endingBalance || 0;
+                
+                return {
+                  name: `${accountCode} - ${accountName}`,
+                  items: Array.isArray(transactions) ? transactions.map((txn: any) => ({
+                    name: txn.description || 'Transaction',
+                    amount: (txn.debit_amount || txn.debit || 0) - (txn.credit_amount || txn.credit || 0),
+                    debit: txn.debit_amount || txn.debit || 0,
+                    credit: txn.credit_amount || txn.credit || 0,
+                    date: txn.date,
+                    reference: txn.reference || ''
+                  })) : [],
+                  total: closingBalance,
+                  openingBalance: account.opening_balance || account.openingBalance || 0,
+                  totalDebits: account.total_debits || account.totalDebits || 0,
+                  totalCredits: account.total_credits || account.totalCredits || 0
+                };
+              }),
+              hasData: reportData.accounts.length > 0
+            };
+          }
+          
+          // If no accounts but account_count is 0, return empty state
+          if (reportData.account_count === 0) {
+            return {
+              title: 'General Ledger',
+              period: `${new Date(reportData.start_date || Date.now()).toLocaleDateString('id-ID')} - ${new Date(reportData.end_date || Date.now()).toLocaleDateString('id-ID')}`,
+              sections: [],
+              hasData: false,
+              message: 'No transactions found for the selected period'
+            };
+          }
+          
+          // Log the structure for debugging
+          console.error('General ledger data structure:', reportData);
+          throw new Error('Invalid general ledger data structure - accounts field missing or invalid');
+
+        case 'sales-summary':
+          // Handle SalesSummaryData structure from UnifiedReportController
+          const salesByPeriod = reportData.sales_by_period || [];
+          const totalRevenue = reportData.total_revenue || 0;
+          
+          return {
+            title: 'Sales Summary Report',
+            period: reportData.period || `${new Date().toLocaleDateString('id-ID')}`,
+            sections: [
+              {
+                name: 'SALES BY PERIOD',
+                items: Array.isArray(salesByPeriod) ? salesByPeriod.map((period: any) => ({
+                  name: period.period || 'Unknown Period',
+                  amount: period.amount || 0
+                })) : [],
+                total: totalRevenue
+              }
+            ],
+            hasData: salesByPeriod && salesByPeriod.length > 0,
+            message: (!salesByPeriod || salesByPeriod.length === 0) ? 'No sales data available for the selected period' : undefined
+          };
+
+        case 'vendor-analysis':
+          // Handle VendorAnalysisData structure from UnifiedReportController
+          const purchasesByPeriod = reportData.purchases_by_period || [];
+          const totalPurchases = reportData.total_purchases || 0;
+          
+          return {
+            title: 'Vendor Analysis Report',
+            period: reportData.period || `${new Date().toLocaleDateString('id-ID')}`,
+            sections: [
+              {
+                name: 'PURCHASES BY PERIOD',
+                items: Array.isArray(purchasesByPeriod) ? purchasesByPeriod.map((period: any) => ({
+                  name: period.period || 'Unknown Period',
+                  amount: period.amount || 0
+                })) : [],
+                total: totalPurchases
+              }
+            ],
+            hasData: purchasesByPeriod && purchasesByPeriod.length > 0,
+            message: (!purchasesByPeriod || purchasesByPeriod.length === 0) ? 'No purchase data available for the selected period' : undefined
+          };
+
+        default:
+          throw new Error(`Unsupported report type: ${report.id}`);
+      }
+    } catch (error) {
+      console.error('Failed to convert API data:', error);
+      throw error;
+    }
+  };
+
+
+  // Format currency for display
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const handleGenerateReport = (report: any) => {
+    setSelectedReport(report);
+    resetParams();
+    
+    // Set default parameters based on report type
+    if (report.id === 'balance-sheet') {
+      setReportParams({ as_of_date: new Date().toISOString().split('T')[0], format: 'pdf' });
+    } else if (report.id === 'profit-loss' || report.id === 'cash-flow') {
+      // Set default start date to first day of current month and end date to today
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      setReportParams({
+        start_date: firstDayOfMonth.toISOString().split('T')[0],
+        end_date: today.toISOString().split('T')[0],
+        format: 'pdf'
+      });
+    } else if (report.id === 'sales-summary' || report.id === 'purchase-summary' || report.id === 'vendor-analysis') {
+      // Set default start date to 30 days ago and end date to today
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+      setReportParams({
+        start_date: thirtyDaysAgo.toISOString().split('T')[0],
+        end_date: today.toISOString().split('T')[0],
+        group_by: 'month',
+        format: 'pdf'
+      });
+    } else if (report.id === 'trial-balance') {
+      setReportParams({ as_of_date: new Date().toISOString().split('T')[0], format: 'pdf' });
+    } else if (report.id === 'general-ledger') {
+      // Set default start date to first day of current month and end date to today
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      setReportParams({
+        start_date: firstDayOfMonth.toISOString().split('T')[0],
+        end_date: today.toISOString().split('T')[0],
+        format: 'pdf'
+      });
+    }
+    
+    onOpen();
+  };
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setReportParams(prev => ({ ...prev, [name]: value }));
+  };
+  
+
+  const executeReport = async () => {
+    if (!selectedReport) return;
+    
+    setLoading(true);
+    try {
+      let result;
+      
+      // Use professional report service for specific reports
+      if (["balance-sheet", "profit-loss", "cash-flow", "sales-summary", "purchase-summary"].includes(selectedReport.id)) {
+        result = await reportService.generateProfessionalReport(selectedReport.id, reportParams);
+      } else {
+        result = await reportService.generateReport(selectedReport.id, reportParams);
+      }
+      
+      // Handle the result - Always download file since we only support PDF and CSV
+      const fileName = `${selectedReport.id}_professional_report.${reportParams.format}`;
+      await reportService.downloadReport(result as Blob, fileName);
+      toast({
+        title: 'Report Downloaded',
+        description: `${selectedReport.name} has been downloaded successfully.`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      
+      onClose();
+    } catch (error) {
+      console.error('Failed to generate report:', error);
+      toast({
+        title: 'Error',
+        description: `Failed to generate report: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Layout allowedRoles={['admin', 'finance', 'director']}>
+    <SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
       <Box p={8}>
         <VStack spacing={8} align="stretch">
-          <Heading as="h1" size="xl" color="gray.700" fontWeight="medium">
+          <Heading as="h1" size="xl" color={headingColor} fontWeight="medium">
             Financial Reports
           </Heading>
           
+          {/* Financial Reports Grid */}
           <SimpleGrid columns={[1, 2, 3]} spacing={6}>
             {availableReports.map((report) => (
               <Card
                 key={report.id}
-                bg="white"
+                bg={cardBg}
                 border="1px"
-                borderColor="gray.200"
+                borderColor={borderColor}
                 borderRadius="md"
                 overflow="hidden"
                 _hover={{ shadow: 'md' }}
@@ -115,7 +638,7 @@ const ReportsPage: React.FC = () => {
                     <Flex p={4} align="center" justify="space-between">
                       <Icon as={report.icon} size="24px" color="blue.500" />
                       <Badge 
-                        colorScheme="green" 
+                        colorScheme={report.type === 'FINANCIAL' ? 'green' : 'blue'} 
                         variant="solid"
                         fontSize="xs"
                         px={2}
@@ -128,29 +651,42 @@ const ReportsPage: React.FC = () => {
                     
                     {/* Content */}
                     <VStack spacing={3} align="stretch" px={4} pb={4}>
-                      <Heading size="md" color="gray.800" fontWeight="medium">
+                      <Heading size="md" color={textColor} fontWeight="medium">
                         {report.name}
                       </Heading>
                       <Text 
                         fontSize="sm" 
-                        color="gray.600" 
+                        color={descriptionColor} 
                         lineHeight="1.4"
                         noOfLines={3}
                       >
                         {report.description}
                       </Text>
                       
-                      {/* Action Button */}
-                      <Button
-                        colorScheme="blue"
-                        size="md"
-                        width="full"
-                        mt={2}
-                        onClick={() => handleGenerateReport(report.id)}
-                        isLoading={loading}
-                      >
-                        Generate Report
-                      </Button>
+                      {/* Action Buttons */}
+                      <HStack spacing={2} width="full" mt={2}>
+                        <Button
+                          colorScheme="gray"
+                          variant="outline"
+                          size="md"
+                          flex="1"
+                          onClick={() => handleViewReport(report)}
+                          isLoading={loading}
+                          leftIcon={<FiEye />}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          colorScheme="blue"
+                          size="md"
+                          flex="1"
+                          onClick={() => handleGenerateReport(report)}
+                          isLoading={loading && selectedReport?.id === report.id}
+                          leftIcon={<FiFileText />}
+                        >
+                          Generate
+                        </Button>
+                      </HStack>
                     </VStack>
                   </VStack>
                 </CardBody>
@@ -159,7 +695,301 @@ const ReportsPage: React.FC = () => {
           </SimpleGrid>
         </VStack>
       </Box>
-    </Layout>
+      
+      {/* Report Parameters Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} size="md">
+        <ModalOverlay />
+        <ModalContent bg={modalContentBg}>
+          <ModalHeader>{selectedReport?.name}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {selectedReport && (
+              <VStack spacing={4} align="stretch">
+                {/* Balance Sheet Parameters */}
+                {selectedReport.id === 'balance-sheet' && (
+                  <>
+                    <FormControl isRequired>
+                      <FormLabel>As of Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="as_of_date" 
+                        value={reportParams.as_of_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                  </>
+                )}
+                
+                {/* Profit & Loss and Cash Flow Parameters */}
+                {(selectedReport.id === 'profit-loss' || selectedReport.id === 'cash-flow') && (
+                  <>
+                    <FormControl isRequired>
+                      <FormLabel>Start Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="start_date" 
+                        value={reportParams.start_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                    <FormControl isRequired>
+                      <FormLabel>End Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="end_date" 
+                        value={reportParams.end_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                  </>
+                )}
+                
+                {/* Sales Summary, Purchase Summary, and Vendor Analysis Parameters */}
+                {(selectedReport.id === 'sales-summary' || selectedReport.id === 'purchase-summary' || selectedReport.id === 'vendor-analysis') && (
+                  <>
+                    <FormControl isRequired>
+                      <FormLabel>Start Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="start_date" 
+                        value={reportParams.start_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                    <FormControl isRequired>
+                      <FormLabel>End Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="end_date" 
+                        value={reportParams.end_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Group By</FormLabel>
+                      <Select 
+                        name="group_by" 
+                        value={reportParams.group_by || 'month'} 
+                        onChange={handleInputChange}
+                      >
+                        <option value="month">Month</option>
+                        <option value="quarter">Quarter</option>
+                        <option value="year">Year</option>
+                      </Select>
+                    </FormControl>
+                  </>
+                )}
+                
+                {/* Trial Balance Parameters */}
+                {selectedReport.id === 'trial-balance' && (
+                  <>
+                    <FormControl isRequired>
+                      <FormLabel>As of Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="as_of_date" 
+                        value={reportParams.as_of_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                  </>
+                )}
+                
+                {/* General Ledger Parameters */}
+                {selectedReport.id === 'general-ledger' && (
+                  <>
+                    <FormControl isRequired>
+                      <FormLabel>Start Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="start_date" 
+                        value={reportParams.start_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                    <FormControl isRequired>
+                      <FormLabel>End Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="end_date" 
+                        value={reportParams.end_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                  </>
+                )}
+                
+                {/* Format selection for all reports */}
+                <FormControl>
+                  <FormLabel>Format</FormLabel>
+                  <Select 
+                    name="format" 
+                    value={reportParams.format || 'pdf'} 
+                    onChange={handleInputChange}
+                  >
+                    <option value="pdf">Download as PDF</option>
+                    <option value="csv">Download as CSV</option>
+                  </Select>
+                </FormControl>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onClose} isDisabled={loading}>
+              Cancel
+            </Button>
+            <Button 
+              colorScheme="blue" 
+              onClick={executeReport} 
+              isLoading={loading}
+              leftIcon={<FiDownload />}
+            >
+              Download
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Report Preview Modal */}
+      <Modal isOpen={isPreviewOpen} onClose={onPreviewClose} size="6xl">
+        <ModalOverlay />
+        <ModalContent bg={modalContentBg}>
+          <ModalHeader>
+            <HStack>
+              <Icon as={previewReport?.icon || FiFileText} color="blue.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  {previewData?.title || previewReport?.name}
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
+                  {previewData?.period}
+                </Text>
+              </VStack>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            {loading ? (
+              <Box textAlign="center" py={8}>
+                <VStack spacing={4}>
+                  <Spinner size="xl" thickness="4px" speed="0.65s" color="blue.500" />
+                  <VStack spacing={2}>
+                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
+                      Generating Report Preview
+                    </Text>
+                    <Text fontSize="sm" color={loadingDescColor}>
+                      Please wait while we fetch real data from the database...
+                    </Text>
+                  </VStack>
+                </VStack>
+              </Box>
+            ) : previewData ? (
+              previewData.error || !previewData.hasData ? (
+                // Error State or Empty State
+                <Box textAlign="center" py={12}>
+                  <VStack spacing={4}>
+                    <Icon as={FiFileText} boxSize={12} color={previewData.error ? errorIconColor : noDataIconColor} />
+                    <VStack spacing={2}>
+                      <Text fontSize="lg" fontWeight="medium" color={previewData.error ? errorTextColor : noDataTextColor}>
+                        {previewData.error ? 'Unable to Load Preview' : 'No Data Available'}
+                      </Text>
+                      <Text fontSize="sm" color={summaryTextColor} maxW="md" textAlign="center">
+                        {previewData.message || (previewData.error ? 'There was a problem loading the report data. Please try again or generate the full report.' : 'No data found for the selected period or criteria.')}
+                      </Text>
+                    </VStack>
+                    <Button 
+                      colorScheme="blue" 
+                      variant="outline"
+                      onClick={() => {
+                        onPreviewClose();
+                        if (previewData.error) {
+                          handleViewReport(previewReport);
+                        } else {
+                          handleGenerateReport(previewReport);
+                        }
+                      }}
+                    >
+                      {previewData.error ? 'Retry Preview' : 'Generate Full Report'}
+                    </Button>
+                  </VStack>
+                </Box>
+              ) : (
+                <VStack spacing={6} align="stretch">
+                  {previewData.sections?.map((section: any, sectionIndex: number) => (
+                    <Box key={sectionIndex}>
+                      <Heading size="md" color={headingColor} mb={4} borderBottom="2px" borderColor={sectionBorderColor} pb={2}>
+                        {section.name}
+                      </Heading>
+                      <VStack spacing={2} align="stretch">
+                        {section.items?.map((item: any, itemIndex: number) => (
+                          <HStack key={itemIndex} justify="space-between" py={2} px={4} 
+                                 bg={itemIndex % 2 === 0 ? evenRowBg : oddRowBg} 
+                                 borderRadius="md">
+                            <Text fontSize="sm" color={textColor}>
+                              {item.name}
+                            </Text>
+                            <Text fontSize="sm" fontWeight="medium" 
+                                  color={item.amount >= 0 ? "black" : "red.500"}>
+                              {formatCurrency(item.amount)}
+                            </Text>
+                          </HStack>
+                        ))}
+                        
+                        {/* Section Total */}
+                        <HStack justify="space-between" py={3} px={4} 
+                               bg={sectionTotalBg} borderRadius="md" 
+                               borderTop="2px" borderColor={sectionTotalBorderColor} mt={2}>
+                          <Text fontSize="md" fontWeight="bold" color={sectionTotalTextColor}>
+                            Total {section.name}
+                          </Text>
+                          <Text fontSize="md" fontWeight="bold" 
+                                color={section.total >= 0 ? sectionTotalTextColor : "red.500"}>
+                            {formatCurrency(section.total)}
+                          </Text>
+                        </HStack>
+                      </VStack>
+                    </Box>
+                  ))}
+                  
+                  {/* Report Summary */}
+                  <Box bg={summaryBg} p={4} borderRadius="md" mt={4}>
+                    <Text fontSize="xs" color={summaryTextColor} textAlign="center">
+                      This is a preview of the report. For detailed and up-to-date information, 
+                      please generate the full report using the "Generate" button.
+                    </Text>
+                  </Box>
+                </VStack>
+              )
+            ) : (
+              <Box textAlign="center" py={8}>
+                <VStack spacing={3}>
+                  <Icon as={FiFileText} boxSize={8} color={noDataIconColor} />
+                  <Text color={noDataTextColor}>No preview data available</Text>
+                  <Text fontSize="sm" color={summaryTextColor}>
+                    Please try again or generate the full report
+                  </Text>
+                </VStack>
+              </Box>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" mr={3} onClick={onPreviewClose}>
+              Close
+            </Button>
+            <Button 
+              colorScheme="blue" 
+              onClick={() => {
+                onPreviewClose();
+                handleGenerateReport(previewReport);
+              }}
+              leftIcon={<FiDownload />}
+            >
+              Generate Full Report
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </SimpleLayout>
   );
 };
 

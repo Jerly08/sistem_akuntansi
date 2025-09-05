@@ -1,18 +1,20 @@
 package database
 
 import (
+	"log"
 	"app-sistem-akuntansi/models"
 	"gorm.io/gorm"
 )
 
 // SeedAccounts creates initial chart of accounts
 func SeedAccounts(db *gorm.DB) error {
+	log.Println("🔒 PRODUCTION MODE: Seeding accounts while preserving existing balances...")
 	accounts := []models.Account{
 		// ASSETS (1xxx)
 		{Code: "1000", Name: "ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 1, IsHeader: true, IsActive: true},
 		{Code: "1100", Name: "CURRENT ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "1101", Name: "Kas", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 50000000},
-		{Code: "1102", Name: "Bank BCA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 600000000},
+		{Code: "1101", Name: "Kas", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1102", Name: "Bank BCA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "1103", Name: "Bank Mandiri", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "1105", Name: "Bank BRI", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "1201", Name: "Piutang Usaha", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
@@ -22,7 +24,7 @@ func SeedAccounts(db *gorm.DB) error {
 		{Code: "1501", Name: "Peralatan Kantor", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "1502", Name: "Kendaraan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "1503", Name: "Bangunan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1509", Name: "TRUK", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 2000000},
+		{Code: "1509", Name: "TRUK", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 		// LIABILITIES (2xxx)
 		{Code: "2000", Name: "LIABILITIES", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 1, IsHeader: true, IsActive: true},
@@ -38,7 +40,8 @@ func SeedAccounts(db *gorm.DB) error {
 		// REVENUE (4xxx)
 		{Code: "4000", Name: "REVENUE", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 1, IsHeader: true, IsActive: true},
 		{Code: "4101", Name: "Pendapatan Penjualan", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "4201", Name: "Pendapatan Lain-lain", Type: models.AccountTypeRevenue, Category: models.CategoryOtherRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "4201", Name: "Pendapatan Lain-lain", Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "4900", Name: "Other Income", Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 
 		// EXPENSES (5xxx)
 		{Code: "5000", Name: "EXPENSES", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 1, IsHeader: true, IsActive: true},
@@ -47,6 +50,7 @@ func SeedAccounts(db *gorm.DB) error {
 		{Code: "5202", Name: "Beban Listrik", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "5203", Name: "Beban Telepon", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "5204", Name: "Beban Transportasi", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "5900", Name: "General Expense", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 	}
 
 	// Set parent relationships based on account hierarchy
@@ -64,7 +68,8 @@ func SeedAccounts(db *gorm.DB) error {
 			}
 			accountMap[account.Code] = account.ID
 		} else {
-			// Account exists, update it
+			// Account exists, update it but PRESERVE EXISTING BALANCE
+			log.Printf("🔒 Preserving balance for account %s (%s): %.2f", existingAccount.Code, existingAccount.Name, existingAccount.Balance)
 			existingAccount.Name = account.Name
 			existingAccount.Type = account.Type
 			existingAccount.Category = account.Category
@@ -72,7 +77,7 @@ func SeedAccounts(db *gorm.DB) error {
 			existingAccount.IsHeader = account.IsHeader
 			existingAccount.IsActive = account.IsActive
 			existingAccount.Description = account.Description
-			existingAccount.Balance = account.Balance
+			// REMOVED: existingAccount.Balance = account.Balance (preserving existing balances)
 			
 			if err := db.Save(&existingAccount).Error; err != nil {
 				return err
@@ -102,11 +107,13 @@ func SeedAccounts(db *gorm.DB) error {
 		"3201": "3000", // Laba Ditahan -> EQUITY
 		"4101": "4000", // Pendapatan Penjualan -> REVENUE
 		"4201": "4000", // Pendapatan Lain-lain -> REVENUE
+		"4900": "4000", // Other Income -> REVENUE
 		"5101": "5000", // Harga Pokok Penjualan -> EXPENSES
 		"5201": "5000", // Beban Gaji -> EXPENSES
 		"5202": "5000", // Beban Listrik -> EXPENSES
 		"5203": "5000", // Beban Telepon -> EXPENSES
 		"5204": "5000", // Beban Transportasi -> EXPENSES
+		"5900": "5000", // General Expense -> EXPENSES
 	}
 	
 	// Second pass: set parent relationships
@@ -121,5 +128,6 @@ func SeedAccounts(db *gorm.DB) error {
 	}
 
 
+	log.Println("✅ Account seeding completed - all existing balances preserved")
 	return nil
 }

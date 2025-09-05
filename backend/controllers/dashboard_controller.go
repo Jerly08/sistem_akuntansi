@@ -3,6 +3,7 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
@@ -12,12 +13,14 @@ import (
 type DashboardController struct {
 	DB                     *gorm.DB
 	stockMonitoringService *services.StockMonitoringService
+	dashboardService       *services.DashboardService
 }
 
 func NewDashboardController(db *gorm.DB, stockMonitoringService *services.StockMonitoringService) *DashboardController {
 	return &DashboardController{
 		DB:                     db,
 		stockMonitoringService: stockMonitoringService,
+		dashboardService:       services.NewDashboardService(db),
 	}
 }
 
@@ -29,7 +32,8 @@ func (dc *DashboardController) GetDashboardSummary(c *gin.Context) {
 	summary := make(map[string]interface{})
 	
 	// Get stock alerts for inventory managers and admins
-	if userRole == "admin" || userRole == "inventory_manager" {
+	userRoleLower := strings.ToLower(userRole)
+	if userRoleLower == "admin" || userRoleLower == "inventory_manager" {
 		stockAlerts, err := dc.stockMonitoringService.GetStockAlerts()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get stock alerts"})
@@ -83,7 +87,8 @@ func (dc *DashboardController) GetStockAlertsBanner(c *gin.Context) {
 	userRole := c.GetString("user_role")
 	
 	// Only for authorized roles
-	if userRole != "admin" && userRole != "inventory_manager" && userRole != "director" {
+	userRoleLower := strings.ToLower(userRole)
+	if userRoleLower != "admin" && userRoleLower != "inventory_manager" && userRoleLower != "director" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized to view stock alerts"})
 		return
 	}
@@ -132,7 +137,8 @@ func (dc *DashboardController) DismissStockAlert(c *gin.Context) {
 	alertID := c.Param("id")
 	userRole := c.GetString("user_role")
 	
-	if userRole != "admin" && userRole != "inventory_manager" {
+	userRoleLower := strings.ToLower(userRole)
+	if userRoleLower != "admin" && userRoleLower != "inventory_manager" {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized to dismiss alerts"})
 		return
 	}
@@ -150,6 +156,30 @@ func (dc *DashboardController) DismissStockAlert(c *gin.Context) {
 	}
 	
 	c.JSON(http.StatusOK, gin.H{"message": "Alert dismissed successfully"})
+}
+
+// GetAnalytics returns dashboard analytics data with real growth calculations
+func (dc *DashboardController) GetAnalytics(c *gin.Context) {
+	userRole := c.GetString("user_role")
+	
+	// Only allow admin, finance, and director roles
+	userRoleLower := strings.ToLower(userRole)
+	if userRoleLower != "admin" && userRoleLower != "finance" && userRoleLower != "director" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized to view analytics"})
+		return
+	}
+	
+	// Get comprehensive analytics with real growth calculations
+	analytics, err := dc.dashboardService.GetDashboardAnalytics()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch dashboard analytics",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, analytics)
 }
 
 // GetQuickStats returns quick statistics for dashboard widgets
@@ -183,19 +213,20 @@ func (dc *DashboardController) GetQuickStats(c *gin.Context) {
 	stats["total_categories"] = totalCategories
 	
 	// Role-specific stats
-	if userRole == "admin" || userRole == "finance" {
+	userRoleLower := strings.ToLower(userRole)
+	if userRoleLower == "admin" || userRoleLower == "finance" {
 		// Total sales today
 		var todaySales float64
 		dc.DB.Model(&models.Sale{}).
-			Where("DATE(created_at) = DATE(NOW())").
+			Where("DATE(created_at) = CURRENT_DATE").
 			Select("COALESCE(SUM(total_amount), 0)").
 			Scan(&todaySales)
 		stats["today_sales"] = todaySales
 		
-		// Total purchases today
+		// Total purchases today (only approved)
 		var todayPurchases float64
 		dc.DB.Model(&models.Purchase{}).
-			Where("DATE(created_at) = DATE(NOW())").
+			Where("DATE(created_at) = CURRENT_DATE AND status IN (?)", []string{"APPROVED", "COMPLETED"}).
 			Select("COALESCE(SUM(total_amount), 0)").
 			Scan(&todayPurchases)
 		stats["today_purchases"] = todayPurchases
@@ -293,4 +324,222 @@ func (dc *DashboardController) formatAlertMessage(alert models.StockAlert) strin
 		return fmt.Sprintf("%s requires attention. Current stock: %d",
 			alert.Product.Name, alert.CurrentStock)
 	}
+}
+
+// getMonthlySalesData gets sales data for the last 7 months
+func (dc *DashboardController) getMonthlySalesData() []map[string]interface{} {
+	type MonthlyData struct {
+		Month string  `json:"month"`
+		Value float64 `json:"value"`
+	}
+	
+	var results []MonthlyData
+	dc.DB.Raw(`
+		SELECT 
+			TO_CHAR(created_at, 'Mon') as month,
+			COALESCE(SUM(total_amount), 0) as value
+		FROM sales 
+		WHERE created_at >= CURRENT_DATE - INTERVAL '7 months'
+			AND deleted_at IS NULL
+		GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at), TO_CHAR(created_at, 'Mon')
+		ORDER BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at)
+	`).Scan(&results)
+	
+	// Convert to interface{} slice
+	var data []map[string]interface{}
+	for _, result := range results {
+		data = append(data, map[string]interface{}{
+			"month": result.Month,
+			"value": result.Value,
+		})
+	}
+	
+	// Return only real data from database - no dummy data
+	
+	return data
+}
+
+// getMonthlyPurchasesData gets purchase data for the last 7 months
+func (dc *DashboardController) getMonthlyPurchasesData() []map[string]interface{} {
+	type MonthlyData struct {
+		Month string  `json:"month"`
+		Value float64 `json:"value"`
+	}
+	
+	var results []MonthlyData
+	dc.DB.Raw(`
+		SELECT 
+			TO_CHAR(created_at, 'Mon') as month,
+			COALESCE(SUM(total_amount), 0) as value
+		FROM purchases 
+		WHERE created_at >= CURRENT_DATE - INTERVAL '7 months'
+			AND deleted_at IS NULL
+			AND status IN ('APPROVED', 'COMPLETED')
+		GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at), TO_CHAR(created_at, 'Mon')
+		ORDER BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at)
+	`).Scan(&results)
+	
+	// Convert to interface{} slice
+	var data []map[string]interface{}
+	for _, result := range results {
+		data = append(data, map[string]interface{}{
+			"month": result.Month,
+			"value": result.Value,
+		})
+	}
+	
+	// Return only real data from database - no dummy data
+	
+	return data
+}
+
+// calculateCashFlow calculates cash flow from sales and purchases data
+func (dc *DashboardController) calculateCashFlow(sales, purchases []map[string]interface{}) []map[string]interface{} {
+	var cashFlow []map[string]interface{}
+	
+	maxLen := len(sales)
+	if len(purchases) > maxLen {
+		maxLen = len(purchases)
+	}
+	
+	for i := 0; i < maxLen; i++ {
+		var month string
+		var salesValue, purchasesValue, balance float64
+		
+		if i < len(sales) {
+			month = sales[i]["month"].(string)
+			salesValue = sales[i]["value"].(float64)
+		}
+		
+		if i < len(purchases) {
+			if month == "" {
+				month = purchases[i]["month"].(string)
+			}
+			purchasesValue = purchases[i]["value"].(float64)
+		}
+		
+		balance = salesValue - purchasesValue
+		
+		cashFlow = append(cashFlow, map[string]interface{}{
+			"month":   month,
+			"inflow":  salesValue,
+			"outflow": purchasesValue,
+			"balance": balance,
+		})
+	}
+	
+	return cashFlow
+}
+
+// getTopAccounts gets the top 5 accounts by balance
+func (dc *DashboardController) getTopAccounts() []map[string]interface{} {
+	type AccountData struct {
+		Name    string  `json:"name"`
+		Balance float64 `json:"balance"`
+		Type    string  `json:"type"`
+	}
+
+	var results []AccountData
+	dc.DB.Raw(`
+		SELECT 
+			name,
+			ABS(balance) as balance,
+			type
+		FROM accounts 
+		WHERE deleted_at IS NULL 
+			AND is_active = true
+			AND balance != 0
+		ORDER BY ABS(balance) DESC
+		LIMIT 5
+	`).Scan(&results)
+
+	// Convert to interface{} slice
+	var data []map[string]interface{}
+	for _, result := range results {
+		data = append(data, map[string]interface{}{
+			"name":    result.Name,
+			"balance": result.Balance,
+			"type":    result.Type,
+		})
+	}
+
+	// Return empty array if no accounts found - no dummy data
+	return data
+}
+
+// getRecentTransactions gets recent transactions based on user role
+func (dc *DashboardController) getRecentTransactions(userRole string) []map[string]interface{} {
+	type TransactionData struct {
+		ID             uint    `json:"id"`
+		TransactionID  string  `json:"transaction_id"`
+		Description    string  `json:"description"`
+		Amount         float64 `json:"amount"`
+		Date           string  `json:"date"`
+		Type           string  `json:"type"`
+		AccountName    string  `json:"account_name"`
+		ContactName    *string `json:"contact_name"`
+		Status         string  `json:"status"`
+	}
+
+	var results []TransactionData
+	
+	// Get recent sales data
+	dc.DB.Raw(`
+		SELECT 
+			s.id,
+			s.code as transaction_id,
+			s.notes as description,
+			s.total_amount as amount,
+			TO_CHAR(s.date, 'YYYY-MM-DD') as date,
+			'SALE' as type,
+			'Sales Transaction' as account_name,
+			c.name as contact_name,
+			s.status
+		FROM sales s 
+		LEFT JOIN contacts c ON s.customer_id = c.id
+		WHERE s.deleted_at IS NULL
+		ORDER BY s.created_at DESC
+		LIMIT 5
+	`).Scan(&results)
+
+	// Get recent purchases data and append
+	var purchaseResults []TransactionData
+	dc.DB.Raw(`
+		SELECT 
+			p.id,
+			p.code as transaction_id,
+			p.notes as description,
+			p.total_amount as amount,
+			TO_CHAR(p.date, 'YYYY-MM-DD') as date,
+			'PURCHASE' as type,
+			'Purchase Transaction' as account_name,
+			c.name as contact_name,
+			p.status
+		FROM purchases p 
+		LEFT JOIN contacts c ON p.vendor_id = c.id
+		WHERE p.deleted_at IS NULL
+		ORDER BY p.created_at DESC
+		LIMIT 5
+	`).Scan(&purchaseResults)
+
+	// Combine both sales and purchases
+	results = append(results, purchaseResults...)
+
+	// Convert to interface{} slice
+	var data []map[string]interface{}
+	for _, result := range results {
+		data = append(data, map[string]interface{}{
+			"id":             result.ID,
+			"transaction_id": result.TransactionID,
+			"description":    result.Description,
+			"amount":         result.Amount,
+			"date":           result.Date,
+			"type":           result.Type,
+			"account_name":   result.AccountName,
+			"contact_name":   result.ContactName,
+			"status":         result.Status,
+		})
+	}
+
+	return data
 }

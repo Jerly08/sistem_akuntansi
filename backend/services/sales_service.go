@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"strings"
 	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
@@ -14,6 +15,7 @@ import (
 )
 
 type SalesService struct {
+	db              *gorm.DB
 	salesRepo       *repositories.SalesRepository
 	productRepo     *repositories.ProductRepository
 	contactRepo     repositories.ContactRepository
@@ -44,8 +46,9 @@ type SalesResult struct {
 	TotalPages int           `json:"total_pages"`
 }
 
-func NewSalesService(salesRepo *repositories.SalesRepository, productRepo *repositories.ProductRepository, contactRepo repositories.ContactRepository, accountRepo repositories.AccountRepository, journalService JournalServiceInterface, pdfService PDFServiceInterface) *SalesService {
+func NewSalesService(db *gorm.DB, salesRepo *repositories.SalesRepository, productRepo *repositories.ProductRepository, contactRepo repositories.ContactRepository, accountRepo repositories.AccountRepository, journalService JournalServiceInterface, pdfService PDFServiceInterface) *SalesService {
 	return &SalesService{
+		db:              db,
 		salesRepo:       salesRepo,
 		productRepo:     productRepo,
 		contactRepo:     contactRepo,
@@ -301,6 +304,42 @@ func (s *SalesService) DeleteSale(id uint) error {
 	}
 
 	// Check if sale can be deleted (only drafts)
+	if sale.Status != models.SaleStatusDraft {
+		return errors.New("sale cannot be deleted in current status")
+	}
+
+	return s.salesRepo.Delete(id)
+}
+
+// DeleteSaleWithRole deletes a sale with role-based permission checking
+func (s *SalesService) DeleteSaleWithRole(id uint, userRole string) error {
+	sale, err := s.salesRepo.FindByID(id)
+	if err != nil {
+		return err
+	}
+
+	// Admin users can delete sales in any status
+	if strings.ToLower(userRole) == "admin" {
+		log.Printf("Admin user deleting sale %d with status %s", id, sale.Status)
+		
+		// If sale was confirmed/invoiced, restore inventory and create reversal entries
+		if sale.Status == models.SaleStatusConfirmed || sale.Status == models.SaleStatusInvoiced {
+			err = s.restoreInventoryForSale(sale)
+			if err != nil {
+				log.Printf("Warning: Failed to restore inventory for sale %d: %v", id, err)
+			}
+			
+			// Create reversal journal entries
+			err = s.createReversalJournalEntries(sale, 1, "Admin deletion") // Using userID 1 as placeholder
+			if err != nil {
+				log.Printf("Warning: Failed to create reversal journal entries for sale %d: %v", id, err)
+			}
+		}
+		
+		return s.salesRepo.Delete(id)
+	}
+
+	// Non-admin users can only delete drafts (existing business rule)
 	if sale.Status != models.SaleStatusDraft {
 		return errors.New("sale cannot be deleted in current status")
 	}

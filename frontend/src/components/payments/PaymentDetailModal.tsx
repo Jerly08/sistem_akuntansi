@@ -22,6 +22,7 @@ import {
   Tr,
   Td,
   TableContainer,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { FiFilePlus } from 'react-icons/fi';
 import { Payment } from '@/services/paymentService';
@@ -39,6 +40,16 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  // Theme colors for dark mode support
+  const modalBg = useColorModeValue('white', 'gray.800');
+  const headerBg = useColorModeValue('gray.50', 'gray.700');
+  const headingColor = useColorModeValue('gray.800', 'gray.100');
+  const textPrimary = useColorModeValue('gray.700', 'gray.200');
+  const textSecondary = useColorModeValue('gray.500', 'gray.400');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const tableBg = useColorModeValue('white', 'gray.700');
+  const amountColor = useColorModeValue('green.600', 'green.400');
+  
   if (!payment) return null;
 
   const formatCurrency = (amount: number) => {
@@ -62,10 +73,10 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl">
       <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>
+      <ModalContent bg={modalBg}>
+        <ModalHeader bg={headerBg} borderBottomWidth={1} borderColor={borderColor}>
           <Flex justify="space-between" align="center">
-            <Text>Payment Details</Text>
+            <Text color={headingColor}>Payment Details</Text>
             <Badge
               colorScheme={paymentService.getStatusColorScheme(payment.status)}
               variant="subtle"
@@ -81,11 +92,11 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
           <VStack spacing={6} align="stretch">
             {/* Basic Information */}
             <Box>
-              <Text fontWeight="bold" fontSize="lg" mb={3}>
+              <Text fontWeight="bold" fontSize="lg" mb={3} color={headingColor}>
                 Basic Information
               </Text>
               <TableContainer>
-                <Table size="sm" variant="simple">
+                <Table size="sm" variant="simple" bg={tableBg}>
                   <Tbody>
                     <Tr>
                       <Td fontWeight="medium" w="30%">Payment Code:</Td>
@@ -96,7 +107,7 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
                       <Td>
                         <Flex direction="column">
                           <Text>{payment.contact?.name || 'Unknown Contact'}</Text>
-                          <Text fontSize="sm" color="gray.500">
+                          <Text fontSize="sm" color={textSecondary}>
                             {payment.contact?.type || 'N/A'}
                           </Text>
                         </Flex>
@@ -105,7 +116,7 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
                     <Tr>
                       <Td fontWeight="medium">Amount:</Td>
                       <Td>
-                        <Text fontWeight="bold" fontSize="lg" color="green.600">
+                        <Text fontWeight="bold" fontSize="lg" color={amountColor}>
                           {formatCurrency(payment.amount)}
                         </Text>
                       </Td>
@@ -131,11 +142,11 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
 
             {/* Additional Details */}
             <Box>
-              <Text fontWeight="bold" fontSize="lg" mb={3}>
+              <Text fontWeight="bold" fontSize="lg" mb={3} color={headingColor}>
                 Additional Information
               </Text>
               <TableContainer>
-                <Table size="sm" variant="simple">
+                <Table size="sm" variant="simple" bg={tableBg}>
                   <Tbody>
                     <Tr>
                       <Td fontWeight="medium" w="30%">Reference:</Td>
@@ -149,7 +160,7 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
                             {payment.notes}
                           </Text>
                         ) : (
-                          <Text color="gray.500" fontSize="sm">No notes</Text>
+                          <Text color={textSecondary} fontSize="sm">No notes</Text>
                         )}
                       </Td>
                     </Tr>
@@ -162,11 +173,11 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
 
             {/* System Information */}
             <Box>
-              <Text fontWeight="bold" fontSize="lg" mb={3}>
+              <Text fontWeight="bold" fontSize="lg" mb={3} color={headingColor}>
                 System Information
               </Text>
               <TableContainer>
-                <Table size="sm" variant="simple">
+                <Table size="sm" variant="simple" bg={tableBg}>
                   <Tbody>
                     <Tr>
                       <Td fontWeight="medium" w="30%">Created:</Td>

@@ -19,6 +19,7 @@ import {
 import { FiInfo, FiLock, FiUnlock } from 'react-icons/fi';
 
 import { Account, AccountCreateRequest, AccountUpdateRequest } from '@/types/account';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AccountFormProps {
   account?: Account;
@@ -125,6 +126,11 @@ const AccountForm: React.FC<AccountFormProps> = ({
   onCancel,
   isSubmitting = false,
 }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role?.toLowerCase() === 'admin';
+  
+  // Admin can override opening balance restrictions
+  const canEditOpeningBalance = !account?.id || isAdmin;
   const [formData, setFormData] = useState<any>({
     code: '',
     name: '',
@@ -336,12 +342,15 @@ const AccountForm: React.FC<AccountFormProps> = ({
             </Tooltip>
             {account && (
               <Badge 
-                colorScheme={account.id ? 'orange' : 'green'} 
+                colorScheme={canEditOpeningBalance ? 'green' : 'orange'} 
                 size="sm"
                 variant="subtle"
               >
-                <Icon as={account.id ? FiLock : FiUnlock} mr={1} />
-                {account.id ? 'Edit Restricted' : 'Editable'}
+                <Icon as={canEditOpeningBalance ? FiUnlock : FiLock} mr={1} />
+                {canEditOpeningBalance ? 'EDITABLE' : 'EDIT RESTRICTED'}
+                {isAdmin && account?.id && (
+                  <Text as="span" ml={1} fontSize="xs">(ADMIN OVERRIDE)</Text>
+                )}
               </Badge>
             )}
           </HStack>
@@ -351,12 +360,31 @@ const AccountForm: React.FC<AccountFormProps> = ({
             placeholder="Contoh: Rp 1.000.000"
             size="md"
             min={0}
-            isDisabled={account?.id ? true : false}
+            isDisabled={!canEditOpeningBalance}
           />
-          {account?.id && (
-            <Text fontSize="xs" color="gray.500" mt={1}>
-              Note: Opening balance cannot be changed after account creation. Use journal entries to adjust balance.
-            </Text>
+          {account?.id && !canEditOpeningBalance && (
+            <Alert status="warning" size="sm" mt={2}>
+              <AlertIcon boxSize={3} />
+              <Box fontSize="xs">
+                <Text fontWeight="medium">Opening balance is locked after account creation</Text>
+                <Text color="gray.600">
+                  Opening balance cannot be changed after account creation. Use 
+                  <Text as="span" fontWeight="semibold" color="orange.600">journal entries</Text> to adjust balance.
+                </Text>
+              </Box>
+            </Alert>
+          )}
+          {account?.id && isAdmin && (
+            <Alert status="info" size="sm" mt={2}>
+              <AlertIcon boxSize={3} />
+              <Box fontSize="xs">
+                <Text fontWeight="medium" color="blue.600">Admin Override Active</Text>
+                <Text color="blue.600">
+                  You can edit opening balance as an admin. Use this feature carefully 
+                  as it may affect financial reports.
+                </Text>
+              </Box>
+            </Alert>
           )}
         </Box>
         

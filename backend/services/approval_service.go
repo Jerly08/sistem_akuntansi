@@ -311,19 +311,42 @@ func (s *ApprovalService) ProcessApprovalAction(requestID uint, userID uint, act
 				}
 			}
 		} else {
-			// All steps approved - complete request
-			approvalReq.Status = models.ApprovalStatusApproved
-			approvalReq.CompletedAt = &now
-
-			if err := tx.Save(&approvalReq).Error; err != nil {
-				tx.Rollback()
-				return err
+			// Check if there are any pending director steps that should be activated
+			// This handles the case where director step was added after initial workflow creation
+			var pendingDirectorStep *models.ApprovalAction
+			for i := range approvalReq.ApprovalSteps {
+				step := &approvalReq.ApprovalSteps[i]
+				if strings.ToLower(step.Step.ApproverRole) == "director" && 
+				   step.Status == models.ApprovalStatusPending && !step.IsActive {
+					pendingDirectorStep = step
+					break
+				}
 			}
+			
+			if pendingDirectorStep != nil {
+				// Activate the pending director step instead of auto-approving
+				pendingDirectorStep.IsActive = true
+				if err := tx.Save(pendingDirectorStep).Error; err != nil {
+					tx.Rollback()
+					return err
+				}
+				// Notify directors
+				go s.notifyApprovers(&approvalReq, pendingDirectorStep.Step)
+			} else {
+				// All steps approved - complete request
+				approvalReq.Status = models.ApprovalStatusApproved
+				approvalReq.CompletedAt = &now
 
-			// Update entity status
-			if err := s.updateEntityStatus(tx, approvalReq.EntityType, approvalReq.EntityID, "APPROVED"); err != nil {
-				tx.Rollback()
-				return err
+				if err := tx.Save(&approvalReq).Error; err != nil {
+					tx.Rollback()
+					return err
+				}
+
+				// Update entity status
+				if err := s.updateEntityStatus(tx, approvalReq.EntityType, approvalReq.EntityID, "APPROVED"); err != nil {
+					tx.Rollback()
+					return err
+				}
 			}
 		}
 	}
@@ -527,6 +550,11 @@ func (s *ApprovalService) notifyApprovers(request *models.ApprovalRequest, step 
 	s.db.Where("LOWER(role) = LOWER(?) AND is_active = ?", step.ApproverRole, true).Find(&users)
 
 	for _, user := range users {
+		// Check for duplicate notifications
+		if s.isDuplicateApprovalNotification(user.ID, request.ID, models.NotificationTypeApprovalPending) {
+			continue // Skip creating duplicate
+		}
+
 		notification := models.Notification{
 			UserID:   user.ID,
 			Type:     models.NotificationTypeApprovalPending,
@@ -549,7 +577,7 @@ func (s *ApprovalService) notifyRequester(request *models.ApprovalRequest, actio
 		if request.Status == models.ApprovalStatusApproved {
 			notificationType = models.NotificationTypeApprovalApproved
 			title = "Request Approved"
-			message = fmt.Sprintf("Your request '%s' has been approved", request.RequestTitle)
+		message = fmt.Sprintf("Your request '%s' has been approved", request.RequestTitle)
 		} else {
 			return // Don't notify on intermediate approvals
 		}
@@ -559,6 +587,11 @@ func (s *ApprovalService) notifyRequester(request *models.ApprovalRequest, actio
 		message = fmt.Sprintf("Your request '%s' has been rejected", request.RequestTitle)
 	default:
 		return
+	}
+
+	// Check for duplicate notifications
+	if s.isDuplicateApprovalNotification(request.RequesterID, request.ID, notificationType) {
+		return // Skip creating duplicate
 	}
 
 	notification := models.Notification{
@@ -571,6 +604,24 @@ func (s *ApprovalService) notifyRequester(request *models.ApprovalRequest, actio
 	}
 
 	s.db.Create(&notification)
+}
+
+// isDuplicateApprovalNotification checks if similar approval notification already exists
+func (s *ApprovalService) isDuplicateApprovalNotification(userID uint, requestID uint, notificationType string) bool {
+	// Check for existing notification with same request_id, user_id, and type within last 1 hour
+	var count int64
+	oneHourAgo := time.Now().Add(-1 * time.Hour)
+	
+	err := s.db.Model(&models.Notification{}).
+		Where("user_id = ? AND type = ? AND created_at >= ? AND data::json->>'request_id' = ?", 
+			userID, notificationType, oneHourAgo, fmt.Sprintf("%d", requestID)).
+		Count(&count).Error
+	
+	if err != nil {
+		return false // If error, allow creation
+	}
+
+	return count > 0
 }
 
 // createNotificationData creates JSON data for notifications
@@ -605,6 +656,12 @@ func (s *ApprovalService) EscalateToDirector(requestID uint, escalatedByUserID u
 		return err
 	}
 
+	// Safety check: Don't escalate if request is already approved or rejected
+	if request.Status != models.ApprovalStatusPending {
+		tx.Rollback()
+		return fmt.Errorf("cannot escalate request with status %s - only pending requests can be escalated", request.Status)
+	}
+
 	// Check if there's a director step in the workflow
 	var directorStep *models.ApprovalStep
 	for _, step := range request.Workflow.Steps {
@@ -629,6 +686,12 @@ func (s *ApprovalService) EscalateToDirector(requestID uint, escalatedByUserID u
 		}
 	}
 
+	// Reload the director step to ensure we have the correct ID
+	if err := tx.First(directorStep, directorStep.ID).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to reload director step: %v", err)
+	}
+
 	// Check if director step action already exists
 	var directorAction models.ApprovalAction
 	err = tx.Where("request_id = ? AND step_id = ?", requestID, directorStep.ID).
@@ -644,7 +707,7 @@ func (s *ApprovalService) EscalateToDirector(requestID uint, escalatedByUserID u
 		}
 		if err := tx.Create(&directorAction).Error; err != nil {
 			tx.Rollback()
-			return err
+			return fmt.Errorf("failed to create director action: %v", err)
 		}
 	} else if err == nil {
 		// Update existing action
@@ -655,16 +718,19 @@ func (s *ApprovalService) EscalateToDirector(requestID uint, escalatedByUserID u
 		directorAction.Comments = ""
 		if err := tx.Save(&directorAction).Error; err != nil {
 			tx.Rollback()
-			return err
+			return fmt.Errorf("failed to update director action: %v", err)
 		}
 	} else {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to find director action: %v", err)
 	}
 
-	// Deactivate all other steps
+	// Important: DO NOT deactivate all other steps immediately
+	// Keep the current step active until it's properly processed
+	// Only deactivate other steps if they are not the currently active finance step
 	if err := tx.Model(&models.ApprovalAction{}).
-		Where("request_id = ? AND id != ?", requestID, directorAction.ID).
+		Where("request_id = ? AND id != ? AND is_active = ? AND status != ?", 
+			requestID, directorAction.ID, false, models.ApprovalStatusPending).
 		Update("is_active", false).Error; err != nil {
 		tx.Rollback()
 		return err
@@ -676,6 +742,7 @@ func (s *ApprovalService) EscalateToDirector(requestID uint, escalatedByUserID u
 		UserID:    escalatedByUserID,
 		Action:    "ESCALATED_TO_DIRECTOR",
 		Comments:  reason,
+		Metadata:  "{}",
 	}
 	if err := tx.Create(&history).Error; err != nil {
 		tx.Rollback()
@@ -801,7 +868,13 @@ func (s *ApprovalService) CreateMinimalApprovalRequestForRejection(entityType st
 // notifyDirectors sends high-priority notifications to directors
 func (s *ApprovalService) notifyDirectors(request *models.ApprovalRequest, escalationReason string) {
 	var directors []models.User
-	s.db.Where("LOWER(role) = LOWER(?) AND is_active = ?", "director", true).Find(&directors)
+	err := s.db.Where("LOWER(role) = LOWER(?) AND is_active = ?", "director", true).Find(&directors).Error
+	if err != nil {
+		fmt.Printf("Error finding directors for notification: %v\n", err)
+		return
+	}
+	
+	fmt.Printf("Found %d active directors to notify for request %d\n", len(directors), request.ID)
 
 	for _, director := range directors {
 		notification := models.Notification{
@@ -812,6 +885,12 @@ func (s *ApprovalService) notifyDirectors(request *models.ApprovalRequest, escal
 			Priority: models.ApprovalPriorityUrgent,
 			Data:     s.createNotificationData(request),
 		}
-		s.db.Create(&notification)
+		
+		err := s.db.Create(&notification).Error
+		if err != nil {
+			fmt.Printf("Failed to create notification for director %d: %v\n", director.ID, err)
+		} else {
+			fmt.Printf("Created notification for director %s (ID: %d)\n", director.Username, director.ID)
+		}
 	}
 }

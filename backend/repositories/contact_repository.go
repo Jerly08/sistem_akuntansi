@@ -8,8 +8,10 @@ import (
 // ContactRepository provides database operations for contacts
 type ContactRepository interface {
 	GetAll() ([]models.Contact, error)
+	GetAllIncludingDeleted() ([]models.Contact, error)
 	GetByID(id uint) (*models.Contact, error)
 	GetByCode(code string) (*models.Contact, error)
+	CodeExists(code string) (bool, error)
 	GetByType(contactType string) ([]models.Contact, error)
 	Create(contact models.Contact) (*models.Contact, error)
 	Update(contact models.Contact) (*models.Contact, error)
@@ -17,6 +19,9 @@ type ContactRepository interface {
 	CountByType(contactType string) (int64, error)
 	BulkCreate(contacts []models.Contact) error
 	Search(query string) ([]models.Contact, error)
+	AddAddress(address models.ContactAddress) (*models.ContactAddress, error)
+	UpdateAddress(address models.ContactAddress) (*models.ContactAddress, error)
+	DeleteAddress(addressID uint) error
 }
 
 // contactRepository implements ContactRepository
@@ -33,6 +38,13 @@ func NewContactRepository(db *gorm.DB) ContactRepository {
 func (r *contactRepository) GetAll() ([]models.Contact, error) {
 	var contacts []models.Contact
 	err := r.db.Preload("Addresses").Find(&contacts).Error
+	return contacts, err
+}
+
+// GetAllIncludingDeleted returns all contacts including soft-deleted ones
+func (r *contactRepository) GetAllIncludingDeleted() ([]models.Contact, error) {
+	var contacts []models.Contact
+	err := r.db.Unscoped().Preload("Addresses").Find(&contacts).Error
 	return contacts, err
 }
 
@@ -54,6 +66,16 @@ func (r *contactRepository) GetByCode(code string) (*models.Contact, error) {
 		return nil, err
 	}
 	return &contact, nil
+}
+
+// CodeExists checks if a contact code exists (including soft-deleted records)
+func (r *contactRepository) CodeExists(code string) (bool, error) {
+	var count int64
+	err := r.db.Unscoped().Model(&models.Contact{}).Where("code = ?", code).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // GetByType returns contacts filtered by type
@@ -108,9 +130,32 @@ func (r *contactRepository) Search(query string) ([]models.Contact, error) {
 	searchPattern := "%" + query + "%"
 	
 	err := r.db.Preload("Addresses").Where(
-		"name ILIKE ? OR email ILIKE ? OR phone ILIKE ? OR mobile ILIKE ?",
-		searchPattern, searchPattern, searchPattern, searchPattern,
+		"name ILIKE ? OR email ILIKE ? OR phone ILIKE ? OR mobile ILIKE ? OR code ILIKE ? OR pic_name ILIKE ?",
+		searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern,
 	).Find(&contacts).Error
 	
 	return contacts, err
+}
+
+// AddAddress adds a new address to a contact
+func (r *contactRepository) AddAddress(address models.ContactAddress) (*models.ContactAddress, error) {
+	err := r.db.Create(&address).Error
+	if err != nil {
+		return nil, err
+	}
+	return &address, nil
+}
+
+// UpdateAddress updates an existing contact address
+func (r *contactRepository) UpdateAddress(address models.ContactAddress) (*models.ContactAddress, error) {
+	err := r.db.Save(&address).Error
+	if err != nil {
+		return nil, err
+	}
+	return &address, nil
+}
+
+// DeleteAddress deletes a contact address
+func (r *contactRepository) DeleteAddress(addressID uint) error {
+	return r.db.Delete(&models.ContactAddress{}, addressID).Error
 }

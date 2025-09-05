@@ -54,15 +54,52 @@ const (
 
 // Account Categories Constants
 const (
-	CategoryCurrentAsset    = "CURRENT_ASSET"
-	CategoryFixedAsset      = "FIXED_ASSET"
-	CategoryCurrentLiability = "CURRENT_LIABILITY"
+	// Balance Sheet Categories
+	CategoryCurrentAsset      = "CURRENT_ASSET"
+	CategoryFixedAsset        = "FIXED_ASSET"
+	CategoryIntangibleAsset   = "INTANGIBLE_ASSET"
+	CategoryInvestmentAsset   = "INVESTMENT_ASSET"
+	CategoryCurrentLiability  = "CURRENT_LIABILITY"
 	CategoryLongTermLiability = "LONG_TERM_LIABILITY"
-	CategoryEquity          = "EQUITY"
-	CategoryOperatingRevenue = "OPERATING_REVENUE"
-	CategoryOtherRevenue    = "OTHER_REVENUE"
-	CategoryOperatingExpense = "OPERATING_EXPENSE"
-	CategoryOtherExpense    = "OTHER_EXPENSE"
+	CategoryEquity            = "EQUITY"
+	CategoryRetainedEarnings  = "RETAINED_EARNINGS"
+	CategoryShareCapital      = "SHARE_CAPITAL"
+	
+	// Profit & Loss Categories - Revenue
+	CategoryOperatingRevenue    = "OPERATING_REVENUE"
+	CategoryServiceRevenue      = "SERVICE_REVENUE"
+	CategorySalesRevenue        = "SALES_REVENUE"
+	CategoryNonOperatingRevenue = "NON_OPERATING_REVENUE"
+	CategoryInterestIncome      = "INTEREST_INCOME"
+	CategoryDividendIncome      = "DIVIDEND_INCOME"
+	CategoryGainOnSale          = "GAIN_ON_SALE"
+	CategoryOtherIncome         = "OTHER_INCOME"
+	
+	// Profit & Loss Categories - Cost of Goods Sold
+	CategoryCostOfGoodsSold        = "COST_OF_GOODS_SOLD"
+	CategoryDirectMaterial         = "DIRECT_MATERIAL"
+	CategoryDirectLabor            = "DIRECT_LABOR"
+	CategoryManufacturingOverhead  = "MANUFACTURING_OVERHEAD"
+	CategoryFreightIn              = "FREIGHT_IN"
+	CategoryPurchaseReturns        = "PURCHASE_RETURNS"
+	
+	// Profit & Loss Categories - Operating Expenses
+	CategoryOperatingExpense    = "OPERATING_EXPENSE"
+	CategoryAdministrativeExp   = "ADMINISTRATIVE_EXPENSE"
+	CategorySellingExpense      = "SELLING_EXPENSE"
+	CategoryMarketingExpense    = "MARKETING_EXPENSE"
+	CategoryGeneralExpense      = "GENERAL_EXPENSE"
+	CategoryDepreciationExp     = "DEPRECIATION_EXPENSE"
+	CategoryAmortizationExp     = "AMORTIZATION_EXPENSE"
+	CategoryBadDebtExpense      = "BAD_DEBT_EXPENSE"
+	
+	// Profit & Loss Categories - Non-Operating Expenses
+	CategoryNonOperatingExpense = "NON_OPERATING_EXPENSE"
+	CategoryInterestExpense     = "INTEREST_EXPENSE"
+	CategoryFinancialExpense    = "FINANCIAL_EXPENSE"
+	CategoryLossOnSale          = "LOSS_ON_SALE"
+	CategoryTaxExpense          = "TAX_EXPENSE"
+	CategoryOtherExpense        = "OTHER_EXPENSE"
 )
 
 // AccountType enum

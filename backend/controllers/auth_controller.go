@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -107,15 +108,11 @@ func (ac *AuthController) Register(c *gin.Context) {
 		return
 	}
 
-	// Convert role to uppercase for frontend compatibility
-	userWithUppercaseRole := tokens.User
-	userWithUppercaseRole.Role = convertRoleToUppercase(userWithUppercaseRole.Role)
-
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "User registered successfully",
-		"token":   tokens.AccessToken,
-		"refreshToken": tokens.RefreshToken,
-		"user":    userWithUppercaseRole,
+		"access_token":   tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+		"user":    tokens.User,
 	})
 }
 
@@ -135,6 +132,13 @@ func (ac *AuthController) Login(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 			return
 		}
+	}
+	
+	// Debug logging
+	if simpleReq.Email != "" {
+		log.Printf("Login attempt - Email: %s, Password length: %d", simpleReq.Email, len(simpleReq.Password))
+	} else {
+		log.Printf("Login attempt - Identifier: %s, Password length: %d", enhancedReq.EmailOrUsername, len(enhancedReq.Password))
 	}
 	
 	// Determine the identifier and password
@@ -183,15 +187,11 @@ func (ac *AuthController) Login(c *gin.Context) {
 
 	ac.logAuthAttempt(identifier, true, "", c.ClientIP(), c.Request.UserAgent())
 	
-	// Convert role to uppercase for frontend compatibility
-	userWithUppercaseRole := tokens.User
-	userWithUppercaseRole.Role = convertRoleToUppercase(userWithUppercaseRole.Role)
-	
 	// Return response in format expected by frontend
 	c.JSON(http.StatusOK, gin.H{
-		"token":        tokens.AccessToken,
-		"refreshToken": tokens.RefreshToken,
-		"user":         userWithUppercaseRole,
+		"access_token":        tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+		"user":         tokens.User,
 		"message":      "Login successful",
 	})
 }
@@ -225,18 +225,10 @@ func (ac *AuthController) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Convert role to uppercase for frontend compatibility
-	userWithUppercaseRole := tokens.User
-	userWithUppercaseRole.Role = convertRoleToUppercase(userWithUppercaseRole.Role)
-
-	// Update tokens with uppercase role
-	updatedTokens := *tokens
-	updatedTokens.User = userWithUppercaseRole
-
 	c.JSON(http.StatusOK, gin.H{
-		"token":        updatedTokens.AccessToken,
-		"refreshToken": updatedTokens.RefreshToken,
-		"user":         userWithUppercaseRole,
+		"access_token":        tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
+		"user":         tokens.User,
 		"message":      "Token refreshed successfully",
 	})
 }
@@ -250,11 +242,56 @@ func (ac *AuthController) Profile(c *gin.Context) {
 		return
 	}
 
-	// Convert role to uppercase for frontend compatibility
-	user.Role = convertRoleToUppercase(user.Role)
-
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Profile retrieved successfully",
 		"data":    user,
+	})
+}
+
+// ValidateToken validates if the current token is valid and active
+func (ac *AuthController) ValidateToken(c *gin.Context) {
+	// If we reach this point, it means the JWT middleware has already validated the token
+	// and set the user context, so the token is valid
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid token - user ID not found",
+			"code":  "INVALID_TOKEN",
+			"valid": false,
+		})
+		return
+	}
+	
+	// Double-check that the user still exists and is active
+	var user models.User
+	if err := ac.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not found",
+			"code":  "USER_NOT_FOUND",
+			"valid": false,
+		})
+		return
+	}
+	
+	// Check if user is still active
+	if !user.IsActive {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User account is disabled",
+			"code":  "ACCOUNT_DISABLED",
+			"valid": false,
+		})
+		return
+	}
+	
+	// Token is valid
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Token is valid",
+		"valid":   true,
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+			"role":     user.Role,
+		},
 	})
 }

@@ -1,4 +1,6 @@
 import axios from 'axios';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -18,9 +20,9 @@ api.interceptors.request.use(
         const token = window.localStorage.getItem('token');
         if (token) {
           (config.headers as any).Authorization = `Bearer ${token}`;
-          // Debug: log token usage for payment requests only
-          if (config.url?.includes('payments')) {
-            console.log('Request interceptor - Using token (length):', token.length);
+          // Debug: log token usage for specific requests
+          if (config.url?.includes('payments') || config.url?.includes('products') || config.url?.includes('notifications')) {
+            console.log('Request interceptor - Using token for', config.url, '(length):', token.length);
           }
         }
       }
@@ -40,6 +42,7 @@ let refreshPromise: Promise<any> | null = null;
 let refreshAttempts = 0;
 const MAX_REFRESH_ATTEMPTS = 3;
 const failedQueue: Array<{resolve: (token: string) => void, reject: (error: any) => void}> = [];
+let authExpiredModalShown = false;
 
 function processQueue(error: any, token: string | null = null) {
   failedQueue.forEach(({ resolve, reject }) => {
@@ -63,31 +66,44 @@ api.interceptors.response.use(
     const originalRequest = error.config || {};
     const status = error.response?.status;
 
-    // Log only for 401 errors that might need refresh
+    // Log for 401 and 403 errors 
     if (status === 401) {
       console.log('API Interceptor - 401 Error on:', originalRequest.url);
+    } else if (status === 403) {
+      console.log('API Interceptor - 403 Forbidden on:', originalRequest.url);
+      // Log current user info from localStorage for debugging
+      const userData = window.localStorage.getItem('user');
+      try {
+        const user = userData ? JSON.parse(userData) : null;
+        console.log('Current user role:', user?.role);
+      } catch (e) {
+        console.log('Could not parse user data');
+      }
     }
 
     if (status === 401 && typeof window !== 'undefined' && !originalRequest._retry) {
       originalRequest._retry = true;
       
-      // Circuit breaker: prevent infinite refresh loops
-      if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
-        console.error('API Interceptor - Max refresh attempts reached, forcing logout');
-        
-        // Clear auth data
-        window.localStorage.removeItem('token');
-        window.localStorage.removeItem('refreshToken');
-        window.localStorage.removeItem('user');
-        
-        // Reset counter
-        refreshAttempts = 0;
-        
-        const authError = new Error('Session expired. Please login again.');
-        (authError as any).isAuthError = true;
-        (authError as any).code = 'AUTH_SESSION_EXPIRED';
-        return Promise.reject(authError);
-      }
+		// Circuit breaker: prevent infinite refresh loops
+		if (refreshAttempts >= MAX_REFRESH_ATTEMPTS) {
+			console.error('API Interceptor - Max refresh attempts reached, forcing logout');
+			
+			// Clear auth data
+			window.localStorage.removeItem('token');
+			window.localStorage.removeItem('refreshToken');
+			window.localStorage.removeItem('user');
+			
+			// Reset counter
+			refreshAttempts = 0;
+			
+			// Show auth expired modal
+			showAuthExpiredModal();
+			
+			const authError = new Error('Session expired. Please login again.');
+			(authError as any).isAuthError = true;
+			(authError as any).code = 'AUTH_SESSION_EXPIRED';
+			return Promise.reject(authError);
+		}
       
       refreshAttempts++;
       console.log(`API Interceptor - Attempting token refresh for 401 (attempt ${refreshAttempts}/${MAX_REFRESH_ATTEMPTS})`);
@@ -96,19 +112,22 @@ api.interceptors.response.use(
         const storedRefresh = window.localStorage.getItem('refreshToken');
         const storedToken = window.localStorage.getItem('token');
 
-        if (!storedRefresh) {
-          // No refresh token, clear auth and return specific error
-          console.warn('API Interceptor - No refresh token available');
-          window.localStorage.removeItem('token');
-          window.localStorage.removeItem('refreshToken');
-          window.localStorage.removeItem('user');
-          
-          // Return a more specific error for the frontend
-          const authError = new Error('Session expired. Please login again.');
-          (authError as any).isAuthError = true;
-          (authError as any).code = 'AUTH_SESSION_EXPIRED';
-          return Promise.reject(authError);
-        }
+			if (!storedRefresh) {
+				// No refresh token, clear auth and return specific error
+				console.warn('API Interceptor - No refresh token available');
+				window.localStorage.removeItem('token');
+				window.localStorage.removeItem('refreshToken');
+				window.localStorage.removeItem('user');
+				
+				// Show auth expired modal
+				showAuthExpiredModal();
+				
+				// Return a more specific error for the frontend
+				const authError = new Error('Session expired. Please login again.');
+				(authError as any).isAuthError = true;
+				(authError as any).code = 'AUTH_SESSION_EXPIRED';
+				return Promise.reject(authError);
+			}
 
         if (!isRefreshing) {
           isRefreshing = true;
@@ -164,14 +183,17 @@ api.interceptors.response.use(
               processQueue(null, newAccessToken);
               return newAccessToken as string;
             } catch (refreshError) {
-              // If refresh fails, clear auth data
-              console.error('Token refresh failed:', refreshError);
-              window.localStorage.removeItem('token');
-              window.localStorage.removeItem('refreshToken');
-              window.localStorage.removeItem('user');
-              
-              processQueue(refreshError, null);
-              throw refreshError;
+					// If refresh fails, clear auth data
+					console.error('Token refresh failed:', refreshError);
+					window.localStorage.removeItem('token');
+					window.localStorage.removeItem('refreshToken');
+					window.localStorage.removeItem('user');
+					
+					// Show auth expired modal
+					showAuthExpiredModal();
+					
+					processQueue(refreshError, null);
+					throw refreshError;
             } finally {
               isRefreshing = false;
               refreshPromise = null;
@@ -198,20 +220,23 @@ api.interceptors.response.use(
         
         return api(retryConfig);
       } catch (refreshError) {
-        // If refresh fails, handle gracefully
-        console.error('API Interceptor - Token refresh completely failed:', refreshError);
-        
-        // Clear all auth data
-        window.localStorage.removeItem('token');
-        window.localStorage.removeItem('refreshToken');
-        window.localStorage.removeItem('user');
-        
-        // Return a more specific error for the frontend
-        const authError = new Error('Session expired. Please login again.');
-        (authError as any).isAuthError = true;
-        (authError as any).code = 'AUTH_SESSION_EXPIRED';
-        (authError as any).originalError = refreshError;
-        return Promise.reject(authError);
+			// If refresh fails, handle gracefully
+			console.error('API Interceptor - Token refresh completely failed:', refreshError);
+			
+			// Clear all auth data
+			window.localStorage.removeItem('token');
+			window.localStorage.removeItem('refreshToken');
+			window.localStorage.removeItem('user');
+			
+			// Show auth expired modal
+			showAuthExpiredModal();
+			
+			// Return a more specific error for the frontend
+			const authError = new Error('Session expired. Please login again.');
+			(authError as any).isAuthError = true;
+			(authError as any).code = 'AUTH_SESSION_EXPIRED';
+			(authError as any).originalError = refreshError;
+			return Promise.reject(authError);
       }
     }
 
@@ -219,5 +244,52 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Function to show auth expired modal
+function showAuthExpiredModal() {
+	if (authExpiredModalShown) {
+		return; // Prevent showing multiple modals
+	}
+	
+	authExpiredModalShown = true;
+	
+	// Dynamically import and show the modal
+	import('../components/auth/AuthExpiredModal').then(({ default: AuthExpiredModal }) => {
+		// Create a container for the modal
+		const modalRoot = document.createElement('div');
+		modalRoot.id = 'auth-expired-modal-root';
+		document.body.appendChild(modalRoot);
+		
+		// Render the modal
+		const root = ReactDOM.createRoot(modalRoot);
+		
+		// Import ChakraProvider for the modal
+		import('@chakra-ui/react').then(({ ChakraProvider }) => {
+			root.render(
+				React.createElement(ChakraProvider, null,
+					React.createElement(AuthExpiredModal, {
+						isOpen: true,
+						onLoginRedirect: () => {
+							authExpiredModalShown = false;
+							// Clean up modal
+							root.unmount();
+							document.body.removeChild(modalRoot);
+							// Redirect to login
+							window.location.href = '/login';
+						}
+					})
+				)
+			);
+		});
+	}).catch(error => {
+		console.error('Failed to load AuthExpiredModal:', error);
+		authExpiredModalShown = false;
+		// Fallback to direct redirect
+		window.location.href = '/login';
+	});
+}
+
+// Export function for manual use if needed
+export { showAuthExpiredModal };
 
 export default api;

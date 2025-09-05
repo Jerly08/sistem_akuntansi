@@ -31,8 +31,9 @@ import {
   StatNumber,
   StatHelpText,
 } from '@chakra-ui/react';
-import { CashBank, DepositRequest, WithdrawalRequest } from '@/services/cashbankService';
+import { CashBank, DepositRequest, WithdrawalRequest, ManualJournalEntry } from '@/services/cashbankService';
 import cashbankService from '@/services/cashbankService';
+import JournalEntryForm from './JournalEntryForm';
 
 interface DepositWithdrawalFormProps {
   isOpen: boolean;
@@ -58,6 +59,9 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [journalEntries, setJournalEntries] = useState<ManualJournalEntry[]>([]);
+  const [manualJournalMode, setManualJournalMode] = useState(false);
+  const [journalErrors, setJournalErrors] = useState<{ [key: number]: string }>({});
   const toast = useToast();
 
   const handleInputChange = (field: string, value: any) => {
@@ -65,6 +69,65 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
       ...prev,
       [field]: value
     }));
+    setError(null);
+  };
+
+  const validateJournalEntries = (): boolean => {
+    if (!manualJournalMode) return true;
+    
+    const errors: { [key: number]: string } = {};
+    let hasErrors = false;
+
+    journalEntries.forEach((entry, index) => {
+      const entryErrors: string[] = [];
+      
+      if (!entry.account_id || entry.account_id === 0) {
+        entryErrors.push('Account is required');
+      }
+      
+      if (!entry.description || entry.description.trim() === '') {
+        entryErrors.push('Description is required');
+      }
+      
+      if (entry.debit_amount === 0 && entry.credit_amount === 0) {
+        entryErrors.push('Either debit or credit amount must be greater than zero');
+      }
+      
+      if (entry.debit_amount > 0 && entry.credit_amount > 0) {
+        entryErrors.push('Entry cannot have both debit and credit amounts');
+      }
+      
+      if (entryErrors.length > 0) {
+        errors[index] = entryErrors.join(', ');
+        hasErrors = true;
+      }
+    });
+
+    // Check if debits equal credits
+    const totalDebit = journalEntries.reduce((sum, entry) => sum + entry.debit_amount, 0);
+    const totalCredit = journalEntries.reduce((sum, entry) => sum + entry.credit_amount, 0);
+    
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      setError('Journal entries are not balanced. Total debits must equal total credits.');
+      hasErrors = true;
+    }
+
+    setJournalErrors(errors);
+    return !hasErrors;
+  };
+
+  const handleJournalEntriesChange = (entries: ManualJournalEntry[]) => {
+    setJournalEntries(entries);
+    setJournalErrors({});
+    setError(null);
+  };
+
+  const handleJournalModeToggle = (enabled: boolean) => {
+    setManualJournalMode(enabled);
+    if (!enabled) {
+      setJournalEntries([]);
+      setJournalErrors({});
+    }
     setError(null);
   };
 
@@ -86,20 +149,35 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
         throw new Error(`Insufficient balance. Available: ${account.currency} ${account.balance.toLocaleString('id-ID')}`);
       }
 
+      // Validate journal entries if manual mode is enabled
+      if (manualJournalMode) {
+        if (!validateJournalEntries()) {
+          return; // Validation failed, errors are already set
+        }
+        
+        if (journalEntries.length === 0) {
+          setError('At least one journal entry is required in manual mode');
+          return;
+        }
+      }
+
       // Prepare request data
-      const requestData = {
+      const requestData: DepositRequest | WithdrawalRequest = {
         account_id: account.id,
         date: formData.date,
         amount: formData.amount,
         reference: formData.reference,
-        notes: formData.notes
+        notes: formData.notes,
+        ...(manualJournalMode && journalEntries.length > 0 ? { journal_entries: journalEntries } : {})
       };
 
       if (mode === 'deposit') {
         await cashbankService.processDeposit(requestData as DepositRequest);
         toast({
           title: 'Deposit Successful',
-          description: `${account.currency} ${formData.amount.toLocaleString('id-ID')} has been deposited to ${account.name}`,
+          description: `${account.currency} ${formData.amount.toLocaleString('id-ID')} has been deposited to ${account.name}${
+            manualJournalMode ? ' with manual journal entries' : ''
+          }`,
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -108,7 +186,9 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
         await cashbankService.processWithdrawal(requestData as WithdrawalRequest);
         toast({
           title: 'Withdrawal Successful',
-          description: `${account.currency} ${formData.amount.toLocaleString('id-ID')} has been withdrawn from ${account.name}`,
+          description: `${account.currency} ${formData.amount.toLocaleString('id-ID')} has been withdrawn from ${account.name}${
+            manualJournalMode ? ' with manual journal entries' : ''
+          }`,
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -134,6 +214,9 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
 
   const handleClose = () => {
     setError(null);
+    setJournalErrors({});
+    setJournalEntries([]);
+    setManualJournalMode(false);
     setFormData({
       date: new Date().toISOString().split('T')[0],
       amount: 0,
@@ -150,7 +233,7 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
     : account.balance - formData.amount;
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="lg">
+    <Modal isOpen={isOpen} onClose={handleClose} size={manualJournalMode ? "6xl" : "lg"} scrollBehavior="inside">
       <ModalOverlay />
       <ModalContent>
         <ModalHeader>
@@ -266,6 +349,18 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
                 </FormControl>
               </VStack>
             </Box>
+
+            {/* Journal Entry Form */}
+            <JournalEntryForm
+              journalEntries={journalEntries}
+              onChange={handleJournalEntriesChange}
+              isEnabled={manualJournalMode}
+              onToggle={handleJournalModeToggle}
+              transactionAmount={formData.amount}
+              mode={mode}
+              cashBankAccountId={account.account_id}
+              errors={journalErrors}
+            />
 
             {/* Balance Preview */}
             {formData.amount > 0 && (

@@ -30,11 +30,37 @@ const AuthExpiredModal: React.FC<AuthExpiredModalProps> = ({
 }) => {
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const [isRedirecting, setIsRedirecting] = React.useState(false);
   
   // Debug effect to track modal state
   React.useEffect(() => {
     console.log('AuthExpiredModal - isOpen changed:', isOpen);
   }, [isOpen]);
+  
+  // Auto-cleanup localStorage when modal opens
+  React.useEffect(() => {
+    if (isOpen && typeof window !== 'undefined') {
+      // Clear any potentially corrupted auth data
+      window.localStorage.removeItem('token');
+      window.localStorage.removeItem('refreshToken');
+      window.localStorage.removeItem('user');
+      // Set logout timestamp to prevent auto-login
+      window.localStorage.setItem('lastLogoutTime', Date.now().toString());
+      console.log('AuthExpiredModal - Cleared localStorage and set logout timestamp');
+    }
+  }, [isOpen]);
+  
+  const handleLoginRedirect = () => {
+    if (isRedirecting) return; // Prevent double-clicks
+    
+    setIsRedirecting(true);
+    console.log('AuthExpiredModal - Redirecting to login');
+    
+    // Small delay to show loading state
+    setTimeout(() => {
+      onLoginRedirect();
+    }, 500);
+  };
 
   return (
     <Modal
@@ -96,13 +122,16 @@ const AuthExpiredModal: React.FC<AuthExpiredModalProps> = ({
         <ModalFooter justifyContent="center" pb={6}>
           <Button
             colorScheme="orange"
-            leftIcon={<FiLogIn />}
-            onClick={onLoginRedirect}
+            leftIcon={isRedirecting ? undefined : <FiLogIn />}
+            onClick={handleLoginRedirect}
             size="lg"
             minW="200px"
             borderRadius="lg"
+            isLoading={isRedirecting}
+            loadingText="Redirecting..."
+            disabled={isRedirecting}
           >
-            Login Again
+            {isRedirecting ? 'Redirecting...' : 'Login Again'}
           </Button>
         </ModalFooter>
       </ModalContent>

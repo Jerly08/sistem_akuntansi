@@ -48,6 +48,7 @@ import {
   TabList,
   TabPanels,
   TabPanel,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { FiCreditCard, FiDollarSign, FiCalendar, FiUser, FiFileText } from 'react-icons/fi';
@@ -60,6 +61,8 @@ import { searchableSelectService } from '@/services/searchableSelectService';
 import cashbankService, { CashBank } from '@/services/cashbankService';
 import AuthExpiredModal from '@/components/auth/AuthExpiredModal';
 import CurrencyInput from '@/components/common/CurrencyInput';
+import { useAuth } from '@/contexts/AuthContext';
+import { normalizeRole } from '@/utils/roles';
 
 interface AdvancedPaymentFormProps {
   isOpen: boolean;
@@ -106,6 +109,13 @@ const PaymentAllocationTable: React.FC<{
   type: 'receivable' | 'payable';
 }> = ({ items, allocations, onAllocationsChange, maxAmount, type }) => {
   const [tempAllocations, setTempAllocations] = useState<Record<number, number>>({});
+
+  // Color mode values
+  const textColor = useColorModeValue('gray.600', 'gray.300');
+  const mutedTextColor = useColorModeValue('gray.500', 'gray.400');
+  const scrollbarTrackColor = useColorModeValue('#f1f1f1', '#2d3748');
+  const scrollbarThumbColor = useColorModeValue('#c1c1c1', '#4a5568');
+  const scrollbarThumbHoverColor = useColorModeValue('#a8a8a8', '#718096');
 
   useEffect(() => {
     // Initialize temp allocations from props
@@ -198,7 +208,7 @@ const PaymentAllocationTable: React.FC<{
       <HStack justify="space-between" mb={4}>
         <Text fontWeight="bold">Payment Allocation</Text>
         <HStack>
-          <Text fontSize="sm" color="gray.600">
+          <Text fontSize="sm" color={textColor}>
             Allocated: {paymentService.formatCurrency(getTotalAllocated())} / {paymentService.formatCurrency(maxAmount)}
           </Text>
           <Button size="xs" onClick={autoAllocatePayment} variant="outline">
@@ -219,14 +229,14 @@ const PaymentAllocationTable: React.FC<{
             width: '6px',
           },
           '&::-webkit-scrollbar-track': {
-            background: '#f1f1f1',
+            background: scrollbarTrackColor,
             borderRadius: '3px',
           },
           '&::-webkit-scrollbar-thumb': {
-            background: '#c1c1c1',
+            background: scrollbarThumbColor,
             borderRadius: '3px',
             '&:hover': {
-              background: '#a8a8a8',
+              background: scrollbarThumbHoverColor,
             },
           },
         }}
@@ -248,7 +258,7 @@ const PaymentAllocationTable: React.FC<{
                 <Td>
                   <Text fontWeight="medium">{item.code}</Text>
                   {item.due_date && (
-                    <Text fontSize="xs" color="gray.500">
+                    <Text fontSize="xs" color={mutedTextColor}>
                       Due: {paymentService.formatDate(item.due_date)}
                     </Text>
                   )}
@@ -281,7 +291,7 @@ const PaymentAllocationTable: React.FC<{
       </TableContainer>
 
       {items.length === 0 && (
-        <Text textAlign="center" py={4} color="gray.500">
+        <Text textAlign="center" py={4} color={mutedTextColor}>
           No outstanding {type === 'receivable' ? 'invoices' : 'bills'} found for this contact
         </Text>
       )}
@@ -304,6 +314,17 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
   const [loadingItems, setLoadingItems] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [showAuthExpired, setShowAuthExpired] = useState(false);
+  const { user } = useAuth();
+  
+  // Color mode values
+  const modalContentBg = useColorModeValue('white', 'gray.800');
+  const modalHeaderBg = useColorModeValue('blue.500', 'blue.600');
+  const modalFooterBg = useColorModeValue('gray.50', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const textColor = useColorModeValue('gray.600', 'gray.300');
+  const scrollbarTrackColor = useColorModeValue('#f1f1f1', '#2d3748');
+  const scrollbarThumbColor = useColorModeValue('#c1c1c1', '#4a5568');
+  const scrollbarThumbHoverColor = useColorModeValue('#a8a8a8', '#718096');
   
   // Debug effect to track modal state changes
   useEffect(() => {
@@ -311,6 +332,28 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
   }, [showAuthExpired]);
   
   const toast = useToast();
+  
+  // Check if user has permission to create payments (ADMIN cannot create)
+  const userRole = normalizeRole(user?.role);
+  const canCreatePayments = userRole === 'finance' || userRole === 'director';
+  
+  // If modal is opened but user doesn't have permission, close it and show error
+  useEffect(() => {
+    if (isOpen && user && !canCreatePayments) {
+      toast({
+        title: 'Access Denied',
+        description: 'You do not have permission to create payments. Contact your administrator for access.',
+        status: 'error',
+        duration: 5000,
+      });
+      onClose();
+    }
+  }, [isOpen, user, canCreatePayments, toast, onClose]);
+  
+  // Don't render the form if user doesn't have permission
+  if (!canCreatePayments && user) {
+    return null;
+  }
 
   const {
     control,
@@ -585,9 +628,10 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
         maxH="95vh" 
         maxW={{ base: '95vw', md: '90vw', lg: '80vw' }}
         mx={4}
+        bg={modalContentBg}
       >
         <ModalHeader 
-          bg="blue.500" 
+          bg={modalHeaderBg} 
           color="white" 
           borderTopRadius="md"
           py={4}
@@ -605,14 +649,14 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
                 width: '8px',
               },
               '&::-webkit-scrollbar-track': {
-                background: '#f1f1f1',
+                background: scrollbarTrackColor,
                 borderRadius: '4px',
               },
               '&::-webkit-scrollbar-thumb': {
-                background: '#c1c1c1',
+                background: scrollbarThumbColor,
                 borderRadius: '4px',
                 '&:hover': {
-                  background: '#a8a8a8',
+                  background: scrollbarThumbHoverColor,
                 },
               },
               // Enhanced mouse wheel scroll
@@ -791,19 +835,19 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
                           <Text fontWeight="bold" mb={3}>Payment Summary</Text>
                           <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
                             <Box>
-                              <Text fontSize="sm" color="gray.600">Payment Amount</Text>
+                              <Text fontSize="sm" color={textColor}>Payment Amount</Text>
                               <Text fontSize="lg" fontWeight="bold">
                                 {paymentService.formatCurrency(watchedAmount || 0)}
                               </Text>
                             </Box>
                             <Box>
-                              <Text fontSize="sm" color="gray.600">Allocated</Text>
+                              <Text fontSize="sm" color={textColor}>Allocated</Text>
                               <Text fontSize="lg" fontWeight="bold" color="blue.600">
                                 {paymentService.formatCurrency(getTotalAllocated())}
                               </Text>
                             </Box>
                             <Box>
-                              <Text fontSize="sm" color="gray.600">Remaining</Text>
+                              <Text fontSize="sm" color={textColor}>Remaining</Text>
                               <Text
                                 fontSize="lg"
                                 fontWeight="bold"
@@ -853,25 +897,25 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
           </ModalBody>
 
           <ModalFooter 
-            bg="gray.50" 
+            bg={modalFooterBg} 
             borderBottomRadius="md"
             py={4}
             px={6}
             borderTop="1px"
-            borderColor="gray.200"
+            borderColor={borderColor}
           >
             <HStack spacing={3} width="full" justify="flex-end">
               {/* Payment Summary Info in Footer */}
               {watchedAmount > 0 && (
                 <Box flex="1" display={{ base: 'none', md: 'block' }}>
                   <HStack spacing={4}>
-                    <Text fontSize="sm" color="gray.600">
+                    <Text fontSize="sm" color={textColor}>
                       Amount: <Text as="span" fontWeight="bold" color="blue.600">
                         {paymentService.formatCurrency(watchedAmount || 0)}
                       </Text>
                     </Text>
                     {getTotalAllocated() > 0 && (
-                      <Text fontSize="sm" color="gray.600">
+                      <Text fontSize="sm" color={textColor}>
                         Remaining: <Text as="span" fontWeight="bold" color={getRemainingAmount() === 0 ? "green.600" : "orange.600"}>
                           {paymentService.formatCurrency(getRemainingAmount())}
                         </Text>

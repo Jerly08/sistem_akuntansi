@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"time"
 	"app-sistem-akuntansi/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -49,6 +50,8 @@ func SeedData(db *gorm.DB) {
 
 	// Seed default approval workflows for PURCHASE module
 	seedApprovalWorkflows(db)
+
+	// Sample sales and purchases seeding removed to prevent errors
 
 	log.Println("Database seeding completed successfully")
 }
@@ -114,116 +117,6 @@ func seedUsers(db *gorm.DB) {
 	}
 }
 
-func seedAccounts(db *gorm.DB) {
-	// Check if accounts already exist
-	var count int64
-	db.Model(&models.Account{}).Count(&count)
-	if count > 0 {
-		return
-	}
-
-	accounts := []models.Account{
-		// ASSETS
-		{Code: "1000", Name: "ASET", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, IsHeader: true, Level: 1},
-		{Code: "1100", Name: "ASET LANCAR", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, IsHeader: true, Level: 2},
-		{Code: "1101", Name: "Kas", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3},
-		{Code: "1102", Name: "Bank BCA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3},
-		{Code: "1103", Name: "Bank Mandiri", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3},
-		{Code: "1201", Name: "Piutang Usaha", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3},
-		{Code: "1301", Name: "Persediaan Barang Dagangan", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3},
-		
-		// FIXED ASSETS
-		{Code: "1500", Name: "ASET TETAP", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, IsHeader: true, Level: 2},
-		{Code: "1501", Name: "Peralatan Kantor", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3},
-		{Code: "1502", Name: "Kendaraan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3},
-		{Code: "1503", Name: "Bangunan", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3},
-
-		// LIABILITIES
-		{Code: "2000", Name: "KEWAJIBAN", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, IsHeader: true, Level: 1},
-		{Code: "2100", Name: "KEWAJIBAN LANCAR", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, IsHeader: true, Level: 2},
-		{Code: "2101", Name: "Utang Usaha", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3},
-		{Code: "2102", Name: "Utang Pajak", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3},
-
-		// EQUITY
-		{Code: "3000", Name: "EKUITAS", Type: models.AccountTypeEquity, Category: models.CategoryEquity, IsHeader: true, Level: 1},
-		{Code: "3101", Name: "Modal Pemilik", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2},
-		{Code: "3201", Name: "Laba Ditahan", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2},
-
-		// REVENUE
-		{Code: "4000", Name: "PENDAPATAN", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, IsHeader: true, Level: 1},
-		{Code: "4101", Name: "Pendapatan Penjualan", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2},
-		{Code: "4201", Name: "Pendapatan Lain-lain", Type: models.AccountTypeRevenue, Category: models.CategoryOtherRevenue, Level: 2},
-
-		// EXPENSES
-		{Code: "5000", Name: "BEBAN", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, IsHeader: true, Level: 1},
-		{Code: "5101", Name: "Harga Pokok Penjualan", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2},
-		{Code: "5201", Name: "Beban Gaji", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2},
-		{Code: "5202", Name: "Beban Listrik", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2},
-		{Code: "5203", Name: "Beban Telepon", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2},
-		{Code: "5204", Name: "Beban Transportasi", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2},
-	}
-
-	for _, account := range accounts {
-		db.Create(&account)
-	}
-}
-
-func seedContacts(db *gorm.DB) {
-	// Check if contacts already exist
-	var count int64
-	db.Model(&models.Contact{}).Count(&count)
-	if count > 0 {
-		return
-	}
-
-	contacts := []models.Contact{
-		// Customers
-		{
-			Code:         "CUST001",
-			Name:         "PT Maju Sejahtera",
-			Type:         models.ContactTypeCustomer,
-			Category:     models.CategoryWholesale,
-			Email:        "contact@majusejahtera.com",
-			Phone:        "021-1234567",
-			CreditLimit:  50000000,
-			PaymentTerms: 30,
-		},
-		{
-			Code:         "CUST002",
-			Name:         "CV Berkah Jaya",
-			Type:         models.ContactTypeCustomer,
-			Category:     models.CategoryRetail,
-			Email:        "info@berkahjaya.com",
-			Phone:        "021-2345678",
-			CreditLimit:  25000000,
-			PaymentTerms: 15,
-		},
-		
-		// Vendors
-		{
-			Code:         "VEND001",
-			Name:         "PT Supplier Utama",
-			Type:         models.ContactTypeVendor,
-			Category:     models.CategoryDistributor,
-			Email:        "sales@supplierutama.com",
-			Phone:        "021-3456789",
-			PaymentTerms: 30,
-		},
-		{
-			Code:         "VEND002",
-			Name:         "UD Barang Lengkap",
-			Type:         models.ContactTypeVendor,
-			Category:     models.CategoryWholesale,
-			Email:        "order@baranglengkap.com",
-			Phone:        "021-4567890",
-			PaymentTerms: 21,
-		},
-	}
-
-	for _, contact := range contacts {
-		db.Create(&contact)
-	}
-}
 
 func seedProductCategories(db *gorm.DB) {
 	// Check if product categories already exist
@@ -246,10 +139,11 @@ func seedProductCategories(db *gorm.DB) {
 }
 
 func seedProducts(db *gorm.DB) {
-	// Check if products already exist
-	var count int64
-	db.Model(&models.Product{}).Count(&count)
-	if count > 0 {
+	// Check if specific seed products already exist (including soft-deleted)
+	var seedProductExists int64
+	db.Unscoped().Model(&models.Product{}).Where("code IN ?", []string{"PRD001", "PRD002", "PRD003"}).Count(&seedProductExists)
+	if seedProductExists > 0 {
+		log.Printf("Seed products already exist (%d records), skipping seed", seedProductExists)
 		return
 	}
 
@@ -307,9 +201,25 @@ func seedProducts(db *gorm.DB) {
 		},
 	}
 
+	// Create products one by one, checking for existing records first
+	successCount := 0
 	for _, product := range products {
-		db.Create(&product)
+		// Check if product already exists by code
+		var existingProduct models.Product
+		if err := db.Where("code = ?", product.Code).First(&existingProduct).Error; err == nil {
+			log.Printf("Product %s already exists, skipping", product.Code)
+			continue
+		}
+		
+		// Product doesn't exist, create it
+		if err := db.Create(&product).Error; err != nil {
+			log.Printf("Error seeding product %s: %v", product.Code, err)
+		} else {
+			successCount++
+			log.Printf("Successfully created product %s", product.Code)
+		}
 	}
+	log.Printf("Successfully seeded %d out of %d products", successCount, len(products))
 }
 
 func seedExpenseCategories(db *gorm.DB) {
@@ -345,21 +255,21 @@ func seedCashBankAccounts(db *gorm.DB) {
 			Code:     "CASH001",
 			Name:     "Kas Besar",
 			Type:     models.CashBankTypeCash,
-			Balance:  5000000,
+			Balance:  0,
 			IsActive: true,
 		},
 		{
 			Code:     "BANK001",
 			Name:     "Bank BCA - Operasional",
 			Type:     models.CashBankTypeBank,
-			Balance:  50000000,
+			Balance:  0,
 			IsActive: true,
 		},
 		{
 			Code:     "BANK002",
 			Name:     "Bank Mandiri - Payroll",
 			Type:     models.CashBankTypeBank,
-			Balance:  25000000,
+			Balance:  0,
 			IsActive: true,
 		},
 	}
@@ -704,4 +614,216 @@ func seedApprovalWorkflows(db *gorm.DB) {
 	stepC2 := models.ApprovalStep{WorkflowID: wfC.ID, StepOrder: 2, StepName: "Director Approval", ApproverRole: "director"}
 	db.Create(&stepC1)
 	db.Create(&stepC2)
+}
+
+// seedSampleSales creates sample sales data for dashboard analytics
+func seedSampleSales(db *gorm.DB) {
+	// Check if specific sample sales already exist
+	var sampleSalesExists int64
+	db.Model(&models.Sale{}).Where("code IN ?", []string{"SAL-2024-001", "SAL-2024-002", "SAL-2024-003"}).Count(&sampleSalesExists)
+	if sampleSalesExists > 0 {
+		log.Printf("Sample sales already exist (%d records), skipping seed", sampleSalesExists)
+		return
+	}
+
+	// Get first customer and product for relations
+	var customer models.Contact
+	db.Where("type = ?", models.ContactTypeCustomer).First(&customer)
+
+	var product models.Product
+	db.Unscoped().First(&product)
+
+	// Get admin user
+	var user models.User
+	db.Where("role = ?", "admin").First(&user)
+
+	if customer.ID == 0 || product.ID == 0 || user.ID == 0 {
+		log.Println("Required data not found for seeding sales")
+		return
+	}
+
+	// Create sample sales with varied dates for analytics
+	sales := []models.Sale{
+		{
+			Code:            "SAL-2024-001",
+			Type:            models.SaleTypeInvoice,
+			CustomerID:      customer.ID,
+			UserID:          user.ID,
+			Date:           time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+			DueDate:        time.Date(2024, 2, 15, 0, 0, 0, 0, time.UTC),
+			InvoiceNumber:  "INV-2024-001",
+			Subtotal:       15000000,
+			DiscountPercent: 5,
+			DiscountAmount: 750000,
+			PPNPercent:     11,
+			TaxableAmount:  14250000,
+			PPN:            1567500,
+			TotalTax:       1567500,
+			TotalAmount:    15817500,
+			PaidAmount:     15817500,
+			OutstandingAmount: 0,
+			Status:         models.SaleStatusPaid,
+			Notes:          "Sample sales transaction",
+		},
+		{
+			Code:            "SAL-2024-002",
+			Type:            models.SaleTypeInvoice,
+			CustomerID:      customer.ID,
+			UserID:          user.ID,
+			Date:           time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC),
+			DueDate:        time.Date(2024, 3, 10, 0, 0, 0, 0, time.UTC),
+			InvoiceNumber:  "INV-2024-002",
+			Subtotal:       8500000,
+			DiscountPercent: 0,
+			DiscountAmount: 0,
+			PPNPercent:     11,
+			TaxableAmount:  8500000,
+			PPN:            935000,
+			TotalTax:       935000,
+			TotalAmount:    9435000,
+			PaidAmount:     0,
+			OutstandingAmount: 9435000,
+			Status:         models.SaleStatusInvoiced,
+			Notes:          "Pending payment",
+		},
+		{
+			Code:            "SAL-2024-003",
+			Type:            models.SaleTypeInvoice,
+			CustomerID:      customer.ID,
+			UserID:          user.ID,
+			Date:           time.Date(2024, 3, 5, 0, 0, 0, 0, time.UTC),
+			DueDate:        time.Date(2024, 4, 5, 0, 0, 0, 0, time.UTC),
+			InvoiceNumber:  "INV-2024-003",
+			Subtotal:       12000000,
+			DiscountPercent: 3,
+			DiscountAmount: 360000,
+			PPNPercent:     11,
+			TaxableAmount:  11640000,
+			PPN:            1280400,
+			TotalTax:       1280400,
+			TotalAmount:    12920400,
+			PaidAmount:     12920400,
+			OutstandingAmount: 0,
+			Status:         models.SaleStatusPaid,
+			Notes:          "Fully paid",
+		},
+	}
+
+	for _, sale := range sales {
+		db.Create(&sale)
+		
+		// Create sample sale items for each sale
+		saleItem := models.SaleItem{
+			SaleID:        sale.ID,
+			ProductID:     product.ID,
+			Quantity:      2,
+			UnitPrice:     product.SalePrice,
+			LineTotal:     2 * product.SalePrice,
+			Taxable:       true,
+			FinalAmount:   2 * product.SalePrice,
+		}
+		db.Create(&saleItem)
+	}
+}
+
+// seedSamplePurchases creates sample purchases data for dashboard analytics
+func seedSamplePurchases(db *gorm.DB) {
+	// Check if specific sample purchases already exist
+	var samplePurchasesExists int64
+	db.Model(&models.Purchase{}).Where("code IN ?", []string{"PUR-2024-001", "PUR-2024-002", "PUR-2024-003"}).Count(&samplePurchasesExists)
+	if samplePurchasesExists > 0 {
+		log.Printf("Sample purchases already exist (%d records), skipping seed", samplePurchasesExists)
+		return
+	}
+
+	// Get first vendor and product for relations
+	var vendor models.Contact
+	db.Where("type = ?", models.ContactTypeVendor).First(&vendor)
+
+	var product models.Product
+	db.Unscoped().First(&product)
+
+	// Get admin user
+	var user models.User
+	db.Where("role = ?", "admin").First(&user)
+
+	if vendor.ID == 0 || product.ID == 0 || user.ID == 0 {
+		log.Println("Required data not found for seeding purchases")
+		return
+	}
+
+	// Create sample purchases with varied dates for analytics
+	purchases := []models.Purchase{
+		{
+			Code:                   "PUR-2024-001",
+			VendorID:               vendor.ID,
+			UserID:                 user.ID,
+			Date:                   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+			DueDate:                time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC),
+			SubtotalBeforeDiscount: 10000000,
+			Discount:               2,
+			OrderDiscountAmount:    200000,
+			NetBeforeTax:           9800000,
+			PPNRate:                11,
+			PPNAmount:              1078000,
+			TotalTaxAdditions:      1078000,
+			TotalAmount:            10878000,
+			PaidAmount:             10878000,
+			OutstandingAmount:      0,
+			Status:                 models.PurchaseStatusCompleted,
+			Notes:                  "Sample purchase transaction",
+		},
+		{
+			Code:                   "PUR-2024-002",
+			VendorID:               vendor.ID,
+			UserID:                 user.ID,
+			Date:                   time.Date(2024, 2, 5, 0, 0, 0, 0, time.UTC),
+			DueDate:                time.Date(2024, 3, 5, 0, 0, 0, 0, time.UTC),
+			SubtotalBeforeDiscount: 6500000,
+			Discount:               0,
+			OrderDiscountAmount:    0,
+			NetBeforeTax:           6500000,
+			PPNRate:                11,
+			PPNAmount:              715000,
+			TotalTaxAdditions:      715000,
+			TotalAmount:            7215000,
+			PaidAmount:             0,
+			OutstandingAmount:      7215000,
+			Status:                 models.PurchaseStatusApproved,
+			Notes:                  "Pending payment",
+		},
+		{
+			Code:                   "PUR-2024-003",
+			VendorID:               vendor.ID,
+			UserID:                 user.ID,
+			Date:                   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+			DueDate:                time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
+			SubtotalBeforeDiscount: 8000000,
+			Discount:               5,
+			OrderDiscountAmount:    400000,
+			NetBeforeTax:           7600000,
+			PPNRate:                11,
+			PPNAmount:              836000,
+			TotalTaxAdditions:      836000,
+			TotalAmount:            8436000,
+			PaidAmount:             8436000,
+			OutstandingAmount:      0,
+			Status:                 models.PurchaseStatusCompleted,
+			Notes:                  "Fully paid",
+		},
+	}
+
+	for _, purchase := range purchases {
+		db.Create(&purchase)
+		
+		// Create sample purchase items for each purchase
+		purchaseItem := models.PurchaseItem{
+			PurchaseID:    purchase.ID,
+			ProductID:     product.ID,
+			Quantity:      3,
+			UnitPrice:     product.PurchasePrice,
+			TotalPrice:    3 * product.PurchasePrice,
+		}
+		db.Create(&purchaseItem)
+	}
 }

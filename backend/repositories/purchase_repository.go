@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"fmt"
 	"app-sistem-akuntansi/models"
 	"gorm.io/gorm"
 )
@@ -73,10 +74,14 @@ func (r *PurchaseRepository) FindWithFilter(filter models.PurchaseFilter) ([]mod
 		Preload("Vendor").
 		Preload("User").
 		Preload("PurchaseItems.Product").
-		// Load approval request with nested workflow and steps for role-based filtering on server side
+		// Load approval request with all nested data for role-based filtering
+		Preload("ApprovalRequest").
 		Preload("ApprovalRequest.Workflow").
+		Preload("ApprovalRequest.Requester").
+		Preload("ApprovalRequest.ApprovalSteps").
 		Preload("ApprovalRequest.ApprovalSteps.Step").
-		Preload("ApprovalRequest.ApprovalSteps.Approver")
+		Preload("ApprovalRequest.ApprovalSteps.Approver").
+		Preload("Approver")
 
 	// Apply filters
 	if filter.Status != "" {
@@ -241,11 +246,23 @@ func (r *PurchaseRepository) GetPurchasesSummary(startDate, endDate string) (*mo
 	// Get basic counts and totals
 	var totalCount int64
 	var totalAmount float64
+	var totalApprovedAmount float64
 
 	query.Count(&totalCount)
 	// Only include non-rejected purchases in total amount calculation
 	query.Where("status != ? AND approval_status != ?", models.PurchaseStatusCancelled, models.PurchaseApprovalRejected).
 		Select("COALESCE(SUM(total_amount), 0)").Scan(&totalAmount)
+	
+	// Calculate approved purchases total
+	query2 := r.db.Model(&models.Purchase{})
+	if startDate != "" {
+		query2 = query2.Where("date >= ?", startDate)
+	}
+	if endDate != "" {
+		query2 = query2.Where("date <= ?", endDate)
+	}
+	query2.Where("status IN (?) AND approval_status = ?", []string{models.PurchaseStatusApproved, models.PurchaseStatusCompleted}, models.PurchaseApprovalApproved).
+		Select("COALESCE(SUM(total_amount), 0)").Scan(&totalApprovedAmount)
 
 	// Get status counts
 	var statusCounts []struct {
@@ -269,6 +286,7 @@ func (r *PurchaseRepository) GetPurchasesSummary(startDate, endDate string) (*mo
 
 	summary.TotalPurchases = totalCount
 	summary.TotalAmount = totalAmount
+	summary.TotalApprovedAmount = totalApprovedAmount
 	summary.StatusCounts = make(map[string]int64)
 	summary.ApprovalStatusCounts = make(map[string]int64)
 
@@ -304,6 +322,44 @@ func (r *PurchaseRepository) CountByMonth(year, month int) (int64, error) {
 		Count(&count).Error
 
 	return count, err
+}
+
+// GetLastPurchaseNumberByMonth gets the last number used in purchase code for a specific month
+func (r *PurchaseRepository) GetLastPurchaseNumberByMonth(year, month int) (int, error) {
+	var purchase models.Purchase
+	var lastNumber int
+	
+	// Query for purchases with codes matching the pattern for this year/month
+	// Include deleted records since unique constraint applies to all records
+	pattern := fmt.Sprintf("PO/%04d/%02d/%%", year, month)
+	
+	err := r.db.Unscoped().Model(&models.Purchase{}).
+		Where("code LIKE ?", pattern).
+		Order("code DESC").
+		First(&purchase).Error
+	
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// No purchases found for this month, return 0
+			return 0, nil
+		}
+		return 0, err
+	}
+	
+	// Extract the number from the code
+	if purchase.Code != "" {
+		// Parse the last 4 digits of the code
+		_, err := fmt.Sscanf(purchase.Code, fmt.Sprintf("PO/%04d/%02d/%%04d", year, month), &lastNumber)
+		if err != nil {
+			// If parsing fails, try to get it from the last 4 characters
+			if len(purchase.Code) >= 4 {
+				lastPart := purchase.Code[len(purchase.Code)-4:]
+				fmt.Sscanf(lastPart, "%d", &lastNumber)
+			}
+		}
+	}
+	
+	return lastNumber, nil
 }
 
 func (r *PurchaseRepository) CountByStatus(status string) (int64, error) {
@@ -370,7 +426,8 @@ func (r *PurchaseRepository) UpdateMatchingStatus(purchaseID uint, status string
 // CodeExists checks if a purchase with the given code already exists
 func (r *PurchaseRepository) CodeExists(code string) (bool, error) {
 	var count int64
-	err := r.db.Model(&models.Purchase{}).Where("code = ?", code).Count(&count).Error
+	// Include deleted records since unique constraint applies to all records
+	err := r.db.Unscoped().Model(&models.Purchase{}).Where("code = ?", code).Count(&count).Error
 	if err != nil {
 		return false, err
 	}

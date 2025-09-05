@@ -102,9 +102,7 @@ func (cc *ContactController) SearchContacts(c *gin.Context) {
 		return
 	}
 	
-	// For now, get all contacts and filter in service layer
-	// In production, this should be handled in repository
-	contacts, err := cc.contactService.GetAllContacts()
+	contacts, err := cc.contactService.SearchContacts(query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -145,5 +143,52 @@ func (cc *ContactController) ExportContacts(c *gin.Context) {
 	c.Header("Content-Type", "application/json")
 	c.Header("Content-Disposition", "attachment; filename=contacts.json")
 	c.JSON(http.StatusOK, contacts)
+}
+
+// AddContactAddress adds a new address to a contact
+func (cc *ContactController) AddContactAddress(c *gin.Context) {
+	id := c.Param("id")
+	var address models.ContactAddress
+	if err := c.ShouldBindJSON(&address); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	newAddress, err := cc.contactService.AddContactAddress(id, address)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, newAddress)
+}
+
+// UpdateContactAddress updates an existing contact address
+func (cc *ContactController) UpdateContactAddress(c *gin.Context) {
+	contactID := c.Param("id")
+	addressID := c.Param("address_id")
+	var address models.ContactAddress
+	if err := c.ShouldBindJSON(&address); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	
+	updatedAddress, err := cc.contactService.UpdateContactAddress(contactID, addressID, address)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, updatedAddress)
+}
+
+// DeleteContactAddress deletes a contact address
+func (cc *ContactController) DeleteContactAddress(c *gin.Context) {
+	contactID := c.Param("id")
+	addressID := c.Param("address_id")
+	
+	if err := cc.contactService.DeleteContactAddress(contactID, addressID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusNoContent, nil)
 }
 

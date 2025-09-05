@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Layout from '@/components/layout/Layout';
+import UnifiedLayout from '@/components/layout/UnifiedLayout';
 import salesService, { Sale } from '@/services/salesService';
 import PaymentForm from '@/components/sales/PaymentForm';
 import {

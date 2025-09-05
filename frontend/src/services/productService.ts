@@ -102,9 +102,16 @@ class ProductService {
     category?: string;
     page?: number;
     limit?: number;
-  }) {
-    const response = await api.get('/products', { params });
-    return response.data;
+  }, token?: string) {
+    try {
+      // Always use axios api instance which handles auth automatically
+      const response = await api.get('/products', { params });
+      return response.data;
+    } catch (error: any) {
+      console.warn('ProductService: Failed to load products:', error.message);
+      // Return empty structure for graceful fallback
+      return { data: [] };
+    }
   }
 
   async getProduct(id: number) {

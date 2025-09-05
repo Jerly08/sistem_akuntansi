@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"strings"
 	"gorm.io/gorm"
 	"app-sistem-akuntansi/models"
 )
@@ -110,6 +111,41 @@ func SeedContacts(db *gorm.DB) {
 			Address:      "Jl. Cempaka Putih No. 55, Cempaka Putih, Jakarta Pusat 10570, DKI Jakarta, Indonesia",
 			Notes:        "Supervisor Inventory",
 		},
+		{
+			Code:         "CUST-0003",
+			Name:         "PT Sejahtera Mandiri",
+			Type:         models.ContactTypeCustomer,
+			Category:     models.CategoryDistributor,
+			Email:        "contact@sejahteramandiri.com",
+			Phone:        "+62-21-8881234",
+			Mobile:       "+62-816-2345678",
+			Website:      "www.sejahteramandiri.com",
+			TaxNumber:    "05.678.901.2-345.000",
+			CreditLimit:  100000000,
+			PaymentTerms: 60,
+			IsActive:     true,
+			PICName:      "Dewi Sartika",
+			ExternalID:   "CUST-003",
+			Address:      "Jl. MH Thamrin No. 88, Tanah Abang, Jakarta Pusat 10230, DKI Jakarta, Indonesia",
+			Notes:        "Distributor utama wilayah Jakarta",
+		},
+		{
+			Code:         "VEND-0003",
+			Name:         "UD Berkah Jaya",
+			Type:         models.ContactTypeVendor,
+			Category:     models.CategoryManufacturer,
+			Email:        "info@berkahjaya.com",
+			Phone:        "+62-21-2345678",
+			Mobile:       "+62-817-3456789",
+			TaxNumber:    "06.789.012.3-456.000",
+			CreditLimit:  0,
+			PaymentTerms: 21,
+			IsActive:     true,
+			PICName:      "Bambang Sutrisno",
+			ExternalID:   "VEND-003",
+			Address:      "Jl. Jend Sudirman No. 200, Karet Semanggi, Jakarta Selatan 12930, DKI Jakarta, Indonesia",
+			Notes:        "Manufaktur spare parts",
+		},
 	}
 
 	// Seed addresses for contacts
@@ -187,25 +223,46 @@ func SeedContacts(db *gorm.DB) {
 		},
 	}
 
-	// Check if contacts already exist
-	var existingCount int64
-	db.Model(&models.Contact{}).Count(&existingCount)
+	// Check if specific seed contacts already exist
+	var seedContactExists int64
+	db.Model(&models.Contact{}).Where("code IN ?", []string{"CUST-0001", "VEND-0001", "EMP-0001"}).Count(&seedContactExists)
 	
-	if existingCount == 0 {
-		// Create contacts
-		if err := db.Create(&contacts).Error; err != nil {
-			log.Printf("Error seeding contacts: %v", err)
-		} else {
-			log.Printf("Successfully seeded %d contacts", len(contacts))
+	if seedContactExists == 0 {
+	// Create contacts one by one, checking for existing records first
+	successCount := 0
+	for _, contact := range contacts {
+		// Check if contact already exists by code
+		var existingContact models.Contact
+		if err := db.Where("code = ?", contact.Code).First(&existingContact).Error; err == nil {
+			log.Printf("Contact %s already exists, skipping", contact.Code)
+			continue
 		}
+		
+		// Contact doesn't exist, create it
+		if err := db.Create(&contact).Error; err != nil {
+			log.Printf("Error seeding contact %s: %v", contact.Code, err)
+		} else {
+			successCount++
+			log.Printf("Successfully created contact %s", contact.Code)
+		}
+	}
+		log.Printf("Successfully seeded %d out of %d contacts", successCount, len(contacts))
 
-		// Create addresses
-		if err := db.Create(&addresses).Error; err != nil {
-			log.Printf("Error seeding contact addresses: %v", err)
-		} else {
-			log.Printf("Successfully seeded %d contact addresses", len(addresses))
+		// Create addresses one by one to handle duplicates gracefully
+		addressSuccessCount := 0
+		for _, address := range addresses {
+			if err := db.Create(&address).Error; err != nil {
+				if strings.Contains(err.Error(), "duplicate key") {
+					log.Printf("Address for contact %d already exists, skipping", address.ContactID)
+				} else {
+					log.Printf("Error seeding address for contact %d: %v", address.ContactID, err)
+				}
+			} else {
+				addressSuccessCount++
+			}
 		}
+		log.Printf("Successfully seeded %d out of %d contact addresses", addressSuccessCount, len(addresses))
 	} else {
-		log.Printf("Contacts already exist (%d records), skipping seed", existingCount)
+		log.Printf("Seed contacts already exist (%d records), skipping seed", seedContactExists)
 	}
 }

@@ -75,13 +75,22 @@ class ContactService {
   }
 
   // Get all contacts
-  async getContacts(token: string, type?: string): Promise<Contact[]> {
-    const url = new URL(`${API_BASE_URL}/contacts`);
-    if (type) {
-      url.searchParams.append('type', type);
+  async getContacts(token?: string, type?: string): Promise<Contact[]> {
+    if (!token) {
+      throw new Error('Authentication token is required to access contacts');
     }
     
-    const response = await fetch(url.toString(), {
+    let url: string;
+    
+    if (type) {
+      // Use the type-specific endpoint
+      url = `${API_BASE_URL}/contacts/type/${type}`;
+    } else {
+      // Use the general contacts endpoint
+      url = `${API_BASE_URL}/contacts`;
+    }
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -104,6 +113,10 @@ class ContactService {
   // Create new contact
   async createContact(token: string, contactData: Partial<Contact>): Promise<Contact> {
     console.log('ContactService: Creating contact with data:', contactData);
+    
+    if (!token) {
+      throw new Error('Authentication token is required to create contacts');
+    }
     
     const response = await fetch(`${API_BASE_URL}/contacts`, {
       method: 'POST',
@@ -137,24 +150,69 @@ class ContactService {
 
   // Update existing contact
   async updateContact(token: string, id: string, contactData: Partial<Contact>): Promise<Contact> {
+    if (!token) {
+      throw new Error('Authentication token is required to update contacts');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/contacts/${id}`, {
       method: 'PUT',
       headers: this.getHeaders(token),
       body: JSON.stringify(contactData),
     });
     
-    const result: ApiResponse<Contact> = await this.handleResponse(response);
-    return result.data;
+    const result = await this.handleResponse(response);
+    return result.data || result;
   }
 
   // Delete contact
   async deleteContact(token: string, id: string): Promise<void> {
+    if (!token) {
+      throw new Error('Authentication token is required to delete contacts');
+    }
+    
     const response = await fetch(`${API_BASE_URL}/contacts/${id}`, {
       method: 'DELETE',
       headers: this.getHeaders(token),
     });
     
     await this.handleResponse(response);
+  }
+
+  // Search contacts
+  async searchContacts(token: string, query: string): Promise<Contact[]> {
+    if (!token) {
+      throw new Error('Authentication token is required to search contacts');
+    }
+    
+    const response = await fetch(`${API_BASE_URL}/contacts/search?q=${encodeURIComponent(query)}`, {
+      method: 'GET',
+      headers: this.getHeaders(token),
+    });
+    
+    const result = await this.handleResponse(response);
+    return Array.isArray(result) ? result : result.data || [];
+  }
+
+  // Import contacts
+  async importContacts(token: string, contactsData: Contact[]): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/contacts/import`, {
+      method: 'POST',
+      headers: this.getHeaders(token),
+      body: JSON.stringify(contactsData),
+    });
+    
+    await this.handleResponse(response);
+  }
+
+  // Export contacts
+  async exportContacts(token: string): Promise<Contact[]> {
+    const response = await fetch(`${API_BASE_URL}/contacts/export`, {
+      method: 'GET',
+      headers: this.getHeaders(token),
+    });
+    
+    const result = await this.handleResponse(response);
+    return Array.isArray(result) ? result : result.data || [];
   }
 
   // Helper: Get contact type label
@@ -183,6 +241,40 @@ class ContactService {
       default:
         return 'gray';
     }
+  }
+
+  // Add contact address
+  async addContactAddress(token: string, contactId: string, addressData: Partial<ContactAddress>): Promise<ContactAddress> {
+    const response = await fetch(`${API_BASE_URL}/contacts/${contactId}/addresses`, {
+      method: 'POST',
+      headers: this.getHeaders(token),
+      body: JSON.stringify(addressData),
+    });
+    
+    const result: ApiResponse<ContactAddress> = await this.handleResponse(response);
+    return result.data;
+  }
+
+  // Update contact address
+  async updateContactAddress(token: string, contactId: string, addressId: string, addressData: Partial<ContactAddress>): Promise<ContactAddress> {
+    const response = await fetch(`${API_BASE_URL}/contacts/${contactId}/addresses/${addressId}`, {
+      method: 'PUT',
+      headers: this.getHeaders(token),
+      body: JSON.stringify(addressData),
+    });
+    
+    const result: ApiResponse<ContactAddress> = await this.handleResponse(response);
+    return result.data;
+  }
+
+  // Delete contact address
+  async deleteContactAddress(token: string, contactId: string, addressId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/contacts/${contactId}/addresses/${addressId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(token),
+    });
+    
+    await this.handleResponse(response);
   }
 }
 

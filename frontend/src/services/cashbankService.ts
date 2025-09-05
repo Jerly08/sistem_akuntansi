@@ -87,12 +87,20 @@ export interface TransferRequest {
   notes?: string;
 }
 
+export interface ManualJournalEntry {
+  account_id: number;
+  description: string;
+  debit_amount: number;
+  credit_amount: number;
+}
+
 export interface DepositRequest {
   account_id: number;
   date: string;
   amount: number;
   reference?: string;
   notes?: string;
+  journal_entries?: ManualJournalEntry[];
 }
 
 export interface WithdrawalRequest {
@@ -101,6 +109,7 @@ export interface WithdrawalRequest {
   amount: number;
   reference?: string;
   notes?: string;
+  journal_entries?: ManualJournalEntry[];
 }
 
 export interface TransactionFilter {
@@ -314,6 +323,28 @@ class CashBankService {
       return response.data;
     } catch (error) {
       console.error('Error reconciling account:', error);
+      throw error;
+    }
+  }
+
+  // Check GL account links status
+  async checkGLAccountLinks(): Promise<any> {
+    try {
+      const response = await api.get(`${this.baseUrl}/admin/check-gl-links`);
+      return response.data;
+    } catch (error) {
+      console.error('Error checking GL account links:', error);
+      throw error;
+    }
+  }
+
+  // Fix GL account links
+  async fixGLAccountLinks(): Promise<any> {
+    try {
+      const response = await api.post(`${this.baseUrl}/admin/fix-gl-links`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fixing GL account links:', error);
       throw error;
     }
   }

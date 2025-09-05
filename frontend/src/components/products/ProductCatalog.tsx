@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import Layout from '@/components/layout/Layout';
+import SimpleLayout from '@/components/layout/SimpleLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useModulePermissions } from '@/hooks/usePermissions';
 import {
   Box,
   Button,
@@ -40,11 +41,17 @@ import ProductService, { Product, Category } from '@/services/productService';
 import ProductForm from './ProductForm';
 import CategoryForm from './CategoryForm';
 import UnitForm, { ProductUnit } from './UnitForm';
+import { formatIDR, formatCurrencyDetailed } from '@/utils/currency';
 
 const ProductCatalog: React.FC = () => {
   const { user } = useAuth();
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'INVENTORY_MANAGER';
-  const isAdmin = user?.role === 'ADMIN';
+  const { 
+    canView, 
+    canCreate, 
+    canEdit, 
+    canDelete, 
+    canExport 
+  } = useModulePermissions('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -113,7 +120,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   const handleAddProductClick = () => {
-    if (!canEdit) return;
+    if (!canCreate) return;
     setSelectedProduct(null);
     setIsModalOpen(true);
   };
@@ -228,7 +235,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
   // Category handlers
   const handleAddCategoryClick = () => {
-    if (!isAdmin) return;
+    if (!canCreate) return; // Admin privilege for category management
     setSelectedCategory(null);
     onCategoryModalOpen();
   };
@@ -246,7 +253,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
   // Unit handlers
   const handleAddUnitClick = () => {
-    if (!isAdmin) return;
+    if (!canCreate) return; // Admin privilege for unit management
     setSelectedUnit(null);
     onUnitModalOpen();
   };
@@ -264,6 +271,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   // Filtered and sorted products using useMemo for performance
+
   const filteredAndSortedProducts = useMemo(() => {
     return products
       .filter(product => {
@@ -292,7 +300,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   }, [products, searchTerm, categoryFilter, statusFilter, sortBy, sortOrder]);
 
   return (
-    <Layout allowedRoles={['ADMIN', 'INVENTORY_MANAGER', 'EMPLOYEE', 'FINANCE', 'DIRECTOR']}>
+    <SimpleLayout allowedRoles={['admin', 'inventory_manager', 'employee', 'finance', 'director']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Box>
@@ -301,7 +309,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           
           {/* Management Buttons */}
           <HStack spacing={3}>
-            {isAdmin && (
+            {canCreate && (
               <>
                 <Button 
                   leftIcon={<FiGrid />} 
@@ -321,17 +329,15 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                 >
                   Add Unit
                 </Button>
+                <Button 
+                  leftIcon={<FiPlus />} 
+                  colorScheme="brand" 
+                  size="lg" 
+                  onClick={handleAddProductClick}
+                >
+                  Add Product
+                </Button>
               </>
-            )}
-            {canEdit && (
-              <Button 
-                leftIcon={<FiPlus />} 
-                colorScheme="brand" 
-                size="lg" 
-                onClick={handleAddProductClick}
-              >
-                Add Product
-              </Button>
             )}
           </HStack>
         </Flex>
@@ -627,13 +633,13 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                       <Box>
                         <Text fontWeight="semibold" color="gray.600">Purchase Price:</Text>
                         <Text fontSize="md" color="green.600" fontWeight="bold">
-                          ${detailProduct.purchase_price?.toFixed(2)}
+                          {formatCurrencyDetailed(detailProduct.purchase_price || 0)}
                         </Text>
                       </Box>
                       <Box>
                         <Text fontWeight="semibold" color="gray.600">Sale Price:</Text>
                         <Text fontSize="md" color="blue.600" fontWeight="bold">
-                          ${detailProduct.sale_price?.toFixed(2)}
+                          {formatCurrencyDetailed(detailProduct.sale_price || 0)}
                         </Text>
                       </Box>
                       <Box>
@@ -703,7 +709,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
         </Modal>
 
         {/* Add/Edit Category Modal */}
-        {isAdmin && (
+        {canCreate && (
           <Modal isOpen={isCategoryModalOpen} onClose={onCategoryModalClose} size="4xl">
             <ModalOverlay />
             <ModalContent>
@@ -723,7 +729,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
         )}
 
         {/* Add/Edit Unit Modal */}
-        {isAdmin && (
+        {canCreate && (
           <Modal isOpen={isUnitModalOpen} onClose={onUnitModalClose} size="3xl">
             <ModalOverlay />
             <ModalContent>
@@ -770,7 +776,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
           </AlertDialogOverlay>
         </AlertDialog>
       </Box>
-    </Layout>
+    </SimpleLayout>
   );
 };
 

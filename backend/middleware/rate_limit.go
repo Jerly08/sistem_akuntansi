@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"app-sistem-akuntansi/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -126,31 +127,111 @@ func (rl *RateLimiter) cleanup() {
 
 // Global rate limiters for different endpoints
 var (
-	paymentRateLimiter = NewRateLimiter(100, time.Minute, 5*time.Minute)      // 100 requests per minute
-	authRateLimiter    = NewRateLimiter(10, time.Minute, 10*time.Minute)      // 10 auth attempts per minute
-	generalRateLimiter = NewRateLimiter(200, time.Minute, 2*time.Minute)      // 200 requests per minute
+	paymentRateLimiter *RateLimiter
+	authRateLimiter    *RateLimiter
+	generalRateLimiter *RateLimiter
+	monitoringChan     = make(chan RateLimitEvent, 1000)
 )
+
+// RateLimitEvent for monitoring
+type RateLimitEvent struct {
+	Timestamp    time.Time
+	ClientIP     string
+	Endpoint     string
+	Allowed      bool
+	Reason       string
+	RemainingRequests int
+}
+
+// InitializeRateLimiters initializes rate limiters with config
+func InitializeRateLimiters(cfg *config.Config) {
+	// Initialize based on config
+	paymentRateLimiter = NewRateLimiter(
+		cfg.RateLimitAPIRequests, 
+		time.Minute, 
+		cfg.LockoutDuration,
+	)
+	
+	authRateLimiter = NewRateLimiter(
+		cfg.RateLimitAuthRequests, 
+		time.Minute, 
+		cfg.LockoutDuration,
+	)
+	
+	generalRateLimiter = NewRateLimiter(
+		cfg.RateLimitRequests, 
+		time.Minute, 
+		2*time.Minute,
+	)
+	
+	// Start monitoring if enabled
+	if cfg.EnableMonitoring {
+		go startRateLimitMonitoring()
+	}
+}
+
+// startRateLimitMonitoring monitors rate limit events
+func startRateLimitMonitoring() {
+	for event := range monitoringChan {
+		// Log the event
+		if !event.Allowed {
+			logRateLimitViolation(event)
+		}
+	}
+}
+
+// logRateLimitViolation logs rate limit violations
+func logRateLimitViolation(event RateLimitEvent) {
+	// This can be enhanced to send alerts, write to database, etc.
+	fmt.Printf("[RATE_LIMIT_VIOLATION] Time: %s, IP: %s, Endpoint: %s, Reason: %s\n",
+		event.Timestamp.Format(time.RFC3339),
+		event.ClientIP,
+		event.Endpoint,
+		event.Reason,
+	)
+}
 
 // PaymentRateLimit middleware for payment endpoints
 func PaymentRateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := getClientKey(c)
+		if paymentRateLimiter == nil {
+			c.Next()
+			return
+		}
 		
-		if !paymentRateLimiter.IsAllowed(key) {
+		key := getClientKey(c)
+		allowed := paymentRateLimiter.IsAllowed(key)
+		remaining := paymentRateLimiter.GetRemainingRequests(key)
+		
+		// Send monitoring event
+		select {
+		case monitoringChan <- RateLimitEvent{
+			Timestamp:    time.Now(),
+			ClientIP:     key,
+			Endpoint:     c.Request.URL.Path,
+			Allowed:      allowed,
+			Reason:       "payment_endpoint",
+			RemainingRequests: remaining,
+		}:
+		default:
+			// Channel full, skip monitoring
+		}
+		
+		if !allowed {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error": "Payment rate limit exceeded. Please try again later.",
 				"code":  "PAYMENT_RATE_LIMIT_EXCEEDED",
-				"retry_after": "5 minutes",
+				"retry_after": paymentRateLimiter.blockDuration.String(),
 			})
 			c.Abort()
 			return
 		}
 
 		// Add rate limit headers
-		remaining := paymentRateLimiter.GetRemainingRequests(key)
 		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", paymentRateLimiter.limit))
 		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 		c.Header("X-RateLimit-Window", "60")
+		c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(time.Minute).Unix()))
 
 		c.Next()
 	}
@@ -159,23 +240,44 @@ func PaymentRateLimit() gin.HandlerFunc {
 // AuthRateLimit middleware for authentication endpoints
 func AuthRateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := getClientKey(c)
+		if authRateLimiter == nil {
+			c.Next()
+			return
+		}
 		
-		if !authRateLimiter.IsAllowed(key) {
+		key := getClientKey(c)
+		allowed := authRateLimiter.IsAllowed(key)
+		remaining := authRateLimiter.GetRemainingRequests(key)
+		
+		// Send monitoring event
+		select {
+		case monitoringChan <- RateLimitEvent{
+			Timestamp:    time.Now(),
+			ClientIP:     key,
+			Endpoint:     c.Request.URL.Path,
+			Allowed:      allowed,
+			Reason:       "auth_endpoint",
+			RemainingRequests: remaining,
+		}:
+		default:
+			// Channel full, skip monitoring
+		}
+		
+		if !allowed {
 			c.JSON(http.StatusTooManyRequests, gin.H{
 				"error": "Authentication rate limit exceeded. Please try again later.",
 				"code":  "AUTH_RATE_LIMIT_EXCEEDED",
-				"retry_after": "10 minutes",
+				"retry_after": authRateLimiter.blockDuration.String(),
 			})
 			c.Abort()
 			return
 		}
 
 		// Add rate limit headers
-		remaining := authRateLimiter.GetRemainingRequests(key)
 		c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", authRateLimiter.limit))
 		c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
 		c.Header("X-RateLimit-Window", "60")
+		c.Header("X-RateLimit-Reset", fmt.Sprintf("%d", time.Now().Add(time.Minute).Unix()))
 
 		c.Next()
 	}
@@ -217,6 +319,11 @@ func getClientKey(c *gin.Context) string {
 	// Fall back to IP address
 	clientIP := c.ClientIP()
 	return fmt.Sprintf("ip_%s", clientIP)
+}
+
+// RateLimit is an alias for GeneralRateLimit for convenience
+func RateLimit() gin.HandlerFunc {
+	return GeneralRateLimit()
 }
 
 // GetRateLimitStatus returns current rate limit status for debugging

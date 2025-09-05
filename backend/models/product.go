@@ -129,3 +129,10 @@ const (
 	InventoryTypeIn  = "IN"
 	InventoryTypeOut = "OUT"
 )
+
+// ProductPriceUpdate represents bulk price update data
+type ProductPriceUpdate struct {
+	ProductID     uint    `json:"product_id"`
+	PurchasePrice float64 `json:"purchase_price"`
+	SalePrice     float64 `json:"sale_price"`
+}

@@ -14,11 +14,21 @@ func main() {
 	// Load configuration
 	cfg := config.LoadConfig()
 
+	// Set Gin mode based on configuration
+	if cfg.Environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	// Connect to database
 	db := database.ConnectDB()
 	
 	// Auto migrate models
 	database.AutoMigrate(db)
+	
+	// Migrate permissions table
+	if err := database.MigratePermissions(db); err != nil {
+		log.Printf("Error migrating permissions: %v", err)
+	}
 	
 	// Seed database with initial data
 	database.SeedData(db)
@@ -27,8 +37,19 @@ func main() {
 	startupService := services.NewStartupService(db)
 	startupService.RunStartupTasks()
 
-	// Initialize Gin router
-	r := gin.Default()
+	// Initialize Gin router without default middleware
+	r := gin.New()
+
+	// Add recovery middleware
+	r.Use(gin.Recovery())
+
+	// Add custom logger middleware only in development
+	if cfg.Environment != "production" {
+		r.Use(gin.Logger())
+	}
+
+	// Configure trusted proxies for security
+	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 
 	// CORS middleware
 	r.Use(cors.New(cors.Config{

@@ -42,6 +42,12 @@ type Purchase struct {
 	OutstandingAmount float64 `json:"outstanding_amount" gorm:"type:decimal(15,2);default:0"`
 	MatchingStatus    string  `json:"matching_status" gorm:"size:20;default:'PENDING'"`
 	
+	// Bank/Payment method fields
+	PaymentMethod     string  `json:"payment_method" gorm:"size:20;default:'CREDIT'"` // CASH, CREDIT, TRANSFER
+	BankAccountID     *uint   `json:"bank_account_id" gorm:"index"`                  // For cash/transfer purchases
+	CreditAccountID   *uint   `json:"credit_account_id" gorm:"index"`                 // For credit purchases - liability account
+	PaymentReference  string  `json:"payment_reference" gorm:"size:100"`              // Check number, transfer reference, etc.
+	
 	Status       string         `json:"status" gorm:"size:20"` // DRAFT, PENDING_APPROVAL, APPROVED, COMPLETED, CANCELLED
 	Notes        string         `json:"notes" gorm:"type:text"`
 	
@@ -62,6 +68,8 @@ type Purchase struct {
 	Vendor          Contact          `json:"vendor" gorm:"foreignKey:VendorID"`
 	User            User             `json:"user" gorm:"foreignKey:UserID"`
 	PurchaseItems   []PurchaseItem   `json:"purchase_items" gorm:"foreignKey:PurchaseID"`
+	BankAccount     *CashBank        `json:"bank_account,omitempty" gorm:"foreignKey:BankAccountID"`
+	CreditAccount   *Account         `json:"credit_account,omitempty" gorm:"foreignKey:CreditAccountID"`
 	ApprovalRequest *ApprovalRequest `json:"approval_request,omitempty" gorm:"foreignKey:ApprovalRequestID"`
 	Approver        *User            `json:"approver,omitempty" gorm:"foreignKey:ApprovedBy"`
 }
@@ -113,6 +121,14 @@ const (
 	PurchaseMatchingMismatch = "MISMATCH"
 )
 
+// Purchase Payment Method Constants
+const (
+	PurchasePaymentCredit      = "CREDIT"        // Credit purchase - pay later (creates accounts payable)
+	PurchasePaymentCash        = "CASH"          // Cash purchase - immediate payment from cash/bank
+	PurchasePaymentTransfer    = "BANK_TRANSFER" // Bank transfer - immediate payment via bank transfer
+	PurchasePaymentCheck       = "CHECK"         // Check payment - immediate payment via check
+)
+
 // Filter and Request DTOs
 type PurchaseFilter struct {
 	Status           string `json:"status"`
@@ -132,7 +148,13 @@ type PurchaseCreateRequest struct {
 	DueDate      time.Time                `json:"due_date"`
 	Discount     float64                  `json:"discount"`
 	
-	// Legacy tax field (for backward compatibility)
+	// Payment method fields
+	PaymentMethod     string                 `json:"payment_method"` // CASH, CREDIT, TRANSFER
+	BankAccountID     *uint                  `json:"bank_account_id"` // Required if payment_method is CASH or TRANSFER
+	CreditAccountID   *uint                  `json:"credit_account_id"` // Required if payment_method is CREDIT
+	PaymentReference  string                 `json:"payment_reference"`
+	
+	// Legacy tax field (for backward compatibility - ignored in calculation)
 	Tax          float64                  `json:"tax"`
 	
 	// Tax additions (Penambahan)
@@ -154,7 +176,13 @@ type PurchaseUpdateRequest struct {
 	DueDate      *time.Time               `json:"due_date"`
 	Discount     *float64                 `json:"discount"`
 	
-	// Legacy tax field (for backward compatibility)
+	// Payment method fields
+	PaymentMethod     *string                `json:"payment_method"`
+	BankAccountID     *uint                  `json:"bank_account_id"`
+	CreditAccountID   *uint                  `json:"credit_account_id"`
+	PaymentReference  *string                `json:"payment_reference"`
+	
+	// Legacy tax field (for backward compatibility - ignored in calculation)
 	Tax          *float64                 `json:"tax"`
 	
 	// Tax additions (Penambahan)
@@ -237,6 +265,7 @@ type PurchaseReceiptItem struct {
 type PurchaseSummary struct {
 	TotalPurchases         int64                  `json:"total_purchases"`
 	TotalAmount            float64                `json:"total_amount"`
+	TotalApprovedAmount    float64                `json:"total_approved_amount"`
 	TotalPaid              float64                `json:"total_paid"`
 	TotalOutstanding       float64                `json:"total_outstanding"`
 	AvgOrderValue          float64                `json:"avg_order_value"`

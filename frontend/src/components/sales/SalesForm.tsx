@@ -45,7 +45,8 @@ import {
   Alert,
   AlertIcon,
   AlertDescription,
-  Icon
+  Icon,
+  useColorModeValue
 } from '@chakra-ui/react';
 import CurrencyInput from '@/components/common/CurrencyInput';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -117,6 +118,51 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const toast = useToast();
   const { user, token } = useAuth();
   const modalBodyRef = useRef<HTMLDivElement>(null);
+  
+  // Color mode values for dark mode support
+  const modalBg = useColorModeValue('white', 'gray.800');
+  const headerBg = useColorModeValue('blue.50', 'gray.700');
+  const headingColor = useColorModeValue('blue.700', 'blue.300');
+  const subHeadingColor = useColorModeValue('gray.600', 'gray.300');
+  const textColor = useColorModeValue('gray.600', 'gray.400');
+  const inputBg = useColorModeValue('gray.50', 'gray.600');
+  const inputFocusBg = useColorModeValue('white', 'gray.500');
+  const tableBg = useColorModeValue('white', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const footerBg = useColorModeValue('white', 'gray.800');
+  const shadowColor = useColorModeValue('rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.3)');
+  const alertBg = useColorModeValue('blue.50', 'blue.900');
+  const alertBorderColor = useColorModeValue('blue.200', 'blue.700');
+  const scrollTrackBg = useColorModeValue('#f7fafc', '#2d3748');
+  const scrollThumbBg = useColorModeValue('#cbd5e0', '#4a5568');
+  const scrollThumbHoverBg = useColorModeValue('#a0aec0', '#718096');
+  
+  // Check if user has permission to create/edit sales - using lowercase for consistency
+  const userRole = user?.role?.toLowerCase();
+  const canCreateSales = userRole === 'finance' || userRole === 'director' || userRole === 'admin';
+  const canEditSales = userRole === 'admin' || userRole === 'finance' || userRole === 'director';
+  
+  // For new sales, check create permission; for editing, check edit permission
+  const hasPermission = sale ? canEditSales : canCreateSales;
+  
+  // If modal is opened but user doesn't have permission, close it and show error
+  useEffect(() => {
+    if (isOpen && user && !hasPermission) {
+      const action = sale ? 'edit' : 'create';
+      toast({
+        title: 'Access Denied',
+        description: `You do not have permission to ${action} sales. Contact your administrator for access.`,
+        status: 'error',
+        duration: 5000,
+      });
+      onClose();
+    }
+  }, [isOpen, user, hasPermission, sale, toast, onClose]);
+  
+  // Don't render the form if user doesn't have permission
+  if (!hasPermission && user) {
+    return null;
+  }
 
   const {
     register,
@@ -201,30 +247,50 @@ const SalesForm: React.FC<SalesFormProps> = ({
     setLoadingData(true);
     
     try {
+      console.log('SalesForm: Starting to load form data...');
+      
       // Load all data concurrently with proper error handling
       const [customersResult, productsResult, salesPersonsResult, accountsResult] = await Promise.allSettled([
         // Load customers
         (async () => {
+          console.log('SalesForm: Loading customers...');
           const contactService = await import('@/services/contactService');
-          return await contactService.default.getContacts(token, 'CUSTOMER');
+          const result = await contactService.default.getContacts(token, 'CUSTOMER');
+          console.log('SalesForm: Customers loaded:', result?.length || 0);
+          return result;
         })(),
         
-        // Load products
+        // Load products with fallback for permission errors
         (async () => {
-          const productService = await import('@/services/productService');
-          return await productService.default.getProducts();
+          try {
+            console.log('SalesForm: Loading products with token...');
+            const productService = await import('@/services/productService');
+            const result = await productService.default.getProducts({}, token);
+            console.log('SalesForm: Products loaded:', result?.data?.length || 0);
+            return result;
+          } catch (error: any) {
+            console.warn('SalesForm: Failed to load products, using empty list:', error?.message || error);
+            // Return empty result for any error
+            return { data: [] }; // Empty products array
+          }
         })(),
         
         // Load sales persons from contacts (employees)
         (async () => {
+          console.log('SalesForm: Loading sales persons (employees)...');
           const contactService = await import('@/services/contactService');
-          return await contactService.default.getContacts(token, 'EMPLOYEE');
+          const result = await contactService.default.getContacts(token, 'EMPLOYEE');
+          console.log('SalesForm: Sales persons loaded:', result?.length || 0);
+          return result;
         })(),
         
         // Load revenue accounts
         (async () => {
+          console.log('SalesForm: Loading revenue accounts...');
           const accountService = await import('@/services/accountService');
-          return await accountService.default.getAccounts(token, 'REVENUE');
+          const result = await accountService.default.getAccounts(token, 'REVENUE');
+          console.log('SalesForm: Revenue accounts loaded:', result?.length || 0);
+          return result;
         })()
       ]);
 
@@ -388,10 +454,21 @@ const SalesForm: React.FC<SalesFormProps> = ({
     try {
       setLoading(true);
 
-      // Validate items using standardized validation
-      const validItems = data.items.filter(item => item.product_id > 0);
+      // Validate items - allow items without product_id if products are not available
+      const validItems = data.items.filter(item => {
+        // If products are available, require product_id
+        if (products.length > 0) {
+          return item.product_id > 0;
+        }
+        // If no products available, just check for description and price
+        return item.description && item.description.trim() !== '' && item.unit_price > 0;
+      });
+      
       if (validItems.length === 0) {
-        ErrorHandler.handleValidationError(['At least one item is required'], toast, 'sales form');
+        const errorMsg = products.length > 0 
+          ? 'At least one item with a selected product is required'
+          : 'At least one item with description and price is required';
+        ErrorHandler.handleValidationError([errorMsg], toast, 'sales form');
         return;
       }
 
@@ -529,7 +606,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
         mx={4} 
         my={2} 
         borderRadius="xl"
-        bg="white"
+        bg={modalBg}
         shadow="2xl"
         overflow="hidden"
         display="flex"
@@ -538,18 +615,18 @@ const SalesForm: React.FC<SalesFormProps> = ({
         maxW="6xl"
       >
         <ModalHeader 
-          bg="blue.50" 
+          bg={headerBg} 
           borderBottomWidth={1} 
-          borderColor="gray.200"
+          borderColor={borderColor}
           pb={4}
           pt={6}
         >
           <HStack justify="space-between" align="center">
             <Box>
-              <Heading size="lg" color="blue.700">
+              <Heading size="lg" color={headingColor}>
                 {sale ? 'Edit Sale Transaction' : 'Create New Sale'}
               </Heading>
-              <Text color="gray.600" fontSize="sm" mt={1}>
+              <Text color={textColor} fontSize="sm" mt={1}>
                 {sale ? 'Modify existing sale details and items' : 'Create a new sales transaction with items and pricing'}
               </Text>
             </Box>
@@ -589,14 +666,14 @@ const SalesForm: React.FC<SalesFormProps> = ({
                 display: 'block',
               },
               '&::-webkit-scrollbar-track': {
-                background: '#f7fafc',
+                background: scrollTrackBg,
                 borderRadius: '4px',
               },
               '&::-webkit-scrollbar-thumb': {
-                background: '#cbd5e0',
+                background: scrollThumbBg,
                 borderRadius: '4px',
                 '&:hover': {
-                  background: '#a0aec0',
+                  background: scrollThumbHoverBg,
                 },
               },
             }}
@@ -615,7 +692,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
             <VStack spacing={6} align="stretch">
               {/* Basic Information */}
               <Box>
-                <Heading size="md" mb={4} color="gray.600">
+                <Heading size="md" mb={4} color={subHeadingColor}>
                   📋 Basic Information
                 </Heading>
                 <VStack spacing={4}>
@@ -627,10 +704,14 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             required: 'Customer is required',
                             setValueAs: value => parseInt(value) || 0
                           })}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
+                          isDisabled={loadingData}
                         >
-                          <option value="">Select customer</option>
+                          <option value="">
+                            {loadingData ? 'Loading customers...' : 
+                             customers.length === 0 ? 'No customers available' : 'Select customer'}
+                          </option>
                           {customers.map(customer => (
                             <option key={customer.id} value={customer.id}>
                               {customer.code} - {customer.name}
@@ -646,10 +727,14 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           {...register('sales_person_id', {
                             setValueAs: value => value ? parseInt(value) : undefined
                           })}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
+                          isDisabled={loadingData}
                         >
-                          <option value="">Select sales person</option>
+                          <option value="">
+                            {loadingData ? 'Loading sales persons...' : 
+                             salesPersons.length === 0 ? 'No sales persons available' : 'Select sales person'}
+                          </option>
                           {salesPersons.map(person => (
                             <option key={person.id} value={person.id}>
                               {person.name}
@@ -667,8 +752,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           {...register('date', {
                             required: 'Date is required'
                           })}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
                         />
                         <FormErrorMessage>{errors.date?.message}</FormErrorMessage>
                       </FormControl>
@@ -678,8 +763,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         <Input
                           type="date"
                           {...register('due_date')}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
                         />
                       </FormControl>
 
@@ -688,8 +773,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         <Input
                           type="date"
                           {...register('valid_until')}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
                         />
                       </FormControl>
                   </HStack>
@@ -701,7 +786,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
               {/* Items Section */}
               <Box>
                 <Flex justify="space-between" align="center" mb={4}>
-                  <Heading size="md" color="gray.600">
+                  <Heading size="md" color={subHeadingColor}>
                     🛍️ Sale Items
                   </Heading>
                   <Button
@@ -714,27 +799,37 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   </Button>
                 </Flex>
 
+                {/* Products warning if empty */}
+                {!loadingData && products.length === 0 && (
+                  <Alert status="warning" mb={4} borderRadius="md" bg={alertBg} borderColor={alertBorderColor}>
+                    <AlertIcon />
+                    <AlertDescription fontSize="sm">
+                      Products are not available. You can still create sales by manually entering product information in the description field.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <Box 
                   overflowX="auto" 
                   border="1px" 
-                  borderColor="gray.200" 
+                  borderColor={borderColor} 
                   borderRadius="md"
-                  bg="white"
+                  bg={tableBg}
                   shadow="sm"
                   css={{
                     '&::-webkit-scrollbar': {
                       height: '8px',
                     },
                     '&::-webkit-scrollbar-track': {
-                      background: '#f7fafc',
+                      background: scrollTrackBg,
                       borderRadius: '4px',
                     },
                     '&::-webkit-scrollbar-thumb': {
-                      background: '#cbd5e0',
+                      background: scrollThumbBg,
                       borderRadius: '4px',
                     },
                     '&::-webkit-scrollbar-thumb:hover': {
-                      background: '#a0aec0',
+                      background: scrollThumbHoverBg,
                     },
                   }}
                 >
@@ -762,8 +857,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                                 setValueAs: value => parseInt(value) || 0
                               })}
                               onChange={(e) => handleProductChange(index, parseInt(e.target.value))}
-                              bg="gray.50"
-                              _focus={{ bg: 'white' }}
+                              bg={inputBg}
+                              _focus={{ bg: inputFocusBg }}
                             >
                               <option value="">Select product</option>
                               {products.map(product => (
@@ -778,8 +873,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                               size="sm"
                               {...register(`items.${index}.description`)}
                               placeholder="Item description"
-                              bg="gray.50"
-                              _focus={{ bg: 'white' }}
+                              bg={inputBg}
+                              _focus={{ bg: inputFocusBg }}
                             />
                           </Td>
                           <Td>
@@ -849,7 +944,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
 
               {/* Pricing & Taxes */}
               <Box>
-                <Heading size="md" mb={4} color="gray.600">
+                <Heading size="md" mb={4} color={subHeadingColor}>
                   💰 Pricing & Taxes
                 </Heading>
                 <HStack w="full" spacing={4}>
@@ -860,8 +955,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           {...register('discount_percent', {
                             setValueAs: value => parseFloat(value) || 0
                           })}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
                         />
                       </NumberInput>
                     </FormControl>
@@ -873,8 +968,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           {...register('ppn_percent', {
                             setValueAs: value => parseFloat(value) || 0
                           })}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
                         />
                       </NumberInput>
                     </FormControl>
@@ -886,8 +981,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           {...register('shipping_cost', {
                             setValueAs: value => parseFloat(value) || 0
                           })}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
                         />
                       </NumberInput>
                     </FormControl>
@@ -896,18 +991,18 @@ const SalesForm: React.FC<SalesFormProps> = ({
                 
                 {/* Total Calculation Alert */}
                 {calculateSubtotal() > 0 && (
-                  <Alert status="info" borderRadius="lg" mt={4} bg="blue.50" borderColor="blue.200">
+                  <Alert status="info" borderRadius="lg" mt={4} bg={alertBg} borderColor={alertBorderColor}>
                     <AlertIcon color="blue.500" />
                     <AlertDescription fontSize="sm">
                       <VStack align="stretch" spacing={3} w="full">
                         <HStack justify="space-between">
-                          <Text color="gray.700"><strong>Subtotal:</strong></Text>
-                          <Text fontWeight="medium" color="gray.800">
+                          <Text color={textColor}><strong>Subtotal:</strong></Text>
+                          <Text fontWeight="medium" color={textColor}>
                             {salesService.formatCurrency(calculateSubtotal())}
                           </Text>
                         </HStack>
                         <HStack justify="space-between">
-                          <Text color="gray.700"><strong>Total Amount:</strong></Text>
+                          <Text color={textColor}><strong>Total Amount:</strong></Text>
                           <Text fontSize="lg" fontWeight="bold" color="blue.600">
                             {salesService.formatCurrency(calculateTotal())}
                           </Text>
@@ -922,7 +1017,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
 
               {/* Additional Information */}
               <Box>
-                <Heading size="md" mb={4} color="gray.600">
+                <Heading size="md" mb={4} color={subHeadingColor}>
                   📝 Additional Information
                 </Heading>
                 <VStack spacing={4}>
@@ -931,8 +1026,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         <FormLabel>Payment Terms</FormLabel>
                         <Select 
                           {...register('payment_terms')}
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
                         >
                           <option value="COD">COD (Cash on Delivery)</option>
                           <option value="NET_15">NET 15</option>
@@ -947,8 +1042,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         <Input
                           {...register('reference')}
                           placeholder="External reference number"
-                          bg="gray.50"
-                          _focus={{ bg: 'white' }}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
                         />
                       </FormControl>
                   </HStack>
@@ -959,8 +1054,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                       {...register('notes')}
                       placeholder="Customer-visible notes"
                       rows={3}
-                      bg="gray.50"
-                      _focus={{ bg: 'white' }}
+                      bg={inputBg}
+                      _focus={{ bg: inputFocusBg }}
                     />
                   </FormControl>
 
@@ -970,8 +1065,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                       {...register('internal_notes')}
                       placeholder="Internal notes (not visible to customer)"
                       rows={3}
-                      bg="gray.50"
-                      _focus={{ bg: 'white' }}
+                      bg={inputBg}
+                      _focus={{ bg: inputFocusBg }}
                     />
                   </FormControl>
                 </VStack>
@@ -983,9 +1078,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
             position="sticky"
             bottom={0}
             borderTopWidth={2} 
-            borderColor="gray.300" 
-            bg="white"
-            boxShadow="0 -4px 12px rgba(0, 0, 0, 0.1)"
+            borderColor={borderColor} 
+            bg={footerBg}
+            boxShadow={`0 -4px 12px ${shadowColor}`}
             px={6}
             py={4}
             mt={6}
@@ -995,7 +1090,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
             <HStack justify="space-between" spacing={4} w="full">
               {/* Left side - Form info */}
               <HStack spacing={2}>
-                <Text fontSize="sm" color="gray.500">
+                <Text fontSize="sm" color={textColor}>
                   {loadingData ? 'Loading...' : `${fields.length} item${fields.length !== 1 ? 's' : ''}`}
                 </Text>
                 {calculateSubtotal() > 0 && (

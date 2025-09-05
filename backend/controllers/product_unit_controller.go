@@ -89,12 +89,16 @@ func (puc *ProductUnitController) CreateProductUnit(c *gin.Context) {
 		return
 	}
 
-	// Check if unit code already exists (excluding soft deleted)
+	// Check if unit code already exists (including soft deleted records)
 	var existingUnit models.ProductUnit
-	if err := puc.DB.Unscoped().Where("code = ?", unit.Code).First(&existingUnit).Error; err == nil {
-		// If found a soft deleted record, we can reuse it
+	findResult := puc.DB.Unscoped().Where("code = ?", unit.Code).First(&existingUnit)
+	
+	// Handle the three possible outcomes:
+	switch {
+	case findResult.Error == nil:
+		// Record found - check if it's soft deleted or active
 		if existingUnit.DeletedAt.Valid {
-			// Restore the soft deleted record with new data
+			// Found a soft deleted record - restore it with new data
 			existingUnit.Name = unit.Name
 			existingUnit.Symbol = unit.Symbol
 			existingUnit.Type = unit.Type
@@ -124,6 +128,19 @@ func (puc *ProductUnitController) CreateProductUnit(c *gin.Context) {
 			})
 			return
 		}
+		
+	case findResult.Error == gorm.ErrRecordNotFound:
+		// No existing record found - proceed to create new unit
+		// This is the normal case for new units
+		break
+		
+	default:
+		// Some other database error occurred
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to check existing product unit",
+			"details": findResult.Error.Error(),
+		})
+		return
 	}
 
 	if err := puc.DB.Create(&unit).Error; err != nil {

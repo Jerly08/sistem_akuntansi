@@ -20,7 +20,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   useEffect(() => {
     if (!isLoading) {
       if (!isAuthenticated) {
-        router.push('/login');
+        console.log('ProtectedRoute: User not authenticated, redirecting to login');
+        router.replace('/login');
         return;
       }
 
@@ -29,7 +30,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         const userRoleNorm = normalizeRole(user.role as unknown as string);
         const hasPermission = allowed.has(userRoleNorm);
         if (!hasPermission) {
-          router.push('/unauthorized');
+          console.log('ProtectedRoute: User unauthorized, redirecting to unauthorized page');
+          router.replace('/unauthorized');
         }
       }
     }

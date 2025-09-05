@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import Layout from '@/components/layout/Layout';
+import SimpleLayout from '@/components/layout/SimpleLayout';
 import Table from '@/components/common/Table';
 import {
   Box,
@@ -792,7 +792,7 @@ const AssetsPage = () => {
   };
 
   return (
-<Layout allowedRoles={['admin', 'finance', 'director']}>
+<SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Box>
@@ -1700,7 +1700,7 @@ const AssetsPage = () => {
           </ModalContent>
         </Modal>
       </Box>
-    </Layout>
+    </SimpleLayout>
   );
 };
 

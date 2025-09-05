@@ -109,6 +109,17 @@ export interface PurchaseListResponse {
   total_pages: number;
 }
 
+export interface PurchaseSummary {
+  total_purchases: number;
+  total_amount: number;
+  total_approved_amount: number;
+  total_paid: number;
+  total_outstanding: number;
+  avg_order_value: number;
+  status_counts: { [key: string]: number };
+  approval_status_counts: { [key: string]: number };
+}
+
 class PurchaseService {
   async list(params: PurchaseFilterParams): Promise<PurchaseListResponse> {
     const toUpper = (v?: string) => (v ? v.toUpperCase() : undefined);
@@ -157,6 +168,16 @@ class PurchaseService {
       page,
       limit,
     });
+  }
+
+  async getSummary(startDate?: string, endDate?: string): Promise<PurchaseSummary> {
+    const response = await api.get('/purchases/summary', {
+      params: {
+        start_date: startDate,
+        end_date: endDate,
+      },
+    });
+    return response.data;
   }
 }
 

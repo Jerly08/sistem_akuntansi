@@ -2,20 +2,24 @@ package services
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
+	"gorm.io/gorm"
 )
 
 type NotificationService struct {
 	notificationRepo *repositories.NotificationRepository
+	smartService     *SmartNotificationService
+	db               *gorm.DB
 }
 
-func NewNotificationService(notificationRepo *repositories.NotificationRepository) *NotificationService {
+func NewNotificationService(db *gorm.DB, notificationRepo *repositories.NotificationRepository) *NotificationService {
 	return &NotificationService{
 		notificationRepo: notificationRepo,
+		smartService:     NewSmartNotificationService(db, notificationRepo),
+		db:               db,
 	}
 }
 
@@ -79,65 +83,25 @@ func (s *NotificationService) CreateApprovalNotification(userID uint, notificati
 
 // CreatePurchaseSubmissionNotification notifies when purchase is submitted for approval
 func (s *NotificationService) CreatePurchaseSubmissionNotification(purchase *models.Purchase) error {
-	// Get approvers based on purchase amount
-	approvers := s.getApproversForPurchase(purchase)
-
-	for _, approverID := range approvers {
-		title := "Purchase Approval Required"
-		message := fmt.Sprintf("Purchase %s requires your approval (Amount: Rp %,.2f)", 
-			purchase.Code, purchase.TotalAmount)
-		
-		data := map[string]interface{}{
-			"purchase_id":   purchase.ID,
-			"purchase_code": purchase.Code,
-			"vendor_name":   purchase.Vendor.Name,
-			"total_amount":  purchase.TotalAmount,
-			"action_type":   "approval_required",
-		}
-
-		err := s.CreateApprovalNotification(approverID, models.NotificationTypeApprovalPending, title, message, data)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	// Use smart notification service for intelligent routing
+	return s.smartService.CreatePurchaseNotification(purchase, "SUBMITTED", nil)
 }
 
 // CreatePurchaseApprovedNotification notifies when purchase is approved
 func (s *NotificationService) CreatePurchaseApprovedNotification(purchase *models.Purchase, approverID uint) error {
-	title := "Purchase Approved"
-	message := fmt.Sprintf("Your purchase request %s has been approved", purchase.Code)
-	
-	data := map[string]interface{}{
-		"purchase_id":   purchase.ID,
-		"purchase_code": purchase.Code,
-		"approved_by":   approverID,
-		"approved_at":   purchase.ApprovedAt,
-		"action_type":   "approved",
-	}
-
-	return s.CreateApprovalNotification(purchase.UserID, models.NotificationTypeApprovalApproved, title, message, data)
+	// Use smart notification service
+	return s.smartService.CreatePurchaseNotification(purchase, "APPROVED", map[string]interface{}{
+		"approver_id": approverID,
+	})
 }
 
 // CreatePurchaseRejectedNotification notifies when purchase is rejected
 func (s *NotificationService) CreatePurchaseRejectedNotification(purchase *models.Purchase, approverID uint, reason string) error {
-	title := "Purchase Rejected"
-	message := fmt.Sprintf("Your purchase request %s has been rejected", purchase.Code)
-	if reason != "" {
-		message += fmt.Sprintf(". Reason: %s", reason)
-	}
-	
-	data := map[string]interface{}{
-		"purchase_id":   purchase.ID,
-		"purchase_code": purchase.Code,
-		"rejected_by":   approverID,
-		"rejected_at":   time.Now(),
-		"reason":        reason,
-		"action_type":   "rejected",
-	}
-
-	return s.CreateApprovalNotification(purchase.UserID, models.NotificationTypeApprovalRejected, title, message, data)
+	// Use smart notification service
+	return s.smartService.CreatePurchaseNotification(purchase, "REJECTED", map[string]interface{}{
+		"approver_id": approverID,
+		"reason":      reason,
+	})
 }
 
 // SendBulkNotification sends notification to multiple users
@@ -166,37 +130,51 @@ func (s *NotificationService) getNotificationPriority(notificationType string) s
 	}
 }
 
+// DEPRECATED: Use smart notification service instead
+// getApproversForPurchase is now handled by SmartNotificationService
 func (s *NotificationService) getApproversForPurchase(purchase *models.Purchase) []uint {
-	var approvers []uint
+	// This method is deprecated - use SmartNotificationService.getEligibleUsers instead
+	// Keeping for backward compatibility
+	var users []models.User
 	
-	// This is a simplified logic - in real implementation, 
-	// you would query the approval workflow system
-	
-	// For demonstration purposes:
-	// - Finance approves purchases up to 25M
-	// - Director approves purchases above 25M
-	
-	if purchase.TotalAmount <= 25000000 { // 25M IDR
-		// Add finance users (you would query from database)
-		approvers = append(approvers, s.getFinanceUserIDs()...)
+	if purchase.TotalAmount <= 25000000 {
+		// Get finance users from database
+		s.db.Where("LOWER(role) = LOWER(?) AND is_active = ?", "finance", true).Find(&users)
 	} else {
-		// Add director users
-		approvers = append(approvers, s.getDirectorUserIDs()...)
+		// Get director users from database
+		s.db.Where("LOWER(role) = LOWER(?) AND is_active = ?", "director", true).Find(&users)
+	}
+	
+	var approvers []uint
+	for _, user := range users {
+		approvers = append(approvers, user.ID)
 	}
 	
 	return approvers
 }
 
+// DEPRECATED: Use database queries instead
 func (s *NotificationService) getFinanceUserIDs() []uint {
-	// This should query the database for users with finance role
-	// For now, return dummy data
-	return []uint{2} // Assuming user ID 2 is finance
+	var users []models.User
+	s.db.Where("LOWER(role) = LOWER(?) AND is_active = ?", "finance", true).Find(&users)
+	
+	var ids []uint
+	for _, user := range users {
+		ids = append(ids, user.ID)
+	}
+	return ids
 }
 
+// DEPRECATED: Use database queries instead
 func (s *NotificationService) getDirectorUserIDs() []uint {
-	// This should query the database for users with director role
-	// For now, return dummy data
-	return []uint{3} // Assuming user ID 3 is director
+	var users []models.User
+	s.db.Where("LOWER(role) = LOWER(?) AND is_active = ?", "director", true).Find(&users)
+	
+	var ids []uint
+	for _, user := range users {
+		ids = append(ids, user.ID)
+	}
+	return ids
 }
 
 // CleanupOldNotifications removes old notifications

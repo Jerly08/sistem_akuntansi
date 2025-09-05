@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import SimpleLayout from '@/components/layout/SimpleLayout';
 import {
   Box,
   Flex,
@@ -22,7 +23,7 @@ import {
 import { FiUserPlus } from 'react-icons/fi';
 import Link from 'next/link';
 
-export default function RegisterPage() {
+const RegisterContent = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,6 +32,7 @@ export default function RegisterPage() {
   
   const { register, isAuthenticated } = useAuth();
   const router = useRouter();
+  const toast = useToast();
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -59,8 +61,6 @@ export default function RegisterPage() {
       setIsSubmitting(false);
     }
   };
-
-  const toast = useToast();
 
   return (
     <Flex minH="100vh" align="center" justify="center" bg="gray.50">
@@ -155,7 +155,15 @@ export default function RegisterPage() {
           </Button>
         </Text>
       </Box>
-    </Flex>
+  </Flex>
+  );
+};
+
+export default function RegisterPage() {
+  return (
+    <SimpleLayout showSidebar={false} requireAuth={false}>
+      <RegisterContent />
+    </SimpleLayout>
   );
 }
 

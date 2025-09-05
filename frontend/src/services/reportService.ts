@@ -30,7 +30,7 @@ export interface ReportParameters {
   account_code?: string;
   include_valuation?: boolean;
   period?: 'current' | 'ytd' | 'comparative';
-  format?: 'json' | 'pdf' | 'excel';
+  format?: 'json' | 'pdf' | 'csv';
 }
 
 class ReportService {
@@ -54,6 +54,41 @@ class ReportService {
     return searchParams.toString();
   }
 
+  private async handleUnifiedResponse<T>(response: Response): Promise<T> {
+    if (!response.ok) {
+      let errorData: any;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = {
+          error: { 
+            code: 'NETWORK_ERROR',
+            message: `HTTP error! status: ${response.status}` 
+          }
+        };
+      }
+
+      const errorMessage = errorData.error?.message || errorData.message || `HTTP error! status: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+    
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const result = await response.json();
+      // Handle unified response structure
+      if (result.success !== undefined) {
+        if (!result.success) {
+          throw new Error(result.error?.message || 'Request failed');
+        }
+        return result.data;
+      }
+      return result.data || result;
+    } else {
+      // Handle file responses (PDF, Excel, CSV)
+      return response.blob() as any;
+    }
+  }
+
   // Get list of available reports
   async getAvailableReports(): Promise<Report[]> {
     const response = await fetch(`${API_BASE_URL}/reports`, {
@@ -68,7 +103,7 @@ class ReportService {
     return result.data || [];
   }
 
-  // Generate Balance Sheet
+// Generate Balance Sheet
   async generateBalanceSheet(params: ReportParameters): Promise<ReportData | Blob> {
     const queryString = this.buildQueryString(params);
     const url = `${API_BASE_URL}/reports/balance-sheet${queryString ? '?' + queryString : ''}`;
@@ -77,16 +112,7 @@ class ReportService {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate balance sheet');
-    }
-
-    if (params.format === 'pdf') {
-      return await response.blob();
-    }
-
-    const result = await response.json();
-    return result.data;
+    return this.handleUnifiedResponse(response);
   }
 
   // Generate Profit & Loss Statement
@@ -102,16 +128,7 @@ class ReportService {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate profit & loss statement');
-    }
-
-    if (params.format === 'pdf') {
-      return await response.blob();
-    }
-
-    const result = await response.json();
-    return result.data;
+    return this.handleUnifiedResponse(response);
   }
 
   // Generate Cash Flow Statement
@@ -127,16 +144,7 @@ class ReportService {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate cash flow statement');
-    }
-
-    if (params.format === 'pdf') {
-      return await response.blob();
-    }
-
-    const result = await response.json();
-    return result.data;
+    return this.handleUnifiedResponse(response);
   }
 
   // Generate Trial Balance
@@ -148,16 +156,7 @@ class ReportService {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate trial balance');
-    }
-
-    if (params.format === 'pdf') {
-      return await response.blob();
-    }
-
-    const result = await response.json();
-    return result.data;
+    return this.handleUnifiedResponse(response);
   }
 
   // Generate General Ledger
@@ -173,16 +172,7 @@ class ReportService {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate general ledger');
-    }
-
-    if (params.format === 'pdf') {
-      return await response.blob();
-    }
-
-    const result = await response.json();
-    return result.data;
+    return this.handleUnifiedResponse(response);
   }
 
   // Generate Accounts Receivable Report
@@ -240,16 +230,7 @@ class ReportService {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate sales summary report');
-    }
-
-    if (params.format === 'pdf') {
-      return await response.blob();
-    }
-
-    const result = await response.json();
-    return result.data;
+    return this.handleUnifiedResponse(response);
   }
 
   // Generate Purchase Summary Report
@@ -331,6 +312,7 @@ class ReportService {
       'accounts-payable': 'accounts-payable',
       'sales-summary': 'sales-summary',
       'purchase-summary': 'purchase-summary',
+      'vendor-analysis': 'vendor-analysis',
       'inventory-report': 'inventory-report',
       'financial-ratios': 'financial-ratios'
     };
@@ -341,23 +323,14 @@ class ReportService {
     }
 
     const queryString = this.buildQueryString(params);
+    // All reports now use the unified /reports endpoint
     const url = `${API_BASE_URL}/reports/${endpoint}${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to generate report: ${errorText}`);
-    }
-
-    if (params.format === 'pdf') {
-      return await response.blob();
-    }
-
-    const result = await response.json();
-    return result.data;
+    return this.handleUnifiedResponse(response);
   }
 
   // Download report as file
@@ -406,6 +379,59 @@ class ReportService {
 
     const result = await response.json();
     return result.data;
+  }
+
+  // Professional Reports - Now handled by unified generateReport method
+  // These methods are deprecated, use generateReport or generateUnifiedReport instead
+
+  // Generic professional report generator - Updated with unified handler
+  async generateProfessionalReport(reportType: string, params: ReportParameters): Promise<any | Blob> {
+    // Use the same endpoint as generateReport - they are unified now
+    return this.generateReport(reportType, params);
+  }
+
+  // Generate preview data (JSON format only) - Updated with unified handler
+  async generateReportPreview(reportType: string, params: ReportParameters): Promise<ReportData> {
+    // Force JSON format for preview and use the unified generateReport method
+    const previewParams = { ...params, format: 'json' };
+    const result = await this.generateReport(reportType, previewParams);
+    return result as ReportData;
+  }
+
+  // Unified report generation method that handles all report types
+  // This is now handled by the main generateReport method
+
+  // Enhanced error handling wrapper
+  private async handleApiResponse(response: Response, operation: string): Promise<any> {
+    if (!response.ok) {
+      let errorMessage = `Failed to ${operation}`;
+      
+      try {
+        const errorData = await response.json();
+        if (errorData.message) {
+          errorMessage = errorData.message;
+        } else if (errorData.error) {
+          errorMessage = errorData.error;
+        } else if (errorData.errors && Array.isArray(errorData.errors)) {
+          errorMessage = errorData.errors.join(', ');
+        }
+      } catch {
+        // If JSON parsing fails, try to get text
+        try {
+          const errorText = await response.text();
+          if (errorText) {
+            errorMessage = errorText;
+          }
+        } catch {
+          // Use HTTP status text as fallback
+          errorMessage = `${errorMessage}: ${response.status} ${response.statusText}`;
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    return response;
   }
 }
 

@@ -19,6 +19,8 @@ import {
   Icon,
   Button,
   HStack,
+  useColorMode,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import {
   FiTrendingUp,
@@ -53,6 +55,13 @@ interface DashboardAnalytics {
   totalPurchases: number;
   accountsReceivable: number;
   accountsPayable: number;
+  
+  // Growth percentages
+  salesGrowth: number;
+  purchasesGrowth: number;
+  receivablesGrowth: number;
+  payablesGrowth: number;
+  
   monthlySales: { month: string; value: number }[];
   monthlyPurchases: { month: string; value: number }[];
   cashFlow: { month: string; inflow: number; outflow: number; balance: number }[];
@@ -64,55 +73,94 @@ interface AdminDashboardProps {
   analytics: DashboardAnalytics | null;
 }
 
-const StatCard = ({ icon, title, stat, change, changeType }) => (
-  <Card>
-    <CardHeader display="flex" flexDirection="row" alignItems="center" justifyContent="space-between" pb={2}>
-      <Stat>
-        <StatLabel color="gray.500">{title}</StatLabel>
-        <StatNumber fontSize="2xl" fontWeight="bold">{stat}</StatNumber>
-        <StatHelpText>
-          <StatArrow type={changeType === 'increase' ? 'increase' : 'decrease'} />
-          {change}
-        </StatHelpText>
-      </Stat>
-      <Flex
-        w={12}
-        h={12}
-        align="center"
-        justify="center"
-        borderRadius="full"
-        bg={`${changeType === 'increase' ? 'green' : 'red'}.100`}
-      >
-        <Icon as={icon} color={`${changeType === 'increase' ? 'green' : 'red'}.500`} w={6} h={6} />
-      </Flex>
-    </CardHeader>
-  </Card>
-);
+const StatCard = ({ icon, title, stat, change, changeType }) => {
+  const labelColor = useColorModeValue('gray.500', 'var(--text-secondary)');
+  const numberColor = useColorModeValue('gray.800', 'var(--text-primary)');
+  const iconBgColor = useColorModeValue(
+    `${changeType === 'increase' ? 'green' : 'red'}.100`,
+    `${changeType === 'increase' ? 'green' : 'red'}.900`
+  );
+  const iconColor = useColorModeValue(
+    `${changeType === 'increase' ? 'green' : 'red'}.500`,
+    `${changeType === 'increase' ? 'green' : 'red'}.300`
+  );
+
+  return (
+    <Card className="card">
+      <CardHeader display="flex" flexDirection="row" alignItems="center" justifyContent="space-between" pb={2}>
+        <Stat>
+          <StatLabel color={labelColor}>{title}</StatLabel>
+          <StatNumber fontSize="2xl" fontWeight="bold" color={numberColor}>{stat}</StatNumber>
+          <StatHelpText>
+            <StatArrow type={changeType === 'increase' ? 'increase' : 'decrease'} />
+            {change}
+          </StatHelpText>
+        </Stat>
+        <Flex
+          w={12}
+          h={12}
+          align="center"
+          justify="center"
+          borderRadius="full"
+          bg={iconBgColor}
+          transition="all 0.3s ease"
+        >
+          <Icon as={icon} color={iconColor} w={6} h={6} />
+        </Flex>
+      </CardHeader>
+    </Card>
+  );
+};
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => {
   const router = useRouter();
+  const { colorMode } = useColorMode();
+  
+  // Dynamic colors for charts based on theme
+  const chartColors = {
+    primary: colorMode === 'dark' ? '#4dabf7' : '#2196F3',
+    secondary: colorMode === 'dark' ? '#51cf66' : '#28a745',
+    tertiary: colorMode === 'dark' ? '#ffd43b' : '#ffc107',
+    quaternary: colorMode === 'dark' ? '#ff6b6b' : '#dc3545',
+    background: colorMode === 'dark' ? 'var(--bg-secondary)' : 'white',
+    gridColor: colorMode === 'dark' ? '#495057' : '#e0e0e0',
+    textColor: colorMode === 'dark' ? 'var(--text-primary)' : '#333333',
+  };
   
   if (!analytics) {
-    return <Box>Loading analytics...</Box>;
+    return <Box color={colorMode === 'dark' ? 'var(--text-primary)' : 'gray.800'}>Loading analytics...</Box>;
   }
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(value);
   
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28bF4'];
+  // Format growth percentage for display
+  const formatGrowthPercentage = (growth: number) => {
+    const absGrowth = Math.abs(growth);
+    const formatted = absGrowth.toFixed(1);
+    return growth >= 0 ? `+${formatted}%` : `-${formatted}%`;
+  };
+  
+  // Get growth type for styling
+  const getGrowthType = (growth: number) => growth >= 0 ? 'increase' : 'decrease';
+  
+  // Dynamic chart colors based on theme
+  const COLORS = colorMode === 'dark' 
+    ? ['#4dabf7', '#51cf66', '#ffd43b', '#ff6b6b', '#9775fa']
+    : ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28bF4'];
 
   // Format data for charts
-  const salesPurchaseData = analytics.monthlySales.map((sale, index) => ({
+  const salesPurchaseData = analytics.monthlySales?.map((sale, index) => ({
     month: sale.month,
     sales: sale.value,
-    purchases: analytics.monthlyPurchases[index]?.value || 0,
-  }));
+    purchases: analytics.monthlyPurchases?.[index]?.value || 0,
+  })) || [];
 
-  const topAccountsData = analytics.topAccounts.map((account, index) => ({
+  const topAccountsData = analytics.topAccounts?.map((account, index) => ({
     name: account.name,
     value: account.balance,
     fill: COLORS[index % COLORS.length],
-  }));
+  })) || [];
 
   return (
     <Box>
@@ -120,30 +168,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
         <StatCard
           icon={FiDollarSign}
           title="Total Pendapatan"
-          stat={formatCurrency(analytics.totalSales)}
-          change="+20.1%"
-          changeType="increase"
+          stat={formatCurrency(analytics.totalSales || 0)}
+          change={formatGrowthPercentage(analytics.salesGrowth || 0)}
+          changeType={getGrowthType(analytics.salesGrowth || 0)}
         />
         <StatCard
           icon={FiShoppingCart}
           title="Total Pembelian"
-          stat={formatCurrency(analytics.totalPurchases)}
-          change="+18.3%"
-          changeType="increase"
+          stat={formatCurrency(analytics.totalPurchases || 0)}
+          change={formatGrowthPercentage(analytics.purchasesGrowth || 0)}
+          changeType={getGrowthType(analytics.purchasesGrowth || 0)}
         />
         <StatCard
           icon={FiTrendingUp}
           title="Piutang Usaha"
-          stat={formatCurrency(analytics.accountsReceivable)}
-          change="+5.2%"
-          changeType="increase"
+          stat={formatCurrency(analytics.accountsReceivable || 0)}
+          change={formatGrowthPercentage(analytics.receivablesGrowth || 0)}
+          changeType={getGrowthType(analytics.receivablesGrowth || 0)}
         />
         <StatCard
           icon={FiTrendingDown}
           title="Utang Usaha"
-          stat={formatCurrency(analytics.accountsPayable)}
-          change="+3.1%"
-          changeType="increase"
+          stat={formatCurrency(analytics.accountsPayable || 0)}
+          change={formatGrowthPercentage(analytics.payablesGrowth || 0)}
+          changeType={getGrowthType(analytics.payablesGrowth || 0)}
         />
       </SimpleGrid>
 
@@ -179,10 +227,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
               leftIcon={<FiTrendingUp />}
               colorScheme="blue"
               variant="outline"
-              onClick={() => router.push('/payments')}
+              onClick={() => router.push('/cash-bank')}
               size="md"
             >
-              Kelola Pembayaran
+              Kelola Kas & Bank
+            </Button>
+            <Button
+              leftIcon={<FiBarChart2 />}
+              colorScheme="purple"
+              variant="outline"
+              onClick={() => router.push('/reports')}
+              size="md"
+            >
+              Laporan Keuangan
             </Button>
           </HStack>
         </CardBody>
@@ -197,15 +254,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
             </Heading>
           </CardHeader>
           <CardBody>
-<ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={300}>
               <LineChart data={salesPurchaseData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="sales" stroke="#8884d8" activeDot={{ r: 8 }} />
-                <Line type="monotone" dataKey="purchases" stroke="#82ca9d" />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.gridColor} />
+                <XAxis 
+                  dataKey="month" 
+                  tick={{ fill: chartColors.textColor, fontSize: 12 }}
+                  axisLine={{ stroke: chartColors.gridColor }}
+                />
+                <YAxis 
+                  tick={{ fill: chartColors.textColor, fontSize: 12 }}
+                  axisLine={{ stroke: chartColors.gridColor }}
+                />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: chartColors.background,
+                    border: `1px solid ${chartColors.gridColor}`,
+                    borderRadius: '8px',
+                    color: chartColors.textColor,
+                  }}
+                />
+                <Legend wrapperStyle={{ color: chartColors.textColor }} />
+                <Line type="monotone" dataKey="sales" stroke={chartColors.primary} activeDot={{ r: 8 }} strokeWidth={2} />
+                <Line type="monotone" dataKey="purchases" stroke={chartColors.secondary} strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </CardBody>
@@ -219,15 +290,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
             </Heading>
           </CardHeader>
           <CardBody>
-<ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={300}>
               <RechartsPieChart>
-                <Pie data={topAccountsData} innerRadius={60} outerRadius={80} fill="#8884d8" dataKey="value" label>
+                <Pie 
+                  data={topAccountsData} 
+                  innerRadius={60} 
+                  outerRadius={80} 
+                  fill={chartColors.primary} 
+                  dataKey="value" 
+                  label={{ fill: chartColors.textColor }}
+                >
                   {
-                    topAccountsData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)
+                    topAccountsData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={colorMode === 'dark' ? COLORS[index % COLORS.length] : entry.fill} 
+                      />
+                    ))
                   }
                 </Pie>
-                <Tooltip />
-                <Legend />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: chartColors.background,
+                    border: `1px solid ${chartColors.gridColor}`,
+                    borderRadius: '8px',
+                    color: chartColors.textColor,
+                  }}
+                />
+                <Legend wrapperStyle={{ color: chartColors.textColor }} />
               </RechartsPieChart>
             </ResponsiveContainer>
           </CardBody>
@@ -244,15 +334,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
         </CardHeader>
         <CardBody>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={analytics.cashFlow} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="inflow" fill="#00C49F" name="Arus Masuk" />
-              <Bar dataKey="outflow" fill="#FF8042" name="Arus Keluar" />
-              <Bar dataKey="balance" fill="#0088FE" name="Saldo" />
+            <BarChart data={analytics.cashFlow || []} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.gridColor} />
+              <XAxis 
+                dataKey="month" 
+                tick={{ fill: chartColors.textColor, fontSize: 12 }}
+                axisLine={{ stroke: chartColors.gridColor }}
+              />
+              <YAxis 
+                tick={{ fill: chartColors.textColor, fontSize: 12 }}
+                axisLine={{ stroke: chartColors.gridColor }}
+              />
+              <Tooltip 
+                contentStyle={{
+                  backgroundColor: chartColors.background,
+                  border: `1px solid ${chartColors.gridColor}`,
+                  borderRadius: '8px',
+                  color: chartColors.textColor,
+                }}
+              />
+              <Legend wrapperStyle={{ color: chartColors.textColor }} />
+              <Bar dataKey="inflow" fill={chartColors.secondary} name="Arus Masuk" />
+              <Bar dataKey="outflow" fill={chartColors.quaternary} name="Arus Keluar" />
+              <Bar dataKey="balance" fill={chartColors.primary} name="Saldo" />
             </BarChart>
           </ResponsiveContainer>
         </CardBody>

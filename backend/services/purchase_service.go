@@ -1,22 +1,26 @@
 package services
 
 import (
+	"app-sistem-akuntansi/models"
+	"app-sistem-akuntansi/repositories"
+	"context"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"math"
 	"os"
 	"time"
-	"app-sistem-akuntansi/models"
-	"app-sistem-akuntansi/repositories"
 )
 
 type PurchaseService struct {
+	db              *gorm.DB
 	purchaseRepo    *repositories.PurchaseRepository
 	productRepo     *repositories.ProductRepository
 	contactRepo     repositories.ContactRepository
 	accountRepo     repositories.AccountRepository
 	approvalService *ApprovalService
 	journalService  JournalServiceInterface
+	journalRepo     repositories.JournalEntryRepository
 	pdfService      PDFServiceInterface
 }
 
@@ -29,21 +33,25 @@ type PurchaseResult struct {
 }
 
 func NewPurchaseService(
+	db *gorm.DB,
 	purchaseRepo *repositories.PurchaseRepository,
 	productRepo *repositories.ProductRepository,
 	contactRepo repositories.ContactRepository,
 	accountRepo repositories.AccountRepository,
 	approvalService *ApprovalService,
 	journalService JournalServiceInterface,
+	journalRepo repositories.JournalEntryRepository,
 	pdfService PDFServiceInterface,
 ) *PurchaseService {
 	return &PurchaseService{
+		db:              db,
 		purchaseRepo:    purchaseRepo,
 		productRepo:     productRepo,
 		contactRepo:     contactRepo,
 		accountRepo:     accountRepo,
 		approvalService: approvalService,
 		journalService:  journalService,
+		journalRepo:     journalRepo,
 		pdfService:      pdfService,
 	}
 }
@@ -86,17 +94,27 @@ func (s *PurchaseService) CreatePurchase(request models.PurchaseCreateRequest, u
 
 	// Create purchase entity
 	purchase := &models.Purchase{
-		Code:             code,
-		VendorID:         request.VendorID,
-		UserID:           userID,
-		Date:             request.Date,
-		DueDate:          request.DueDate,
-		Discount:         request.Discount,
-		TaxAmount:        request.Tax,
-		Status:           models.PurchaseStatusDraft,
-		Notes:            request.Notes,
-		ApprovalStatus:   models.PurchaseApprovalNotStarted,
-		RequiresApproval: false,
+		Code:     code,
+		VendorID: request.VendorID,
+		UserID:   userID,
+		Date:     request.Date,
+		DueDate:  request.DueDate,
+		Discount: request.Discount,
+		// Payment method fields
+		PaymentMethod:     getPaymentMethod(request.PaymentMethod),
+		BankAccountID:     request.BankAccountID,
+		CreditAccountID:   request.CreditAccountID,
+		PaymentReference:  request.PaymentReference,
+		// Tax rates from request (don't use legacy tax field directly)
+		PPNRate:            request.PPNRate,
+		OtherTaxAdditions:  request.OtherTaxAdditions,
+		PPh21Rate:          request.PPh21Rate,
+		PPh23Rate:          request.PPh23Rate,
+		OtherTaxDeductions: request.OtherTaxDeductions,
+		Status:             models.PurchaseStatusDraft,
+		Notes:              request.Notes,
+		ApprovalStatus:     models.PurchaseApprovalNotStarted,
+		RequiresApproval:   false,
 		// Initialize payment tracking fields
 		PaidAmount:        0,
 		OutstandingAmount: 0, // Will be set after total calculation
@@ -110,12 +128,30 @@ func (s *PurchaseService) CreatePurchase(request models.PurchaseCreateRequest, u
 	}
 
 	// Determine approval basis and base amount for later use
-	s.setApprovalBasisAndBase(purchase)
+	if s.approvalService != nil {
+		s.setApprovalBasisAndBase(purchase)
+	} else {
+		// For testing purposes, set default values
+		purchase.RequiresApproval = false
+		purchase.ApprovalStatus = models.PurchaseApprovalNotRequired
+	}
 
 	// Save purchase, status will remain DRAFT
 	createdPurchase, err := s.purchaseRepo.Create(purchase)
 	if err != nil {
 		return nil, err
+	}
+
+	// For credit purchases that don't require approval, create journal entries immediately
+	// This ensures COA is updated correctly without waiting for approval
+	// If approval is required, journal entries will be created after approval
+	if purchase.PaymentMethod == models.PurchasePaymentCredit && !purchase.RequiresApproval {
+		fmt.Printf("Creating immediate journal entries for credit purchase %s (no approval required)\n", purchase.Code)
+		err = s.createAndPostPurchaseJournalEntries(createdPurchase, userID)
+		if err != nil {
+			fmt.Printf("Warning: Failed to create journal entries for credit purchase %d: %v\n", createdPurchase.ID, err)
+			// Don't fail the purchase creation, but log the issue
+		}
 	}
 
 	return s.GetPurchaseByID(createdPurchase.ID)
@@ -128,7 +164,7 @@ func (s *PurchaseService) UpdatePurchase(id uint, request models.PurchaseUpdateR
 	}
 
 	// Check if purchase can be updated
-	if purchase.Status != models.PurchaseStatusDraft && purchase.Status != models.PurchaseStatusPendingApproval {
+	if purchase.Status != models.PurchaseStatusDraft && purchase.Status != models.PurchaseStatusPending {
 		return nil, errors.New("purchase cannot be updated in current status")
 	}
 
@@ -145,11 +181,37 @@ func (s *PurchaseService) UpdatePurchase(id uint, request models.PurchaseUpdateR
 	if request.Discount != nil {
 		purchase.Discount = *request.Discount
 	}
-	if request.Tax != nil {
-		purchase.TaxAmount = *request.Tax
+	// Update tax rates from request (don't use legacy tax field directly)
+	if request.PPNRate != nil {
+		purchase.PPNRate = *request.PPNRate
+	}
+	if request.OtherTaxAdditions != nil {
+		purchase.OtherTaxAdditions = *request.OtherTaxAdditions
+	}
+	if request.PPh21Rate != nil {
+		purchase.PPh21Rate = *request.PPh21Rate
+	}
+	if request.PPh23Rate != nil {
+		purchase.PPh23Rate = *request.PPh23Rate
+	}
+	if request.OtherTaxDeductions != nil {
+		purchase.OtherTaxDeductions = *request.OtherTaxDeductions
 	}
 	if request.Notes != nil {
 		purchase.Notes = *request.Notes
+	}
+	// Update payment method fields
+	if request.PaymentMethod != nil {
+		purchase.PaymentMethod = *request.PaymentMethod
+	}
+	if request.BankAccountID != nil {
+		purchase.BankAccountID = request.BankAccountID
+	}
+	if request.CreditAccountID != nil {
+		purchase.CreditAccountID = request.CreditAccountID
+	}
+	if request.PaymentReference != nil {
+		purchase.PaymentReference = *request.PaymentReference
 	}
 
 	// Update items if provided
@@ -240,7 +302,7 @@ func (s *PurchaseService) SubmitForApproval(id uint, userID uint) error {
 
 	// Update purchase status
 	now := time.Now()
-	purchase.Status = models.PurchaseStatusPendingApproval
+	purchase.Status = models.PurchaseStatusPending // Change to PENDING instead of PENDING_APPROVAL
 	purchase.ApprovalStatus = models.PurchaseApprovalPending
 	purchase.RequiresApproval = true
 	purchase.UpdatedAt = now
@@ -287,8 +349,9 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 	// Allow approval/rejection of DRAFT purchases (Finance approving new purchases)
 	// and PENDING purchases (Director approving escalated purchases)
 	// Also allow NOT_STARTED for rejection
-	if purchase.Status != models.PurchaseStatusDraft && 
-		purchase.ApprovalStatus != models.PurchaseApprovalPending && 
+	if purchase.Status != models.PurchaseStatusDraft &&
+		purchase.Status != models.PurchaseStatusPending &&
+		purchase.ApprovalStatus != models.PurchaseApprovalPending &&
 		purchase.ApprovalStatus != models.PurchaseApprovalNotStarted {
 		return nil, errors.New("purchase cannot be approved in current status")
 	}
@@ -301,7 +364,7 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 		purchase.Status = models.PurchaseStatusCancelled
 		purchase.ApprovalStatus = models.PurchaseApprovalRejected
 		purchase.UpdatedAt = now
-		
+
 		// If no approval request exists (DRAFT status), create one for history tracking
 		if purchase.ApprovalRequestID == nil {
 			// Create a minimal approval request for history tracking (without workflow dependency)
@@ -310,12 +373,12 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 				// Continue even if this fails - the rejection should still proceed
 			}
 		}
-		
+
 		_, err = s.purchaseRepo.Update(purchase)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// Create approval history record for rejection
 		if purchase.ApprovalRequestID != nil {
 			// First update the approval request status to rejected
@@ -325,13 +388,13 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 				approvalReq.RejectReason = comments
 				s.approvalService.UpdateApprovalRequest(approvalReq)
 			}
-			
+
 			// Ensure comments are not empty for rejection history
 			historyComments := comments
 			if historyComments == "" {
 				historyComments = "Purchase rejected without comment"
 			}
-			
+
 			historyErr := s.approvalService.CreateApprovalHistory(*purchase.ApprovalRequestID, userID, models.ApprovalActionRejected, historyComments)
 			if historyErr != nil {
 				// Log error but don't fail the entire operation
@@ -341,7 +404,7 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 		} else {
 			fmt.Printf("Warning: Purchase %d rejected but no approval request ID found\n", purchaseID)
 		}
-		
+
 		result["message"] = "Purchase rejected"
 		result["purchase_id"] = purchaseID
 		result["status"] = "REJECTED"
@@ -365,33 +428,43 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 				return nil, err
 			}
 		}
-		
-		// Create approval history for finance approval with escalation note
+
+		// IMPORTANT: Escalate to director FIRST before processing approval
+		// This ensures the request stays PENDING for director approval
 		if purchase.ApprovalRequestID != nil {
-			historyErr := s.approvalService.CreateApprovalHistory(*purchase.ApprovalRequestID, userID, models.ApprovalActionApproved, 
-				fmt.Sprintf("%s (Escalated to Director)", comments))
-			if historyErr != nil {
-				fmt.Printf("Failed to create approval history: %v\n", historyErr)
+			// First escalate to director to add director step
+			err = s.approvalService.EscalateToDirector(*purchase.ApprovalRequestID, userID, "Requires Director approval as requested by Finance")
+			if err != nil {
+				return nil, fmt.Errorf("failed to escalate to director: %v", err)
+			}
+
+			// Then process the finance approval
+			action := models.ApprovalActionDTO{
+				Action:   "APPROVE",
+				Comments: fmt.Sprintf("%s (Escalated to Director for final approval)", comments),
+			}
+			err = s.approvalService.ProcessApprovalAction(*purchase.ApprovalRequestID, userID, action)
+			if err != nil {
+				return nil, fmt.Errorf("failed to process finance approval: %v", err)
 			}
 		}
-		
-		// Finance approved but escalated to director
-		// Purchase stays DRAFT, but approval_status becomes PENDING for director review
-		purchase.Status = models.PurchaseStatusDraft  // Keep as DRAFT
-		purchase.ApprovalStatus = models.PurchaseApprovalPending  // Set to PENDING for director
-		purchase.RequiresApproval = true  // Mark as requiring approval
-		
+
+		// Purchase stays PENDING for director review
+		purchase.Status = models.PurchaseStatusPending           // Keep as PENDING
+		purchase.ApprovalStatus = models.PurchaseApprovalPending // Set to PENDING for director
+		purchase.RequiresApproval = true                         // Mark as requiring approval
+
 		purchase.UpdatedAt = now
 		_, err = s.purchaseRepo.Update(purchase)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		result["message"] = "Purchase approved by Finance and escalated to Director for final approval"
 		result["purchase_id"] = purchaseID
 		result["escalated"] = true
-		result["status"] = "DRAFT"  // Status remains DRAFT
-		result["approval_status"] = "PENDING"  // But approval status is PENDING
+		result["status"] = "PENDING"          // Status is PENDING
+		result["approval_status"] = "PENDING" // But approval status is PENDING
 		return result, nil
 	}
 
@@ -409,7 +482,7 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 			return nil, err
 		}
 	}
-	
+
 	// Create approval history
 	if purchase.ApprovalRequestID != nil {
 		// Update the approval request status to approved
@@ -418,24 +491,44 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 			approvalReq.CompletedAt = &now
 			s.approvalService.UpdateApprovalRequest(approvalReq)
 		}
-		
+
 		historyErr := s.approvalService.CreateApprovalHistory(*purchase.ApprovalRequestID, userID, models.ApprovalActionApproved, comments)
 		if historyErr != nil {
 			fmt.Printf("Failed to create approval history: %v\n", historyErr)
 		}
 	}
-	
+
 	purchase.Status = models.PurchaseStatusApproved
 	purchase.ApprovalStatus = models.PurchaseApprovalApproved
 	purchase.ApprovedAt = &now
 	purchase.ApprovedBy = &userID
 	purchase.UpdatedAt = now
-	
+
 	_, err = s.purchaseRepo.Update(purchase)
 	if err != nil {
 		return nil, err
 	}
-	
+
+	// Create and post journal entries for the approved purchase
+	// Skip if journal entries were already created (e.g., for credit purchases without approval)
+	hasExistingJournalEntries, checkErr := s.purchaseHasJournalEntries(purchaseID)
+	if checkErr != nil {
+		fmt.Printf("Warning: Failed to check existing journal entries for purchase %d: %v\n", purchaseID, checkErr)
+		// Continue with journal creation to be safe
+		hasExistingJournalEntries = false
+	}
+
+	if !hasExistingJournalEntries {
+		fmt.Printf("Creating journal entries for approved purchase %d\n", purchaseID)
+		err = s.createAndPostPurchaseJournalEntries(purchase, userID)
+		if err != nil {
+			fmt.Printf("Warning: Failed to create/post journal entries for purchase %d: %v\n", purchaseID, err)
+			// Don't fail the approval process, but log the issue
+		}
+	} else {
+		fmt.Printf("Journal entries already exist for purchase %d, skipping creation\n", purchaseID)
+	}
+
 	result["message"] = "Purchase approved successfully"
 	result["purchase_id"] = purchaseID
 	result["escalated"] = false
@@ -452,8 +545,8 @@ func (s *PurchaseService) CreatePurchaseReceipt(request models.PurchaseReceiptRe
 		return nil, err
 	}
 
-	if purchase.Status != models.PurchaseStatusApproved {
-		return nil, errors.New("can only receive items for approved purchases")
+	if purchase.Status != models.PurchaseStatusApproved && purchase.Status != models.PurchaseStatusPending {
+		return nil, errors.New("can only receive items for approved or pending purchases")
 	}
 
 	// Generate receipt number
@@ -605,7 +698,6 @@ func (s *PurchaseService) checkIfApprovalRequired(amount float64) bool {
 	return err == nil && workflow != nil
 }
 
-
 func (s *PurchaseService) createApprovalRequest(purchase *models.Purchase, priority string, userID uint) error {
 	// Ensure vendor is loaded
 	vendorName := "Unknown"
@@ -656,7 +748,6 @@ func (s *PurchaseService) createApprovalRequest(purchase *models.Purchase, prior
 	_, err = s.purchaseRepo.Update(purchase)
 	return err
 }
-
 
 func (s *PurchaseService) validateReceiptItems(receiptItems []models.PurchaseReceiptItemRequest, purchaseItems []models.PurchaseItem) error {
 	for _, receiptItem := range receiptItems {
@@ -733,3 +824,33 @@ func getApprovalBasis() string {
 	return basis
 }
 
+// getPaymentMethod returns default payment method if empty
+func getPaymentMethod(paymentMethod string) string {
+	if paymentMethod == "" {
+		return models.PurchasePaymentCredit // Default to credit
+	}
+	return paymentMethod
+}
+
+// purchaseHasJournalEntries checks if a purchase already has associated journal entries
+func (s *PurchaseService) purchaseHasJournalEntries(purchaseID uint) (bool, error) {
+	if s.journalRepo == nil {
+		return false, errors.New("journal repository not available")
+	}
+	
+	// Use FindByReferenceID which is specifically designed for finding entries by reference
+	ctx := context.Background()
+	existingEntry, err := s.journalRepo.FindByReferenceID(ctx, models.JournalRefPurchase, purchaseID)
+	if err != nil {
+		return false, err
+	}
+	
+	return existingEntry != nil, nil
+}
+
+// isImmediatePayment checks if payment method requires immediate payment
+func isImmediatePayment(paymentMethod string) bool {
+	return paymentMethod == models.PurchasePaymentCash ||
+		paymentMethod == models.PurchasePaymentTransfer ||
+		paymentMethod == models.PurchasePaymentCheck
+}

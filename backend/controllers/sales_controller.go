@@ -121,7 +121,15 @@ func (sc *SalesController) DeleteSale(c *gin.Context) {
 		return
 	}
 
-	if err := sc.salesService.DeleteSale(uint(id)); err != nil {
+	// Get user role from context for permission checking
+	userRole, exists := c.Get("role")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User role not found"})
+		return
+	}
+	roleStr := userRole.(string)
+
+	if err := sc.salesService.DeleteSaleWithRole(uint(id), roleStr); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

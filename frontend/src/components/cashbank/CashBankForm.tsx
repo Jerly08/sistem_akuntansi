@@ -43,6 +43,7 @@ import {
   TabPanels,
   TabPanel,
   Badge,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { useForm, Controller } from 'react-hook-form';
 import { FiUser, FiDollarSign, FiCalendar, FiCreditCard, FiFileText, FiSettings } from 'react-icons/fi';
@@ -85,6 +86,25 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
   const [autoCreateGL, setAutoCreateGL] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
   const toast = useToast();
+
+  // Color mode values
+  const modalContentBg = useColorModeValue('white', 'gray.800');
+  const modalHeaderBg = useColorModeValue('blue.500', 'blue.600');
+  const modalFooterBg = useColorModeValue('gray.50', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const textColor = useColorModeValue('gray.700', 'gray.300');
+  const mutedTextColor = useColorModeValue('gray.500', 'gray.400');
+  const readOnlyBg = useColorModeValue('gray.50', 'gray.700');
+  const cardInfoBg = useColorModeValue('blue.50', 'blue.900');
+  const cardInfoTextColor = useColorModeValue('blue.700', 'blue.200');
+  const cardInfoBorderColor = useColorModeValue('blue.200', 'blue.700');
+  const cardSuccessBg = useColorModeValue('green.50', 'green.900');
+  const cardSuccessTextColor = useColorModeValue('green.700', 'green.200');
+  const cardSuccessBorderColor = useColorModeValue('green.200', 'green.700');
+  const warningTextColor = useColorModeValue('orange.500', 'orange.300');
+  const scrollbarTrackColor = useColorModeValue('#f1f1f1', '#2d3748');
+  const scrollbarThumbColor = useColorModeValue('#c1c1c1', '#4a5568');
+  const scrollbarThumbHoverColor = useColorModeValue('#a8a8a8', '#718096');
 
   const {
     control,
@@ -251,9 +271,10 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
         maxH="95vh" 
         maxW={{ base: '95vw', md: '90vw', lg: '70vw' }}
         mx={4}
+        bg={modalContentBg}
       >
         <ModalHeader 
-          bg="blue.500" 
+          bg={modalHeaderBg} 
           color="white" 
           borderTopRadius="md"
           py={4}
@@ -271,14 +292,14 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                 width: '8px',
               },
               '&::-webkit-scrollbar-track': {
-                background: '#f1f1f1',
+                background: scrollbarTrackColor,
                 borderRadius: '4px',
               },
               '&::-webkit-scrollbar-thumb': {
-                background: '#c1c1c1',
+                background: scrollbarThumbColor,
                 borderRadius: '4px',
                 '&:hover': {
-                  background: '#a8a8a8',
+                  background: scrollbarThumbHoverColor,
                 },
               },
               scrollBehavior: 'smooth',
@@ -322,7 +343,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                       <Text fontSize="2xl">💵</Text>
                                       <Box>
                                         <Text>Cash Account</Text>
-                                        <Text fontSize="xs" color="gray.500">Physical money management</Text>
+                                        <Text fontSize="xs" color={mutedTextColor}>Physical money management</Text>
                                       </Box>
                                     </HStack>
                                   </Radio>
@@ -331,7 +352,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                       <Text fontSize="2xl">🏦</Text>
                                       <Box>
                                         <Text>Bank Account</Text>
-                                        <Text fontSize="xs" color="gray.500">Electronic banking</Text>
+                                        <Text fontSize="xs" color={mutedTextColor}>Electronic banking</Text>
                                       </Box>
                                     </HStack>
                                   </Radio>
@@ -340,7 +361,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                             )}
                           />
                           {mode === 'edit' && (
-                            <Text fontSize="xs" color="orange.500" mt={2}>
+                            <Text fontSize="xs" color={warningTextColor} mt={2}>
                               ⚠️ Account type cannot be changed after creation
                             </Text>
                           )}
@@ -351,7 +372,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                     {/* Basic Account Information */}
                     <Card>
                       <CardBody>
-                        <Text fontWeight="bold" mb={4} color="gray.700">
+                        <Text fontWeight="bold" mb={4} color={textColor}>
                           📋 Basic Information
                         </Text>
                         
@@ -383,11 +404,11 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                             <Input
                               value="Indonesian Rupiah (IDR)"
                               isReadOnly
-                              bg="gray.50"
-                              color="gray.700"
+                              bg={readOnlyBg}
+                              color={textColor}
                               fontWeight="medium"
                             />
-                            <Text fontSize="xs" color="gray.500" mt={1}>
+                            <Text fontSize="xs" color={mutedTextColor} mt={1}>
                               Currency is automatically set to Indonesian Rupiah
                             </Text>
                           </FormControl>
@@ -409,7 +430,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                     {watchedType === 'BANK' && (
                       <Card>
                         <CardBody>
-                          <Text fontWeight="bold" mb={4} color="gray.700">
+                          <Text fontWeight="bold" mb={4} color={textColor}>
                             🏦 Bank Details
                           </Text>
                           
@@ -436,7 +457,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                 {...register('account_no')}
                                 placeholder="e.g., 1234567890"
                               />
-                              <Text fontSize="xs" color="gray.500" mt={1}>
+                              <Text fontSize="xs" color={mutedTextColor} mt={1}>
                                 Optional: Bank account number for reference
                               </Text>
                             </FormControl>
@@ -449,7 +470,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                     {mode === 'create' && (
                       <Card>
                         <CardBody>
-                          <Text fontWeight="bold" mb={4} color="gray.700">
+                          <Text fontWeight="bold" mb={4} color={textColor}>
                             💰 Initial Setup
                           </Text>
                           
@@ -479,7 +500,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                   </NumberInput>
                                 )}
                               />
-                              <Text fontSize="xs" color="gray.500" mt={1}>
+                              <Text fontSize="xs" color={mutedTextColor} mt={1}>
                                 Initial balance when creating this account
                               </Text>
                             </FormControl>
@@ -513,14 +534,14 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
 
                     {/* Next Step for COA Integration */}
                     {mode === 'create' && (
-                      <Card bg="blue.50" borderColor="blue.200">
+                      <Card bg={cardInfoBg} borderColor={cardInfoBorderColor}>
                         <CardBody>
                           <HStack justify="space-between" align="center">
                             <Box>
-                              <Text fontWeight="bold" color="blue.700" mb={1}>
+                              <Text fontWeight="bold" color={cardInfoTextColor} mb={1}>
                                 📊 Chart of Accounts Integration
                               </Text>
-                              <Text fontSize="sm" color="blue.600">
+                              <Text fontSize="sm" color={cardInfoTextColor}>
                                 Configure how this account links to your Chart of Accounts
                               </Text>
                             </Box>
@@ -566,10 +587,10 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                               size="lg"
                             >
                               <VStack align="start" spacing={1} ml={3}>
-                                <Text fontWeight="bold" color="blue.700">
+                                <Text fontWeight="bold" color={cardInfoTextColor}>
                                   🔄 Auto-create GL Account (Recommended)
                                 </Text>
-                                <Text fontSize="sm" color="gray.600">
+                                <Text fontSize="sm" color={textColor}>
                                   Let the system automatically create and link a GL account
                                 </Text>
                               </VStack>
@@ -613,7 +634,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                     </option>
                                   ))}
                                 </Select>
-                                <Text fontSize="xs" color="gray.500" mt={1}>
+                                <Text fontSize="xs" color={mutedTextColor} mt={1}>
                                   Only active Asset accounts (Current Asset category) are shown. 
                                   Need more accounts? Visit <strong>Chart of Accounts</strong> page to create them.
                                 </Text>
@@ -624,29 +645,29 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                       </Card>
 
                       {/* COA Benefits */}
-                      <Card bg="green.50" borderColor="green.200">
+                      <Card bg={cardSuccessBg} borderColor={cardSuccessBorderColor}>
                         <CardBody>
-                          <Text fontWeight="bold" color="green.700" mb={3}>
+                          <Text fontWeight="bold" color={cardSuccessTextColor} mb={3}>
                             ✅ Benefits of COA Integration
                           </Text>
                           <VStack align="start" spacing={2}>
                             <HStack>
-                              <Text fontSize="sm" color="green.600">
+                              <Text fontSize="sm" color={cardSuccessTextColor}>
                                 📈 Automatic journal entries for all transactions
                               </Text>
                             </HStack>
                             <HStack>
-                              <Text fontSize="sm" color="green.600">
+                              <Text fontSize="sm" color={cardSuccessTextColor}>
                                 📊 Proper balance sheet and income statement reporting
                               </Text>
                             </HStack>
                             <HStack>
-                              <Text fontSize="sm" color="green.600">
+                              <Text fontSize="sm" color={cardSuccessTextColor}>
                                 🔍 Full audit trail and compliance readiness
                               </Text>
                             </HStack>
                             <HStack>
-                              <Text fontSize="sm" color="green.600">
+                              <Text fontSize="sm" color={cardSuccessTextColor}>
                                 🔄 Real-time synchronization between cash/bank and GL
                               </Text>
                             </HStack>
@@ -661,12 +682,12 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           </ModalBody>
 
           <ModalFooter 
-            bg="gray.50" 
+            bg={modalFooterBg} 
             borderBottomRadius="md"
             py={4}
             px={6}
             borderTop="1px"
-            borderColor="gray.200"
+            borderColor={borderColor}
           >
             <HStack spacing={3} width="full" justify="flex-end">
               <Button 

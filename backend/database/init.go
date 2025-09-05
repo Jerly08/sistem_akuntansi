@@ -1,13 +1,17 @@
 package database
 
 import (
+	"fmt"
 	"log"
+	"time"
 	"gorm.io/gorm"
 	"app-sistem-akuntansi/models"
 )
 
 // InitializeDatabase runs migrations and seeds initial data
 func InitializeDatabase(db *gorm.DB) {
+	log.Println("🛡️  PRODUCTION DATABASE INITIALIZATION - ALL BALANCE SYNC OPERATIONS DISABLED")
+	log.Println("✅ Account balances are protected from automatic modifications")
 	log.Println("Initializing database...")
 	
 	// Run migrations
@@ -18,6 +22,18 @@ func InitializeDatabase(db *gorm.DB) {
 	
 	// Update existing purchase data with new payment tracking fields
 	UpdateExistingPurchaseData(db)
+	
+	// Note: Balance sync migration is now handled in database.go after environment variable checks
+	// to prevent balance resets during development
+	
+	// Fix cash bank constraint issues
+	CashBankConstraintMigration(db)
+	
+	// Run notification system migrations
+	MigrateNotificationConfig(db)
+	
+	// Clean up duplicate notifications
+	CleanupDuplicateNotificationsMigration(db)
 	
 	log.Println("Database initialization completed")
 }
@@ -99,6 +115,17 @@ func RunMigrations(db *gorm.DB) {
 			
 			// Audit models
 			&models.AuditLog{},
+			
+			// Security models
+			&models.SecurityIncident{},
+			&models.SystemAlert{},
+			&models.RequestLog{},
+			&models.IpWhitelist{},
+			&models.SecurityConfig{},
+			&models.SecurityMetrics{},
+			
+			// Migration tracking
+			&models.MigrationRecord{},
 		)
 
 	if err != nil {
@@ -161,6 +188,19 @@ func CreateIndexes(db *gorm.DB) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_logs_table_record ON audit_logs(table_name, record_id)")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_audit_logs_user_action ON audit_logs(user_id, action)")
 	
+	// Security indexes
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_security_incidents_type_severity ON security_incidents(incident_type, severity)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_security_incidents_client_ip ON security_incidents(client_ip, created_at)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_security_incidents_resolved ON security_incidents(resolved, created_at)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_system_alerts_type_level ON system_alerts(alert_type, level)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_system_alerts_acknowledged ON system_alerts(acknowledged, created_at)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_request_logs_client_ip ON request_logs(client_ip, timestamp)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_request_logs_suspicious ON request_logs(is_suspicious, timestamp)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_request_logs_path_method ON request_logs(path, method, timestamp)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_ip_whitelist_environment ON ip_whitelists(environment, is_active)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_security_config_key_env ON security_configs(key, environment)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_security_metrics_date ON security_metrics(date)")
+	
 	log.Println("Additional database indexes created successfully")
 }
 
@@ -186,4 +226,131 @@ func UpdateExistingPurchaseData(db *gorm.DB) {
 	}
 	
 	log.Println("Existing purchase data update completed")
+}
+
+// CleanupDuplicateNotificationsMigration removes duplicate notifications
+func CleanupDuplicateNotificationsMigration(db *gorm.DB) {
+	migrationID := "cleanup_duplicate_notifications_v1.0"
+	
+	// Check if this migration has already been applied
+	var existing models.MigrationRecord
+	err := db.Where("migration_id = ?", migrationID).First(&existing).Error
+	if err == nil {
+		log.Printf("Migration '%s' already applied at %v, skipping...", migrationID, existing.AppliedAt)
+		return
+	}
+	
+	log.Println("Running duplicate notification cleanup migration...")
+	
+	// Find and remove duplicate notifications
+	var duplicates []struct {
+		UserID     uint
+		Type       string
+		PurchaseID string
+		Count      int64
+	}
+
+	// Find duplicates
+	err = db.Raw(`
+		SELECT 
+			user_id,
+			type,
+			data::json->>'purchase_id' as purchase_id,
+			COUNT(*) as count
+		FROM notifications 
+		WHERE data::json->>'purchase_id' IS NOT NULL
+		AND created_at >= NOW() - INTERVAL '7 days'
+		GROUP BY user_id, type, data::json->>'purchase_id'
+		HAVING COUNT(*) > 1
+	`).Scan(&duplicates).Error
+
+	if err != nil {
+		log.Printf("Error finding duplicate notifications: %v", err)
+		return
+	}
+
+	totalRemoved := 0
+	for _, dup := range duplicates {
+		if dup.PurchaseID == "" {
+			continue
+		}
+
+		// Keep the latest notification, remove older ones
+		var notifications []models.Notification
+		err := db.Where("user_id = ? AND type = ? AND data::json->>'purchase_id' = ?",
+			dup.UserID, dup.Type, dup.PurchaseID).
+			Order("created_at DESC").
+			Find(&notifications).Error
+
+		if err != nil {
+			log.Printf("Error finding notifications for cleanup: %v", err)
+			continue
+		}
+
+		// Keep first (latest), remove the rest
+		if len(notifications) > 1 {
+			var idsToDelete []uint
+			for i := 1; i < len(notifications); i++ {
+				idsToDelete = append(idsToDelete, notifications[i].ID)
+			}
+
+			if len(idsToDelete) > 0 {
+				err := db.Where("id IN ?", idsToDelete).Delete(&models.Notification{}).Error
+				if err != nil {
+					log.Printf("Error deleting duplicate notifications: %v", err)
+					continue
+				}
+				
+				removed := len(idsToDelete)
+				totalRemoved += removed
+				log.Printf("✅ Removed %d duplicate notifications for user %d, type %s, purchase %s",
+					removed, dup.UserID, dup.Type, dup.PurchaseID)
+			}
+		}
+	}
+	
+	// Also cleanup by title-based duplicates (for notifications without purchase_id)
+	titleDuplicates := 0
+	err = db.Raw(`
+		SELECT COUNT(*) FROM (
+			SELECT user_id, type, title, COUNT(*) as cnt
+			FROM notifications 
+			WHERE created_at >= NOW() - INTERVAL '7 days'
+			GROUP BY user_id, type, title
+			HAVING COUNT(*) > 1
+		) as title_dups
+	`).Scan(&titleDuplicates).Error
+	
+	if err == nil && titleDuplicates > 0 {
+		// Remove title-based duplicates
+		result := db.Exec(`
+			DELETE FROM notifications 
+			WHERE id NOT IN (
+				SELECT DISTINCT ON (user_id, type, title) id
+				FROM notifications 
+				WHERE created_at >= NOW() - INTERVAL '7 days'
+				ORDER BY user_id, type, title, created_at DESC
+			)
+			AND created_at >= NOW() - INTERVAL '7 days'
+		`)
+		
+		if result.Error == nil {
+			totalRemoved += int(result.RowsAffected)
+			log.Printf("✅ Removed %d title-based duplicate notifications", result.RowsAffected)
+		}
+	}
+
+	// Record this migration as completed
+	migrationRecord := models.MigrationRecord{
+		MigrationID: migrationID,
+		Description: fmt.Sprintf("Cleanup duplicate notifications - removed %d duplicates", totalRemoved),
+		Version:     "1.0",
+		AppliedAt:   time.Now(),
+	}
+	
+	if err := db.Create(&migrationRecord).Error; err != nil {
+		log.Printf("Warning: Failed to record migration completion: %v", err)
+	}
+	
+	log.Printf("✅ Duplicate notification cleanup migration completed - removed %d total duplicates", totalRemoved)
 }

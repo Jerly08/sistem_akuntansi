@@ -93,41 +93,65 @@ const PurchaseAccountingLogic: React.FC<PurchaseAccountingLogicProps> = ({
     let inventoryImpact = 0;
     let expenseImpact = 0;
     let taxDeductible = 0;
+    let subtotalBeforeDiscount = 0;
+    let itemDiscountAmount = 0;
 
     purchaseData.items.forEach((item: any) => {
-      const itemTotal = parseFloat(item.quantity || 0) * parseFloat(item.unit_price || 0);
+      const quantity = parseFloat(item.quantity || 0);
+      const unitPrice = parseFloat(item.unit_price || 0);
+      const itemDiscount = parseFloat(item.discount || 0);
+      const lineSubtotal = quantity * unitPrice;
       const product = products.find(p => p.id === parseInt(item.product_id));
 
-      if (product && itemTotal > 0) {
+      if (product && lineSubtotal > 0) {
+        subtotalBeforeDiscount += lineSubtotal;
+        itemDiscountAmount += itemDiscount;
+
+        // Calculate net item amount after discount
+        const netItemAmount = lineSubtotal - itemDiscount;
+
         if (product.type === 'PRODUCT' || product.category === 'INVENTORY') {
-          inventoryImpact += itemTotal;
+          inventoryImpact += netItemAmount;
         } else {
-          expenseImpact += itemTotal;
+          expenseImpact += netItemAmount;
         }
 
         // Tax deductible calculation - expenses are typically deductible
         if (item.expense_account_id) {
           const accountCode = item.expense_account_id.toString();
           if (accountCode.startsWith('5') || accountCode.startsWith('6')) {
-            taxDeductible += itemTotal;
+            taxDeductible += netItemAmount;
           }
         } else if (product.type === 'SERVICE') {
-          taxDeductible += itemTotal;
+          taxDeductible += netItemAmount;
         }
       }
     });
 
-    // Apply purchase-level discount
-    const subtotal = inventoryImpact + expenseImpact;
-    const discount = parseFloat(purchaseData.discount || 0);
-    const netAmount = subtotal - (subtotal * discount / 100);
+    // Apply purchase-level discount to remaining amount
+    const orderDiscountRate = parseFloat(purchaseData.discount || 0);
+    const orderDiscountAmount = (subtotalBeforeDiscount - itemDiscountAmount) * orderDiscountRate / 100;
+    const netBeforeTax = subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount;
     
-    // Calculate PPN (11%)
-    const ppnAmount = netAmount * 0.11;
-    const totalCost = netAmount + ppnAmount;
+    // Calculate tax additions (Penambahan)
+    const ppnRate = parseFloat(purchaseData.ppn_rate || 11);
+    const ppnAmount = netBeforeTax * ppnRate / 100;
+    const otherTaxAdditions = parseFloat(purchaseData.other_tax_additions || 0);
+    const totalTaxAdditions = ppnAmount + otherTaxAdditions;
+    
+    // Calculate tax deductions (Pemotongan)
+    const pph21Rate = parseFloat(purchaseData.pph21_rate || 0);
+    const pph23Rate = parseFloat(purchaseData.pph23_rate || 0);
+    const pph21Amount = netBeforeTax * pph21Rate / 100;
+    const pph23Amount = netBeforeTax * pph23Rate / 100;
+    const otherTaxDeductions = parseFloat(purchaseData.other_tax_deductions || 0);
+    const totalTaxDeductions = pph21Amount + pph23Amount + otherTaxDeductions;
+    
+    // Final total amount
+    const totalCost = netBeforeTax + totalTaxAdditions - totalTaxDeductions;
 
-    // Adjust impacts based on discount
-    const discountRatio = discount > 0 ? (netAmount / subtotal) : 1;
+    // Adjust impacts based on final discount ratio
+    const discountRatio = subtotalBeforeDiscount > 0 ? (netBeforeTax / subtotalBeforeDiscount) : 1;
     inventoryImpact *= discountRatio;
     expenseImpact *= discountRatio;
     taxDeductible *= discountRatio;
@@ -136,7 +160,7 @@ const PurchaseAccountingLogic: React.FC<PurchaseAccountingLogicProps> = ({
       inventoryImpact,
       expenseImpact,
       taxDeductible,
-      totalAmount: netAmount,
+      totalAmount: netBeforeTax,
       ppnAmount,
       totalCost
     });

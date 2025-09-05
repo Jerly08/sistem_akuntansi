@@ -1,6 +1,25 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Input,
+  InputGroup,
+  InputLeftElement,
+  Button,
+  Flex,
+  Text,
+  HStack,
+  Heading,
+  useColorModeValue,
+} from '@chakra-ui/react';
+import { SearchIcon } from '@chakra-ui/icons';
 
 interface Column<T> {
   header: string;
@@ -35,6 +54,21 @@ function DataTable<T>({
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredData, setFilteredData] = useState<T[]>(data);
   const [paginatedData, setPaginatedData] = useState<T[]>([]);
+
+  // Color mode values
+  const bg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const headerBg = useColorModeValue('gray.50', 'gray.700');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const textColor = useColorModeValue('gray.900', 'white');
+  const mutedTextColor = useColorModeValue('gray.500', 'gray.400');
+  const headingColor = useColorModeValue('gray.800', 'white');
+  const inputBg = useColorModeValue('white', 'gray.700');
+  const buttonBg = useColorModeValue('gray.200', 'gray.600');
+  const buttonHoverBg = useColorModeValue('gray.300', 'gray.500');
+  const buttonDisabledBg = useColorModeValue('gray.100', 'gray.700');
+  const buttonDisabledColor = useColorModeValue('gray.400', 'gray.500');
+  const activeBg = useColorModeValue('blue.600', 'blue.500');
 
   // Filter data based on search term
   useEffect(() => {
@@ -89,129 +123,145 @@ function DataTable<T>({
   };
 
   return (
-    <div className="bg-white shadow-md rounded-lg overflow-hidden">
+    <Box bg={bg} shadow="md" borderRadius="lg" overflow="hidden" borderWidth="1px" borderColor={borderColor}>
       {/* Header with title and search */}
-      <div className="p-4 border-b flex justify-between items-center">
-        {title && <h2 className="text-lg font-medium">{title}</h2>}
+      <Flex p={4} borderBottomWidth="1px" borderColor={borderColor} justify="space-between" align="center">
+        {title && <Heading size="lg" color={headingColor}>{title}</Heading>}
         
         {searchable && (
-          <div className="relative">
-            <input
+          <InputGroup maxW="300px">
+            <InputLeftElement pointerEvents="none">
+              <SearchIcon color={mutedTextColor} />
+            </InputLeftElement>
+            <Input
               type="text"
               placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              bg={inputBg}
+              borderColor={borderColor}
+              color={textColor}
+              _focus={{
+                borderColor: 'blue.500',
+                boxShadow: '0 0 0 1px #3182ce'
+              }}
             />
-            <div className="absolute left-3 top-2.5 text-gray-400">
-              🔍
-            </div>
-          </div>
+          </InputGroup>
         )}
-      </div>
+      </Flex>
       
       {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50">
+      <Box overflowX="auto">
+        <Table variant="simple">
+          <Thead>
+            <Tr bg={headerBg}>
               {columns.map((column, index) => (
-                <th
+                <Th
                   key={index}
-                  className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.className || ''}`}
+                  color={mutedTextColor}
+                  fontWeight="500"
+                  fontSize="xs"
+                  textTransform="uppercase"
+                  letterSpacing="wider"
+                  borderColor={borderColor}
                 >
                   {column.header}
-                </th>
+                </Th>
               ))}
-              {actions && <th className="px-6 py-3 text-right">Actions</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
+              {actions && <Th textAlign="right" color={mutedTextColor} borderColor={borderColor}>Actions</Th>}
+            </Tr>
+          </Thead>
+          <Tbody>
             {paginatedData.length > 0 ? (
               paginatedData.map((row) => (
-                <tr
+                <Tr
                   key={String(row[keyField])}
-                  className={`hover:bg-gray-50 ${onRowClick ? 'cursor-pointer' : ''}`}
+                  _hover={{ bg: hoverBg }}
+                  cursor={onRowClick ? 'pointer' : 'default'}
                   onClick={() => onRowClick && onRowClick(row)}
                 >
                   {columns.map((column, index) => (
-                    <td
+                    <Td
                       key={index}
-                      className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${column.className || ''}`}
+                      color={textColor}
+                      fontSize="sm"
+                      borderColor={borderColor}
                     >
                       {renderCell(row, column)}
-                    </td>
+                    </Td>
                   ))}
                   {actions && (
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                    <Td textAlign="right" fontSize="sm" borderColor={borderColor}>
                       {actions(row)}
-                    </td>
+                    </Td>
                   )}
-                </tr>
+                </Tr>
               ))
             ) : (
-              <tr>
-                <td
+              <Tr>
+                <Td
                   colSpan={columns.length + (actions ? 1 : 0)}
-                  className="px-6 py-4 text-center text-sm text-gray-500"
+                  textAlign="center"
+                  fontSize="sm"
+                  color={mutedTextColor}
+                  borderColor={borderColor}
                 >
                   No data available
-                </td>
-              </tr>
+                </Td>
+              </Tr>
             )}
-          </tbody>
-        </table>
-      </div>
+          </Tbody>
+        </Table>
+      </Box>
       
       {/* Pagination */}
       {pagination && totalPages > 1 && (
-        <div className="px-4 py-3 border-t flex items-center justify-between">
-          <div className="text-sm text-gray-500">
+        <Flex px={4} py={3} borderTopWidth="1px" borderColor={borderColor} justify="space-between" align="center">
+          <Text fontSize="sm" color={mutedTextColor}>
             Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredData.length)} of {filteredData.length} entries
-          </div>
+          </Text>
           
-          <div className="flex space-x-1">
-            <button
+          <HStack spacing={1}>
+            <Button
               onClick={() => handlePageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className={`px-3 py-1 rounded ${
-                currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              isDisabled={currentPage === 1}
+              size="sm"
+              bg={currentPage === 1 ? buttonDisabledBg : buttonBg}
+              color={currentPage === 1 ? buttonDisabledColor : textColor}
+              _hover={currentPage === 1 ? {} : { bg: buttonHoverBg }}
+              cursor={currentPage === 1 ? 'not-allowed' : 'pointer'}
             >
               Previous
-            </button>
+            </Button>
             
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <button
+              <Button
                 key={page}
                 onClick={() => handlePageChange(page)}
-                className={`px-3 py-1 rounded ${
-                  currentPage === page
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
+                size="sm"
+                bg={currentPage === page ? activeBg : buttonBg}
+                color={currentPage === page ? 'white' : textColor}
+                _hover={currentPage === page ? {} : { bg: buttonHoverBg }}
               >
                 {page}
-              </button>
+              </Button>
             ))}
             
-            <button
+            <Button
               onClick={() => handlePageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className={`px-3 py-1 rounded ${
-                currentPage === totalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
+              isDisabled={currentPage === totalPages}
+              size="sm"
+              bg={currentPage === totalPages ? buttonDisabledBg : buttonBg}
+              color={currentPage === totalPages ? buttonDisabledColor : textColor}
+              _hover={currentPage === totalPages ? {} : { bg: buttonHoverBg }}
+              cursor={currentPage === totalPages ? 'not-allowed' : 'pointer'}
             >
               Next
-            </button>
-          </div>
-        </div>
+            </Button>
+          </HStack>
+        </Flex>
       )}
-    </div>
+    </Box>
   );
 }
 

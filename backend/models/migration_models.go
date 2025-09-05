@@ -67,6 +67,18 @@ func (ReconciliationItemMigration) TableName() string {
 }
 
 // Function to migrate additional cash bank tables using GORM
+// MigrationRecord tracks applied migrations to prevent re-running
+type MigrationRecord struct {
+	ID          uint      `gorm:"primaryKey"`
+	MigrationID string    `gorm:"unique;not null;size:100"` // Unique identifier for migration
+	Description string    `gorm:"type:text"`                  // Description of what was migrated
+	Version     string    `gorm:"size:20"`                    // Version when migration was applied
+	AppliedAt   time.Time `gorm:"not null"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
+}
+
 func MigrateCashBankTables(db *gorm.DB) error {
 	// Migrate additional tables using GORM AutoMigrate
 	err := db.AutoMigrate(

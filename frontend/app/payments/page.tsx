@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import Layout from '@/components/layout/Layout';
+import SimpleLayout from '@/components/layout/SimpleLayout';
 import { DataTable } from '@/components/common/DataTable';
 import {
   Box,
@@ -54,6 +54,7 @@ import {
   MenuItem,
   MenuDivider,
   useToast,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import {
   FiPlus, 
@@ -103,6 +104,25 @@ const formatCurrency = (amount: number) => {
 const PaymentsPage: React.FC = () => {
   const { token, user } = useAuth();
   const toast = useToast();
+  
+  // Theme colors for dark mode support
+  const bgColor = useColorModeValue('gray.50', 'gray.900');
+  const cardBg = useColorModeValue('white', 'gray.800');
+  const headingColor = useColorModeValue('gray.800', 'gray.100');
+  const textSecondary = useColorModeValue('gray.600', 'gray.400');
+  const textPrimary = useColorModeValue('gray.700', 'gray.200');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const inputBg = useColorModeValue('white', 'gray.700');
+  const searchIconColor = useColorModeValue('gray.300', 'gray.500');
+  const alertBg = useColorModeValue('red.50', 'red.900');
+  const alertTextColor = useColorModeValue('red.600', 'red.300');
+  const statColors = {
+    green: useColorModeValue('green.500', 'green.400'),
+    blue: useColorModeValue('blue.600', 'blue.400'),
+    purple: useColorModeValue('purple.600', 'purple.400'),
+    orange: useColorModeValue('orange.600', 'orange.400')
+  };
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,11 +151,12 @@ const PaymentsPage: React.FC = () => {
   const [showPaymentDetail, setShowPaymentDetail] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
 
-  // Permission checks
-  const canCreate = user?.role === 'ADMIN' || user?.role === 'FINANCE' || user?.role === 'DIRECTOR';
-  const canEdit = user?.role === 'ADMIN' || user?.role === 'FINANCE' || user?.role === 'DIRECTOR';
-  const canDelete = user?.role === 'ADMIN';
-  const canExport = user?.role === 'ADMIN' || user?.role === 'FINANCE' || user?.role === 'DIRECTOR';
+  // Permission checks - Normalize role comparison for case-insensitive check
+  const userRole = user?.role?.toLowerCase();
+  const canCreate = userRole === 'finance' || userRole === 'director';
+  const canEdit = userRole === 'admin' || userRole === 'finance' || userRole === 'director';
+  const canDelete = userRole === 'admin';
+  const canExport = userRole === 'admin' || userRole === 'finance' || userRole === 'director';
 
   // New Payment handler
   const handleNewPayment = () => {
@@ -165,7 +186,7 @@ const PaymentsPage: React.FC = () => {
   {
     header: 'Payment #',
     accessor: (row: Payment) => (
-      <Text fontWeight="medium" color="blue.600">{row.code}</Text>
+      <Text fontWeight="medium" color={statColors.blue}>{row.code}</Text>
     )
   },
   { 
@@ -540,22 +561,23 @@ const resetFilters = () => {
   
   if (loading && (!payments || payments.length === 0)) {
     return (
-      <Layout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR']}>
+      <SimpleLayout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR']}>
         <Box display="flex" justifyContent="center" alignItems="center" height="400px">
           <Spinner size="xl" thickness="4px" speed="0.65s" color="brand.500" />
           <Text ml={4} fontSize="lg">Loading payments...</Text>
         </Box>
-      </Layout>
+      </SimpleLayout>
     );
   }
 
   return (
-    <Layout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR']}>
-      <VStack spacing={6} align="stretch">
+    <SimpleLayout allowedRoles={['ADMIN', 'FINANCE', 'DIRECTOR']}>
+      <Box bg={bgColor} minH="100vh" p={6}>
+        <VStack spacing={6} align="stretch">
         {/* Summary Cards */}
         {summary && (
           <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
-            <Card>
+            <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Stat>
                   <StatLabel>Total Payments</StatLabel>
@@ -564,7 +586,7 @@ const resetFilters = () => {
                 </Stat>
               </CardBody>
             </Card>
-            <Card>
+            <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Stat>
                   <StatLabel>Total Amount</StatLabel>
@@ -573,18 +595,18 @@ const resetFilters = () => {
                 </Stat>
               </CardBody>
             </Card>
-            <Card>
+            <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Stat>
                   <StatLabel>Completed</StatLabel>
-                  <StatNumber color="green.500">
+                  <StatNumber color={statColors.green}>
                     {formatCurrency(summary.completed_amount)}
                   </StatNumber>
                   <StatHelpText>{summary.completed_count} payments</StatHelpText>
                 </Stat>
               </CardBody>
             </Card>
-            <Card>
+            <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Stat>
                   <StatLabel>Avg Payment Value</StatLabel>
@@ -599,8 +621,8 @@ const resetFilters = () => {
         {/* Header */}
         <Flex justify="space-between" align="center">
           <Box>
-            <Heading as="h1" size="xl" mb={2}>Payment Management</Heading>
-            <Text color="gray.600">Manage your payment transactions</Text>
+            <Heading as="h1" size="xl" mb={2} color={headingColor}>Payment Management</Heading>
+            <Text color={textSecondary}>Manage your payment transactions</Text>
           </Box>
           <HStack spacing={3}>
             <Button
@@ -679,16 +701,18 @@ const resetFilters = () => {
         </Flex>
 
         {/* Search and Filters */}
-        <Card>
+        <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
           <CardBody>
             <HStack spacing={4} wrap="wrap">
               <InputGroup maxW="400px">
                 <InputLeftElement pointerEvents="none">
-                  <FiSearch color="gray.300" />
+                  <FiSearch color={searchIconColor} />
                 </InputLeftElement>
                 <Input 
                   placeholder="Search by payment code or contact..."
                   onChange={(e) => handleSearch(e.target.value)}
+                  bg={inputBg}
+                  borderColor={borderColor}
                 />
               </InputGroup>
               
@@ -697,6 +721,8 @@ const resetFilters = () => {
                 placeholder="All Status"
                 value={statusFilter}
                 onChange={(e) => handleFilterChange('status', e.target.value)}
+                bg={inputBg}
+                borderColor={borderColor}
               >
                 <option value="PENDING">Pending</option>
                 <option value="COMPLETED">Completed</option>
@@ -708,6 +734,8 @@ const resetFilters = () => {
                 placeholder="All Methods"
                 value={methodFilter}
                 onChange={(e) => handleFilterChange('method', e.target.value)}
+                bg={inputBg}
+                borderColor={borderColor}
               >
                 <option value="CASH">Cash</option>
                 <option value="BANK_TRANSFER">Bank Transfer</option>
@@ -722,6 +750,8 @@ const resetFilters = () => {
                 placeholder="Start Date"
                 value={startDate}
                 onChange={(e) => handleFilterChange('start_date', e.target.value)}
+                bg={inputBg}
+                borderColor={borderColor}
               />
               
               <Input
@@ -730,6 +760,8 @@ const resetFilters = () => {
                 placeholder="End Date"
                 value={endDate}
                 onChange={(e) => handleFilterChange('end_date', e.target.value)}
+                bg={inputBg}
+                borderColor={borderColor}
               />
             </HStack>
           </CardBody>
@@ -744,10 +776,10 @@ const resetFilters = () => {
         )}
 
         {/* Payments Table */}
-        <Card>
+        <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
           <CardHeader>
             <Flex justify="space-between" align="center">
-              <Heading size="md">Payment Transactions ({payments?.length || 0})</Heading>
+              <Heading size="md" color={headingColor}>Payment Transactions ({payments?.length || 0})</Heading>
             </Flex>
           </CardHeader>
           <CardBody>
@@ -788,18 +820,18 @@ const resetFilters = () => {
         onClose={() => setShowConfirmDelete(false)}
       >
         <AlertDialogOverlay>
-          <AlertDialogContent>
-            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+          <AlertDialogContent bg={cardBg}>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold" color={headingColor}>
               Delete Payment
             </AlertDialogHeader>
 
-            <AlertDialogBody>
+            <AlertDialogBody color={textPrimary}>
               Are you sure you want to delete this payment?
               {selectedPayment && (
-                <Box mt={3} p={3} bg="red.50" borderRadius="md">
-                  <Text fontSize="sm" fontWeight="bold">Payment: {selectedPayment.code}</Text>
-                  <Text fontSize="sm">Amount: {formatCurrency(selectedPayment.amount)}</Text>
-                  <Text fontSize="sm" color="red.600">This action cannot be undone.</Text>
+                <Box mt={3} p={3} bg={alertBg} borderRadius="md">
+                  <Text fontSize="sm" fontWeight="bold" color={textPrimary}>Payment: {selectedPayment.code}</Text>
+                  <Text fontSize="sm" color={textPrimary}>Amount: {formatCurrency(selectedPayment.amount)}</Text>
+                  <Text fontSize="sm" color={alertTextColor}>This action cannot be undone.</Text>
                 </Box>
               )}
             </AlertDialogBody>
@@ -824,7 +856,8 @@ const resetFilters = () => {
           setSelectedPayment(null);
         }}
       />
-    </Layout>
+      </Box>
+    </SimpleLayout>
   );
 };
 

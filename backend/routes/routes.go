@@ -2,6 +2,8 @@ package routes
 
 import (
 	"net/http"
+	"os"
+	"strings"
 	"app-sistem-akuntansi/controllers"
 	"app-sistem-akuntansi/handlers"
 	"app-sistem-akuntansi/repositories"
@@ -11,9 +13,37 @@ import (
 	"gorm.io/gorm"
 )
 
+// Environment detection helper
+func getEnvironment() string {
+	env := strings.ToLower(os.Getenv("ENV"))
+	if env == "" {
+		env = strings.ToLower(os.Getenv("GO_ENV"))
+	}
+	if env == "" {
+		env = strings.ToLower(os.Getenv("ENVIRONMENT"))
+	}
+	if env == "" {
+		env = "development" // default
+	}
+	return env
+}
+
+// Check if development features should be enabled
+func isDevelopmentMode() bool {
+	env := getEnvironment()
+	return env == "development" || env == "dev" || env == "local"
+}
+
+// Check if debug routes should be enabled (requires explicit flag)
+func shouldEnableDebugRoutes() bool {
+	return os.Getenv("ENABLE_DEBUG_ROUTES") == "true" && isDevelopmentMode()
+}
+
 func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupService) {
 	// Controllers
 	authController := controllers.NewAuthController(db)
+	userController := controllers.NewUserController(db)
+	permissionController := controllers.NewPermissionController(db)
 	productController := controllers.NewProductController(db)
 	categoryController := controllers.NewCategoryController(db)
 	unitController := controllers.NewProductUnitController(db)
@@ -37,21 +67,26 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	
 	// Notification repositories, services and handlers
 	notificationRepo := repositories.NewNotificationRepository(db)
-	notificationService := services.NewNotificationService(notificationRepo)
+	notificationService := services.NewNotificationService(db, notificationRepo)
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
 	
 	// Purchase repositories, services and controllers
 	purchaseRepo := repositories.NewPurchaseRepository(db)
 	productRepo := repositories.NewProductRepository(db)
 	approvalService := services.NewApprovalService(db)
+	// Initialize services needed for purchase service
+	journalRepo := repositories.NewJournalEntryRepository(db)
+	pdfService := services.NewPDFService()
 	purchaseService := services.NewPurchaseService(
+		db,
 		purchaseRepo,
 		productRepo, 
 		contactRepo,
 		accountRepo,
 		approvalService,
 		nil, // journal service - can be nil for now
-		nil, // pdf service - can be nil for now
+		journalRepo,
+		pdfService,
 	)
 	purchaseController := controllers.NewPurchaseController(purchaseService)
 	// Handlers that depend on services
@@ -61,19 +96,67 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	middleware.InitAuditLogger(db)       // Initialize audit logging
 	middleware.InitTokenMonitor(db)      // Initialize token monitoring
 	
+	// Initialize Security controller for security dashboard
+	securityController := controllers.NewSecurityController(db)
+	
 	// Initialize JWT Manager
 	jwtManager := middleware.NewJWTManager(db)
+	
+	// Initialize Permission Middleware
+	permMiddleware := middleware.NewPermissionMiddleware(db)
+	
+	// 🔒 Initialize Enhanced Security Middleware
+	enhancedSecurity := middleware.NewEnhancedSecurityMiddleware(db)
+	
+	// 🎛️ Apply global security middleware
+	r.Use(enhancedSecurity.SecurityHeaders())     // Security headers pada semua requests
+	r.Use(enhancedSecurity.RequestMonitoring())   // Monitor semua requests untuk threats
+	
+	// Initialize Stock Monitoring service and Dashboard controller
+	stockMonitoringService := services.NewStockMonitoringService(db, notificationService)
+	dashboardController := controllers.NewDashboardController(db, stockMonitoringService)
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
 	{
-		// Public routes (no auth required)
+		// 🔐 Auth routes (minimal public access)
 		auth := v1.Group("/auth")
 		auth.Use(middleware.AuthRateLimit()) // Apply auth rate limiting
+		auth.Use(enhancedSecurity.SecurityHeaders()) // Extra security for auth endpoints
 		{
 			auth.POST("/login", authController.Login)
-			auth.POST("/register", authController.Register)
+			// 🔒 PRODUCTION: Disable register endpoint in production
+			if isDevelopmentMode() || os.Getenv("ALLOW_REGISTRATION") == "true" {
+				auth.POST("/register", authController.Register)
+			}
 			auth.POST("/refresh", authController.RefreshToken)
+			
+			// Token validation endpoint (requires auth)
+			auth.GET("/validate-token", jwtManager.AuthRequired(), authController.ValidateToken)
+		}
+
+		// 🔒 SECURITY: Secure debug routes (development only dengan multiple security layers)
+		if shouldEnableDebugRoutes() {
+			debugAuth := v1.Group("/debug")
+			debugAuth.Use(enhancedSecurity.EnvironmentGate("development", "dev")) // ✅ Environment restriction
+			debugAuth.Use(enhancedSecurity.IPWhitelist())                        // ✅ IP whitelisting
+			debugAuth.Use(jwtManager.AuthRequired())                            // ✅ Authentication required
+			debugAuth.Use(middleware.RoleRequired("admin"))                     // ✅ Admin only access
+			debugAuth.Use(middleware.RateLimit())                               // ✅ Rate limiting
+			{
+				// 🔍 Read-only endpoints untuk debugging (safe)
+				debugAuth.GET("/contacts", contactController.GetContacts)
+				debugAuth.GET("/contacts/:id", contactController.GetContact)
+				debugAuth.GET("/contacts/type/:type", contactController.GetContactsByType)
+				debugAuth.GET("/contacts/search", contactController.SearchContacts)
+				
+				// 📊 Debug system information
+				// debugAuth.GET("/system/info", debugController.GetSystemInfo)
+				// debugAuth.GET("/database/health", debugController.GetDatabaseHealth)
+				
+				// ⚠️  ALL WRITE OPERATIONS COMPLETELY REMOVED FOR SECURITY
+				// No CREATE/UPDATE/DELETE operations allowed in any debug route
+			}
 		}
 
 		// Protected routes (auth required)
@@ -83,26 +166,67 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			// Profile routes
 			protected.GET("/profile", authController.Profile)
 
-			// Product routes
-			products := protected.Group("/products")
+			// User management routes (admin only)
+			users := protected.Group("/users")
 			{
-				products.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), productController.GetProducts)
-				products.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), productController.GetProduct)
-products.POST("", middleware.RoleRequired("admin", "inventory_manager", "employee"), productController.CreateProduct)
-				products.PUT("/:id", middleware.RoleRequired("admin", "inventory_manager"), productController.UpdateProduct)
-				products.DELETE("/:id", middleware.RoleRequired("admin"), productController.DeleteProduct)
-				products.POST("/adjust-stock", middleware.RoleRequired("admin", "inventory_manager"), productController.AdjustStock)
-				products.POST("/opname", middleware.RoleRequired("admin", "inventory_manager"), productController.Opname)
-				products.POST("/upload-image", middleware.RoleRequired("admin", "inventory_manager"), productController.UploadProductImage)
+				users.GET("", middleware.RoleRequired("admin"), userController.GetUsers)
+				users.GET("/:id", middleware.RoleRequired("admin"), userController.GetUser)
+				users.POST("", middleware.RoleRequired("admin"), userController.CreateUser)
+				users.PUT("/:id", middleware.RoleRequired("admin"), userController.UpdateUser)
+				users.DELETE("/:id", middleware.RoleRequired("admin"), userController.DeleteUser)
+			}
+			
+			// Permission management routes
+			permissions := protected.Group("/permissions")
+			{
+				// Admin only routes
+				permissions.GET("/users", middleware.RoleRequired("admin"), permissionController.GetAllUsersPermissions)
+				permissions.GET("/users/:userId", middleware.RoleRequired("admin"), permissionController.GetUserPermissions)
+				permissions.PUT("/users/:userId", middleware.RoleRequired("admin"), permissionController.UpdateUserPermissions)
+				permissions.POST("/users/:userId/reset", middleware.RoleRequired("admin"), permissionController.ResetToDefaultPermissions)
+				
+				// Self permission routes (any authenticated user)
+				permissions.GET("/me", permissionController.GetMyPermissions) // User can get their own permissions
+				permissions.GET("/check", permissionController.CheckUserPermission) // User can check their own permission
+			}
+
+			// Dashboard routes
+			dashboard := protected.Group("/dashboard")
+			{
+				dashboard.GET("/analytics", middleware.RoleRequired("admin", "finance", "director"), dashboardController.GetAnalytics)
+				dashboard.GET("/summary", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), dashboardController.GetDashboardSummary)
+				dashboard.GET("/quick-stats", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), dashboardController.GetQuickStats)
+				dashboard.GET("/stock-alerts", middleware.RoleRequired("admin", "inventory_manager", "director"), dashboardController.GetStockAlertsBanner)
+				dashboard.POST("/stock-alerts/:id/dismiss", middleware.RoleRequired("admin", "inventory_manager"), dashboardController.DismissStockAlert)
+			}
+
+			// 📦 Product routes with enhanced permission checks dan inventory monitoring
+			products := protected.Group("/products")
+		products.Use(enhancedSecurity.RequestMonitoring()) // 📊 Enhanced monitoring
+		// if middleware.GlobalAuditLogger != nil {
+		//	products.Use(middleware.GlobalAuditLogger.InventoryAuditMiddleware()) // 📋 Inventory audit
+		// }
+			{
+				// Basic CRUD operations dengan enhanced security
+				products.GET("", permMiddleware.CanView("products"), productController.GetProducts)
+				products.GET("/:id", permMiddleware.CanView("products"), productController.GetProduct)
+				products.POST("", permMiddleware.CanCreate("products"), productController.CreateProduct)
+				products.PUT("/:id", permMiddleware.CanEdit("products"), productController.UpdateProduct)
+				products.DELETE("/:id", permMiddleware.CanDelete("products"), productController.DeleteProduct)
+				
+				// 📊 Critical inventory operations dengan extra monitoring
+				products.POST("/adjust-stock", permMiddleware.CanEdit("products"), enhancedSecurity.RequestMonitoring(), productController.AdjustStock)
+				products.POST("/opname", permMiddleware.CanEdit("products"), enhancedSecurity.RequestMonitoring(), productController.Opname)
+				products.POST("/upload-image", permMiddleware.CanEdit("products"), productController.UploadProductImage)
 			}
 
 			// Category routes
 			categories := protected.Group("/categories")
 			{
-				categories.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), categoryController.GetCategories)
-				categories.GET("/tree", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), categoryController.GetCategoryTree)
-				categories.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), categoryController.GetCategory)
-				categories.GET("/:id/products", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), categoryController.GetCategoryProducts)
+				categories.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), categoryController.GetCategories)
+				categories.GET("/tree", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), categoryController.GetCategoryTree)
+				categories.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), categoryController.GetCategory)
+				categories.GET("/:id/products", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), categoryController.GetCategoryProducts)
 				categories.POST("", middleware.RoleRequired("admin", "inventory_manager"), categoryController.CreateCategory)
 				categories.PUT("/:id", middleware.RoleRequired("admin", "inventory_manager"), categoryController.UpdateCategory)
 				categories.DELETE("/:id", middleware.RoleRequired("admin"), categoryController.DeleteCategory)
@@ -111,85 +235,98 @@ products.POST("", middleware.RoleRequired("admin", "inventory_manager", "employe
 			// Product Units routes
 			units := protected.Group("/product-units")
 			{
-				units.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), unitController.GetProductUnits)
-				units.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director"), unitController.GetProductUnit)
+				units.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), unitController.GetProductUnits)
+				units.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), unitController.GetProductUnit)
 				units.POST("", middleware.RoleRequired("admin"), unitController.CreateProductUnit)
 				units.PUT("/:id", middleware.RoleRequired("admin"), unitController.UpdateProductUnit)
 				units.DELETE("/:id", middleware.RoleRequired("admin"), unitController.DeleteProductUnit)
 			}
 
-			// Account routes (Chart of Accounts)
+			// 📊 Account routes (Chart of Accounts) dengan enhanced security
 			accounts := protected.Group("/accounts")
+		accounts.Use(enhancedSecurity.RequestMonitoring()) // 📊 Enhanced monitoring
+		// if middleware.GlobalAuditLogger != nil {
+		//	accounts.Use(middleware.GlobalAuditLogger.AccountAuditMiddleware()) // 📋 Financial audit
+		// }
 			{
-				accounts.GET("", middleware.RoleRequired("admin", "finance"), accountHandler.ListAccounts)
+				accounts.GET("", permMiddleware.CanView("accounts"), accountHandler.ListAccounts)
 				
 				// Get account catalog (minimal EXPENSE data) - accessible by EMPLOYEE for purchases
-				accounts.GET("/catalog", middleware.RoleRequired("employee", "admin", "finance", "director"), accountHandler.GetAccountCatalog)
+				accounts.GET("/catalog", permMiddleware.CanView("accounts"), accountHandler.GetAccountCatalog)
 				
-				accounts.GET("/hierarchy", middleware.RoleRequired("admin", "finance"), accountHandler.GetAccountHierarchy)
-				accounts.GET("/balance-summary", middleware.RoleRequired("admin", "finance"), accountHandler.GetBalanceSummary)
-				accounts.GET("/validate-code", middleware.RoleRequired("admin", "finance"), accountHandler.ValidateAccountCode)
+				accounts.GET("/hierarchy", permMiddleware.CanView("accounts"), accountHandler.GetAccountHierarchy)
+				accounts.GET("/balance-summary", permMiddleware.CanView("accounts"), accountHandler.GetBalanceSummary)
+				accounts.GET("/validate-code", permMiddleware.CanView("accounts"), accountHandler.ValidateAccountCode)
 				
 				// Fix account header status
 				accounts.POST("/fix-header-status", middleware.RoleRequired("admin"), accountHandler.FixAccountHeaderStatus)
 				
-				accounts.GET("/:code", middleware.RoleRequired("admin", "finance"), accountHandler.GetAccount)
-				accounts.POST("", middleware.RoleRequired("admin", "finance"), accountHandler.CreateAccount)
-				accounts.PUT("/:code", middleware.RoleRequired("admin", "finance"), accountHandler.UpdateAccount)
-				accounts.DELETE("/:code", middleware.RoleRequired("admin"), accountHandler.DeleteAccount)
-				accounts.POST("/import", middleware.RoleRequired("admin"), accountHandler.ImportAccounts)
+				accounts.GET("/:code", permMiddleware.CanView("accounts"), accountHandler.GetAccount)
+				accounts.POST("", permMiddleware.CanCreate("accounts"), accountHandler.CreateAccount)
+				accounts.PUT("/:code", permMiddleware.CanEdit("accounts"), accountHandler.UpdateAccount)
+				accounts.DELETE("/:code", permMiddleware.CanDelete("accounts"), accountHandler.DeleteAccount)
+				accounts.POST("/import", permMiddleware.CanCreate("accounts"), accountHandler.ImportAccounts)
 				
 				// Export routes
-				accounts.GET("/export/pdf", middleware.RoleRequired("admin", "finance"), accountHandler.ExportAccountsPDF)
-				accounts.GET("/export/excel", middleware.RoleRequired("admin", "finance"), accountHandler.ExportAccountsExcel)
+				accounts.GET("/export/pdf", permMiddleware.CanExport("accounts"), accountHandler.ExportAccountsPDF)
+				accounts.GET("/export/excel", permMiddleware.CanExport("accounts"), accountHandler.ExportAccountsExcel)
 			}
 
-			// Contact routes
+			// 📞 Contact routes with enhanced permission checks dan audit logging
 			contacts := protected.Group("/contacts")
+		contacts.Use(enhancedSecurity.RequestMonitoring()) // 📊 Enhanced monitoring
+		// if middleware.GlobalAuditLogger != nil {
+		//	contacts.Use(middleware.GlobalAuditLogger.ContactAuditMiddleware()) // 📋 Audit logging
+		// }
 			{
-				// Basic CRUD operations
-				contacts.GET("", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), contactController.GetContacts)
-				contacts.GET("/:id", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), contactController.GetContact)
-contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee"), contactController.CreateContact)
-				contacts.PUT("/:id", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.UpdateContact)
-				contacts.DELETE("/:id", middleware.RoleRequired("admin"), contactController.DeleteContact)
+				// Basic CRUD operations dengan enhanced security
+				contacts.GET("", permMiddleware.CanView("contacts"), contactController.GetContacts)
+				contacts.GET("/:id", permMiddleware.CanView("contacts"), contactController.GetContact)
+				contacts.POST("", permMiddleware.CanCreate("contacts"), contactController.CreateContact)
+				contacts.PUT("/:id", permMiddleware.CanEdit("contacts"), contactController.UpdateContact)
+				contacts.DELETE("/:id", permMiddleware.CanDelete("contacts"), contactController.DeleteContact)
 				
 				// Advanced operations
-				contacts.GET("/type/:type", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), contactController.GetContactsByType)
-				contacts.GET("/search", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), contactController.SearchContacts)
+				contacts.GET("/type/:type", permMiddleware.CanView("contacts"), contactController.GetContactsByType)
+				contacts.GET("/search", permMiddleware.CanView("contacts"), contactController.SearchContacts)
 				
 				// Import/Export operations
-				contacts.POST("/import", middleware.RoleRequired("admin"), contactController.ImportContacts)
-				contacts.GET("/export", middleware.RoleRequired("admin", "finance", "inventory_manager"), contactController.ExportContacts)
+				contacts.POST("/import", permMiddleware.CanCreate("contacts"), contactController.ImportContacts)
+				contacts.GET("/export", permMiddleware.CanExport("contacts"), contactController.ExportContacts)
+				
+				// Address management
+				contacts.POST("/:id/addresses", permMiddleware.CanEdit("contacts"), contactController.AddContactAddress)
+				contacts.PUT("/:id/addresses/:address_id", permMiddleware.CanEdit("contacts"), contactController.UpdateContactAddress)
+				contacts.DELETE("/:id/addresses/:address_id", permMiddleware.CanEdit("contacts"), contactController.DeleteContactAddress)
 			}
 
 			// Sales repositories, services and controllers
 			salesRepo := repositories.NewSalesRepository(db)
 			productRepo := repositories.NewProductRepository(db)
-			pdfService := services.NewPDFService()
-		salesService := services.NewSalesService(salesRepo, productRepo, contactRepo, accountRepo, nil, pdfService)
+			// Note: pdfService is already initialized earlier for purchase service
+		salesService := services.NewSalesService(db, salesRepo, productRepo, contactRepo, accountRepo, nil, pdfService)
 			salesController := controllers.NewSalesController(salesService)
 
 			// Notification routes
 			notifs := protected.Group("/notifications")
 			{
-				notifs.GET("", notificationHandler.GetNotifications)
-				notifs.GET("/unread-count", notificationHandler.GetUnreadCount)
-				notifs.PUT("/:id/read", notificationHandler.MarkNotificationAsRead)
-				notifs.PUT("/read-all", notificationHandler.MarkAllNotificationsAsRead)
-				notifs.GET("/type/:type", notificationHandler.GetNotificationsByType)
-				notifs.GET("/approvals", notificationHandler.GetApprovalNotifications)
+				notifs.GET("", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.GetNotifications)
+				notifs.GET("/unread-count", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.GetUnreadCount)
+				notifs.PUT("/:id/read", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.MarkNotificationAsRead)
+				notifs.PUT("/read-all", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.MarkAllNotificationsAsRead)
+				notifs.GET("/type/:type", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.GetNotificationsByType)
+				notifs.GET("/approvals", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.GetApprovalNotifications)
 			}
 
-			// Sales routes
+			// Sales routes with permission checks
 			sales := protected.Group("/sales")
 			{
 				// Basic CRUD operations
-				sales.GET("", middleware.RoleRequired("admin", "finance", "director", "employee", "inventory_manager"), salesController.GetSales)
-				sales.GET("/:id", middleware.RoleRequired("admin", "finance", "director", "employee", "inventory_manager"), salesController.GetSale)
-				sales.POST("", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateSale)
-				sales.PUT("/:id", middleware.RoleRequired("admin", "finance", "director"), salesController.UpdateSale)
-				sales.DELETE("/:id", middleware.RoleRequired("admin"), salesController.DeleteSale)
+				sales.GET("", permMiddleware.CanView("sales"), salesController.GetSales)
+				sales.GET("/:id", permMiddleware.CanView("sales"), salesController.GetSale)
+				sales.POST("", permMiddleware.CanCreate("sales"), salesController.CreateSale)
+				sales.PUT("/:id", permMiddleware.CanEdit("sales"), salesController.UpdateSale)
+				sales.DELETE("/:id", permMiddleware.CanDelete("sales"), salesController.DeleteSale)
 
 				// Status management
 				sales.POST("/:id/confirm", middleware.RoleRequired("admin", "finance", "director"), salesController.ConfirmSale)
@@ -205,7 +342,7 @@ contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager
 				sales.GET("/returns", middleware.RoleRequired("admin", "finance", "director"), salesController.GetSaleReturns)
 
 				// Analytics and reporting
-				sales.GET("/summary", middleware.RoleRequired("admin", "finance", "director"), salesController.GetSalesSummary)
+				sales.GET("/summary", middleware.RoleRequired("admin", "finance", "director", "employee"), salesController.GetSalesSummary)
 				sales.GET("/analytics", middleware.RoleRequired("admin", "finance", "director"), salesController.GetSalesAnalytics)
 				sales.GET("/receivables", middleware.RoleRequired("admin", "finance", "director"), salesController.GetReceivablesReport)
 
@@ -218,16 +355,20 @@ contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager
 				sales.GET("/customer/:customer_id/invoices", middleware.RoleRequired("admin", "finance", "director"), salesController.GetCustomerInvoices)
 			}
 
-			// Initialize Payment repositories, services and controllers
-			paymentRepo := repositories.NewPaymentRepository(db)
-			cashBankRepo := repositories.NewCashBankRepository(db)
-			paymentService := services.NewPaymentService(db, paymentRepo, salesRepo, purchaseRepo, cashBankRepo, accountRepo, contactRepo)
-			paymentController := controllers.NewPaymentController(paymentService)
-			cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
-			cashBankController := controllers.NewCashBankController(cashBankService)
+	// Initialize Payment repositories, services and controllers
+	paymentRepo := repositories.NewPaymentRepository(db)
+	cashBankRepo := repositories.NewCashBankRepository(db)
+	paymentService := services.NewPaymentService(db, paymentRepo, salesRepo, purchaseRepo, cashBankRepo, accountRepo, contactRepo)
+	paymentController := controllers.NewPaymentController(paymentService)
+	cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
+	cashBankController := controllers.NewCashBankController(cashBankService)
+	
+	// Initialize Balance Monitoring service and controller
+	balanceMonitoringService := services.NewBalanceMonitoringService(db)
+	balanceMonitoringController := controllers.NewBalanceMonitoringController(balanceMonitoringService)
 			
-			// Setup Payment routes
-			SetupPaymentRoutes(protected, paymentController, cashBankController, cashBankService, jwtManager)
+			// Setup Payment routes (including cash bank routes with GL fix functionality)
+			SetupPaymentRoutes(protected, paymentController, cashBankController, cashBankService, jwtManager, db)
 
 			// Purchases routes
 			purchases := protected.Group("/purchases")
@@ -260,7 +401,7 @@ contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager
 				purchases.GET("/:id/receipts", middleware.RoleRequired("admin", "finance", "inventory_manager", "director"), purchaseController.GetPurchaseReceipts)
 				
 				// Analytics and reporting
-				purchases.GET("/summary", middleware.RoleRequired("admin", "finance", "director"), purchaseController.GetPurchasesSummary)
+				purchases.GET("/summary", middleware.RoleRequired("admin", "finance", "director", "employee"), purchaseController.GetPurchasesSummary)
 				purchases.GET("/pending-approvals", middleware.RoleRequired("admin", "finance", "director"), purchaseController.GetPendingApprovals)
 				purchases.GET("/dashboard", middleware.RoleRequired("admin", "finance", "inventory_manager", "director"), purchaseController.GetPurchaseDashboard)
 				purchases.GET("/vendor/:vendor_id/summary", middleware.RoleRequired("admin", "finance"), purchaseController.GetVendorPurchaseSummary)
@@ -315,12 +456,55 @@ contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager
 				workflows.POST("", middleware.RoleRequired("admin"), purchaseApprovalHandler.CreateApprovalWorkflow)
 			}
 
-			// Initialize Report service and controller
+			// Initialize Report services and controller
 			reportService := services.NewReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
-			reportController := controllers.NewReportController(reportService)
+			professionalService := services.NewProfessionalReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
+			standardizedService := services.NewStandardizedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
+			reportController := controllers.NewReportController(reportService, professionalService, standardizedService)
 			
-			// Setup Report routes
+			// Initialize Financial Report services and controller
+			// Note: journalRepo is already initialized earlier for purchase service
+			financialReportService := services.NewFinancialReportService(db, accountRepo, journalRepo)
+			financialReportController := controllers.NewFinancialReportController(financialReportService)
+			
+			// Setup Settings routes
+			SetupSettingsRoutes(protected, db)
+			
+			// Setup Report routes - Using single consolidated report controller
 			SetupReportRoutes(protected, reportController)
+			
+			// Setup Financial Report routes (enhanced endpoints under /reports/enhanced)
+			SetupFinancialReportRoutes(protected, financialReportController)
+			
+			// NOTE: Unified report routes are commented out to avoid duplicate registrations
+			// The main report routes already handle all necessary endpoints at /api/v1/reports/*
+			// If unified reports are needed in the future, they should use a different path
+			// like /api/v1/unified-reports to avoid conflicts
+			
+			// // Setup Unified Report Controller and Routes
+			// balanceSheetService := services.NewStandardizedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
+			// profitLossService := services.NewEnhancedProfitLossService(db, accountRepo)
+			// cashFlowService := services.NewStandardizedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
+			// 
+			// unifiedReportController := controllers.NewUnifiedReportController(
+			// 	db,
+			// 	accountRepo,
+			// 	salesRepo,
+			// 	purchaseRepo,
+			// 	contactRepo,
+			// 	productRepo,
+			// 	reportService,
+			// 	balanceSheetService,
+			// 	profitLossService,
+			// 	cashFlowService,
+			// )
+			// 
+			// // Register unified report routes
+			// RegisterUnifiedReportRoutes(r, unifiedReportController, jwtManager)
+			// RegisterUnifiedReportMiddleware(r)
+			
+			// Setup Unified Financial Report Routes (at /api/unified-reports - different path)
+			SetupUnifiedReportRoutes(r, db)
 
 			// Monitoring routes (admin only)
 			monitoring := protected.Group("/monitoring")
@@ -344,6 +528,41 @@ contacts.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager
 				// Startup service monitoring
 				monitoring.GET("/startup-status", startupHandler.GetStartupStatus)
 				monitoring.POST("/fix-account-headers", startupHandler.TriggerAccountHeaderFix)
+				
+				// Balance monitoring routes
+				monitoring.GET("/balance-sync", balanceMonitoringController.CheckBalanceSync)
+				monitoring.POST("/fix-discrepancies", balanceMonitoringController.FixBalanceDiscrepancies)
+				monitoring.GET("/balance-health", balanceMonitoringController.GetBalanceHealth)
+				monitoring.GET("/discrepancies", balanceMonitoringController.GetBalanceDiscrepancies)
+				monitoring.GET("/sync-status", balanceMonitoringController.GetSyncStatus)
+			}
+			
+			// 🔒 Security Dashboard routes (admin only) 
+			security := protected.Group("/admin/security")
+			security.Use(middleware.RoleRequired("admin")) // Only admins can access security dashboard
+			security.Use(enhancedSecurity.RequestMonitoring()) // Enhanced monitoring for security routes
+			{
+				// Security Incident Management
+				security.GET("/incidents", securityController.GetSecurityIncidents)
+				security.GET("/incidents/:id", securityController.GetSecurityIncident)
+				security.PUT("/incidents/:id/resolve", securityController.ResolveSecurityIncident)
+				
+				// System Alerts Management
+				security.GET("/alerts", securityController.GetSystemAlerts)
+				security.PUT("/alerts/:id/acknowledge", securityController.AcknowledgeAlert)
+				
+				// Security Metrics & Analytics
+				security.GET("/metrics", securityController.GetSecurityMetrics)
+				
+				// IP Whitelist Management
+				security.GET("/ip-whitelist", securityController.GetIPWhitelist)
+				security.POST("/ip-whitelist", securityController.AddIPToWhitelist)
+				
+				// Security Configuration
+				security.GET("/config", securityController.GetSecurityConfig)
+				
+				// Maintenance Operations
+				security.POST("/cleanup", securityController.CleanupSecurityLogs)
 			}
 		}
 	}

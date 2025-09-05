@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -90,27 +91,68 @@ func (h *PurchaseApprovalHandler) ApprovePurchase(c *gin.Context) {
 	
 	// If finance role and escalate flag is set, handle escalation
 	if strings.ToLower(userRole) == "finance" && request.EscalateToDirector {
-		// First approve the current step
-		action := models.ApprovalActionDTO{Action: "APPROVE", Comments: request.Comments}
-		if err := h.approvalService.ProcessApprovalAction(*purchase.ApprovalRequestID, userID, action); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		// Check if purchase is already approved
+		if purchase.ApprovalStatus == models.PurchaseApprovalApproved {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Purchase is already approved - cannot escalate"})
 			return
 		}
 		
-		// Then escalate to director
-		if err := h.approvalService.EscalateToDirector(*purchase.ApprovalRequestID, userID, "Requires Director approval as requested by Finance"); err != nil {
+		// Create approval request if it doesn't exist
+		if purchase.ApprovalRequestID == nil {
+			// This should not happen in normal flow, but handle it gracefully
+			result, err := h.purchaseService.ProcessPurchaseApprovalWithEscalation(
+				uint(purchaseID), true, userID, userRole, request.Comments, true)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, result)
+			return
+		}
+		
+		// Check if approval request is still pending
+		approvalRequest, err := h.approvalService.GetApprovalRequest(*purchase.ApprovalRequestID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get approval request: " + err.Error()})
+			return
+		}
+		
+		if approvalRequest.Status != models.ApprovalStatusPending {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Cannot escalate - approval request is already %s", approvalRequest.Status)})
+			return
+		}
+		
+		// First escalate to director, then approve the finance step
+		escalationReason := "Requires Director approval as requested by Finance"
+		if request.Comments != "" {
+			escalationReason = fmt.Sprintf("%s - %s", escalationReason, request.Comments)
+		}
+		if err := h.approvalService.EscalateToDirector(*purchase.ApprovalRequestID, userID, escalationReason); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to escalate to Director: " + err.Error()})
 			return
 		}
 		
+		// Reload purchase with updated approval steps to get accurate status
+		updatedPurchase, err := h.purchaseService.GetPurchaseByID(uint(purchaseID))
+		if err == nil && updatedPurchase != nil {
+			purchase = updatedPurchase
+		}
+		
+		// Get current active step after escalation
+		currentStep := h.getCurrentApprovalStep(approvalRequest)
+		
 		c.JSON(http.StatusOK, gin.H{
-			"message": "Purchase approved by Finance and escalated to Director",
+			"message": "Purchase escalated to Director for approval",
 			"purchase_id": purchaseID,
 			"escalated": true,
+			"status": "PENDING",
+			"approval_status": "PENDING",
+			"current_step": currentStep,
+			"waiting_for": "director",
 		})
 		return
 	}
-
+	
 	// Normal approval process
 	action := models.ApprovalActionDTO{Action: "APPROVE", Comments: request.Comments}
 	if err := h.approvalService.ProcessApprovalAction(*purchase.ApprovalRequestID, userID, action); err != nil {

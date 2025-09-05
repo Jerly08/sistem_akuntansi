@@ -95,6 +95,7 @@ const PurchaseApprovalDashboard: React.FC<PurchaseApprovalDashboardProps> = () =
   const [comments, setComments] = useState('');
   const [approvalHistory, setApprovalHistory] = useState<ApprovalHistory[]>([]);
   const [processing, setProcessing] = useState(false);
+  const [requiresDirector, setRequiresDirector] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -143,26 +144,47 @@ const PurchaseApprovalDashboard: React.FC<PurchaseApprovalDashboardProps> = () =
     
     setProcessing(true);
     try {
-      await approvalService.approvePurchase(selectedPurchase.id, {
-        comments: comments || undefined
+      // Check if user is Finance and wants to escalate to Director
+      const userRole = normalizeRole(user?.role as string);
+      const isFinance = userRole === 'finance';
+      // Remove amount restriction - Finance can escalate any amount to Director
+      const needsEscalation = isFinance && requiresDirector;
+      
+      const response = await approvalService.approvePurchase(selectedPurchase.id, {
+        comments: comments || undefined,
+        escalate_to_director: needsEscalation
       });
-      toast({
-        title: 'Success',
-        description: 'Purchase approved successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+      
+      // Check if it was escalated
+      if (response?.escalated) {
+        toast({
+          title: 'Escalated to Director',
+          description: response.message || 'Purchase has been escalated to Director for final approval',
+          status: 'info',
+          duration: 5000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: 'Success',
+          description: response?.message || 'Purchase approved successfully',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+      
       onApprovalClose();
       setComments('');
       setSelectedPurchase(null);
+      // Refresh data to show updated status
       await fetchPurchasesForApproval();
       await fetchApprovalStats();
     } catch (error: any) {
       console.error('Failed to approve purchase:', error);
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to approve purchase',
+        description: error.response?.data?.error || error.response?.data?.message || 'Failed to approve purchase',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -280,33 +302,45 @@ const getPriorityColor = (amount: number) => {
   };
 
   // Get active step details for display
-  const getActiveStepInfo = (purchase: Purchase): { role: string | null, humanRole: string, hasActiveStep: boolean } => {
+  const getActiveStepInfo = (purchase: Purchase): { role: string | null, humanRole: string, hasActiveStep: boolean, stepStatus: string } => {
     const steps = (purchase as any).approval_steps as any[] | undefined;
     if (!steps || steps.length === 0) {
-      return { role: null, humanRole: 'Unknown', hasActiveStep: false };
+      return { role: null, humanRole: 'Tidak ada workflow', hasActiveStep: false, stepStatus: 'NO_WORKFLOW' };
     }
     
+    // First check for active steps
     const active = steps.find((a: any) => a.is_active && a.status === 'PENDING');
     if (active?.step?.approver_role) {
       const normalizedRole = normalizeRole(active.step.approver_role);
       return {
         role: normalizedRole,
-        humanRole: humanizeRole(normalizedRole),
-        hasActiveStep: true
+        humanRole: `Menunggu ${humanizeRole(normalizedRole)}`,
+        hasActiveStep: true,
+        stepStatus: 'ACTIVE_PENDING'
       };
     }
     
-    const pending = steps.find((a: any) => a.status === 'PENDING');
-    if (pending?.step?.approver_role) {
-      const normalizedRole = normalizeRole(pending.step.approver_role);
+    // Check for approved steps to show progression
+    const approvedSteps = steps.filter((a: any) => a.status === 'APPROVED');
+    const pendingSteps = steps.filter((a: any) => a.status === 'PENDING');
+    
+    if (pendingSteps.length > 0) {
+      const nextPending = pendingSteps[0]; // Should be next in line
+      const normalizedRole = normalizeRole(nextPending.step.approver_role);
       return {
         role: normalizedRole,
-        humanRole: humanizeRole(normalizedRole),
-        hasActiveStep: false
+        humanRole: `Menunggu ${humanizeRole(normalizedRole)}`,
+        hasActiveStep: false,
+        stepStatus: 'NEXT_PENDING'
       };
     }
     
-    return { role: null, humanRole: 'Unknown', hasActiveStep: false };
+    // All steps approved
+    if (approvedSteps.length === steps.length) {
+      return { role: null, humanRole: 'Semua langkah disetujui', hasActiveStep: false, stepStatus: 'ALL_APPROVED' };
+    }
+    
+    return { role: null, humanRole: 'Status tidak diketahui', hasActiveStep: false, stepStatus: 'UNKNOWN' };
   };
 
   // Check if current user can approve: must match active step approver_role OR be admin
@@ -818,6 +852,22 @@ const getPriorityColor = (amount: number) => {
                     rows={4}
                   />
                 </FormControl>
+                {/* Show checkbox for Finance role to escalate to Director */}
+                {approvalType === 'approve' && normalizeRole(user?.role as string) === 'finance' && (
+                  <FormControl>
+                    <HStack>
+                      <input
+                        type="checkbox"
+                        id="escalateToDirector"
+                        checked={requiresDirector}
+                        onChange={(e) => setRequiresDirector(e.target.checked)}
+                      />
+                      <FormLabel htmlFor="escalateToDirector" mb={0} cursor="pointer">
+                        Eskalasi ke Director untuk persetujuan tambahan
+                      </FormLabel>
+                    </HStack>
+                  </FormControl>
+                )}
               </VStack>
             )}
           </ModalBody>

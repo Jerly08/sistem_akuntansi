@@ -58,10 +58,11 @@ const StockNotifications: React.FC = () => {
     if (user?.role === 'admin' || user?.role === 'inventory_manager') {
       fetchStockNotifications();
       fetchStockAlerts();
+      // Increase interval to 5 minutes to reduce server load
       const interval = setInterval(() => {
         fetchStockNotifications();
         fetchStockAlerts();
-      }, 30000); // Refresh every 30 seconds
+      }, 300000); // Refresh every 5 minutes (300 seconds)
       return () => clearInterval(interval);
     }
   }, [user]);

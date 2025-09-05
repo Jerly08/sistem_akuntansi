@@ -334,7 +334,7 @@ func (s *PaymentService) createReceivablePaymentJournal(tx *gorm.DB, payment *mo
 		// cashBankAccountID = cashAccount.ID
 		cashBankAccountID = 1 // Default cash account ID - should be from config or db
 	}
-	
+
 	// TODO: Implement GetAccountByCode in AccountRepository
 	// arAccount, err := s.accountRepo.GetAccountByCode("1200") // Accounts Receivable
 	// if err != nil {
@@ -342,21 +342,23 @@ func (s *PaymentService) createReceivablePaymentJournal(tx *gorm.DB, payment *mo
 	// }
 	// Use default AR account ID for now
 	arAccountID := uint(2) // Default AR account ID - should be from config or db
-	
-	// Create journal
-	journal := &models.Journal{
+
+	// Create journal entry
+	journalEntry := &models.JournalEntry{
 		Code:          s.generateJournalCode("RCV"),
-		Date:          payment.Date,
+		EntryDate:     payment.Date,
 		Description:   fmt.Sprintf("Customer Payment %s", payment.Code),
-		ReferenceType: models.JournalRefTypePayment,
+		ReferenceType: models.JournalRefPayment,
 		ReferenceID:   &payment.ID,
+		Reference:     payment.Code,
 		UserID:        userID,
 		Status:        models.JournalStatusPosted,
-		Period:        payment.Date.Format("2006-01"),
+		TotalDebit:    payment.Amount,
+		TotalCredit:   payment.Amount,
 	}
-	
-	// Journal entries
-	entries := []models.JournalEntry{
+
+	// Journal lines
+	journalLines := []models.JournalLine{
 		// Debit: Cash/Bank
 		{
 			AccountID:    cashBankAccountID,
@@ -372,12 +374,10 @@ func (s *PaymentService) createReceivablePaymentJournal(tx *gorm.DB, payment *mo
 			CreditAmount: payment.Amount,
 		},
 	}
-	
-	journal.JournalEntries = entries
-	journal.TotalDebit = payment.Amount
-	journal.TotalCredit = payment.Amount
-	
-	return tx.Create(journal).Error
+
+	journalEntry.JournalLines = journalLines
+
+	return tx.Create(journalEntry).Error
 }
 
 // createPayablePaymentJournal creates journal entries for payable payment
@@ -399,7 +399,7 @@ func (s *PaymentService) createPayablePaymentJournal(tx *gorm.DB, payment *model
 		// cashBankAccountID = cashAccount.ID
 		cashBankAccountID = 1 // Default cash account ID - should be from config or db
 	}
-	
+
 	// TODO: Implement GetAccountByCode in AccountRepository
 	// apAccount, err := s.accountRepo.GetAccountByCode("2100") // Accounts Payable
 	// if err != nil {
@@ -407,21 +407,23 @@ func (s *PaymentService) createPayablePaymentJournal(tx *gorm.DB, payment *model
 	// }
 	// Use default AP account ID for now
 	apAccountID := uint(3) // Default AP account ID - should be from config or db
-	
-	// Create journal
-	journal := &models.Journal{
+
+	// Create journal entry
+	journalEntry := &models.JournalEntry{
 		Code:          s.generateJournalCode("PAY"),
-		Date:          payment.Date,
+		EntryDate:     payment.Date,
 		Description:   fmt.Sprintf("Vendor Payment %s", payment.Code),
-		ReferenceType: models.JournalRefTypePayment,
+		ReferenceType: models.JournalRefPayment,
 		ReferenceID:   &payment.ID,
+		Reference:     payment.Code,
 		UserID:        userID,
 		Status:        models.JournalStatusPosted,
-		Period:        payment.Date.Format("2006-01"),
+		TotalDebit:    payment.Amount,
+		TotalCredit:   payment.Amount,
 	}
-	
-	// Journal entries
-	entries := []models.JournalEntry{
+
+	// Journal lines
+	journalLines := []models.JournalLine{
 		// Debit: Accounts Payable
 		{
 			AccountID:    apAccountID,
@@ -437,12 +439,10 @@ func (s *PaymentService) createPayablePaymentJournal(tx *gorm.DB, payment *model
 			CreditAmount: payment.Amount,
 		},
 	}
-	
-	journal.JournalEntries = entries
-	journal.TotalDebit = payment.Amount
-	journal.TotalCredit = payment.Amount
-	
-	return tx.Create(journal).Error
+
+	journalEntry.JournalLines = journalLines
+
+	return tx.Create(journalEntry).Error
 }
 
 // GetPayments retrieves payments with filters
@@ -524,43 +524,61 @@ func (s *PaymentService) CancelPayment(id uint, reason string, userID uint) erro
 
 // createReversalJournal creates reversal journal entries
 func (s *PaymentService) createReversalJournal(tx *gorm.DB, payment *models.Payment, reason string, userID uint) error {
-	// Find original journal
-	var originalJournal models.Journal
-	if err := tx.Where("reference_type = ? AND reference_id = ?", models.JournalRefTypePayment, payment.ID).First(&originalJournal).Error; err != nil {
+	// Find original journal entry
+	var originalJournalEntry models.JournalEntry
+	if err := tx.Where("reference_type = ? AND reference_id = ?", models.JournalRefPayment, payment.ID).First(&originalJournalEntry).Error; err != nil {
 		return err
 	}
 	
-	// Create reversal journal
-	journal := &models.Journal{
+	// Get original journal lines
+	var originalLines []models.JournalLine
+	if err := tx.Where("journal_entry_id = ?", originalJournalEntry.ID).Find(&originalLines).Error; err != nil {
+		return err
+	}
+	
+	// Create reversal journal entry
+	reversalEntry := &models.JournalEntry{
 		Code:          s.generateJournalCode("REV"),
-		Date:          time.Now(),
+		EntryDate:     time.Now(),
 		Description:   fmt.Sprintf("Reversal of %s - %s", payment.Code, reason),
-		ReferenceType: models.JournalRefTypePayment,
+		ReferenceType: models.JournalRefPayment,
 		ReferenceID:   &payment.ID,
+		Reference:     fmt.Sprintf("REV-%s", payment.Code),
 		UserID:        userID,
 		Status:        models.JournalStatusPosted,
-		Period:        time.Now().Format("2006-01"),
-		IsAdjusting:   true,
+		TotalDebit:    originalJournalEntry.TotalCredit,  // Swap totals
+		TotalCredit:   originalJournalEntry.TotalDebit,
+		ReversedID:    &originalJournalEntry.ID,
 	}
 	
-	// Reverse entries
-	var originalEntries []models.JournalEntry
-	tx.Where("journal_id = ?", originalJournal.ID).Find(&originalEntries)
+	// Create the journal entry first
+	if err := tx.Create(reversalEntry).Error; err != nil {
+		return err
+	}
 	
-	for _, original := range originalEntries {
-		entry := models.JournalEntry{
-			AccountID:    original.AccountID,
-			Description:  fmt.Sprintf("Reversal - %s", original.Description),
-			DebitAmount:  original.CreditAmount, // Swap debit and credit
-			CreditAmount: original.DebitAmount,
+	// Create reversed journal lines
+	for i, original := range originalLines {
+		reversalLine := models.JournalLine{
+			JournalEntryID: reversalEntry.ID,
+			AccountID:      original.AccountID,
+			Description:    fmt.Sprintf("Reversal - %s", original.Description),
+			DebitAmount:    original.CreditAmount, // Swap debit and credit
+			CreditAmount:   original.DebitAmount,
+			LineNumber:     i + 1,
 		}
-		journal.JournalEntries = append(journal.JournalEntries, entry)
+		if err := tx.Create(&reversalLine).Error; err != nil {
+			return err
+		}
 	}
 	
-	journal.TotalDebit = originalJournal.TotalCredit
-	journal.TotalCredit = originalJournal.TotalDebit
+	// Update original entry to mark as reversed
+	originalJournalEntry.ReversalID = &reversalEntry.ID
+	originalJournalEntry.Status = models.JournalStatusReversed
+	if err := tx.Save(&originalJournalEntry).Error; err != nil {
+		return err
+	}
 	
-	return tx.Create(journal).Error
+	return nil
 }
 
 // Helper functions

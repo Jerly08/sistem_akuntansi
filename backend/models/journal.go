@@ -7,7 +7,7 @@ import (
 
 type Journal struct {
 	ID           uint           `json:"id" gorm:"primaryKey"`
-	Code         string         `json:"code" gorm:"unique;not null;size:20"`
+	Code         string         `json:"code" gorm:"unique;not null;size:30"`
 	Date         time.Time      `json:"date"`
 	Description  string         `json:"description" gorm:"not null;type:text"`
 	ReferenceType string        `json:"reference_type" gorm:"size:50"` // MANUAL, SALE, PURCHASE, PAYMENT, etc.
@@ -24,30 +24,16 @@ type Journal struct {
 
 	// Relations
 	User         User            `json:"user" gorm:"foreignKey:UserID"`
-	JournalEntries []JournalEntry `json:"journal_entries" gorm:"foreignKey:JournalID"`
+	// JournalEntries relation removed - see journal_entry.go for new structure
 }
 
-type JournalEntry struct {
-	ID          uint           `json:"id" gorm:"primaryKey"`
-	JournalID   uint           `json:"journal_id" gorm:"not null;index"`
-	AccountID   uint           `json:"account_id" gorm:"not null;index"`
-	Description string         `json:"description" gorm:"type:text"`
-	DebitAmount  float64       `json:"debit_amount" gorm:"type:decimal(20,2);default:0"`
-	CreditAmount float64       `json:"credit_amount" gorm:"type:decimal(20,2);default:0"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+// JournalEntry moved to journal_entry.go to avoid conflicts
 
-	// Relations
-	Journal Journal `json:"journal" gorm:"foreignKey:JournalID"`
-	Account Account `json:"account" gorm:"foreignKey:AccountID"`
-}
-
-// Journal Status Constants
+// Journal Status Constants (different from JournalEntry status)
 const (
 	JournalStatusPending   = "PENDING"
-	JournalStatusPosted    = "POSTED"
 	JournalStatusCancelled = "CANCELLED"
+	// Note: JournalStatusPosted moved to journal_entry.go to avoid conflicts
 )
 
 // Journal Reference Types Constants

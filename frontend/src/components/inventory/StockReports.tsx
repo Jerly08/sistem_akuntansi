@@ -46,7 +46,7 @@ const StockReports: React.FC = () => {
   };
 
   return (
-    <Layout allowedRoles={['ADMIN', 'INVENTORY_MANAGER']}>
+    <Layout allowedRoles={['ADMIN', 'INVENTORY_MANAGER']}>
       <Box>
         <Heading as="h1" size="xl" mb={6}>
           Stock Reports

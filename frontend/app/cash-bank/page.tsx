@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import Layout from '@/components/layout/Layout';
+import { useTranslation } from '@/hooks/useTranslation';
+import SimpleLayout from '@/components/layout/SimpleLayout';
 import { DataTable } from '@/components/common/DataTable';
 import {
   Box,
@@ -40,6 +41,7 @@ import {
   VStack,
   HStack,
   Tooltip,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { FiPlus, FiDollarSign, FiCreditCard, FiEdit2, FiEye, FiArrowRight, FiTrendingUp, FiTrendingDown, FiMoreVertical, FiTrash2 } from 'react-icons/fi';
 import cashbankService, { CashBank, BalanceSummary } from '@/services/cashbankService';
@@ -50,41 +52,44 @@ import TransactionHistoryModal from '@/components/cashbank/TransactionHistoryMod
 
 // Table columns for cash and bank accounts with COA standards
 const getAccountColumns = (
+  t: any,
   onEdit?: (account: CashBank) => void, 
   onView?: (account: CashBank) => void,
   onDeposit?: (account: CashBank) => void,
   onWithdraw?: (account: CashBank) => void,
   onTransfer?: (account: CashBank) => void,
-  onDelete?: (account: CashBank) => void
+  onDelete?: (account: CashBank) => void,
+  textColor?: string,
+  mutedTextColor?: string
 ) => [
   {
-    header: 'Account Code',
+    header: t('cashBank.accountCode'),
     accessor: ((row: CashBank) => (
       <Box>
-        <Text fontFamily="mono" fontWeight="bold" fontSize="sm" color="gray.800">
+        <Text fontFamily="mono" fontWeight="bold" fontSize="sm" color={textColor}>
           {row.code}
         </Text>
-        <Text fontSize="xs" color="gray.500">
+        <Text fontSize="xs" color={mutedTextColor}>
           {row.type} Account
         </Text>
       </Box>
     )) as (row: CashBank) => React.ReactNode
   },
   {
-    header: 'Account Name',
+    header: t('cashBank.accountName'),
     accessor: ((row: CashBank) => (
       <Box>
-        <Text fontWeight="medium" fontSize="sm" color="gray.800">
+        <Text fontWeight="medium" fontSize="sm" color={textColor}>
           {row.name}
         </Text>
-        <Text fontSize="xs" color="gray.500">
+        <Text fontSize="xs" color={mutedTextColor}>
           {row.description || 'No description'}
         </Text>
       </Box>
     )) as (row: CashBank) => React.ReactNode
   },
   {
-    header: 'Account Type',
+    header: t('cashBank.accountType'),
     accessor: ((row: CashBank) => (
       <Box textAlign="center">
         <Flex alignItems="center" gap={2} justifyContent="center" mb={1}>
@@ -97,14 +102,14 @@ const getAccountColumns = (
             {row.type}
           </Badge>
         </Flex>
-        <Text fontSize="xs" color="gray.500">
+        <Text fontSize="xs" color={mutedTextColor}>
           {row.type === 'CASH' ? 'Physical Money' : 'Bank Account'}
         </Text>
       </Box>
     )) as (row: CashBank) => React.ReactNode
   },
   {
-    header: 'GL Account (COA)',
+    header: t('cashBank.glAccount'),
     accessor: ((row: CashBank) => {
       if (row.account && row.account.code && row.account.name) {
         return (
@@ -113,16 +118,16 @@ const getAccountColumns = (
               <Badge size="sm" colorScheme="blue" variant="outline">
                 {row.account.code}
               </Badge>
-              <Text fontSize="sm" fontWeight="medium" color="blue.700" noOfLines={1}>
+              <Text fontSize="sm" fontWeight="medium" color="blue.600" noOfLines={1}>
                 {row.account.name}
               </Text>
             </Flex>
             <Flex alignItems="center" gap={1}>
               <Text fontSize="xs" color="green.600">
-                ✅ Integrated with COA
+                ✅ {t('cashBank.integratedWithCOA')}
               </Text>
               <Badge size="xs" colorScheme="green" variant="subtle">
-                ASSET
+                {t('cashBank.asset')}
               </Badge>
             </Flex>
           </Box>
@@ -148,18 +153,18 @@ const getAccountColumns = (
     }) as (row: CashBank) => React.ReactNode
   },
   {
-    header: 'Bank Details',
+    header: t('cashBank.bankDetails'),
     accessor: ((row: CashBank) => {
       if (row.type === 'BANK') {
         return (
           <Box>
-            <Text fontWeight="medium" fontSize="sm" color="blue.700" mb={1}>
+            <Text fontWeight="medium" fontSize="sm" color="blue.600" mb={1}>
               {row.bank_name || 'Unknown Bank'}
             </Text>
-            <Text fontSize="xs" color="gray.600" fontFamily="mono">
+            <Text fontSize="xs" color={textColor} fontFamily="mono">
               Account: {row.account_no || 'N/A'}
             </Text>
-            <Text fontSize="xs" color="gray.500">
+            <Text fontSize="xs" color={mutedTextColor}>
               Electronic Banking
             </Text>
           </Box>
@@ -167,13 +172,13 @@ const getAccountColumns = (
       }
       return (
         <Box>
-          <Text fontSize="sm" color="green.700" fontWeight="medium" mb={1}>
+          <Text fontSize="sm" color="green.600" fontWeight="medium" mb={1}>
             Cash Storage
           </Text>
-          <Text fontSize="xs" color="gray.500">
+          <Text fontSize="xs" color={mutedTextColor}>
             Physical cash management
           </Text>
-          <Text fontSize="xs" color="gray.400">
+          <Text fontSize="xs" color={mutedTextColor}>
             Manual transactions
           </Text>
         </Box>
@@ -181,7 +186,7 @@ const getAccountColumns = (
     }) as (row: CashBank) => React.ReactNode
   },
   {
-    header: 'Current Balance',
+    header: t('cashBank.currentBalance'),
     accessor: ((row: CashBank) => {
       const isNegative = row.balance < 0;
       const balanceColor = isNegative ? 'red.500' : (row.balance > 0 ? 'green.600' : 'gray.500');
@@ -197,8 +202,8 @@ const getAccountColumns = (
             {row.currency} {Math.abs(row.balance).toLocaleString('id-ID')}
             {isNegative && ' (Dr)'}
           </Text>
-          <Text fontSize="xs" color="gray.500" mb={1}>
-            {isNegative ? '⚠️ Overdraft' : (row.balance > 0 ? '✅ Credit Balance' : '➖ Zero Balance')}
+          <Text fontSize="xs" color={mutedTextColor} mb={1}>
+            {isNegative ? '⚠️ Overdraft' : (row.balance > 0 ? '✅ Credit Balance' : '➜ Zero Balance')}
           </Text>
           <Badge 
             size="xs" 
@@ -212,7 +217,7 @@ const getAccountColumns = (
     }) as (row: CashBank) => React.ReactNode
   },
   {
-    header: 'Status',
+    header: t('cashBank.status'),
     accessor: ((row: CashBank) => (
       <Box textAlign="center">
         <Badge 
@@ -229,7 +234,7 @@ const getAccountColumns = (
     )) as (row: CashBank) => React.ReactNode
   },
   {
-    header: 'Actions',
+    header: t('cashBank.actions'),
     accessor: ((row: CashBank) => (
       <Box>
         <Menu>
@@ -341,8 +346,18 @@ const getAccountColumns = (
 
 const CashBankPage: React.FC = () => {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  
+  // Color mode values
+  const bg = useColorModeValue('white', 'gray.800');
+  const textColor = useColorModeValue('gray.800', 'white');
+  const mutedTextColor = useColorModeValue('gray.500', 'gray.400');
+  const modalContentBg = useColorModeValue('white', 'gray.800');
+  const modalFooterBg = useColorModeValue('gray.50', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const readOnlyBg = useColorModeValue('gray.50', 'gray.700');
   
   const [accounts, setAccounts] = useState<CashBank[]>([]);
   const [balanceSummary, setBalanceSummary] = useState<BalanceSummary | null>(null);
@@ -490,41 +505,72 @@ const CashBankPage: React.FC = () => {
     fetchData();
   };
 
+  const handleFixGLLinks = async () => {
+    try {
+      setLoading(true);
+      const result = await cashbankService.fixGLAccountLinks();
+      
+      toast({
+        title: 'GL Account Links Fixed',
+        description: `Successfully fixed ${result.fixed_count} cash/bank accounts`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      
+      // Refresh data to show updated GL links
+      fetchData();
+    } catch (error: any) {
+      toast({
+        title: 'Failed to Fix GL Links',
+        description: error.response?.data?.details || error.message || 'An error occurred while fixing GL account links',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Separate cash and bank accounts
   const cashAccounts = accounts.filter(acc => acc.type === 'CASH' && acc.is_active);
   const bankAccounts = accounts.filter(acc => acc.type === 'BANK' && acc.is_active);
   
   // Get columns with handlers
   const accountColumns = getAccountColumns(
+    t,
     handleEditAccount, 
     handleViewAccount, 
     handleDeposit, 
     handleWithdraw, 
     handleTransfer, 
-    handleDelete
+    handleDelete,
+    textColor,
+    mutedTextColor
   );
 
   if (loading) {
     return (
-<Layout allowedRoles={['admin', 'finance', 'director']}>
+<SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
         <Box>
-          <Text>Loading cash & bank data...</Text>
+          <Text>{t('common.loading')}</Text>
         </Box>
-      </Layout>
+      </SimpleLayout>
     );
   }
 
   return (
-    <Layout allowedRoles={['admin', 'finance', 'director']}>
+    <SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
-          <Heading size="lg">Cash & Bank Management</Heading>
+          <Heading size="lg">{t('cashBank.title')}</Heading>
           <Button
             colorScheme="blue"
             leftIcon={<FiPlus />}
             onClick={handleAddAccount}
           >
-            Add Account
+            {t('common.add')} {t('accounts.title')}
           </Button>
         </Flex>
         
@@ -585,7 +631,13 @@ const CashBankPage: React.FC = () => {
                   </Text>
                 </Box>
                 {accounts.some(acc => !acc.account) && (
-                  <Button size="xs" colorScheme="orange" variant="outline">
+                  <Button 
+                    size="xs" 
+                    colorScheme="orange" 
+                    variant="outline"
+                    onClick={handleFixGLLinks}
+                    isLoading={loading}
+                  >
                     Fix Missing Links
                   </Button>
                 )}
@@ -647,7 +699,7 @@ const CashBankPage: React.FC = () => {
             </Button>
           </Flex>
           {bankAccounts.length > 0 ? (
-            <Box bg="white" borderRadius="lg" overflow="hidden" boxShadow="sm">
+            <Box bg={bg} borderRadius="lg" overflow="hidden" boxShadow="sm">
               <DataTable<CashBank>
                 columns={accountColumns}
                 data={bankAccounts}
@@ -660,7 +712,7 @@ const CashBankPage: React.FC = () => {
           ) : (
             <Card>
               <CardBody>
-                <Text color="gray.500" textAlign="center" py={8}>
+                <Text color={mutedTextColor} textAlign="center" py={8}>
                   No bank accounts found. Click "Add Bank Account" to create one.
                 </Text>
               </CardBody>
@@ -682,7 +734,7 @@ const CashBankPage: React.FC = () => {
             </Button>
           </Flex>
           {cashAccounts.length > 0 ? (
-            <Box bg="white" borderRadius="lg" overflow="hidden" boxShadow="sm">
+            <Box bg={bg} borderRadius="lg" overflow="hidden" boxShadow="sm">
               <DataTable<CashBank>
                 columns={accountColumns}
                 data={cashAccounts}
@@ -695,7 +747,7 @@ const CashBankPage: React.FC = () => {
           ) : (
             <Card>
               <CardBody>
-                <Text color="gray.500" textAlign="center" py={8}>
+                <Text color={mutedTextColor} textAlign="center" py={8}>
                   No cash accounts found. Click "Add Cash Account" to create one.
                 </Text>
               </CardBody>
@@ -737,6 +789,7 @@ const CashBankPage: React.FC = () => {
           maxH="95vh" 
           maxW={{ base: '95vw', md: '90vw', lg: '70vw' }}
           mx={4}
+          bg={modalContentBg}
         >
           {/* Payment Modal Style Header */}
           <ModalHeader 
@@ -839,13 +892,13 @@ const CashBankPage: React.FC = () => {
                       
                       <VStack spacing={3} align="stretch">
                         <Box>
-                          <Text fontSize="xs" color="gray.500" mb={1} textTransform="uppercase" letterSpacing="wide">Account Code</Text>
-                          <Text fontWeight="bold" fontFamily="mono" bg="gray.50" px={3} py={2} borderRadius="md">
+                          <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Account Code</Text>
+                          <Text fontWeight="bold" fontFamily="mono" bg={readOnlyBg} px={3} py={2} borderRadius="md">
                             {selectedAccount.code}
                           </Text>
                         </Box>
                         <Box>
-                          <Text fontSize="xs" color="gray.500" mb={1} textTransform="uppercase" letterSpacing="wide">Currency</Text>
+                          <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Currency</Text>
                           <HStack spacing={2}>
                             <Text fontWeight="bold">{selectedAccount.currency}</Text>
                             <Badge colorScheme="blue" variant="subtle" fontSize="xs">
@@ -866,14 +919,14 @@ const CashBankPage: React.FC = () => {
                         
                         <VStack spacing={3} align="stretch">
                           <Box>
-                            <Text fontSize="xs" color="gray.500" mb={1} textTransform="uppercase" letterSpacing="wide">Bank Name</Text>
-                            <Text bg="gray.50" px={3} py={2} borderRadius="md" color={selectedAccount.bank_name ? 'gray.800' : 'orange.600'}>
+                            <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Bank Name</Text>
+                            <Text bg={readOnlyBg} px={3} py={2} borderRadius="md" color={selectedAccount.bank_name ? textColor : 'orange.600'}>
                               {selectedAccount.bank_name || 'Bank name not specified'}
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="xs" color="gray.500" mb={1} textTransform="uppercase" letterSpacing="wide">Account Number</Text>
-                            <Text bg="gray.50" px={3} py={2} borderRadius="md" fontFamily="mono" color={selectedAccount.account_no ? 'gray.800' : 'orange.600'}>
+                            <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Account Number</Text>
+                            <Text bg={readOnlyBg} px={3} py={2} borderRadius="md" fontFamily="mono" color={selectedAccount.account_no ? textColor : 'orange.600'}>
                               {selectedAccount.account_no || 'Account number not specified'}
                             </Text>
                           </Box>
@@ -930,8 +983,8 @@ const CashBankPage: React.FC = () => {
                       
                       <VStack spacing={3} align="stretch">
                         <Box>
-                          <Text fontSize="xs" color="gray.500" mb={1} textTransform="uppercase" letterSpacing="wide">Created</Text>
-                          <Text fontSize="sm" fontFamily="mono" bg="gray.50" px={3} py={2} borderRadius="md">
+                          <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Created</Text>
+                          <Text fontSize="sm" fontFamily="mono" bg={readOnlyBg} px={3} py={2} borderRadius="md">
                             {new Date(selectedAccount.created_at).toLocaleDateString('id-ID', {
                               weekday: 'long',
                               year: 'numeric',
@@ -943,8 +996,8 @@ const CashBankPage: React.FC = () => {
                           </Text>
                         </Box>
                         <Box>
-                          <Text fontSize="xs" color="gray.500" mb={1} textTransform="uppercase" letterSpacing="wide">Last Updated</Text>
-                          <Text fontSize="sm" fontFamily="mono" bg="gray.50" px={3} py={2} borderRadius="md">
+                          <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Last Updated</Text>
+                          <Text fontSize="sm" fontFamily="mono" bg={readOnlyBg} px={3} py={2} borderRadius="md">
                             {new Date(selectedAccount.updated_at).toLocaleDateString('id-ID', {
                               weekday: 'long',
                               year: 'numeric',
@@ -1032,24 +1085,24 @@ const CashBankPage: React.FC = () => {
 
           {/* Modal Footer with Payment Modal Style */}
           <ModalFooter 
-            bg="gray.50" 
+            bg={modalFooterBg} 
             borderBottomRadius="md"
             py={4}
             px={6}
             borderTop="1px"
-            borderColor="gray.200"
+            borderColor={borderColor}
           >
             <HStack spacing={3} width="full" justify="space-between">
               {/* Account Summary Info */}
               {selectedAccount && (
                 <Box flex="1" display={{ base: 'none', md: 'block' }}>
                   <HStack spacing={4}>
-                    <Text fontSize="sm" color="gray.600">
+                    <Text fontSize="sm" color={mutedTextColor}>
                       Balance: <Text as="span" fontWeight="bold" color={selectedAccount.balance < 0 ? "red.600" : selectedAccount.balance > 0 ? "green.600" : "gray.600"}>
                         {selectedAccount.currency} {Math.abs(selectedAccount.balance).toLocaleString('id-ID')}
                       </Text>
                     </Text>
-                    <Text fontSize="sm" color="gray.600">
+                    <Text fontSize="sm" color={mutedTextColor}>
                       Status: <Text as="span" fontWeight="bold" color={selectedAccount.is_active ? "green.600" : "red.600"}>
                         {selectedAccount.is_active ? 'Active' : 'Inactive'}
                       </Text>
@@ -1092,7 +1145,7 @@ const CashBankPage: React.FC = () => {
         onClose={onTransactionHistoryModalClose}
         account={selectedAccount}
       />
-    </Layout>
+    </SimpleLayout>
   );
 };
 

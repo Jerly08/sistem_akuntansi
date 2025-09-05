@@ -349,6 +349,7 @@ func (jm *JWTManager) AuthRequired() gin.HandlerFunc {
 		c.Set("username", claims.Username)
 		c.Set("email", claims.Email)
 		c.Set("role", claims.Role)
+		c.Set("user_role", claims.Role) // Backward compatibility
 		c.Set("session_id", claims.SessionID)
 		c.Set("permissions", claims.Permissions)
 		c.Set("user", user)

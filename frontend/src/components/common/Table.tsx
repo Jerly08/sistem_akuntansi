@@ -18,6 +18,7 @@ import {
   Badge,
   Button,
   Box,
+  useColorModeValue,
 } from '@chakra-ui/react';
 
 interface Column<T> {
@@ -37,6 +38,13 @@ interface TableProps<T> {
 }
 
 function Table<T>({ columns, data, keyField, title, actions, isLoading, emptyMessage }: TableProps<T>) {
+  const bgCard = useColorModeValue('white', 'gray.800');
+  const bgHeader = useColorModeValue('#F7FAFC', 'gray.700');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const textColor = useColorModeValue('gray.700', 'gray.200');
+  const headerTextColor = useColorModeValue('gray.600', 'gray.300');
+  
   const renderCell = (item: T, column: Column<T>) => {
     if (column.cell) {
       return column.cell(item);
@@ -97,10 +105,17 @@ function Table<T>({ columns, data, keyField, title, actions, isLoading, emptyMes
   }
 
   return (
-    <Card>
+    <Card 
+      bg={bgCard} 
+      borderRadius="lg" 
+      boxShadow="sm" 
+      border="1px" 
+      borderColor={borderColor}
+      overflow="hidden"
+    >
       {title && (
-        <CardHeader>
-          <Heading size="md">{title}</Heading>
+        <CardHeader pb={0}>
+          <Heading size="md" color={textColor}>{title}</Heading>
         </CardHeader>
       )}
       <CardBody p={0}>
@@ -110,29 +125,35 @@ function Table<T>({ columns, data, keyField, title, actions, isLoading, emptyMes
           </Flex>
         ) : (
           <Box overflowX="auto">
-            <ChakraTable variant="simple">
-              <Thead bg="gray.50">
+            <ChakraTable variant="simple" size="md">
+              <Thead bg={bgHeader}>
                 <Tr>
                   {columns.map((column, index) => (
                     <Th 
                       key={index} 
-                      fontWeight="bold"
-                      whiteSpace="nowrap"
-                      px={4}
-                      py={3}
+                      fontWeight="500"
+                      textTransform="none"
                       fontSize="sm"
-                      color="gray.700"
+                      color={headerTextColor}
+                      px={6}
+                      py={4}
+                      borderBottom="1px"
+                      borderColor={borderColor}
                     >
                       {column.header}
                     </Th>
                   ))}
                   {actions && (
                     <Th 
-                      whiteSpace="nowrap"
-                      px={4}
-                      py={3}
+                      fontWeight="500"
+                      textTransform="none"
                       fontSize="sm"
-                      color="gray.700"
+                      color={headerTextColor}
+                      px={6}
+                      py={4}
+                      borderBottom="1px"
+                      borderColor={borderColor}
+                      textAlign="center"
                     >
                       Actions
                     </Th>
@@ -140,26 +161,33 @@ function Table<T>({ columns, data, keyField, title, actions, isLoading, emptyMes
                 </Tr>
               </Thead>
               <Tbody>
-                {data.map((item) => (
-                  <Tr key={String(item[keyField])} _hover={{ bg: 'gray.50' }}>
+                {data.map((item, rowIndex) => (
+                  <Tr 
+                    key={String(item[keyField])} 
+                    _hover={{ bg: hoverBg, cursor: 'pointer' }}
+                    transition="all 0.2s"
+                  >
                     {columns.map((column, index) => (
                       <Td 
                         key={index}
-                        px={4}
-                        py={3}
+                        px={6}
+                        py={4}
                         fontSize="sm"
-                        verticalAlign="middle"
+                        color={textColor}
+                        borderBottom={rowIndex === data.length - 1 ? 'none' : '1px'}
+                        borderColor={borderColor}
                       >
                         {renderCellContent(renderCell(item, column))}
                       </Td>
                     ))}
                     {actions && (
                       <Td
-                        px={4}
-                        py={3}
-                        verticalAlign="middle"
+                        px={6}
+                        py={4}
+                        borderBottom={rowIndex === data.length - 1 ? 'none' : '1px'}
+                        borderColor={borderColor}
                       >
-                        <Flex gap={2} justify="flex-end" wrap="wrap">
+                        <Flex gap={2} justify="center" wrap="wrap">
                           {actions(item)}
                         </Flex>
                       </Td>

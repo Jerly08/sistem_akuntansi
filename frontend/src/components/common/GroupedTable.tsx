@@ -39,7 +39,7 @@ interface Group<T> {
 }
 
 interface GroupedTableProps<T> {
-  columns: Column<T>[];
+  columns: Column<T>[] | ((groupKey: string) => Column<T>[]);
   data: T[];
   keyField: keyof T;
   groupBy: keyof T;
@@ -179,108 +179,112 @@ function GroupedTable<T>({
           </Flex>
         ) : (
           <Box>
-            {sortedGroups.map((group) => (
-              <Box key={group.key} mb={4}>
-                {/* Group Header */}
-                <Flex
-                  align="center"
-                  px={4}
-                  py={3}
-                  bg="gray.100"
-                  cursor="pointer"
-                  onClick={() => toggleGroup(group.key)}
-                  _hover={{ bg: 'gray.200' }}
-                  borderBottom="1px solid"
-                  borderColor="gray.200"
-                >
-                  <IconButton
-                    aria-label={group.isOpen ? 'Collapse group' : 'Expand group'}
-                    icon={group.isOpen ? <FiChevronDown /> : <FiChevronRight />}
-                    size="sm"
-                    variant="ghost"
-                    mr={2}
-                  />
-                  <Badge
-                    colorScheme={getGroupColor(group.key)}
-                    variant="solid"
-                    mr={3}
-                    px={2}
-                    py={1}
+            {sortedGroups.map((group) => {
+              const groupColumns = typeof columns === 'function' ? columns(group.key) : columns;
+              
+              return (
+                <Box key={group.key} mb={4}>
+                  {/* Group Header */}
+                  <Flex
+                    align="center"
+                    px={4}
+                    py={3}
+                    bg="gray.100"
+                    cursor="pointer"
+                    onClick={() => toggleGroup(group.key)}
+                    _hover={{ bg: 'gray.200' }}
+                    borderBottom="1px solid"
+                    borderColor="gray.200"
                   >
-                    {groupLabels[group.key] || group.key}
-                  </Badge>
-                  <Text fontWeight="semibold" fontSize="md">
-                    {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
-                  </Text>
-                </Flex>
+                    <IconButton
+                      aria-label={group.isOpen ? 'Collapse group' : 'Expand group'}
+                      icon={group.isOpen ? <FiChevronDown /> : <FiChevronRight />}
+                      size="sm"
+                      variant="ghost"
+                      mr={2}
+                    />
+                    <Badge
+                      colorScheme={getGroupColor(group.key)}
+                      variant="solid"
+                      mr={3}
+                      px={2}
+                      py={1}
+                    >
+                      {groupLabels[group.key] || group.key}
+                    </Badge>
+                    <Text fontWeight="semibold" fontSize="md">
+                      {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+                    </Text>
+                  </Flex>
 
-                {/* Group Content */}
-                <Collapse in={group.isOpen} animateOpacity>
-                  <Box overflowX="auto">
-                    <ChakraTable variant="simple" size="sm">
-                      <Thead bg="gray.50">
-                        <Tr>
-                          {columns.map((column, index) => (
-                            <Th 
-                              key={index}
-                              fontWeight="bold"
-                              whiteSpace="nowrap"
-                              px={4}
-                              py={3}
-                              fontSize="sm"
-                              color="gray.700"
-                              {...(column.headerStyle || {})}
-                            >
-                              {column.header}
-                            </Th>
-                          ))}
-                          {actions && (
-                            <Th 
-                              whiteSpace="nowrap"
-                              px={4}
-                              py={3}
-                              fontSize="sm"
-                              color="gray.700"
-                            >
-                              Actions
-                            </Th>
-                          )}
-                        </Tr>
-                      </Thead>
-                      <Tbody>
-                        {group.items.map((item) => (
-                          <Tr key={String(item[keyField])} _hover={{ bg: 'gray.50' }}>
-                            {columns.map((column, index) => (
-                              <Td 
+                  {/* Group Content */}
+                  <Collapse in={group.isOpen} animateOpacity>
+                    <Box overflowX="auto">
+                      <ChakraTable variant="simple" size="sm">
+                        <Thead bg="gray.50">
+                          <Tr>
+                            {groupColumns.map((column, index) => (
+                              <Th 
                                 key={index}
+                                fontWeight="bold"
+                                whiteSpace="nowrap"
                                 px={4}
                                 py={3}
                                 fontSize="sm"
-                                verticalAlign="middle"
-                                {...(column.cellStyle || {})}
+                                color="gray.700"
+                                {...(column.headerStyle || {})}
                               >
-                                {renderCellContent(renderCell(item, column))}
-                              </Td>
+                                {column.header}
+                              </Th>
                             ))}
                             {actions && (
-                              <Td
+                              <Th 
+                                whiteSpace="nowrap"
                                 px={4}
                                 py={3}
-                                verticalAlign="middle"
+                                fontSize="sm"
+                                color="gray.700"
                               >
-                                <Flex gap={2} justify="flex-end" wrap="wrap">
-                                  {actions(item)}
-                                </Flex>
-                              </Td>
+                                Actions
+                              </Th>
                             )}
                           </Tr>
-                        ))}
-                      </Tbody>
-                    </ChakraTable>
-                  </Box>
-                </Collapse>
-              </Box>
-            ))}
+                        </Thead>
+                        <Tbody>
+                          {group.items.map((item) => (
+                            <Tr key={String(item[keyField])} _hover={{ bg: 'gray.50' }}>
+                              {groupColumns.map((column, index) => (
+                                <Td 
+                                  key={index}
+                                  px={4}
+                                  py={3}
+                                  fontSize="sm"
+                                  verticalAlign="middle"
+                                  {...(column.cellStyle || {})}
+                                >
+                                  {renderCellContent(renderCell(item, column))}
+                                </Td>
+                              ))}
+                              {actions && (
+                                <Td
+                                  px={4}
+                                  py={3}
+                                  verticalAlign="middle"
+                                >
+                                  <Flex gap={2} justify="flex-end" wrap="wrap">
+                                    {actions(item)}
+                                  </Flex>
+                                </Td>
+                              )}
+                            </Tr>
+                          ))}
+                        </Tbody>
+                      </ChakraTable>
+                    </Box>
+                  </Collapse>
+                </Box>
+              );
+            })}
           </Box>
         )}
       </CardBody>

@@ -16,6 +16,7 @@ func SetupCashBankRoutes(router *gin.Engine, db *gorm.DB, jwtManager *middleware
 	cashBankRepo := repositories.NewCashBankRepository(db)
 	cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
 	cashBankController := controllers.NewCashBankController(cashBankService)
+	fixCashBankController := controllers.NewFixCashBankController(db, cashBankService)
 
 	// Cash Bank routes group with authentication
 	cashBank := router.Group("/api/v1/cashbank")
@@ -41,5 +42,9 @@ func SetupCashBankRoutes(router *gin.Engine, db *gorm.DB, jwtManager *middleware
 		cashBank.GET("/accounts/:id/transactions", middleware.RoleRequired("admin", "finance", "director"), cashBankController.GetTransactions)
 		cashBank.GET("/balance-summary", middleware.RoleRequired("admin", "finance", "director"), cashBankController.GetBalanceSummary)
 		cashBank.POST("/accounts/:id/reconcile", middleware.RoleRequired("admin", "finance"), cashBankController.ReconcileAccount)
+		
+		// Admin operations - GL Account linking fixes
+		cashBank.GET("/admin/check-gl-links", middleware.RoleRequired("admin"), fixCashBankController.CheckCashBankGLLinks)
+		cashBank.POST("/admin/fix-gl-links", middleware.RoleRequired("admin"), fixCashBankController.FixCashBankGLLinks)
 	}
 }

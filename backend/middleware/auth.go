@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,8 +26,12 @@ func RoleRequired(roles ...string) gin.HandlerFunc {
 		}
 
 		roleStr := userRole.(string)
+		// Convert to lowercase for case-insensitive comparison
+		roleStrLower := strings.ToLower(roleStr)
+		
 		for _, role := range roles {
-			if roleStr == role {
+			roleLower := strings.ToLower(role)
+			if roleStrLower == roleLower {
 				c.Next()
 				return
 			}

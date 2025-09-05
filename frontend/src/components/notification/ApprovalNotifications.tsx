@@ -46,8 +46,20 @@ const ApprovalNotifications: React.FC = () => {
       setLoading(true);
       const response = await approvalService.getNotifications({ limit: 20, type: 'approval' });
       setNotifications(response.notifications || []);
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
+    } catch (error: any) {
+      // Handle authentication errors gracefully
+      if (error.response?.status === 401) {
+        console.log('Authentication required for notifications');
+        setNotifications([]);
+        return;
+      }
+      
+      // Handle other errors
+      if (error.response?.status !== 403 && !error.message?.includes('AUTH_SESSION_EXPIRED')) {
+        console.error('Failed to fetch notifications:', error);
+      }
+      
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -58,10 +70,18 @@ const ApprovalNotifications: React.FC = () => {
       const response = await approvalService.getUnreadNotificationCount();
       setUnreadCount(response.count || 0);
     } catch (error: any) {
-      // Only log error if it's not a network/auth issue
-      if (error.response?.status !== 401 && error.code !== 'NETWORK_ERROR') {
+      // Handle authentication errors gracefully
+      if (error.response?.status === 401) {
+        console.log('Authentication required for notifications, count reset to 0');
+        setUnreadCount(0);
+        return;
+      }
+      
+      // Handle other errors but don't spam the console
+      if (error.response?.status !== 403 && !error.message?.includes('AUTH_SESSION_EXPIRED')) {
         console.error('Failed to fetch unread count:', error);
       }
+      
       // Gracefully handle by setting count to 0
       setUnreadCount(0);
     }

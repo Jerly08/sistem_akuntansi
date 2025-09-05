@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import Layout from '@/components/layout/Layout';
-import Table from '@/components/common/Table';
+import { useModulePermissions } from '@/hooks/usePermissions';
+import SimpleLayout from '@/components/layout/SimpleLayout';
+import AccountsTable from '@/components/accounts/AccountsTable';
 import {
   Box,
   Flex,
@@ -39,6 +40,8 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
+  useColorMode,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { FiPlus, FiEdit, FiTrash2, FiDownload, FiSearch, FiSettings } from 'react-icons/fi';
 import AccountForm from '@/components/accounts/AccountForm';
@@ -48,6 +51,15 @@ import accountService from '@/services/accountService';
 
 const AccountsPage = () => {
   const { token } = useAuth();
+  const {
+    canView,
+    canCreate,
+    canEdit,
+    canDelete,
+    canExport,
+    loading: permissionLoading
+  } = useModulePermissions('accounts');
+  
   const [hierarchyAccounts, setHierarchyAccounts] = useState<Account[]>([]);
   const [flatAccounts, setFlatAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,6 +72,15 @@ const AccountsPage = () => {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const toast = useToast();
+  
+  // Theme-aware colors (hooks must be called unconditionally and before any early returns)
+  const headingColor = useColorModeValue('gray.800', 'var(--text-primary)');
+  const cardBg = useColorModeValue('white', 'var(--bg-secondary)');
+  const borderColor = useColorModeValue('gray.200', 'var(--border-color)');
+  const tabBorderColor = useColorModeValue('gray.200', 'var(--border-color)');
+  const emptyStateColor = useColorModeValue('gray.500', 'var(--text-secondary)');
+  // Move dynamic shadow hook call here to avoid calling hooks inside conditional render branches
+  const cardShadow = useColorModeValue('sm', 'var(--shadow)');
 
   // Helper function to get balance for display
   const getDisplayBalance = (account: Account): number => {
@@ -362,139 +383,58 @@ const AccountsPage = () => {
   // Use filtered accounts directly since they're already flattened
   const hierarchicalAccounts = filteredAccounts;
 
-  // Table columns definition with hierarchy support
-  const columns = [
-    { header: 'Code', accessor: 'code' },
-    { 
-      header: 'Name', 
-      accessor: (account: Account & { hierarchyLevel?: number }) => {
-        const level = account.hierarchyLevel || 0;
-        const indentation = level * 20;
-        return (
-          <Flex align="center">
-            <Box w={`${indentation}px`} />
-            <Text 
-              fontWeight={account.is_header ? 'bold' : 'normal'}
-              color={account.is_header ? 'blue.600' : 'inherit'}
-            >
-              {account.name}
-            </Text>
-          </Flex>
-        );
-      }
-    },
-    { 
-      header: 'Type', 
-      accessor: (account: Account) => (
-        <Badge colorScheme={accountService.getAccountTypeColor(account.type)}>
-          {accountService.getAccountTypeLabel(account.type, true)}
-        </Badge>
-      )
-    },
-    { 
-      header: 'Balance', 
-      accessor: (account: Account) => {
-        const displayBalance = getDisplayBalance(account);
-        const prefix = account.is_header && account.child_count && account.child_count > 0 
-          ? 'Total: ' 
-          : '';
-        return (
-          <Text 
-            color={displayBalance >= 0 ? 'green.600' : 'red.600'}
-            fontWeight={account.is_header ? 'bold' : 'normal'}
-          >
-            {prefix}{accountService.formatBalance(displayBalance)}
-          </Text>
-        );
-      }
-    },
-    { 
-      header: 'Status', 
-      accessor: (account: Account) => (
-        <Badge colorScheme={account.is_active ? 'green' : 'gray'}>
-          {account.is_active ? 'Active' : 'Inactive'}
-        </Badge>
-      )
-    },
-  ];
-
-  // Action buttons for each row
-  const renderActions = (account: Account) => {
-    // Don't show actions for header/parent accounts
-    if (account.is_header) {
-      return (
-        <HStack spacing={2}>
-          <Text fontSize="sm" color="gray.500">
-            —
-          </Text>
-        </HStack>
-      );
-    }
-    
+  // Show loading while checking permissions
+  if (permissionLoading) {
     return (
-      <HStack spacing={2}>
-        <Button
-          size="sm"
-          variant="outline"
-          leftIcon={<FiEdit />}
-          onClick={() => handleEdit(account)}
-        >
-          Edit
-        </Button>
-        <Button
-          size="sm"
-          colorScheme="red"
-          variant="outline"
-          leftIcon={<FiTrash2 />}
-          onClick={() => handleDelete(account)}
-          isDisabled={!account.is_active}
-        >
-          Delete
-        </Button>
-      </HStack>
+      <SimpleLayout>
+        <Flex justify="center" align="center" minH="60vh">
+          <VStack spacing={4}>
+            <Spinner size="xl" color="blue.500" thickness="4px" />
+            <Text>Checking permissions...</Text>
+          </VStack>
+        </Flex>
+      </SimpleLayout>
     );
-  };
+  }
+
+  // If user doesn't have view permission, show access denied
+  if (!canView) {
+    return (
+      <SimpleLayout>
+        <Alert status="error" borderRadius="md">
+          <AlertIcon />
+          <AlertTitle mr={2}>Access Denied!</AlertTitle>
+          <AlertDescription>
+            You don't have permission to view Chart of Accounts. Please contact your administrator.
+          </AlertDescription>
+        </Alert>
+      </SimpleLayout>
+    );
+  }
 
   return (
-<Layout allowedRoles={['admin', 'finance']}>
+    <SimpleLayout>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
-          <Heading size="lg">Chart of Accounts</Heading>
-          <HStack spacing={3}>
-            <Menu>
-              <MenuButton as={Button} variant="outline" leftIcon={<FiDownload />}>
-                Download
-              </MenuButton>
-              <MenuList>
-                <MenuItem onClick={handleDownloadPDF}>
-                  Download PDF
-                </MenuItem>
-                <MenuItem onClick={handleDownloadExcel}>
-                  Download Excel
-                </MenuItem>
-                <MenuDivider />
-                <MenuItem onClick={handleDownloadTemplate}>
-                  Download CSV Template
-                </MenuItem>
-              </MenuList>
-            </Menu>
+          <Heading size="xl" color={headingColor} fontWeight="600">Chart of Accounts</Heading>
+          {canCreate && (
             <Button
-              variant="outline"
-              leftIcon={<FiSettings />}
-              onClick={handleFixHeaderStatus}
-              colorScheme="orange"
-              size="sm"
-            >
-              Fix Hierarchy
-            </Button>
-            <Button
-              colorScheme="brand"
+              colorScheme="blue"
               leftIcon={<FiPlus />}
               onClick={handleCreate}
+              size="md"
+              px={6}
+              py={2}
+              borderRadius="md"
+              fontWeight="medium"
+              _hover={{ 
+                transform: 'translateY(-1px)',
+                boxShadow: 'lg'
+              }}
             >
               Add Account
             </Button>
-          </HStack>
+          )}
         </Flex>
         
         {error && (
@@ -505,66 +445,76 @@ const AccountsPage = () => {
           </Alert>
         )}
 
-        <Tabs index={tabIndex} onChange={setTabIndex}>
-          <TabList>
-            <Tab>List View</Tab>
-            <Tab>Tree View</Tab>
-          </TabList>
+          <Box
+            bg={cardBg}
+            borderRadius="lg"
+            boxShadow={cardShadow}
+            overflow="hidden"
+            border="1px"
+            borderColor={borderColor}
+            className="table-container"
+            transition="all 0.3s ease"
+          >
+          <Tabs 
+            index={tabIndex} 
+            onChange={setTabIndex}
+            variant="unstyled"
+          >
+            <TabList borderBottom="1px" borderColor={tabBorderColor} px={4}>
+              <Tab 
+                _selected={{ 
+                  color: 'blue.500', 
+                  borderBottom: '2px solid', 
+                  borderColor: 'blue.500' 
+                }}
+                pb={4}
+                pt={4}
+                fontWeight="medium"
+                fontSize="sm"
+              >
+                Accounts
+              </Tab>
+              <Tab 
+                _selected={{ 
+                  color: 'blue.500', 
+                  borderBottom: '2px solid', 
+                  borderColor: 'blue.500' 
+                }}
+                pb={4}
+                pt={4}
+                fontWeight="medium"
+                fontSize="sm"
+              >
+                Tree View
+              </Tab>
+            </TabList>
 
-          <TabPanels>
-            <TabPanel px={0}>
-              {/* Search and Filter */}
-              <HStack spacing={4} mb={4}>
-                <InputGroup maxW="300px">
-                  <InputLeftElement pointerEvents="none">
-                    <FiSearch color="gray.300" />
-                  </InputLeftElement>
-                  <Input
-                    placeholder="Search accounts..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
+            <TabPanels>
+              <TabPanel px={0} py={0}>
+
+                {isLoading ? (
+                  <Flex justify="center" py={10}>
+                    <Spinner size="lg" color="blue.500" />
+                  </Flex>
+                ) : hierarchicalAccounts.length === 0 ? (
+                  <Box textAlign="center" py={10}>
+                    <Text color={emptyStateColor} mb={4}>
+                      {flatAccounts.length === 0 ? 'No accounts found. Try creating one!' : 'No accounts match your search criteria.'}
+                    </Text>
+                    {flatAccounts.length === 0 && (
+                      <Button colorScheme="blue" onClick={handleCreate}>
+                        Create First Account
+                      </Button>
+                    )}
+                  </Box>
+                ) : (
+                  <AccountsTable
+                    accounts={hierarchicalAccounts}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
                   />
-                </InputGroup>
-                <Select
-                  placeholder="Filter by type"
-                  maxW="200px"
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                >
-                  <option value="ASSET">Asset</option>
-                  <option value="LIABILITY">Liability</option>
-                  <option value="EQUITY">Equity</option>
-                  <option value="REVENUE">Revenue</option>
-                  <option value="EXPENSE">Expense</option>
-                </Select>
-              </HStack>
-
-              {isLoading ? (
-                <Flex justify="center" py={10}>
-                  <Spinner size="lg" />
-                </Flex>
-              ) : hierarchicalAccounts.length === 0 ? (
-                <Box textAlign="center" py={10}>
-                  <Text color="gray.500" mb={4}>
-                    {flatAccounts.length === 0 ? 'No accounts found. Try creating one!' : 'No accounts match your search criteria.'}
-                  </Text>
-                  {flatAccounts.length === 0 && (
-                    <Button colorScheme="brand" onClick={handleCreate}>
-                      Create First Account
-                    </Button>
-                  )}
-                </Box>
-              ) : (
-                <Table<Account>
-                  columns={columns}
-                  data={hierarchicalAccounts}
-                  keyField="id"
-                  title="Accounts"
-                  actions={renderActions}
-                  isLoading={isLoading}
-                />
-              )}
-            </TabPanel>
+                )}
+              </TabPanel>
 
             <TabPanel px={0}>
               {isLoading ? (
@@ -584,6 +534,7 @@ const AccountsPage = () => {
 
           </TabPanels>
         </Tabs>
+        </Box>
         
         <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="lg">
           <ModalOverlay />
@@ -604,7 +555,7 @@ const AccountsPage = () => {
           </ModalContent>
         </Modal>
       </Box>
-    </Layout>
+    </SimpleLayout>
   );
 };
 

@@ -13,8 +13,8 @@ export interface Contact {
   name: string;
   type: 'CUSTOMER' | 'VENDOR' | 'EMPLOYEE';
   category?: string;
-  email: string;
-  phone: string;
+  email?: string;
+  phone?: string;
   mobile?: string;
   fax?: string;
   website?: string;
@@ -25,6 +25,7 @@ export interface Contact {
   pic_name?: string;        // Person In Charge (for Customer/Vendor)
   external_id?: string;     // Employee ID, Vendor ID, Customer ID
   address?: string;         // Simple address field
+  default_expense_account_id?: number;
   notes?: string;
   created_at: string;
   updated_at: string;

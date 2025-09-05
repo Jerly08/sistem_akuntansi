@@ -5,9 +5,12 @@ import (
 	"app-sistem-akuntansi/middleware"
 	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.PaymentController, cashBankController *controllers.CashBankController, cashBankService *services.CashBankService, jwtManager *middleware.JWTManager) {
+func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.PaymentController, cashBankController *controllers.CashBankController, cashBankService *services.CashBankService, jwtManager *middleware.JWTManager, db *gorm.DB) {
+	// Initialize fix controller for GL account linking
+	fixCashBankController := controllers.NewFixCashBankController(db, cashBankService)
 	// Payment routes
 	payment := router.Group("/payments")
 	payment.Use(middleware.PaymentRateLimit()) // Apply rate limiting to all payment endpoints
@@ -41,9 +44,10 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 		// Payment accounts endpoint - specifically for payment form dropdowns
 		cashbank.GET("/payment-accounts", middleware.RoleRequired("admin", "finance", "director", "employee"), cashBankController.GetPaymentAccounts)
 		
-		cashbank.GET("/accounts/:id", middleware.RoleRequired("admin", "finance", "director"), cashBankController.GetAccountByID)
-		cashbank.POST("/accounts", middleware.RoleRequired("admin", "finance"), cashBankController.CreateAccount)
-		cashbank.PUT("/accounts/:id", middleware.RoleRequired("admin", "finance"), cashBankController.UpdateAccount)
+	cashbank.GET("/accounts/:id", middleware.RoleRequired("admin", "finance", "director"), cashBankController.GetAccountByID)
+	cashbank.POST("/accounts", middleware.RoleRequired("admin", "finance"), cashBankController.CreateAccount)
+	cashbank.PUT("/accounts/:id", middleware.RoleRequired("admin", "finance"), cashBankController.UpdateAccount)
+	cashbank.DELETE("/accounts/:id", middleware.RoleRequired("admin", "finance"), cashBankController.DeleteAccount)
 		
 		// Transactions
 		cashbank.POST("/transfer", middleware.RoleRequired("admin", "finance", "director"), cashBankController.ProcessTransfer)
@@ -54,5 +58,9 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 		// Reports
 		cashbank.GET("/balance-summary", middleware.RoleRequired("admin", "finance", "director"), cashBankController.GetBalanceSummary)
 		cashbank.POST("/accounts/:id/reconcile", middleware.RoleRequired("admin", "finance"), cashBankController.ReconcileAccount)
+		
+		// Admin operations - GL Account linking fixes
+		cashbank.GET("/admin/check-gl-links", middleware.RoleRequired("admin"), fixCashBankController.CheckCashBankGLLinks)
+		cashbank.POST("/admin/fix-gl-links", middleware.RoleRequired("admin"), fixCashBankController.FixCashBankGLLinks)
 	}
 }

@@ -29,11 +29,19 @@ func SetupReportRoutes(protected *gin.RouterGroup, reportController *controllers
 		// Operational Reports
 		reports.GET("/sales-summary", reportController.GetSalesSummary)
 		reports.GET("/purchase-summary", reportController.GetPurchaseSummary)
+		reports.GET("/vendor-analysis", reportController.GetVendorAnalysis)
 		reports.GET("/inventory-report", reportController.GetInventoryReport)
 		
 		// Analysis Reports
 		reports.GET("/financial-ratios", reportController.GetFinancialRatios)
 		
+    // Professional Reports (New)
+    reports.GET("/professional/balance-sheet", reportController.GetProfessionalBalanceSheet)
+    reports.GET("/professional/profit-loss", reportController.GetProfessionalProfitLoss)
+    reports.GET("/professional/cash-flow", reportController.GetProfessionalCashFlow)
+    reports.GET("/professional/sales-summary", reportController.GetProfessionalSalesSummary)
+    reports.GET("/professional/purchase-summary", reportController.GetProfessionalPurchaseSummary)
+
 		// Report Templates Management (admin only)
 		templates := reports.Group("/templates")
 		templates.Use(middleware.RoleRequired("admin"))

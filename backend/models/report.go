@@ -90,10 +90,33 @@ type CompanyProfile struct {
 	Logo            string         `json:"logo" gorm:"size:500"`
 	FiscalYearStart string         `json:"fiscal_year_start" gorm:"size:5;default:'01-01'"` // MM-DD format
 	Currency        string         `json:"currency" gorm:"size:3;default:'IDR'"`
+	SharesOutstanding float64      `json:"shares_outstanding" gorm:"type:decimal(20,4);default:0"` // Number of shares outstanding
+	ParValuePerShare  float64      `json:"par_value_per_share" gorm:"type:decimal(15,4);default:1000"` // Par value per share in currency
 	IsActive        bool           `json:"is_active" gorm:"default:true"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `json:"-" gorm:"index"`
+}
+
+// Report Metadata moved to financial_report.go to avoid conflicts
+
+// Report Response DTO
+type ReportResponse struct {
+	ID          uint      `json:"id"`
+	Title       string    `json:"title"`
+	Type        string    `json:"type"`
+	Period      string    `json:"period"`
+	StartDate   *time.Time `json:"start_date,omitempty"`
+	EndDate     *time.Time `json:"end_date,omitempty"`
+	Format      string    `json:"format"`
+	Data        interface{} `json:"data,omitempty"`
+	FileURL     string    `json:"file_url,omitempty"`
+	FileName    string    `json:"file_name,omitempty"`
+	FileSize    int64     `json:"file_size,omitempty"`
+	GeneratedAt time.Time `json:"generated_at"`
+	GeneratedBy uint      `json:"generated_by"`
+	Status      string    `json:"status"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // Report Template Request DTO
@@ -105,18 +128,15 @@ type ReportTemplateRequest struct {
 	IsDefault   bool   `json:"is_default"`
 }
 
-// Report Types Constants
+// Report Types Constants - Basic report types (Financial report types in financial_report.go)
 const (
-	ReportTypeBalanceSheet    = "BALANCE_SHEET"
 	ReportTypeIncomeStatement = "INCOME_STATEMENT"
-	ReportTypeCashFlow        = "CASH_FLOW"
-	ReportTypeTrialBalance    = "TRIAL_BALANCE"
-	ReportTypeGeneralLedger   = "GENERAL_LEDGER"
 	ReportTypeAccountsReceivable = "ACCOUNTS_RECEIVABLE"
 	ReportTypeAccountsPayable = "ACCOUNTS_PAYABLE"
 	ReportTypeInventory       = "INVENTORY"
 	ReportTypeTaxReport       = "TAX_REPORT"
 	ReportTypeBudgetComparison = "BUDGET_COMPARISON"
+	// Note: Common financial report types moved to financial_report.go
 )
 
 // Report Status Constants

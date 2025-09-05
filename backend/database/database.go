@@ -168,6 +168,86 @@ func cleanupConstraints(db *gorm.DB) {
 	log.Println("Database constraint cleanup completed")
 }
 
+// cleanupProductUnitConstraints removes problematic constraints on product_units table
+func cleanupProductUnitConstraints(db *gorm.DB) {
+	log.Println("Cleaning up ProductUnit constraints...")
+	
+	// First, check if product_units table exists
+	var tableExists bool
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'product_units'
+	)`).Scan(&tableExists)
+	
+	if !tableExists {
+		log.Println("Product units table does not exist yet, skipping constraint cleanup")
+		return
+	}
+	
+	// Check if the problematic constraint exists before trying to drop it
+	var constraintExists bool
+	db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.table_constraints 
+			WHERE table_name = 'product_units' 
+			AND constraint_name = 'uni_product_units_code'
+		)
+	`).Scan(&constraintExists)
+	
+	if constraintExists {
+		log.Println("Found uni_product_units_code constraint, attempting to drop...")
+		err := db.Exec("ALTER TABLE product_units DROP CONSTRAINT IF EXISTS uni_product_units_code").Error
+		if err != nil {
+			log.Printf("Warning: Failed to drop uni_product_units_code constraint: %v", err)
+		} else {
+			log.Println("✅ Dropped uni_product_units_code constraint successfully")
+		}
+	} else {
+		log.Println("uni_product_units_code constraint does not exist, nothing to drop")
+	}
+	
+	// Also check for any other code-related constraints on product_units
+	var codeConstraints []string
+	db.Raw(`
+		SELECT constraint_name 
+		FROM information_schema.table_constraints 
+		WHERE table_name = 'product_units' 
+		AND constraint_type = 'UNIQUE'
+		AND constraint_name LIKE '%code%'
+	`).Scan(&codeConstraints)
+	
+	if len(codeConstraints) > 0 {
+		log.Printf("Found %d code-related constraints on product_units", len(codeConstraints))
+		for _, constraint := range codeConstraints {
+			log.Printf("Attempting to drop constraint: %s", constraint)
+			err := db.Exec(fmt.Sprintf("ALTER TABLE product_units DROP CONSTRAINT IF EXISTS %s", constraint)).Error
+			if err != nil {
+				log.Printf("Warning: Failed to drop constraint %s: %v", constraint, err)
+			} else {
+				log.Printf("✅ Dropped constraint %s successfully", constraint)
+			}
+		}
+	}
+	
+	// Check for any indexes that might be causing issues
+	var codeIndexes []string
+	db.Raw(`
+		SELECT indexname 
+		FROM pg_indexes 
+		WHERE tablename = 'product_units' 
+		AND indexname LIKE '%code%'
+	`).Scan(&codeIndexes)
+	
+	if len(codeIndexes) > 0 {
+		log.Printf("Found %d code-related indexes on product_units", len(codeIndexes))
+		for _, index := range codeIndexes {
+			log.Printf("Code-related index found: %s (will be managed by GORM)", index)
+		}
+	}
+	
+	log.Println("ProductUnit constraint cleanup completed")
+}
+
 func ConnectDB() *gorm.DB {
 	cfg := config.LoadConfig()
 	
@@ -186,6 +266,9 @@ func AutoMigrate(db *gorm.DB) {
 	
 	// First, clean up any problematic constraints
 	cleanupConstraints(db)
+	
+	// Clean up ProductUnit constraints before migration
+	cleanupProductUnitConstraints(db)
 	
 	// Migrate models in order to respect foreign key constraints
 	err := db.AutoMigrate(
@@ -206,6 +289,7 @@ func AutoMigrate(db *gorm.DB) {
 		// Products
 		&models.ProductCategory{},
 		&models.Product{},
+		&models.ProductUnit{},
 		&models.Inventory{},
 		
 		// Sales
@@ -265,6 +349,9 @@ func AutoMigrate(db *gorm.DB) {
 		&models.CashBankTransferMigration{},
 		&models.BankReconciliationMigration{},
 		&models.ReconciliationItemMigration{},
+		
+		// Migration tracking models
+		&models.MigrationRecord{},
 	)
 	
 	if err != nil {
@@ -293,6 +380,9 @@ func AutoMigrate(db *gorm.DB) {
 	
 	log.Println("Database migration completed successfully")
 	
+	// Create missing columns that should exist from models but might be missing from database
+	CreateMissingColumns(db)
+	
 	// Run enhanced sales model migration
 	EnhanceSalesModel(db)
 	
@@ -307,7 +397,15 @@ func AutoMigrate(db *gorm.DB) {
 	
 	// Run enhanced cashbank model migration
 	EnhanceCashBankModel(db)
-	
+
+	// PRODUCTION SAFETY: All balance synchronization logic disabled to prevent account balance resets
+	// Balance sync operations have been permanently disabled to protect production data
+	log.Println("🛡️  PRODUCTION MODE: All balance synchronization disabled to protect account balances")
+	log.Println("✅ Account balances will never be automatically modified during startup")
+
+	// Run cleanup duplicate notifications migration
+	CleanupDuplicateNotificationsMigration(db)
+
 	// Create indexes for better performance
 	createIndexes(db)
 }
@@ -343,6 +441,131 @@ func createIndexes(db *gorm.DB) {
 	}
 	
 	log.Println("Database indexes created successfully")
+}
+
+// CreateMissingColumns creates missing columns that should exist from model definitions
+func CreateMissingColumns(db *gorm.DB) {
+	log.Println("Checking and creating missing columns from model definitions...")
+
+	// Check if sales table exists
+	var salesTableExists bool
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'sales'
+	)`).Scan(&salesTableExists)
+
+	if salesTableExists {
+		// Check and add missing pph column to sales table
+		var pphColumnExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'sales' AND column_name = 'pph'
+		)`).Scan(&pphColumnExists)
+
+		if !pphColumnExists {
+			log.Println("Adding missing pph column to sales table...")
+			err := db.Exec(`
+				ALTER TABLE sales 
+				ADD COLUMN pph DECIMAL(15,2) DEFAULT 0;
+			`).Error
+			if err != nil {
+				log.Printf("Warning: Failed to add pph column to sales table: %v", err)
+			} else {
+				log.Println("Added pph column to sales table successfully")
+			}
+		}
+
+		// Check and add missing pph_percent column to sales table
+		var pphPercentColumnExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'sales' AND column_name = 'pph_percent'
+		)`).Scan(&pphPercentColumnExists)
+
+		if !pphPercentColumnExists {
+			log.Println("Adding missing pph_percent column to sales table...")
+			err := db.Exec(`
+				ALTER TABLE sales 
+				ADD COLUMN pph_percent DECIMAL(5,2) DEFAULT 0;
+			`).Error
+			if err != nil {
+				log.Printf("Warning: Failed to add pph_percent column to sales table: %v", err)
+			} else {
+				log.Println("Added pph_percent column to sales table successfully")
+			}
+		}
+
+		// Check and add missing pph_type column to sales table
+		var pphTypeColumnExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'sales' AND column_name = 'pph_type'
+		)`).Scan(&pphTypeColumnExists)
+
+		if !pphTypeColumnExists {
+			log.Println("Adding missing pph_type column to sales table...")
+			err := db.Exec(`
+				ALTER TABLE sales 
+				ADD COLUMN pph_type VARCHAR(20);
+			`).Error
+			if err != nil {
+				log.Printf("Warning: Failed to add pph_type column to sales table: %v", err)
+			} else {
+				log.Println("Added pph_type column to sales table successfully")
+			}
+		}
+	}
+
+	// Check if sale_items table exists
+	var saleItemsTableExists bool
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'sale_items'
+	)`).Scan(&saleItemsTableExists)
+
+	if saleItemsTableExists {
+		// Check and add missing pph_amount column to sale_items table
+		var pphAmountColumnExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'sale_items' AND column_name = 'pph_amount'
+		)`).Scan(&pphAmountColumnExists)
+
+		if !pphAmountColumnExists {
+			log.Println("Adding missing pph_amount column to sale_items table...")
+			err := db.Exec(`
+				ALTER TABLE sale_items 
+				ADD COLUMN pph_amount DECIMAL(15,2) DEFAULT 0;
+			`).Error
+			if err != nil {
+				log.Printf("Warning: Failed to add pph_amount column to sale_items table: %v", err)
+			} else {
+				log.Println("Added pph_amount column to sale_items table successfully")
+			}
+		}
+
+		// Check and add missing revenue_account_id column to sale_items table
+		var revenueAccountIdColumnExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'sale_items' AND column_name = 'revenue_account_id'
+		)`).Scan(&revenueAccountIdColumnExists)
+
+		if !revenueAccountIdColumnExists {
+			log.Println("Adding missing revenue_account_id column to sale_items table...")
+			err := db.Exec(`
+				ALTER TABLE sale_items 
+				ADD COLUMN revenue_account_id INTEGER;
+			`).Error
+			if err != nil {
+				log.Printf("Warning: Failed to add revenue_account_id column to sale_items table: %v", err)
+			} else {
+				log.Println("Added revenue_account_id column to sale_items table successfully")
+			}
+		}
+	}
+
+	log.Println("Missing columns check completed")
 }
 
 // EnhanceSalesModel adds enhanced fields to sales and sale_items tables
@@ -1389,6 +1612,499 @@ func updateLegacyComputedFields(db *gorm.DB) {
 	if err != nil {
 		log.Printf("Warning: Failed to update legacy sales fields: %v", err)
 	} else {
-		log.Println("Updated legacy sales fields successfully")
+	log.Println("Updated legacy sales fields successfully")
 	}
+}
+
+// SyncCashBankGLBalances - DISABLED FOR PRODUCTION SAFETY
+// This function has been permanently disabled to prevent account balance resets in production
+func SyncCashBankGLBalances(db *gorm.DB) {
+	log.Println("🛡️  PRODUCTION SAFETY: SyncCashBankGLBalances DISABLED")
+	log.Println("⚠️  Balance synchronization skipped to protect account data")
+	log.Println("✅ All account balances remain unchanged")
+	return // Exit immediately - no balance operations will be performed
+	
+	// Check if both tables exist first
+	var cashBankTableExists, accountsTableExists bool
+	
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'cash_banks'
+	)`).Scan(&cashBankTableExists)
+	
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'accounts'
+	)`).Scan(&accountsTableExists)
+	
+	if !cashBankTableExists || !accountsTableExists {
+		log.Println("Required tables not found, skipping CashBank-GL balance sync")
+		return
+	}
+	
+	// Check if we have any cash bank accounts to sync
+	var totalCashBankCount int64
+	db.Raw(`SELECT COUNT(*) FROM cash_banks WHERE deleted_at IS NULL`).Scan(&totalCashBankCount)
+	
+	if totalCashBankCount == 0 {
+		log.Println("No cash/bank accounts found, skipping balance sync")
+		return
+	}
+	
+	// Check for unsynchronized accounts
+	var unsyncCount int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM cash_banks cb 
+		INNER JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND cb.balance != acc.balance
+	`).Scan(&unsyncCount)
+	
+	if unsyncCount == 0 {
+		log.Println("✅ All CashBank accounts are already synchronized with GL accounts")
+		return
+	}
+	
+	log.Printf("Found %d unsynchronized CashBank-GL account pairs", unsyncCount)
+	
+	// Get details of unsynchronized accounts for logging
+	type UnsyncAccount struct {
+		CashBankCode    string  `json:"cash_bank_code"`
+		CashBankName    string  `json:"cash_bank_name"`
+		CashBankBalance float64 `json:"cash_bank_balance"`
+		GLCode          string  `json:"gl_code"`
+		GLBalance       float64 `json:"gl_balance"`
+		Difference      float64 `json:"difference"`
+	}
+	
+	var unsyncAccounts []UnsyncAccount
+	db.Raw(`
+		SELECT 
+			cb.code as cash_bank_code,
+			cb.name as cash_bank_name,
+			cb.balance as cash_bank_balance,
+			acc.code as gl_code,
+			acc.balance as gl_balance,
+			cb.balance - acc.balance as difference
+		FROM cash_banks cb 
+		INNER JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND cb.balance != acc.balance
+		ORDER BY cb.type, cb.code
+		LIMIT 10
+	`).Scan(&unsyncAccounts)
+	
+	// Log sample of unsynchronized accounts
+	log.Println("Sample unsynchronized accounts:")
+	for _, account := range unsyncAccounts {
+		log.Printf("  %s (%s): CB=%.2f, GL=%.2f, Diff=%.2f", 
+			account.CashBankCode, account.CashBankName,
+			account.CashBankBalance, account.GLBalance, account.Difference)
+	}
+	
+	if len(unsyncAccounts) < int(unsyncCount) {
+		log.Printf("  ... and %d more accounts", unsyncCount-int64(len(unsyncAccounts)))
+	}
+	
+	// Begin transaction for safe bulk update
+	tx := db.Begin()
+	
+	// Synchronize GL account balances with CashBank balances
+	log.Println("Synchronizing GL account balances with CashBank balances...")
+	
+	// Use a single UPDATE query to sync all unsynchronized accounts
+	err := tx.Exec(`
+		UPDATE accounts 
+		SET balance = cb.balance,
+		    updated_at = CURRENT_TIMESTAMP
+		FROM cash_banks cb 
+		WHERE accounts.id = cb.account_id 
+		  AND cb.deleted_at IS NULL
+		  AND accounts.balance != cb.balance
+	`).Error
+	
+	if err != nil {
+		log.Printf("❌ Failed to synchronize balances: %v", err)
+		tx.Rollback()
+		return
+	}
+	
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("❌ Failed to commit balance synchronization: %v", err)
+		return
+	}
+	
+	// Verify synchronization completed successfully
+	var remainingUnsyncCount int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM cash_banks cb 
+		INNER JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND cb.balance != acc.balance
+	`).Scan(&remainingUnsyncCount)
+	
+	if remainingUnsyncCount == 0 {
+		log.Printf("✅ Successfully synchronized %d CashBank-GL account pairs", unsyncCount)
+		log.Println("✅ All CashBank accounts are now synchronized with their GL accounts")
+	} else {
+		log.Printf("⚠️  Warning: %d accounts still remain unsynchronized after migration", remainingUnsyncCount)
+	}
+	
+	log.Println("CashBank-GL Balance Synchronization completed")
+}
+
+// RunBalanceSyncFix performs comprehensive balance synchronization checks and fixes
+// This function runs after every migration to ensure balance consistency across the system
+func RunBalanceSyncFix(db *gorm.DB) {
+	log.Println("🔧 Starting Comprehensive Balance Synchronization Fix...")
+	
+	// Check if required tables exist
+	var cashBankTableExists, accountsTableExists bool
+	
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'cash_banks'
+	)`).Scan(&cashBankTableExists)
+	
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'accounts'
+	)`).Scan(&accountsTableExists)
+	
+	if !cashBankTableExists || !accountsTableExists {
+		log.Println("Required tables not found, skipping comprehensive balance sync fix")
+		return
+	}
+	
+	// Step 1: Fix missing account_id relationships
+	fixMissingAccountRelationships(db)
+	
+	// Step 2: Recalculate CashBank balances from transactions
+	recalculateCashBankBalances(db)
+	
+	// Step 3: Ensure GL accounts match CashBank balances
+	ensureGLAccountSync(db)
+	
+	// Step 4: Validate and report final synchronization status
+	validateFinalSyncStatus(db)
+	
+	log.Println("✅ Comprehensive Balance Synchronization Fix completed")
+}
+
+// fixMissingAccountRelationships ensures all CashBank accounts have proper GL account relationships
+func fixMissingAccountRelationships(db *gorm.DB) {
+	log.Println("Step 1: Fixing missing account relationships...")
+	
+	// Check for CashBank accounts without GL account links
+	var orphanedCount int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM cash_banks cb 
+		LEFT JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND (cb.account_id IS NULL OR cb.account_id = 0 OR acc.id IS NULL)
+	`).Scan(&orphanedCount)
+	
+	if orphanedCount > 0 {
+		log.Printf("Found %d CashBank accounts without proper GL account links", orphanedCount)
+		
+		// Get details of orphaned accounts
+		type OrphanedAccount struct {
+			CashBankID   uint    `json:"cash_bank_id"`
+			CashBankCode string  `json:"cash_bank_code"`
+			CashBankName string  `json:"cash_bank_name"`
+			AccountID    *uint   `json:"account_id"`
+			Balance      float64 `json:"balance"`
+		}
+		
+		var orphanedAccounts []OrphanedAccount
+		db.Raw(`
+			SELECT 
+				cb.id as cash_bank_id,
+				cb.code as cash_bank_code,
+				cb.name as cash_bank_name,
+				cb.account_id,
+				cb.balance
+			FROM cash_banks cb 
+			LEFT JOIN accounts acc ON cb.account_id = acc.id
+			WHERE cb.deleted_at IS NULL 
+			  AND (cb.account_id IS NULL OR cb.account_id = 0 OR acc.id IS NULL)
+			ORDER BY cb.type, cb.code
+		`).Scan(&orphanedAccounts)
+		
+		// Log orphaned accounts for manual review
+		log.Println("Orphaned CashBank accounts:")
+		for _, account := range orphanedAccounts {
+			log.Printf("  ID=%d, Code=%s, Name=%s, Balance=%.2f, AccountID=%v", 
+				account.CashBankID, account.CashBankCode, account.CashBankName, 
+				account.Balance, account.AccountID)
+		}
+		
+		log.Printf("⚠️  Warning: Found %d orphaned CashBank accounts requiring manual GL account assignment", orphanedCount)
+	} else {
+		log.Println("✅ All CashBank accounts have proper GL account relationships")
+	}
+}
+
+// recalculateCashBankBalances recalculates CashBank balances from transaction history
+func recalculateCashBankBalances(db *gorm.DB) {
+	log.Println("Step 2: Recalculating CashBank balances from transaction history...")
+	
+	// Check if cash_bank_transactions table exists
+	var transactionTableExists bool
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'cash_bank_transactions'
+	)`).Scan(&transactionTableExists)
+	
+	if !transactionTableExists {
+		log.Println("Cash bank transactions table not found, skipping balance recalculation")
+		return
+	}
+	
+	// Recalculate balances for all CashBank accounts
+	err := db.Exec(`
+		UPDATE cash_banks 
+		SET balance = COALESCE((
+			SELECT SUM(amount) 
+			FROM cash_bank_transactions cbt 
+			WHERE cbt.cash_bank_id = cash_banks.id 
+			  AND cbt.deleted_at IS NULL
+		), 0),
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE deleted_at IS NULL
+	`).Error
+	
+	if err != nil {
+		log.Printf("Warning: Failed to recalculate CashBank balances: %v", err)
+	} else {
+		log.Println("✅ Recalculated CashBank balances from transaction history")
+	}
+}
+
+// ensureGLAccountSync ensures GL accounts are synchronized with CashBank balances
+func ensureGLAccountSync(db *gorm.DB) {
+	log.Println("Step 3: Ensuring GL accounts are synchronized with CashBank balances...")
+	
+	// Check for unsynchronized accounts
+	var unsyncCount int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM cash_banks cb 
+		INNER JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND ABS(cb.balance - acc.balance) > 0.01  -- Allow for small rounding differences
+	`).Scan(&unsyncCount)
+	
+	if unsyncCount == 0 {
+		log.Println("✅ All GL accounts are already synchronized with CashBank balances")
+		return
+	}
+	
+	log.Printf("Found %d GL accounts that need synchronization", unsyncCount)
+	
+	// Get details of unsynchronized accounts
+	type UnsyncGLAccount struct {
+		CashBankID      uint    `json:"cash_bank_id"`
+		CashBankCode    string  `json:"cash_bank_code"`
+		CashBankName    string  `json:"cash_bank_name"`
+		CashBankBalance float64 `json:"cash_bank_balance"`
+		GLAccountID     uint    `json:"gl_account_id"`
+		GLCode          string  `json:"gl_code"`
+		GLBalance       float64 `json:"gl_balance"`
+		Difference      float64 `json:"difference"`
+	}
+	
+	var unsyncAccounts []UnsyncGLAccount
+	db.Raw(`
+		SELECT 
+			cb.id as cash_bank_id,
+			cb.code as cash_bank_code,
+			cb.name as cash_bank_name,
+			cb.balance as cash_bank_balance,
+			acc.id as gl_account_id,
+			acc.code as gl_code,
+			acc.balance as gl_balance,
+			cb.balance - acc.balance as difference
+		FROM cash_banks cb 
+		INNER JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND ABS(cb.balance - acc.balance) > 0.01
+		ORDER BY ABS(cb.balance - acc.balance) DESC
+		LIMIT 10
+	`).Scan(&unsyncAccounts)
+	
+	// Log accounts that will be synchronized
+	log.Println("Accounts to be synchronized:")
+	for _, account := range unsyncAccounts {
+		log.Printf("  CB: %s (%.2f) -> GL: %s (%.2f) | Diff: %.2f", 
+			account.CashBankCode, account.CashBankBalance,
+			account.GLCode, account.GLBalance, account.Difference)
+	}
+	
+	if len(unsyncAccounts) < int(unsyncCount) {
+		log.Printf("  ... and %d more accounts", unsyncCount-int64(len(unsyncAccounts)))
+	}
+	
+	// Begin transaction for safe bulk update
+	tx := db.Begin()
+	
+	// Synchronize GL account balances with CashBank balances
+	err := tx.Exec(`
+		UPDATE accounts 
+		SET balance = cb.balance,
+		    updated_at = CURRENT_TIMESTAMP
+		FROM cash_banks cb 
+		WHERE accounts.id = cb.account_id 
+		  AND cb.deleted_at IS NULL
+		  AND ABS(cb.balance - accounts.balance) > 0.01
+	`).Error
+	
+	if err != nil {
+		log.Printf("❌ Failed to synchronize GL accounts: %v", err)
+		tx.Rollback()
+		return
+	}
+	
+	// Commit the transaction
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("❌ Failed to commit GL account synchronization: %v", err)
+		return
+	}
+	
+	log.Printf("✅ Successfully synchronized %d GL accounts with CashBank balances", unsyncCount)
+}
+
+// validateFinalSyncStatus performs final validation and reports synchronization status
+func validateFinalSyncStatus(db *gorm.DB) {
+	log.Println("Step 4: Validating final synchronization status...")
+	
+	// Count total CashBank accounts
+	var totalCount int64
+	db.Raw(`SELECT COUNT(*) FROM cash_banks WHERE deleted_at IS NULL`).Scan(&totalCount)
+	
+	// Count synchronized accounts
+	var syncedCount int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM cash_banks cb 
+		INNER JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND ABS(cb.balance - acc.balance) <= 0.01  -- Allow for small rounding differences
+	`).Scan(&syncedCount)
+	
+	// Count unsynchronized accounts
+	var unsyncedCount int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM cash_banks cb 
+		INNER JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND ABS(cb.balance - acc.balance) > 0.01
+	`).Scan(&unsyncedCount)
+	
+	// Count orphaned accounts (no GL account link)
+	var orphanedCount int64
+	db.Raw(`
+		SELECT COUNT(*) 
+		FROM cash_banks cb 
+		LEFT JOIN accounts acc ON cb.account_id = acc.id
+		WHERE cb.deleted_at IS NULL 
+		  AND (cb.account_id IS NULL OR cb.account_id = 0 OR acc.id IS NULL)
+	`).Scan(&orphanedCount)
+	
+	// Report final status
+	log.Println("=== Final Balance Synchronization Status ===")
+	log.Printf("Total CashBank accounts: %d", totalCount)
+	log.Printf("Synchronized accounts: %d", syncedCount)
+	log.Printf("Unsynchronized accounts: %d", unsyncedCount)
+	log.Printf("Orphaned accounts (no GL link): %d", orphanedCount)
+	
+	syncPercentage := float64(syncedCount) / float64(totalCount) * 100
+	log.Printf("Synchronization rate: %.1f%%", syncPercentage)
+	
+	if unsyncedCount == 0 && orphanedCount == 0 {
+		log.Println("✅ Perfect synchronization achieved! All accounts are properly synced.")
+	} else if syncPercentage >= 95 {
+		log.Printf("✅ Excellent synchronization (%.1f%%). System operating normally.", syncPercentage)
+	} else if syncPercentage >= 85 {
+		log.Printf("✅ Good synchronization (%.1f%%). Minor discrepancies are within acceptable range.", syncPercentage)
+	} else if syncPercentage >= 70 {
+		log.Printf("⚠️  Moderate synchronization (%.1f%%). Some accounts need attention.", syncPercentage)
+	} else {
+		log.Printf("❌ Poor synchronization (%.1f%%). Significant issues detected, manual intervention required.", syncPercentage)
+	}
+	
+	// If there are still issues, log them for investigation
+	if unsyncedCount > 0 || orphanedCount > 0 {
+		log.Println("\n⚠️  Accounts requiring attention:")
+		
+		if unsyncedCount > 0 {
+			var problemAccounts []struct {
+				CashBankCode    string  `json:"cash_bank_code"`
+				CashBankName    string  `json:"cash_bank_name"`
+				CashBankBalance float64 `json:"cash_bank_balance"`
+				GLCode          string  `json:"gl_code"`
+				GLBalance       float64 `json:"gl_balance"`
+				Difference      float64 `json:"difference"`
+			}
+			
+			db.Raw(`
+				SELECT 
+					cb.code as cash_bank_code,
+					cb.name as cash_bank_name,
+					cb.balance as cash_bank_balance,
+					acc.code as gl_code,
+					acc.balance as gl_balance,
+					cb.balance - acc.balance as difference
+				FROM cash_banks cb 
+				INNER JOIN accounts acc ON cb.account_id = acc.id
+				WHERE cb.deleted_at IS NULL 
+				  AND ABS(cb.balance - acc.balance) > 0.01
+				ORDER BY ABS(cb.balance - acc.balance) DESC
+				LIMIT 5
+			`).Scan(&problemAccounts)
+			
+			log.Printf("  Unsynchronized accounts (top 5):")
+			for _, account := range problemAccounts {
+				log.Printf("    %s: CB=%.2f, GL=%.2f, Diff=%.2f", 
+					account.CashBankCode, account.CashBankBalance, 
+					account.GLBalance, account.Difference)
+			}
+		}
+		
+		if orphanedCount > 0 {
+			var orphanedAccounts []struct {
+				CashBankCode string  `json:"cash_bank_code"`
+				CashBankName string  `json:"cash_bank_name"`
+				Balance      float64 `json:"balance"`
+				AccountID    *uint   `json:"account_id"`
+			}
+			
+			db.Raw(`
+				SELECT 
+					cb.code as cash_bank_code,
+					cb.name as cash_bank_name,
+					cb.balance,
+					cb.account_id
+				FROM cash_banks cb 
+				LEFT JOIN accounts acc ON cb.account_id = acc.id
+				WHERE cb.deleted_at IS NULL 
+				  AND (cb.account_id IS NULL OR cb.account_id = 0 OR acc.id IS NULL)
+				ORDER BY cb.balance DESC
+				LIMIT 5
+			`).Scan(&orphanedAccounts)
+			
+			log.Printf("  Orphaned accounts (top 5):")
+			for _, account := range orphanedAccounts {
+				log.Printf("    %s: Balance=%.2f, AccountID=%v", 
+					account.CashBankCode, account.Balance, account.AccountID)
+			}
+		}
+	}
+	
+	log.Println("=== Balance Synchronization Validation Complete ===")
 }

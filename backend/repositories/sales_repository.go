@@ -534,20 +534,6 @@ func (r *SalesRepository) GetReceivablesReport() (*models.ReceivablesReportRespo
 	}, nil
 }
 
-// Product Repository Interface (temporary - should be moved to separate file)
-type ProductRepository struct {
-	db *gorm.DB
-}
-
-func NewProductRepository(db *gorm.DB) *ProductRepository {
-	return &ProductRepository{db: db}
-}
-
-func (r *ProductRepository) FindByID(id uint) (*models.Product, error) {
-	var product models.Product
-	err := r.db.First(&product, id).Error
-	return &product, err
-}
 
 // GetCustomerOutstandingAmount gets customer outstanding amount
 func (r *SalesRepository) GetCustomerOutstandingAmount(customerID uint) (float64, error) {

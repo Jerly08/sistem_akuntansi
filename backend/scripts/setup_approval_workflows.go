@@ -100,6 +100,13 @@ func main() {
 				IsOptional:   false,
 				TimeLimit:    24,
 			},
+			{
+				StepOrder:    3,
+				StepName:     "Director Approval (Optional)",
+				ApproverRole: "director",
+				IsOptional:   true,
+				TimeLimit:    48,
+			},
 		},
 		"Medium Purchase Approval": {
 			{
@@ -115,6 +122,13 @@ func main() {
 				ApproverRole: "finance",
 				IsOptional:   false,
 				TimeLimit:    24,
+			},
+			{
+				StepOrder:    3,
+				StepName:     "Director Approval (Optional)",
+				ApproverRole: "director",
+				IsOptional:   true,
+				TimeLimit:    48,
 			},
 		},
 		"Large Purchase Approval": {

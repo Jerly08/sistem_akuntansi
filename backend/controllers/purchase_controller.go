@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"app-sistem-akuntansi/models"
@@ -83,6 +84,12 @@ func (pc *PurchaseController) CreatePurchase(c *gin.Context) {
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Debug log the incoming request
+	fmt.Printf("[DEBUG] CreatePurchase - Incoming request: %+v\n", request)
+	for i, item := range request.Items {
+		fmt.Printf("[DEBUG] Item %d: ProductID=%d, Qty=%d, Price=%.2f\n", i, item.ProductID, item.Quantity, item.UnitPrice)
 	}
 
 	userID := c.MustGet("user_id").(uint)
@@ -468,8 +475,8 @@ func (pc *PurchaseController) GetPendingApprovals(c *gin.Context) {
 		if userRole == "finance" || userRole == "admin" {
 			filteredPurchases = append(filteredPurchases, purchase)
 		}
-		// Director can approve high-value purchases
-		if userRole == "director" && purchase.TotalAmount > 25000000 {
+		// Director can approve all purchases (removed amount restriction)
+		if userRole == "director" {
 			filteredPurchases = append(filteredPurchases, purchase)
 		}
 	}

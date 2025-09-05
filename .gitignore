@@ -62,6 +62,7 @@ temp/
 /backend/app
 /backend/main
 
+
 # Go test files
 *.test
 *.out
@@ -76,5 +77,8 @@ go.work
 noted.txt
 .noted.txt
 *.noted.txt
+
+# Upload files
+
 
 /backup
