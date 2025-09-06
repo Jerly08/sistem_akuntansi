@@ -4,6 +4,7 @@ import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/SimpleThemeContext';
 import SimpleThemeToggle from '@/components/common/SimpleThemeToggle';
+import UnifiedNotifications from '@/components/notification/UnifiedNotifications';
 import {
   Flex,
   Text,
@@ -81,6 +82,9 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({ onMenuClick, isMenuOpen = f
 
       {/* Right side */}
       <HStack spacing={4}>
+        {/* Notifications */}
+        <UnifiedNotifications />
+        
         {/* Theme Toggle */}
         <SimpleThemeToggle />
 

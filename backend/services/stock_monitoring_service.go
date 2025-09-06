@@ -199,7 +199,7 @@ func (s *StockMonitoringService) createMinimumStockNotification(product *models.
 	for _, userID := range userIDs {
 		// Check if notification already exists for this product and user
 		var existingNotif models.Notification
-		err := s.db.Where("user_id = ? AND type = ? AND data LIKE ? AND is_read = ?",
+		err := s.db.Where("user_id = ? AND type = ? AND data::text LIKE ? AND is_read = ?",
 			userID, models.NotificationTypeLowStock, 
 			fmt.Sprintf(`%%"product_id":%d%%`, product.ID), false).
 			First(&existingNotif).Error
@@ -258,17 +258,39 @@ func (s *StockMonitoringService) createReorderNotification(product *models.Produ
 		data["category_name"] = product.Category.Name
 	}
 
+	dataJSON, _ := json.Marshal(data)
+
 	// Send notification to all inventory managers
 	for _, userID := range userIDs {
-		err := s.notificationService.CreateApprovalNotification(
-			userID, 
-			"STOCK_ALERT", 
-			title, 
-			message, 
-			data,
-		)
-		if err != nil {
-			return err
+		// Check if notification already exists for this product and user
+		var existingNotif models.Notification
+		err := s.db.Where("user_id = ? AND type = ? AND data::text LIKE ? AND is_read = ?",
+			userID, models.NotificationTypeReorderAlert,
+			fmt.Sprintf(`%%"product_id":%d%%`, product.ID), false).
+			First(&existingNotif).Error
+		
+		if err == nil {
+			// Update existing notification
+			existingNotif.Message = message
+			existingNotif.Data = string(dataJSON)
+			existingNotif.UpdatedAt = time.Now()
+			s.db.Save(&existingNotif)
+			continue
+		}
+
+		// Create new notification
+		notification := models.Notification{
+			UserID:   userID,
+			Type:     models.NotificationTypeReorderAlert,
+			Title:    title,
+			Message:  message,
+			Data:     string(dataJSON),
+			Priority: models.NotificationPriorityMedium,
+			IsRead:   false,
+		}
+		
+		if err := s.db.Create(&notification).Error; err != nil {
+			log.Printf("Failed to create notification for user %d: %v", userID, err)
 		}
 	}
 
@@ -321,7 +343,7 @@ func (s *StockMonitoringService) ResolveStockAlerts() error {
 // markStockNotificationsAsRead marks all MIN_STOCK notifications for a product as read
 func (s *StockMonitoringService) markStockNotificationsAsRead(productID uint) error {
 	return s.db.Model(&models.Notification{}).
-		Where("type = ? AND data LIKE ? AND is_read = ?",
+		Where("type = ? AND data::text LIKE ? AND is_read = ?",
 			models.NotificationTypeLowStock,
 			fmt.Sprintf(`%%"product_id":%d%%`, productID),
 			false).

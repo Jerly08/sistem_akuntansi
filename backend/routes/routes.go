@@ -44,7 +44,6 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	authController := controllers.NewAuthController(db)
 	userController := controllers.NewUserController(db)
 	permissionController := controllers.NewPermissionController(db)
-	productController := controllers.NewProductController(db)
 	categoryController := controllers.NewCategoryController(db)
 	unitController := controllers.NewProductUnitController(db)
 	inventoryController := controllers.NewInventoryController(db)
@@ -69,6 +68,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	notificationRepo := repositories.NewNotificationRepository(db)
 	notificationService := services.NewNotificationService(db, notificationRepo)
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
+	
+	// Initialize Stock Monitoring service and Dashboard controller
+	stockMonitoringService := services.NewStockMonitoringService(db, notificationService)
+	dashboardController := controllers.NewDashboardController(db, stockMonitoringService)
+	
+	// Update ProductController with stockMonitoringService
+	productController := controllers.NewProductController(db, stockMonitoringService)
 	
 	// Purchase repositories, services and controllers
 	purchaseRepo := repositories.NewPurchaseRepository(db)
@@ -112,9 +118,6 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	r.Use(enhancedSecurity.SecurityHeaders())     // Security headers pada semua requests
 	r.Use(enhancedSecurity.RequestMonitoring())   // Monitor semua requests untuk threats
 	
-	// Initialize Stock Monitoring service and Dashboard controller
-	stockMonitoringService := services.NewStockMonitoringService(db, notificationService)
-	dashboardController := controllers.NewDashboardController(db, stockMonitoringService)
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")

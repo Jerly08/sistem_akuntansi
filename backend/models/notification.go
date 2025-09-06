@@ -45,6 +45,7 @@ const (
 	NotificationTypeStockOut          = "STOCK_OUT"
 	NotificationTypeReorderAlert      = "REORDER_ALERT"
 	NotificationTypeOverstock         = "OVERSTOCK"
+	NotificationTypeMinStock          = "MIN_STOCK"
 	NotificationTypeApprovalPending   = "APPROVAL_PENDING"
 	NotificationTypeApprovalApproved  = "APPROVAL_APPROVED"
 	NotificationTypeApprovalRejected  = "APPROVAL_REJECTED"
@@ -54,6 +55,7 @@ const (
 const (
 	NotificationPriorityLow    = "LOW"
 	NotificationPriorityNormal = "NORMAL"
+	NotificationPriorityMedium = "MEDIUM"
 	NotificationPriorityHigh   = "HIGH"
 	NotificationPriorityUrgent = "URGENT"
 )

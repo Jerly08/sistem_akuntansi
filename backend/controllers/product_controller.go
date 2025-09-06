@@ -2,22 +2,28 @@ package controllers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 	"app-sistem-akuntansi/models"
+	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
 
 type ProductController struct {
-	DB *gorm.DB
+	DB                     *gorm.DB
+	stockMonitoringService *services.StockMonitoringService
 }
 
-func NewProductController(db *gorm.DB) *ProductController {
-	return &ProductController{DB: db}
+func NewProductController(db *gorm.DB, stockMonitoringService *services.StockMonitoringService) *ProductController {
+	return &ProductController{
+		DB:                     db,
+		stockMonitoringService: stockMonitoringService,
+	}
 }
 
 func (pc *ProductController) GetProducts(c *gin.Context) {
@@ -109,6 +115,17 @@ func (pc *ProductController) AdjustStock(c *gin.Context) {
 		return
 	}
 
+	// Check stock levels after adjustment and trigger notifications if needed
+	if pc.stockMonitoringService != nil {
+		if err := pc.stockMonitoringService.CheckSingleProductStock(input.ProductID); err != nil {
+			log.Printf("Failed to check stock levels for product %d: %v", input.ProductID, err)
+		}
+		// Also resolve any existing alerts if stock is now above threshold
+		if err := pc.stockMonitoringService.ResolveStockAlerts(); err != nil {
+			log.Printf("Failed to resolve stock alerts: %v", err)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Stock adjusted successfully", "product": product})
 }
 
@@ -149,6 +166,17 @@ func (pc *ProductController) Opname(c *gin.Context) {
 	if err := pc.DB.Save(&product).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product stock"})
 		return
+	}
+
+	// Check stock levels after opname and trigger notifications if needed
+	if pc.stockMonitoringService != nil {
+		if err := pc.stockMonitoringService.CheckSingleProductStock(input.ProductID); err != nil {
+			log.Printf("Failed to check stock levels for product %d: %v", input.ProductID, err)
+		}
+		// Also resolve any existing alerts if stock is now above threshold
+		if err := pc.stockMonitoringService.ResolveStockAlerts(); err != nil {
+			log.Printf("Failed to resolve stock alerts: %v", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Stock opname processed successfully", "product": product})
@@ -222,6 +250,18 @@ func (pc *ProductController) UpdateProduct(c *gin.Context) {
 	if err := pc.DB.Preload("Category").First(&product, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load updated product relations"})
 		return
+	}
+
+	// Check stock levels after update and trigger notifications if needed
+	if pc.stockMonitoringService != nil {
+		if err := pc.stockMonitoringService.CheckSingleProductStock(uint(id)); err != nil {
+			// Log error but don't fail the update
+			log.Printf("Failed to check stock levels for product %d: %v", id, err)
+		}
+		// Also resolve any existing alerts if stock is now above threshold
+		if err := pc.stockMonitoringService.ResolveStockAlerts(); err != nil {
+			log.Printf("Failed to resolve stock alerts: %v", err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

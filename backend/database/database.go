@@ -335,6 +335,7 @@ func AutoMigrate(db *gorm.DB) {
 		
 		// Notifications
 		&models.Notification{},
+		&models.StockAlert{},
 		
 		// Overdue Management
 		&models.ReminderLog{},
