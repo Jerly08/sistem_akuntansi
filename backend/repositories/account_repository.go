@@ -122,6 +122,9 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 		}
 	}
 
+	// Store old parent for cleanup
+	oldParentID := account.ParentID
+	
 	// Update fields
 	if req.Code != "" {
 		account.Code = req.Code
@@ -144,9 +147,69 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 	if req.OpeningBalance != nil {
 		account.Balance = *req.OpeningBalance
 	}
+	
+	// Handle parent change and level recalculation
+	if req.ParentID != nil {
+		// Check if parent is valid and different from current
+		if oldParentID == nil || *oldParentID != *req.ParentID {
+			// Validate new parent exists
+			var newParent models.Account
+			if err := r.DB.WithContext(ctx).First(&newParent, *req.ParentID).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil, utils.NewNotFoundError("New parent account")
+				}
+				return nil, utils.NewDatabaseError("find new parent account", err)
+			}
+			
+			// Check for circular reference
+			if err := r.checkCircularReference(ctx, account.ID, *req.ParentID); err != nil {
+				return nil, err
+			}
+			
+			// Update parent and level
+			account.ParentID = req.ParentID
+			account.Level = newParent.Level + 1
+			
+			// Set new parent as header if it's not already
+			if !newParent.IsHeader {
+				if err := r.DB.WithContext(ctx).Model(&newParent).Update("is_header", true).Error; err != nil {
+					return nil, utils.NewDatabaseError("update new parent header status", err)
+				}
+			}
+		}
+	} else {
+		// Setting parent to null (making it a root account)
+		if oldParentID != nil {
+			account.ParentID = nil
+			account.Level = 1
+		}
+	}
+	
+	// Update child levels if this account has children and level changed
+	if oldParentID != account.ParentID {
+		if err := r.updateChildrenLevels(ctx, account.ID, account.Level); err != nil {
+			return nil, utils.NewDatabaseError("update children levels", err)
+		}
+	}
 
 	if err := r.DB.WithContext(ctx).Save(&account).Error; err != nil {
 		return nil, utils.NewDatabaseError("update account", err)
+	}
+	
+	// Clean up old parent header status if needed
+	if oldParentID != nil && (account.ParentID == nil || (account.ParentID != nil && *oldParentID != *account.ParentID)) {
+		// Check if old parent still has other children
+		var siblingCount int64
+		if err := r.DB.WithContext(ctx).Model(&models.Account{}).Where("parent_id = ? AND id != ?", *oldParentID, account.ID).Count(&siblingCount).Error; err != nil {
+			// Log error but don't fail the update
+			fmt.Printf("[WARNING] Failed to count siblings for old parent cleanup: %v\n", err)
+		} else if siblingCount == 0 {
+			// Old parent has no more children, unset header status
+			if err := r.DB.WithContext(ctx).Model(&models.Account{}).Where("id = ?", *oldParentID).Update("is_header", false).Error; err != nil {
+				// Log error but don't fail the update
+				fmt.Printf("[WARNING] Failed to update old parent header status: %v\n", err)
+			}
+		}
 	}
 
 	return &account, nil
@@ -591,4 +654,59 @@ func (r *AccountRepo) calculateTotalBalanceRecursive(ctx context.Context, accoun
 	if account.IsHeader {
 		account.Balance = childrenTotal
 	}
+}
+
+// checkCircularReference checks if setting parentID would create a circular reference
+func (r *AccountRepo) checkCircularReference(ctx context.Context, accountID uint, newParentID uint) error {
+	// An account cannot be its own parent
+	if accountID == newParentID {
+		return utils.NewBadRequestError("An account cannot be its own parent")
+	}
+	
+	// Check if newParentID is a descendant of accountID
+	currentParentID := newParentID
+	for currentParentID != 0 {
+		var parent models.Account
+		if err := r.DB.WithContext(ctx).Select("id, parent_id").First(&parent, currentParentID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				break // Parent doesn't exist, no circular reference
+			}
+			return utils.NewDatabaseError("check circular reference", err)
+		}
+		
+		if parent.ID == accountID {
+			return utils.NewBadRequestError("Cannot create circular reference: new parent is a descendant of this account")
+		}
+		
+		if parent.ParentID == nil {
+			break // Reached root, no circular reference
+		}
+		currentParentID = *parent.ParentID
+	}
+	
+	return nil
+}
+
+// updateChildrenLevels recursively updates the level of all children when parent level changes
+func (r *AccountRepo) updateChildrenLevels(ctx context.Context, accountID uint, parentLevel int) error {
+	// Get all direct children
+	var children []models.Account
+	if err := r.DB.WithContext(ctx).Where("parent_id = ?", accountID).Find(&children).Error; err != nil {
+		return err
+	}
+	
+	// Update each child's level and recursively update their children
+	for _, child := range children {
+		newLevel := parentLevel + 1
+		if err := r.DB.WithContext(ctx).Model(&child).Update("level", newLevel).Error; err != nil {
+			return err
+		}
+		
+		// Recursively update grandchildren
+		if err := r.updateChildrenLevels(ctx, child.ID, newLevel); err != nil {
+			return err
+		}
+	}
+	
+	return nil
 }

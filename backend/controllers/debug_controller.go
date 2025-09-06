@@ -95,3 +95,21 @@ func (dc *DebugController) TestRolePermission(c *gin.Context) {
 		"message": "Role permission test completed",
 	})
 }
+
+// TestCashBankPermission tests permission middleware for cash_bank
+func (dc *DebugController) TestCashBankPermission(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "You have permission to view cash_bank!",
+		"endpoint": "/debug/auth/test-cashbank-permission",
+	})
+}
+
+// TestPaymentsPermission tests permission middleware for payments
+func (dc *DebugController) TestPaymentsPermission(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "You have permission to view payments!",
+		"endpoint": "/debug/auth/test-payments-permission",
+	})
+}

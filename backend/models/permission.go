@@ -61,8 +61,8 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 				CanExport:  true,
 			}
 		}
-	case "finance":
-		// Finance has full access to financial modules
+	case "finance", "finance_manager":
+		// Finance and Finance Manager have full access to financial modules
 		financialModules := []string{"accounts", "payments", "cash_bank", "sales", "purchases"}
 		for _, module := range modules {
 			if contains(financialModules, module) {

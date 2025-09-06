@@ -9,6 +9,7 @@ import (
 type SalePayment struct {
 	ID            uint           `json:"id" gorm:"primaryKey"`
 	SaleID        uint           `json:"sale_id" gorm:"not null;index"`
+	PaymentID     *uint          `json:"payment_id" gorm:"index"` // Cross-reference to Payment Management
 	PaymentNumber string         `json:"payment_number" gorm:"size:50"`
 	Date          time.Time      `json:"date"`
 	Amount        float64        `json:"amount" gorm:"type:decimal(15,2);default:0"`

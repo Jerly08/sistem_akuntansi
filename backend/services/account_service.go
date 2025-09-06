@@ -22,6 +22,7 @@ type AccountService interface {
 	BulkImportAccounts(ctx context.Context, accounts []models.AccountImportRequest) error
 	GenerateAccountCode(ctx context.Context, accountType, parentCode string) (string, error)
 	ValidateAccountHierarchy(ctx context.Context, parentID *uint, accountType string) error
+	GetRevenueAccounts(ctx context.Context) ([]models.Account, error)
 }
 
 // AccountServiceImpl implements AccountService
@@ -228,4 +229,9 @@ func (s *AccountServiceImpl) ValidateAccountHierarchy(ctx context.Context, paren
 	}
 
 	return nil
+}
+
+// GetRevenueAccounts gets all active revenue accounts for deposit source selection
+func (s *AccountServiceImpl) GetRevenueAccounts(ctx context.Context) ([]models.Account, error) {
+	return s.accountRepo.FindByType(ctx, models.AccountTypeRevenue)
 }

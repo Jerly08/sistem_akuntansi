@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"app-sistem-akuntansi/services"
+	"app-sistem-akuntansi/models"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,11 +12,13 @@ import (
 
 type CashBankController struct {
 	cashBankService *services.CashBankService
+	accountService  services.AccountService
 }
 
-func NewCashBankController(cashBankService *services.CashBankService) *CashBankController {
+func NewCashBankController(cashBankService *services.CashBankService, accountService services.AccountService) *CashBankController {
 	return &CashBankController{
 		cashBankService: cashBankService,
+		accountService:  accountService,
 	}
 }
 
@@ -369,6 +372,36 @@ func (c *CashBankController) GetBalanceSummary(ctx *gin.Context) {
 	}
 	
 	ctx.JSON(http.StatusOK, summary)
+}
+
+// GetRevenueAccounts godoc
+// @Summary Get revenue accounts for deposits
+// @Description Get active revenue accounts that can be used for deposit source
+// @Tags CashBank
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {array} models.Account
+// @Router /api/cashbank/revenue-accounts [get]
+func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
+	accounts, err := c.accountService.GetRevenueAccounts(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve revenue accounts",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Filter only active accounts
+	var activeAccounts []models.Account
+	for _, account := range accounts {
+		if account.IsActive {
+			activeAccounts = append(activeAccounts, account)
+		}
+	}
+	
+	ctx.JSON(http.StatusOK, activeAccounts)
 }
 
 // GetPaymentAccounts godoc

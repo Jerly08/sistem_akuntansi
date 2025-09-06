@@ -322,6 +322,7 @@ func AutoMigrate(db *gorm.DB) {
 		// Journals and reports
 		&models.Journal{},
 		&models.JournalEntry{},
+		&models.JournalLine{},
 		&models.Report{},
 		&models.ReportTemplate{},
 		&models.FinancialRatio{},
@@ -334,6 +335,16 @@ func AutoMigrate(db *gorm.DB) {
 		
 		// Notifications
 		&models.Notification{},
+		
+		// Overdue Management
+		&models.ReminderLog{},
+		&models.OverdueRecord{},
+		&models.InterestCharge{},
+		&models.CollectionTask{},
+		&models.WriteOffSuggestion{},
+		&models.SaleCancellation{},
+		&models.CreditNote{},
+		&models.PaymentReminder{},
 		
 		// Additional missing models
 		&models.CompanyProfile{},

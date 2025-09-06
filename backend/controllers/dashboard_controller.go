@@ -449,6 +449,7 @@ func (dc *DashboardController) getTopAccounts() []map[string]interface{} {
 		WHERE deleted_at IS NULL 
 			AND is_active = true
 			AND balance != 0
+			AND is_header = false
 		ORDER BY ABS(balance) DESC
 		LIMIT 5
 	`).Scan(&results)

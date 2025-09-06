@@ -119,7 +119,7 @@ export default function DashboardPage() {
     };
 
     // Fetch analytics only for roles that need it
-    if (user.role === 'ADMIN' || user.role === 'DIRECTOR') {
+    if (user.role === 'admin' || user.role === 'director') {
         fetchAnalytics();
     } else {
         setLoading(false);
@@ -128,7 +128,7 @@ export default function DashboardPage() {
 
   // Handle unauthorized role redirect
   useEffect(() => {
-    if (user && !loading && !['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'DIRECTOR', 'EMPLOYEE'].includes(user.role)) {
+    if (user && !loading && !['admin', 'finance', 'inventory_manager', 'director', 'employee'].includes(user.role)) {
       setRedirecting(true);
       router.push('/unauthorized');
     }
@@ -159,15 +159,15 @@ export default function DashboardPage() {
     }
 
     switch (user?.role) {
-      case 'ADMIN':
+      case 'admin':
         return <AdminDashboard analytics={analytics} />;
-      case 'FINANCE':
+      case 'finance':
         return <FinanceDashboard />;
-      case 'INVENTORY_MANAGER':
+      case 'inventory_manager':
         return <InventoryManagerDashboard />;
-      case 'DIRECTOR':
+      case 'director':
         return <DirectorDashboard />;
-      case 'EMPLOYEE':
+      case 'employee':
         return <EmployeeDashboard />;
       default:
         // Don't call router.push here, it's handled in useEffect

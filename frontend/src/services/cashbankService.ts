@@ -87,6 +87,7 @@ export interface TransferRequest {
   notes?: string;
 }
 
+// Manual journal entry - primarily used for withdrawal transactions
 export interface ManualJournalEntry {
   account_id: number;
   description: string;
@@ -100,7 +101,8 @@ export interface DepositRequest {
   amount: number;
   reference?: string;
   notes?: string;
-  journal_entries?: ManualJournalEntry[];
+  source_account_id?: number; // Revenue account for automatic mode
+  journal_entries?: ManualJournalEntry[]; // Deprecated - kept for backward compatibility
 }
 
 export interface WithdrawalRequest {
@@ -345,6 +347,17 @@ class CashBankService {
       return response.data;
     } catch (error) {
       console.error('Error fixing GL account links:', error);
+      throw error;
+    }
+  }
+
+  // Get revenue accounts for deposit form
+  async getRevenueAccounts(): Promise<any[]> {
+    try {
+      const response = await api.get(`${this.baseUrl}/revenue-accounts`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching revenue accounts:', error);
       throw error;
     }
   }

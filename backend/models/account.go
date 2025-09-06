@@ -152,6 +152,7 @@ type AccountUpdateRequest struct {
 	Type           AccountType `json:"type"`
 	Description    string      `json:"description"`
 	Category       string      `json:"category"`
+	ParentID       *uint       `json:"parent_id"`
 	IsActive       *bool       `json:"is_active"`
 	OpeningBalance *float64    `json:"opening_balance"`
 }

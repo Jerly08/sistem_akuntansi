@@ -53,6 +53,131 @@ func NewReportService(
 	}
 }
 
+// GetUnifiedPaymentReport generates a comprehensive report combining both sales payments and payment management data
+func (rs *ReportService) GetUnifiedPaymentReport(startDate, endDate time.Time, format string) (*models.ReportResponse, error) {
+	// Get data from both payment systems
+	salePayments, err := rs.getSalePayments(startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sale payments: %v", err)
+	}
+
+	paymentManagementData, err := rs.getPaymentManagementData(startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payment management data: %v", err)
+	}
+
+	// Combine and analyze the data
+	unifiedData := rs.combinePaymentData(salePayments, paymentManagementData)
+
+	reportResponse := &models.ReportResponse{
+		ID:          0,
+		Title:       "Unified Payment Report",
+		Type:        "PAYMENT",
+		Period:      fmt.Sprintf("%s to %s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02")),
+		Format:      format,
+		Data:        unifiedData,
+		GeneratedAt: time.Now(),
+		Status:      "success",
+		Metadata: map[string]interface{}{
+			"total_payments":        unifiedData.TotalAmount,
+			"total_count":           unifiedData.TotalCount,
+			"sales_payments_count":  len(salePayments),
+			"payment_mgmt_count":    len(paymentManagementData),
+			"parameters": map[string]interface{}{
+				"start_date": startDate,
+				"end_date":   endDate,
+				"format":     format,
+			},
+		},
+	}
+
+	return reportResponse, nil
+}
+
+// Helper methods for unified payment reporting
+func (rs *ReportService) getSalePayments(startDate, endDate time.Time) ([]models.SalePayment, error) {
+	var salePayments []models.SalePayment
+	err := rs.DB.Preload("Sale").Preload("Sale.Customer").Preload("CashBank").Preload("User").
+		Where("date BETWEEN ? AND ?", startDate, endDate).
+		Order("date DESC").
+		Find(&salePayments).Error
+	return salePayments, err
+}
+
+func (rs *ReportService) getPaymentManagementData(startDate, endDate time.Time) ([]models.Payment, error) {
+	// Get payments from payment management system
+	filter := repositories.PaymentFilter{
+		StartDate: startDate,
+		EndDate:   endDate,
+		Status:    "COMPLETED",
+		Page:      1,
+		Limit:     10000,
+	}
+
+	result, err := rs.PaymentRepo.FindWithFilter(filter)
+	if err != nil {
+		return nil, err
+	}
+	return result.Data, nil
+}
+
+func (rs *ReportService) combinePaymentData(salePayments []models.SalePayment, paymentMgmtData []models.Payment) *UnifiedPaymentData {
+	unifiedData := &UnifiedPaymentData{
+		SalePayments:     salePayments,
+		PaymentMgmtData:  paymentMgmtData,
+		TotalAmount:      0,
+		TotalCount:       len(salePayments) + len(paymentMgmtData),
+		ByMethod:         make(map[string]float64),
+		ByCustomer:       make(map[string]float64),
+		DailyBreakdown:   make(map[string]float64),
+	}
+
+	// Process sale payments
+	for _, payment := range salePayments {
+		unifiedData.TotalAmount += payment.Amount
+		unifiedData.ByMethod[payment.Method] += payment.Amount
+		
+		// Handle customer data
+		if payment.Sale.ID > 0 {
+			customerName := payment.Sale.Customer.Name
+			unifiedData.ByCustomer[customerName] += payment.Amount
+		}
+		
+		// Daily breakdown
+		dayKey := payment.Date.Format("2006-01-02")
+		unifiedData.DailyBreakdown[dayKey] += payment.Amount
+	}
+
+	// Process payment management data
+	for _, payment := range paymentMgmtData {
+		unifiedData.TotalAmount += payment.Amount
+		unifiedData.ByMethod[payment.Method] += payment.Amount
+		
+		// Handle customer data
+		if payment.Contact.ID > 0 {
+			customerName := payment.Contact.Name
+			unifiedData.ByCustomer[customerName] += payment.Amount
+		}
+		
+		// Daily breakdown
+		dayKey := payment.Date.Format("2006-01-02")
+		unifiedData.DailyBreakdown[dayKey] += payment.Amount
+	}
+
+	return unifiedData
+}
+
+// UnifiedPaymentData represents combined data from both payment systems
+type UnifiedPaymentData struct {
+	SalePayments     []models.SalePayment `json:"sale_payments"`
+	PaymentMgmtData  []models.Payment     `json:"payment_mgmt_data"`
+	TotalAmount      float64              `json:"total_amount"`
+	TotalCount       int                  `json:"total_count"`
+	ByMethod         map[string]float64   `json:"by_method"`
+	ByCustomer       map[string]float64   `json:"by_customer"`
+	DailyBreakdown   map[string]float64   `json:"daily_breakdown"`
+}
+
 func (rs *ReportService) GetAvailableReports() []models.ReportMetadata {
 reports := []models.ReportMetadata{
 		{
@@ -134,6 +259,14 @@ reports := []models.ReportMetadata{
 			SupportsComparative: true,
 			RequiredParams:      []string{"as_of_date", "format"},
 			OptionalParams:      []string{"period", "comparative"},
+		},
+		{
+			ReportType:          "unified-payment",
+			Name:                "Unified Payment Report",
+			Description:         "Comprehensive payment report combining Sales Payments and Payment Management data",
+			SupportsComparative: false,
+			RequiredParams:      []string{"start_date", "end_date", "format"},
+			OptionalParams:      []string{"customer_id", "payment_method"},
 		},
 	}
 	return reports

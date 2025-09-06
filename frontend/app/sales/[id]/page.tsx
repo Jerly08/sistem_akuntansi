@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import UnifiedLayout from '@/components/layout/UnifiedLayout';
 import salesService, { Sale } from '@/services/salesService';
 import PaymentForm from '@/components/sales/PaymentForm';
@@ -61,6 +62,13 @@ const SaleDetailPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
 
   const saleId = params?.id as string;
+
+  // Handle back navigation - simplified and more reliable
+  const handleGoBack = () => {
+    console.log('Back button clicked');
+    // Direct navigation to sales page - most reliable
+    router.push('/sales');
+  };
 
   // Load sale data
   const loadSale = async () => {
@@ -179,37 +187,48 @@ const SaleDetailPage: React.FC = () => {
   // Show loading state
   if (loading) {
     return (
-      <Layout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
+      <UnifiedLayout>
         <Flex justify="center" align="center" minH="400px">
           <Spinner size="xl" />
         </Flex>
-      </Layout>
+      </UnifiedLayout>
     );
   }
 
   // Show error state
   if (error || !sale) {
     return (
-      <Layout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
+      <UnifiedLayout>
         <Alert status="error">
           <AlertIcon />
           {error || 'Sale not found'}
         </Alert>
-      </Layout>
+      </UnifiedLayout>
     );
   }
 
   return (
-    <Layout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
+    <UnifiedLayout>
       <VStack spacing={6} align="stretch">
         {/* Header */}
         <Flex justify="space-between" align="center">
           <HStack spacing={4}>
             <IconButton
               icon={<FiArrowLeft />}
-              variant="ghost"
-              onClick={() => router.back()}
-              aria-label="Go back"
+              variant="outline"
+              onClick={handleGoBack}
+              aria-label="Go back to Sales"
+              _hover={{ 
+                bg: 'var(--bg-tertiary)', 
+                transform: 'translateX(-2px)',
+                borderColor: 'var(--accent-color)'
+              }}
+              size="md"
+              title="Go back to Sales"
+              borderColor="var(--border-color)"
+              color="var(--text-primary)"
+              bg="var(--bg-secondary)"
+              cursor="pointer"
             />
             <VStack align="start" spacing={1}>
               <Heading as="h1" size="xl">Sale Detail</Heading>
@@ -460,7 +479,7 @@ const SaleDetailPage: React.FC = () => {
         onSave={handlePaymentSave}
         sale={sale}
       />
-    </Layout>
+    </UnifiedLayout>
   );
 };
 

@@ -27,6 +27,47 @@ export const formatDateTimeForDisplay = (date: string | Date): string => {
   return format(dateObj, 'yyyy-MM-dd HH:mm:ss');
 };
 
+// Indonesian month names for better clarity
+const indonesianMonthNames = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+// Format date with Indonesian month names (DD Month YYYY)
+export const formatDateWithIndonesianMonth = (date: string | Date): string => {
+  if (!date) return '';
+  
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  
+  // Handle invalid dates
+  if (isNaN(dateObj.getTime())) return '';
+  
+  const day = dateObj.getDate();
+  const month = dateObj.getMonth(); // 0-based index
+  const year = dateObj.getFullYear();
+  
+  return `${day} ${indonesianMonthNames[month]} ${year}`;
+};
+
+// Format date for display with Indonesian format (fallback to old format if needed)
+export const formatDateForIndonesianDisplay = (date: string | Date, useMonthNames: boolean = true): string => {
+  if (!date) return '';
+  
+  if (useMonthNames) {
+    return formatDateWithIndonesianMonth(date);
+  } else {
+    // Fallback to DD/MM/YYYY format
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(dateObj.getTime())) return '';
+    
+    return dateObj.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  }
+};
+
 // Field name mapping utilities
 export const mapSaleToBackendFormat = (frontendData: any): any => {
   return {

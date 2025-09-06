@@ -15,7 +15,8 @@ func SetupCashBankRoutes(router *gin.Engine, db *gorm.DB, jwtManager *middleware
 	accountRepo := repositories.NewAccountRepository(db)
 	cashBankRepo := repositories.NewCashBankRepository(db)
 	cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
-	cashBankController := controllers.NewCashBankController(cashBankService)
+	accountService := services.NewAccountService(accountRepo)
+	cashBankController := controllers.NewCashBankController(cashBankService, accountService)
 	fixCashBankController := controllers.NewFixCashBankController(db, cashBankService)
 
 	// Cash Bank routes group with authentication
@@ -28,6 +29,9 @@ func SetupCashBankRoutes(router *gin.Engine, db *gorm.DB, jwtManager *middleware
 		
 		// Payment accounts endpoint - specifically for payment form dropdowns
 		cashBank.GET("/payment-accounts", middleware.RoleRequired("admin", "finance", "director", "employee"), cashBankController.GetPaymentAccounts)
+		
+		// Revenue accounts endpoint - for deposit form source account dropdown
+		cashBank.GET("/revenue-accounts", middleware.RoleRequired("admin", "finance", "director", "employee"), cashBankController.GetRevenueAccounts)
 		
 		cashBank.GET("/accounts/:id", middleware.RoleRequired("admin", "finance", "director"), cashBankController.GetAccountByID)
 		cashBank.POST("/accounts", middleware.RoleRequired("admin", "finance"), cashBankController.CreateAccount)

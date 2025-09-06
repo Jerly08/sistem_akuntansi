@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 	"gorm.io/gorm"
 )
@@ -65,6 +66,7 @@ const (
 	JournalStatusDraft    = "DRAFT"
 	JournalStatusPosted   = "POSTED"
 	JournalStatusReversed = "REVERSED"
+	JournalStatusApproved = "APPROVED"
 )
 
 // Journal Entry Reference Types Constants
@@ -80,6 +82,7 @@ const (
 	JournalRefTransfer = "TRANSFER"
 	JournalRefDeposit  = "DEPOSIT"
 	JournalRefWithdrawal = "WITHDRAWAL"
+	JournalRefInterest = "INTEREST"
 )
 
 // Request/Response DTOs
@@ -133,28 +136,52 @@ func (je *JournalEntry) BeforeCreate(tx *gorm.DB) error {
 	// Generate journal entry code only if not provided
 	if je.Code == "" {
 		now := time.Now()
-		var count int64
-		// Count journal entries created today to generate unique sequence
-		tx.Model(&JournalEntry{}).Where("DATE(created_at) = ?", now.Format("2006-01-02")).Count(&count)
+		year := now.Year()
+		month := int(now.Month())
+		day := now.Day()
 		
-		// Keep trying to generate a unique code
-		for i := 1; i <= 100; i++ {
-			proposedCode := fmt.Sprintf("JE-%s-%04d", now.Format("2006-01-02"), count+int64(i))
+		// Use a more reliable approach with date-based sequence
+		var maxSequence int64
+		
+		// Get the highest sequence number for today using LIKE pattern to be more efficient
+		datePrefix := fmt.Sprintf("JE-%04d-%02d-%02d-", year, month, day)
+		
+		// Query for entries with today's date prefix and extract sequence numbers
+		var entries []JournalEntry
+		tx.Select("code").Where("code LIKE ? AND created_at >= ? AND created_at < ?", 
+			datePrefix+"%", 
+			time.Date(year, time.Month(month), day, 0, 0, 0, 0, now.Location()),
+			time.Date(year, time.Month(month), day+1, 0, 0, 0, 0, now.Location())).Find(&entries)
+		
+		// Find the maximum sequence number from existing codes
+		for _, entry := range entries {
+			if len(entry.Code) > len(datePrefix) {
+				seqStr := entry.Code[len(datePrefix):]
+				if seq, err := strconv.ParseInt(seqStr, 10, 64); err == nil {
+					if seq > maxSequence {
+						maxSequence = seq
+					}
+				}
+			}
+		}
+		
+		// Try to generate a unique code with retry logic
+		for attempt := 1; attempt <= 50; attempt++ {
+			sequence := maxSequence + int64(attempt)
+			proposedCode := fmt.Sprintf("%s%04d", datePrefix, sequence)
 			
-			// Check if this code already exists
+			// Double-check if this code exists (extra safety)
 			var existingCount int64
 			tx.Model(&JournalEntry{}).Where("code = ?", proposedCode).Count(&existingCount)
 			
 			if existingCount == 0 {
 				je.Code = proposedCode
-				break
+				return nil
 			}
 		}
 		
-		// Final fallback - use timestamp if all else fails
-		if je.Code == "" {
-			je.Code = fmt.Sprintf("JE-%s-%d", now.Format("2006-01-02"), now.Unix())
-		}
+		// Ultimate fallback - use nanosecond timestamp to ensure uniqueness
+		je.Code = fmt.Sprintf("JE-%04d-%02d-%02d-%d", year, month, day, now.UnixNano()%1000000)
 	}
 	return nil
 }

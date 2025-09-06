@@ -74,6 +74,16 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
   canEdit = false,
   canDelete = false,
 }) => {
+  // Debug logging for props
+  console.log('EnhancedSalesTable props:', {
+    salesCount: sales?.length,
+    canEdit,
+    canDelete,
+    hasEditHandler: !!onEdit,
+    hasConfirmHandler: !!onConfirm,
+    hasDeleteHandler: !!onDelete,
+    hasDownloadHandler: !!onDownloadInvoice
+  });
   // Theme colors
   const headingColor = useColorModeValue('gray.800', 'var(--text-primary)');
   const tableBg = useColorModeValue('white', 'var(--bg-secondary)');
@@ -97,7 +107,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
   };
 
   return (
-    <Card boxShadow="sm" borderRadius="lg" borderWidth="1px" borderColor={borderColor}>
+    <Card boxShadow="sm" borderRadius="lg" borderWidth="1px" borderColor={borderColor} position="relative" overflow="visible">
       <CardHeader>
         <Flex justify="space-between" align="center">
           <Heading size="md" color={headingColor}>
@@ -105,7 +115,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
           </Heading>
         </Flex>
       </CardHeader>
-      <CardBody p={0}>
+      <CardBody p={0} position="relative" overflow="visible">
         {loading ? (
           <Flex justify="center" align="center" py={10}>
             <Spinner size="lg" color="var(--accent-color)" />
@@ -116,7 +126,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
             <Text color={textColor}>No sales transactions found.</Text>
           </Box>
         ) : (
-          <Box overflowX="auto">
+          <Box overflowX="auto" position="relative">
             <Table variant="simple" size="md" className="table">
               <Thead bg={theadBg}>
                 <Tr>
@@ -185,29 +195,58 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                         {getStatusLabel(sale.status)}
                       </Badge>
                     </Td>
-                    <Td borderColor={borderColor} py={3} textAlign="center">
-                      <Menu>
+                    <Td borderColor={borderColor} py={3} textAlign="center" position="relative">
+                      <Menu strategy="fixed" placement="bottom-end">
                         <MenuButton
                           as={IconButton}
                           icon={<FiMoreVertical />}
                           variant="ghost"
                           size="sm"
-                          aria-label="Options"
+                          aria-label="Actions for sale"
+                          _hover={{ bg: hoverBg }}
+                          data-testid={`actions-${sale.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            console.log('Menu button clicked for sale:', sale.id);
+                          }}
                         />
-                        <MenuList>
+                        <MenuList zIndex={9999} bg={tableBg} border="1px solid" borderColor={borderColor}>
+                          {/* View Details - Always Available */}
                           <MenuItem 
                             icon={<FiEye />} 
-                            onClick={() => onViewDetails(sale)}
+                            onClick={() => {
+                              console.log('View Details clicked for sale:', sale.id);
+                              onViewDetails(sale);
+                            }}
                           >
                             View Details
                           </MenuItem>
+                          
+                          {/* Debug: Show permissions */}
+                          {process.env.NODE_ENV === 'development' && (
+                            <MenuItem isDisabled fontSize="xs" color="gray.500">
+                              Debug: canEdit={String(canEdit)}, canDelete={String(canDelete)}
+                            </MenuItem>
+                          )}
                           {sale.status === 'DRAFT' && canEdit && onEdit && (
-                            <MenuItem icon={<FiEdit />} onClick={() => onEdit(sale)}>
+                            <MenuItem 
+                              icon={<FiEdit />} 
+                              onClick={() => {
+                                console.log('Edit clicked for sale:', sale.id, 'canEdit:', canEdit);
+                                onEdit(sale);
+                              }}
+                            >
                               Edit
                             </MenuItem>
                           )}
                           {sale.status === 'DRAFT' && canEdit && onConfirm && (
-                            <MenuItem icon={<FiCheck />} onClick={() => onConfirm(sale)}>
+                            <MenuItem 
+                              icon={<FiCheck />} 
+                              onClick={() => {
+                                console.log('Confirm clicked for sale:', sale.id);
+                                onConfirm(sale);
+                              }}
+                            >
                               Confirm & Invoice
                             </MenuItem>
                           )}
@@ -224,7 +263,10 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                           {onDownloadInvoice && (
                             <MenuItem 
                               icon={<FiDownload />} 
-                              onClick={() => onDownloadInvoice(sale)}
+                              onClick={() => {
+                                console.log('Download Invoice clicked for sale:', sale.id);
+                                onDownloadInvoice(sale);
+                              }}
                             >
                               Download Invoice
                             </MenuItem>
@@ -235,9 +277,22 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                               <MenuItem 
                                 icon={<FiTrash2 />} 
                                 color="red.500" 
-                                onClick={() => onDelete(sale)}
+                                onClick={() => {
+                                  console.log('Delete clicked for sale:', sale.id, 'canDelete:', canDelete);
+                                  onDelete(sale);
+                                }}
                               >
                                 Delete
+                              </MenuItem>
+                            </>
+                          )}
+                          
+                          {/* Fallback if no actions available */}
+                          {!canEdit && !canDelete && !onDownloadInvoice && (
+                            <>
+                              <MenuDivider />
+                              <MenuItem isDisabled fontSize="xs" color="gray.500">
+                                No actions available
                               </MenuItem>
                             </>
                           )}

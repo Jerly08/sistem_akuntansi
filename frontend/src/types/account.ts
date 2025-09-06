@@ -35,6 +35,7 @@ export interface AccountUpdateRequest {
   type?: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
   description?: string;
   category?: string;
+  parent_id?: number;
   is_active?: boolean;
   opening_balance?: number;
 }

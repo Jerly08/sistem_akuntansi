@@ -13,6 +13,7 @@ import {
   FormControl,
   FormLabel,
   FormErrorMessage,
+  FormHelperText,
   Input,
   Select,
   Textarea,
@@ -204,6 +205,11 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const watchDiscountPercent = watch('discount_percent');
   const watchPPNPercent = watch('ppn_percent');
   const watchShippingCost = watch('shipping_cost');
+  const watchPaymentTerms = watch('payment_terms');
+  const watchDate = watch('date');
+  const watchType = watch('type');
+  const watchDueDate = watch('due_date');
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
 
   useEffect(() => {
     if (isOpen) {
@@ -215,6 +221,26 @@ const SalesForm: React.FC<SalesFormProps> = ({
       }
     }
   }, [isOpen, sale]);
+
+  // Auto-calculate due date based on payment terms and date
+  useEffect(() => {
+    if (watchDate && watchPaymentTerms && watchPaymentTerms !== 'CUSTOM' && !watchDueDate) {
+      const calculatedDueDate = calculateDueDateFromPaymentTerms(watchDate, watchPaymentTerms);
+      if (calculatedDueDate) {
+        setValue('due_date', calculatedDueDate);
+      }
+    }
+  }, [watchDate, watchPaymentTerms, setValue]);
+
+  // Reset due date when payment terms change (except for CUSTOM)
+  useEffect(() => {
+    if (watchPaymentTerms && watchPaymentTerms !== 'CUSTOM' && watchDate) {
+      const calculatedDueDate = calculateDueDateFromPaymentTerms(watchDate, watchPaymentTerms);
+      if (calculatedDueDate) {
+        setValue('due_date', calculatedDueDate);
+      }
+    }
+  }, [watchPaymentTerms, watchDate, setValue]);
 
   // Ensure modal body is scrollable when content overflows
   useEffect(() => {
@@ -411,7 +437,17 @@ const SalesForm: React.FC<SalesFormProps> = ({
       setValue(`items.${index}.product_id`, product.id);
       setValue(`items.${index}.description`, product.name);
       setValue(`items.${index}.unit_price`, product.price);
+    } else {
+      // When manual entry is selected (productId = 0), clear the fields
+      setValue(`items.${index}.product_id`, 0);
+      setValue(`items.${index}.description`, '');
+      setValue(`items.${index}.unit_price`, 0);
     }
+  };
+
+  // Helper function to check if item is manual entry
+  const isManualEntry = (index: number) => {
+    return !watchItems[index]?.product_id || watchItems[index]?.product_id === 0;
   };
 
   const calculateLineTotal = (item: any) => {
@@ -424,14 +460,131 @@ const SalesForm: React.FC<SalesFormProps> = ({
     return watchItems.reduce((sum, item) => sum + calculateLineTotal(item), 0);
   };
 
+  // Calculate subtotal for taxable items only
+  const calculateTaxableSubtotal = () => {
+    return watchItems.reduce((sum, item) => {
+      if (item.taxable !== false) { // Default to true if undefined
+        return sum + calculateLineTotal(item);
+      }
+      return sum;
+    }, 0);
+  };
+
+  // Calculate subtotal for non-taxable items
+  const calculateNonTaxableSubtotal = () => {
+    return watchItems.reduce((sum, item) => {
+      if (item.taxable === false) {
+        return sum + calculateLineTotal(item);
+      }
+      return sum;
+    }, 0);
+  };
+
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
-    const globalDiscount = subtotal * (watchDiscountPercent / 100);
+    
+    // Calculate global discount based on type (percentage or amount)
+    const globalDiscount = discountType === 'percentage' 
+      ? subtotal * (watchDiscountPercent / 100)
+      : Math.min(watchDiscountPercent || 0, subtotal); // Can't discount more than subtotal
+    
     const afterDiscount = subtotal - globalDiscount;
-    const withShipping = afterDiscount + watchShippingCost;
-    const ppn = withShipping * (watchPPNPercent / 100);
-    return withShipping + ppn;
+    
+    // Calculate proportional discount for taxable and non-taxable items
+    const taxableSubtotal = calculateTaxableSubtotal();
+    const nonTaxableSubtotal = calculateNonTaxableSubtotal();
+    
+    // Apply global discount proportionally
+    let taxableAfterDiscount, nonTaxableAfterDiscount;
+    
+    if (discountType === 'percentage') {
+      taxableAfterDiscount = taxableSubtotal - (taxableSubtotal * (watchDiscountPercent / 100));
+      nonTaxableAfterDiscount = nonTaxableSubtotal - (nonTaxableSubtotal * (watchDiscountPercent / 100));
+    } else {
+      // For amount discount, apply proportionally based on subtotal ratio
+      const taxableRatio = subtotal > 0 ? taxableSubtotal / subtotal : 0;
+      const nonTaxableRatio = subtotal > 0 ? nonTaxableSubtotal / subtotal : 0;
+      
+      const taxableDiscountAmount = globalDiscount * taxableRatio;
+      const nonTaxableDiscountAmount = globalDiscount * nonTaxableRatio;
+      
+      taxableAfterDiscount = taxableSubtotal - taxableDiscountAmount;
+      nonTaxableAfterDiscount = nonTaxableSubtotal - nonTaxableDiscountAmount;
+    }
+    
+    // Add shipping to total (shipping is typically taxable)
+    const taxableWithShipping = taxableAfterDiscount + watchShippingCost;
+    
+    // Calculate PPN only on taxable amount + shipping
+    const ppn = taxableWithShipping * (watchPPNPercent / 100);
+    
+    // Total = taxable items + PPN + non-taxable items
+    return taxableWithShipping + ppn + nonTaxableAfterDiscount;
   };
+
+  // Helper function to get global discount amount for display
+  const getGlobalDiscountAmount = () => {
+    const subtotal = calculateSubtotal();
+    return discountType === 'percentage' 
+      ? subtotal * (watchDiscountPercent / 100)
+      : Math.min(watchDiscountPercent || 0, subtotal);
+  };
+
+  // Helper function to calculate due date from payment terms
+  const calculateDueDateFromPaymentTerms = (date: string, terms: string): string | null => {
+    if (!date || terms === 'COD' || terms === 'CUSTOM') return null;
+    
+    const baseDate = new Date(date);
+    let days = 0;
+    
+    switch (terms) {
+      case 'NET_15': days = 15; break;
+      case 'NET_30': days = 30; break;
+      case 'NET_60': days = 60; break;
+      case 'NET_90': days = 90; break;
+      default: return null;
+    }
+    
+    const dueDate = new Date(baseDate);
+    dueDate.setDate(dueDate.getDate() + days);
+    return dueDate.toISOString().split('T')[0];
+  };
+
+  // Helper function to get payment terms explanation
+  const getPaymentTermsExplanation = (terms: string): string => {
+    switch (terms) {
+      case 'COD':
+        return 'Customer pays immediately upon delivery';
+      case 'NET_15':
+        return 'Customer has 15 days from invoice date to pay';
+      case 'NET_30':
+        return 'Customer has 30 days from invoice date to pay';
+      case 'NET_60':
+        return 'Customer has 60 days from invoice date to pay';
+      case 'NET_90':
+        return 'Customer has 90 days from invoice date to pay';
+      default:
+        return '';
+    }
+  };
+
+  // Helper function to get field labels based on transaction type
+  const getDateFieldLabel = (type: string): string => {
+    switch (type) {
+      case 'QUOTE':
+      case 'QUOTATION':
+        return 'Quote Date';
+      case 'INVOICE':
+        return 'Invoice Date';
+      case 'SALES_ORDER':
+        return 'Order Date';
+      default:
+        return 'Transaction Date';
+    }
+  };
+
+  // Check if due date is auto-calculated
+  const isDueDateAutoCalculated = watchPaymentTerms && watchPaymentTerms !== 'CUSTOM' && watchPaymentTerms !== 'COD';
 
   const addItem = () => {
     append({
@@ -719,6 +872,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           ))}
                         </Select>
                         <FormErrorMessage>{errors.customer_id?.message}</FormErrorMessage>
+                        <FormHelperText color={textColor}>
+                          Choose the customer for this transaction
+                        </FormHelperText>
                       </FormControl>
 
                       <FormControl>
@@ -741,12 +897,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             </option>
                           ))}
                         </Select>
+                        <FormHelperText color={textColor}>
+                          Assign a sales representative (optional)
+                        </FormHelperText>
                       </FormControl>
                   </HStack>
                   
                   <HStack w="full" spacing={4}>
                       <FormControl isRequired isInvalid={!!errors.date}>
-                        <FormLabel>Date</FormLabel>
+                        <FormLabel>{getDateFieldLabel(watchType)}</FormLabel>
                         <Input
                           type="date"
                           {...register('date', {
@@ -756,16 +915,30 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           _focus={{ bg: inputFocusBg }}
                         />
                         <FormErrorMessage>{errors.date?.message}</FormErrorMessage>
+                        <FormHelperText color={textColor}>
+                          When this transaction occurred
+                        </FormHelperText>
                       </FormControl>
 
                       <FormControl>
-                        <FormLabel>Due Date</FormLabel>
+                        <FormLabel>
+                          Due Date
+                          {isDueDateAutoCalculated && (
+                            <Badge ml={2} colorScheme="green" size="sm">Auto</Badge>
+                          )}
+                        </FormLabel>
                         <Input
                           type="date"
                           {...register('due_date')}
-                          bg={inputBg}
-                          _focus={{ bg: inputFocusBg }}
+                          bg={isDueDateAutoCalculated ? 'gray.100' : inputBg}
+                          _focus={{ bg: isDueDateAutoCalculated ? 'gray.100' : inputFocusBg }}
+                          isReadOnly={isDueDateAutoCalculated}
                         />
+                        <FormHelperText color={isDueDateAutoCalculated ? 'green.600' : textColor}>
+                          {isDueDateAutoCalculated 
+                            ? 'Auto-calculated from Payment Terms' 
+                            : 'When payment is due (leave empty for auto-calculation)'}
+                        </FormHelperText>
                       </FormControl>
 
                       <FormControl>
@@ -776,6 +949,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           bg={inputBg}
                           _focus={{ bg: inputFocusBg }}
                         />
+                        <FormHelperText color={textColor}>
+                          For quotes: when this offer expires
+                        </FormHelperText>
                       </FormControl>
                   </HStack>
                 </VStack>
@@ -842,39 +1018,51 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         <Th>Unit Price</Th>
                         <Th>Discount %</Th>
                         <Th>Taxable</Th>
-                        <Th>Total</Th>
-                        <Th>Action</Th>
+                        <Th>Line Total</Th>
+                        <Th width="60px">Action</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
                       {fields.map((field, index) => (
                         <Tr key={field.id}>
                           <Td>
-                            <Select
-                              size="sm"
-                              {...register(`items.${index}.product_id`, {
-                                required: 'Product is required',
-                                setValueAs: value => parseInt(value) || 0
-                              })}
-                              onChange={(e) => handleProductChange(index, parseInt(e.target.value))}
-                              bg={inputBg}
-                              _focus={{ bg: inputFocusBg }}
-                            >
-                              <option value="">Select product</option>
-                              {products.map(product => (
-                                <option key={product.id} value={product.id}>
-                                  {product.code} - {product.name}
-                                </option>
-                              ))}
-                            </Select>
+                            <VStack spacing={1}>
+                              <Select
+                                size="sm"
+                                {...register(`items.${index}.product_id`, {
+                                  setValueAs: value => parseInt(value) || 0
+                                })}
+                                onChange={(e) => handleProductChange(index, parseInt(e.target.value))}
+                                bg={inputBg}
+                                _focus={{ bg: inputFocusBg }}
+                                placeholder="Select product"
+                              >
+                                <option value="">Manual entry</option>
+                                {products.map(product => (
+                                  <option key={product.id} value={product.id}>
+                                    {product.code} - {product.name}
+                                  </option>
+                                ))}
+                              </Select>
+                              {isManualEntry(index) && (
+                                <Badge colorScheme="orange" size="xs">
+                                  Manual
+                                </Badge>
+                              )}
+                            </VStack>
                           </Td>
                           <Td>
                             <Input
                               size="sm"
-                              {...register(`items.${index}.description`)}
-                              placeholder="Item description"
-                              bg={inputBg}
-                              _focus={{ bg: inputFocusBg }}
+                              {...register(`items.${index}.description`, {
+                                required: 'Description is required'
+                              })}
+                              placeholder={isManualEntry(index) 
+                                ? "Enter item description manually" 
+                                : "Item description"}
+                              bg={isManualEntry(index) ? 'orange.50' : inputBg}
+                              _focus={{ bg: isManualEntry(index) ? 'orange.100' : inputFocusBg }}
+                              borderColor={isManualEntry(index) ? 'orange.200' : 'gray.200'}
                             />
                           </Td>
                           <Td>
@@ -912,13 +1100,19 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             </NumberInput>
                           </Td>
                           <Td>
-                            <Switch
-                              size="sm"
-                              {...register(`items.${index}.taxable`)}
-                            />
+                            <VStack spacing={1} align="center">
+                              <Switch
+                                size="sm"
+                                {...register(`items.${index}.taxable`)}
+                                colorScheme="green"
+                              />
+                              <Text fontSize="xs" color={watchItems[index]?.taxable !== false ? 'green.600' : 'gray.500'}>
+                                {watchItems[index]?.taxable !== false ? 'Tax' : 'No Tax'}
+                              </Text>
+                            </VStack>
                           </Td>
                           <Td>
-                            <Text fontSize="sm" fontWeight="medium">
+                            <Text fontSize="sm" fontWeight="medium" color="green.600">
                               {salesService.formatCurrency(calculateLineTotal(watchItems[index] || {}))}
                             </Text>
                           </Td>
@@ -949,16 +1143,41 @@ const SalesForm: React.FC<SalesFormProps> = ({
                 </Heading>
                 <HStack w="full" spacing={4}>
                     <FormControl>
-                      <FormLabel>Global Discount (%)</FormLabel>
-                      <NumberInput min={0} max={100}>
-                        <NumberInputField
-                          {...register('discount_percent', {
-                            setValueAs: value => parseFloat(value) || 0
-                          })}
+                      <FormLabel>
+                        Global Discount 
+                        <Badge ml={2} colorScheme="blue" size="sm" cursor="pointer" 
+                               onClick={() => setDiscountType(discountType === 'percentage' ? 'amount' : 'percentage')}>
+                          {discountType === 'percentage' ? '%' : 'Rp'}
+                        </Badge>
+                      </FormLabel>
+                      {discountType === 'percentage' ? (
+                        <NumberInput min={0} max={100}>
+                          <NumberInputField
+                            {...register('discount_percent', {
+                              setValueAs: value => parseFloat(value) || 0
+                            })}
+                            bg={inputBg}
+                            _focus={{ bg: inputFocusBg }}
+                            placeholder="0"
+                          />
+                        </NumberInput>
+                      ) : (
+                        <CurrencyInput
+                          value={watchDiscountPercent || 0}
+                          onChange={(value) => setValue('discount_percent', value)}
+                          placeholder="Rp 0"
+                          min={0}
+                          showLabel={false}
                           bg={inputBg}
                           _focus={{ bg: inputFocusBg }}
                         />
-                      </NumberInput>
+                      )}
+                      <FormHelperText color={textColor}>
+                        {discountType === 'percentage' 
+                          ? 'Percentage discount applied to entire order'
+                          : 'Fixed amount discount applied to entire order'
+                        } (Click badge to toggle)
+                      </FormHelperText>
                     </FormControl>
 
                     <FormControl>
@@ -972,19 +1191,25 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           _focus={{ bg: inputFocusBg }}
                         />
                       </NumberInput>
+                      <FormHelperText color={textColor}>
+                        Value Added Tax (default: 11%)
+                      </FormHelperText>
                     </FormControl>
 
                     <FormControl>
                       <FormLabel>Shipping Cost</FormLabel>
-                      <NumberInput min={0}>
-                        <NumberInputField
-                          {...register('shipping_cost', {
-                            setValueAs: value => parseFloat(value) || 0
-                          })}
-                          bg={inputBg}
-                          _focus={{ bg: inputFocusBg }}
-                        />
-                      </NumberInput>
+                      <CurrencyInput
+                        value={watchShippingCost || 0}
+                        onChange={(value) => setValue('shipping_cost', value)}
+                        placeholder="Rp 0"
+                        min={0}
+                        showLabel={false}
+                        bg={inputBg}
+                        _focus={{ bg: inputFocusBg }}
+                      />
+                      <FormHelperText color={textColor}>
+                        Additional shipping/delivery charges
+                      </FormHelperText>
                     </FormControl>
                 </HStack>
 
@@ -994,13 +1219,64 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   <Alert status="info" borderRadius="lg" mt={4} bg={alertBg} borderColor={alertBorderColor}>
                     <AlertIcon color="blue.500" />
                     <AlertDescription fontSize="sm">
-                      <VStack align="stretch" spacing={3} w="full">
+                      <VStack align="stretch" spacing={2} w="full">
                         <HStack justify="space-between">
-                          <Text color={textColor}><strong>Subtotal:</strong></Text>
+                          <Text color={textColor}><strong>Subtotal (All Items):</strong></Text>
                           <Text fontWeight="medium" color={textColor}>
                             {salesService.formatCurrency(calculateSubtotal())}
                           </Text>
                         </HStack>
+                        
+                        {/* Show breakdown if there are non-taxable items */}
+                        {calculateNonTaxableSubtotal() > 0 && (
+                          <>
+                            <HStack justify="space-between" pl={4}>
+                              <Text color={textColor} fontSize="xs">• Taxable Items:</Text>
+                              <Text fontSize="xs" color={textColor}>
+                                {salesService.formatCurrency(calculateTaxableSubtotal())}
+                              </Text>
+                            </HStack>
+                            <HStack justify="space-between" pl={4}>
+                              <Text color={textColor} fontSize="xs">• Non-Taxable Items:</Text>
+                              <Text fontSize="xs" color={textColor}>
+                                {salesService.formatCurrency(calculateNonTaxableSubtotal())}
+                              </Text>
+                            </HStack>
+                          </>
+                        )}
+                        
+                        {watchDiscountPercent > 0 && (
+                          <HStack justify="space-between">
+                            <Text color={textColor}>
+                              Global Discount ({discountType === 'percentage' ? `${watchDiscountPercent}%` : 'Amount'}):
+                            </Text>
+                            <Text color="red.500">
+                              -{salesService.formatCurrency(getGlobalDiscountAmount())}
+                            </Text>
+                          </HStack>
+                        )}
+                        
+                        {watchShippingCost > 0 && (
+                          <HStack justify="space-between">
+                            <Text color={textColor}>Shipping Cost:</Text>
+                            <Text color={textColor}>
+                              {salesService.formatCurrency(watchShippingCost)}
+                            </Text>
+                          </HStack>
+                        )}
+                        
+                        {watchPPNPercent > 0 && calculateTaxableSubtotal() > 0 && (
+                          <HStack justify="space-between">
+                            <Text color={textColor}>PPN ({watchPPNPercent}%):</Text>
+                            <Text color={textColor}>
+                              {salesService.formatCurrency(
+                                (calculateTaxableSubtotal() - (calculateTaxableSubtotal() * (watchDiscountPercent / 100)) + watchShippingCost) * (watchPPNPercent / 100)
+                              )}
+                            </Text>
+                          </HStack>
+                        )}
+                        
+                        <Divider />
                         <HStack justify="space-between">
                           <Text color={textColor}><strong>Total Amount:</strong></Text>
                           <Text fontSize="lg" fontWeight="bold" color="blue.600">
@@ -1030,11 +1306,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           _focus={{ bg: inputFocusBg }}
                         >
                           <option value="COD">COD (Cash on Delivery)</option>
-                          <option value="NET_15">NET 15</option>
-                          <option value="NET_30">NET 30</option>
-                          <option value="NET_60">NET 60</option>
-                          <option value="NET_90">NET 90</option>
+                          <option value="NET_15">NET 15 (15 days)</option>
+                          <option value="NET_30">NET 30 (30 days)</option>
+                          <option value="NET_60">NET 60 (60 days)</option>
+                          <option value="NET_90">NET 90 (90 days)</option>
+                          <option value="CUSTOM">Custom Due Date</option>
                         </Select>
+                        <FormHelperText color={textColor}>
+                          How long customer has to pay
+                        </FormHelperText>
                       </FormControl>
 
                       <FormControl>
@@ -1045,8 +1325,26 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           bg={inputBg}
                           _focus={{ bg: inputFocusBg }}
                         />
+                        <FormHelperText color={textColor}>
+                          External reference (PO number, etc.)
+                        </FormHelperText>
                       </FormControl>
                   </HStack>
+
+                  {/* Payment Terms Explanation */}
+                  {watchPaymentTerms && watchPaymentTerms !== 'CUSTOM' && getPaymentTermsExplanation(watchPaymentTerms) && (
+                    <Alert status="info" borderRadius="md" bg={alertBg} borderColor={alertBorderColor}>
+                      <AlertIcon color="blue.500" />
+                      <AlertDescription fontSize="sm">
+                        <Text><strong>Payment Terms:</strong> {getPaymentTermsExplanation(watchPaymentTerms)}</Text>
+                        {watchDate && isDueDateAutoCalculated && (
+                          <Text mt={1} color="green.600">
+                            <strong>Due Date:</strong> {salesService.formatDate(calculateDueDateFromPaymentTerms(watchDate, watchPaymentTerms) || '')}
+                          </Text>
+                        )}
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   <FormControl>
                     <FormLabel>Notes</FormLabel>
@@ -1057,6 +1355,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
                       bg={inputBg}
                       _focus={{ bg: inputFocusBg }}
                     />
+                    <FormHelperText color={textColor}>
+                      Notes visible to customer on invoice
+                    </FormHelperText>
                   </FormControl>
 
                   <FormControl>
@@ -1068,6 +1369,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
                       bg={inputBg}
                       _focus={{ bg: inputFocusBg }}
                     />
+                    <FormHelperText color={textColor}>
+                      Internal notes (not visible to customer)
+                    </FormHelperText>
                   </FormControl>
                 </VStack>
               </Box>

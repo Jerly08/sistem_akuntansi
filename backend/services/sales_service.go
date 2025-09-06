@@ -88,6 +88,11 @@ func (s *SalesService) CreateSale(request models.SaleCreateRequest, userID uint)
 		return nil, errors.New("customer not found")
 	}
 
+	// Validate document type specific requirements
+	if err := s.validateDocumentTypeRequirements(request.Type, request.ValidUntil, request.Date); err != nil {
+		return nil, err
+	}
+
 	// Validate sales person if provided
 	if request.SalesPersonID != nil {
 		// Check if sales person exists in contacts with type EMPLOYEE
@@ -137,6 +142,7 @@ func (s *SalesService) CreateSale(request models.SaleCreateRequest, userID uint)
 		PaymentMethod:   request.PaymentMethod,
 		ShippingMethod:  request.ShippingMethod,
 		ShippingCost:    request.ShippingCost,
+		ShippingTaxable:  request.ShippingTaxable,
 		BillingAddress:  request.BillingAddress,
 		ShippingAddress: request.ShippingAddress,
 		Notes:           request.Notes,
@@ -258,6 +264,9 @@ func (s *SalesService) UpdateSale(id uint, request models.SaleUpdateRequest, use
 	if request.ShippingCost != nil {
 		sale.ShippingCost = *request.ShippingCost
 	}
+	if request.ShippingTaxable != nil {
+		sale.ShippingTaxable = *request.ShippingTaxable
+	}
 	if request.BillingAddress != nil {
 		sale.BillingAddress = *request.BillingAddress
 	}
@@ -352,7 +361,8 @@ func (s *SalesService) DeleteSaleWithRole(id uint, userRole string) error {
 func (s *SalesService) ConfirmSale(id uint, userID uint) error {
 	sale, err := s.salesRepo.FindByID(id)
 	if err != nil {
-		return err
+		log.Printf("Error finding sale %d: %v", id, err)
+		return fmt.Errorf("failed to find sale: %v", err)
 	}
 
 	if sale.Status != models.SaleStatusDraft {
@@ -375,17 +385,26 @@ func (s *SalesService) ConfirmSale(id uint, userID uint) error {
 	// Update inventory
 	err = s.updateInventoryForSale(sale)
 	if err != nil {
-		return err
+		log.Printf("Error updating inventory for sale %d: %v", id, err)
+		return fmt.Errorf("failed to update inventory: %v", err)
 	}
 
 	// Create journal entries for the sale
 	err = s.createJournalEntriesForSale(sale, userID)
 	if err != nil {
-		return err
+		log.Printf("Error creating journal entries for sale %d: %v", id, err)
+		return fmt.Errorf("failed to create journal entries: %v", err)
 	}
 
+	// Save the updated sale
 	_, err = s.salesRepo.Update(sale)
-	return err
+	if err != nil {
+		log.Printf("Error updating sale %d: %v", id, err)
+		return fmt.Errorf("failed to update sale: %v", err)
+	}
+
+	log.Printf("Successfully confirmed sale %d", id)
+	return nil
 }
 
 func (s *SalesService) CreateInvoiceFromSale(id uint, userID uint) (*models.Sale, error) {
@@ -412,6 +431,12 @@ func (s *SalesService) CreateInvoiceFromSale(id uint, userID uint) (*models.Sale
 	sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
 
 	updatedSale, err := s.salesRepo.Update(sale)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create journal entries for the invoice
+	err = s.createJournalEntriesForSale(updatedSale, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -766,22 +791,67 @@ func (s *SalesService) getDefaultPaymentTerms(terms string) string {
 }
 
 func (s *SalesService) calculateDueDate(saleDate time.Time, paymentTerms string) time.Time {
-	days := 30 // default
+	// Handle special payment terms first
 	switch paymentTerms {
 	case "COD":
-		days = 0
-	case "NET15":
-		days = 15
-	case "NET30":
-		days = 30
-	case "NET45":
-		days = 45
-	case "NET60":
-		days = 60
-	case "NET90":
-		days = 90
+		// Cash on Delivery - same day payment
+		return saleDate
+	case "EOM":
+		// End of Month - due on last day of current month
+		year, month, _ := saleDate.Date()
+		// Get last day of the current month
+		lastDayOfMonth := time.Date(year, month+1, 0, 0, 0, 0, 0, saleDate.Location())
+		return lastDayOfMonth
+	case "2_10_NET_30":
+		// 2/10, Net 30 - 2% discount if paid within 10 days, otherwise net 30 days
+		return saleDate.AddDate(0, 0, 30)
+	default:
+		// Handle standard NET terms
+		days := s.getDaysFromPaymentTerms(paymentTerms)
+		dueDate := saleDate.AddDate(0, 0, days)
+		
+		// Optional: Skip weekends for business days calculation
+		// Uncomment if business requires due dates to fall on business days
+		// dueDate = s.adjustToBusinessDay(dueDate)
+		
+		return dueDate
 	}
-	return saleDate.AddDate(0, 0, days)
+}
+
+// getDaysFromPaymentTerms extracts the number of days from payment terms
+func (s *SalesService) getDaysFromPaymentTerms(paymentTerms string) int {
+	switch paymentTerms {
+	case "NET15":
+		return 15
+	case "NET30":
+		return 30
+	case "NET45":
+		return 45
+	case "NET60":
+		return 60
+	case "NET90":
+		return 90
+	default:
+		// Default to NET30 if unknown term
+		return 30
+	}
+}
+
+// adjustToBusinessDay adjusts the due date to the next business day if it falls on weekend
+// This is optional and can be enabled based on business requirements
+func (s *SalesService) adjustToBusinessDay(date time.Time) time.Time {
+	weekday := date.Weekday()
+	switch weekday {
+	case time.Saturday:
+		// Move to Monday
+		return date.AddDate(0, 0, 2)
+	case time.Sunday:
+		// Move to Monday  
+		return date.AddDate(0, 0, 1)
+	default:
+		// It's a weekday, return as is
+		return date
+	}
 }
 
 // Helper function to safely dereference float64 pointer
@@ -973,11 +1043,18 @@ func (s *SalesService) calculateSaleItemsFromRequest(sale *models.Sale, items []
 	// Calculate sale totals with enhanced logic
 	sale.Subtotal = subtotal
 	sale.DiscountAmount = subtotal * (sale.DiscountPercent / 100)
-	sale.TaxableAmount = subtotal - sale.DiscountAmount
+	
+	// Calculate taxable amount including shipping if it's taxable
+	taxableAmount := subtotal - sale.DiscountAmount
+	if sale.ShippingTaxable {
+		taxableAmount += sale.ShippingCost
+	}
+	sale.TaxableAmount = taxableAmount
+	
 	sale.PPN = sale.TaxableAmount * (sale.PPNPercent / 100)
 	sale.PPh = sale.TaxableAmount * (sale.PPhPercent / 100)
 	sale.TotalTax = sale.PPN - sale.PPh // PPN is added, PPh is deducted
-	sale.TotalAmount = sale.TaxableAmount + sale.TotalTax + sale.ShippingCost
+	sale.TotalAmount = subtotal - sale.DiscountAmount + sale.TotalTax + sale.ShippingCost
 	sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
 
 	// Set computed/legacy fields for frontend compatibility
@@ -1082,19 +1159,57 @@ func (s *SalesService) calculateSaleTotals(sale *models.Sale, items []models.Sal
 
 func (s *SalesService) recalculateSaleTotals(sale *models.Sale) error {
 	subtotal := 0.0
-	_ = 0.0 // totalTax not used in current implementation
+	totalTax := 0.0
 
 	for i := range sale.SaleItems {
 		item := &sale.SaleItems[i]
 		
-		// Calculate totals
-		item.TotalPrice = float64(item.Quantity) * item.UnitPrice - item.Discount + item.Tax
-		subtotal += item.TotalPrice
+		// Calculate line totals with proper discount handling
+		lineSubtotal := float64(item.Quantity) * item.UnitPrice
+		discountAmount := item.Discount
+		if discountAmount == 0 && item.DiscountPercent > 0 {
+			discountAmount = lineSubtotal * (item.DiscountPercent / 100)
+		}
+		item.DiscountAmount = discountAmount
+		item.LineTotal = lineSubtotal - discountAmount
+		
+		// Calculate taxes only if item is taxable
+		if item.Taxable {
+			item.PPNAmount = item.LineTotal * (sale.PPNPercent / 100)
+			item.PPhAmount = item.LineTotal * (sale.PPhPercent / 100)
+			item.TotalTax = item.PPNAmount - item.PPhAmount
+		} else {
+			item.PPNAmount = 0
+			item.PPhAmount = 0
+			item.TotalTax = 0
+		}
+		item.FinalAmount = item.LineTotal + item.TotalTax
+		item.TotalPrice = item.LineTotal // For frontend compatibility
+		
+		subtotal += item.LineTotal
+		totalTax += item.TotalTax
 	}
 
-	// Calculate sale totals
-	sale.TotalAmount = subtotal - (subtotal * sale.DiscountPercent / 100) + sale.ShippingCost + sale.Tax
+	// Calculate sale totals with enhanced logic
+	sale.Subtotal = subtotal
+	sale.DiscountAmount = subtotal * (sale.DiscountPercent / 100)
+	
+	// Calculate taxable amount including shipping if it's taxable
+	taxableAmount := subtotal - sale.DiscountAmount
+	if sale.ShippingTaxable {
+		taxableAmount += sale.ShippingCost
+	}
+	sale.TaxableAmount = taxableAmount
+	
+	sale.PPN = sale.TaxableAmount * (sale.PPNPercent / 100)
+	sale.PPh = sale.TaxableAmount * (sale.PPhPercent / 100)
+	sale.TotalTax = sale.PPN - sale.PPh
+	sale.TotalAmount = subtotal - sale.DiscountAmount + sale.TotalTax + sale.ShippingCost
 	sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
+	
+	// Set computed/legacy fields for frontend compatibility
+	sale.Tax = sale.TotalTax
+	sale.SubTotal = sale.Subtotal
 
 	return nil
 }
@@ -1152,13 +1267,14 @@ func (s *SalesService) createJournalEntriesForSale(sale *models.Sale, userID uin
 	// Credit: Sales Revenue
 	// Credit/Debit: Tax accounts
 	
-	// Skip journal entries if journal service is not available
-	if s.journalService == nil {
-		log.Printf("Warning: Journal service not available, skipping journal entries for sale %d", sale.ID)
-		return nil
+	// Try to use journal service interface first
+	if s.journalService != nil {
+		return s.journalService.CreateSaleJournalEntries(sale, userID)
 	}
 	
-	return s.journalService.CreateSaleJournalEntries(sale, userID)
+	// Fallback to direct accounting service implementation
+	log.Printf("Using direct accounting service for sale %d", sale.ID)
+	return s.createSaleAccountingEntries(sale, userID)
 }
 
 func (s *SalesService) createJournalEntriesForPayment(payment *models.SalePayment, userID uint) error {
@@ -1166,27 +1282,148 @@ func (s *SalesService) createJournalEntriesForPayment(payment *models.SalePaymen
 	// Debit: Cash/Bank Account
 	// Credit: Accounts Receivable
 	
-	// Skip journal entries if journal service is not available
-	if s.journalService == nil {
-		log.Printf("Warning: Journal service not available, skipping journal entries for payment %d", payment.ID)
-		return nil
+	// Try to use journal service interface first
+	if s.journalService != nil {
+		return s.journalService.CreatePaymentJournalEntries(payment, userID)
 	}
 	
-	return s.journalService.CreatePaymentJournalEntries(payment, userID)
+	// Direct implementation when journal service is not available
+	log.Printf("Using direct implementation for payment journal entries for payment %d", payment.ID)
+	
+	// Get Accounts Receivable account
+	accountsReceivable, err := s.accountRepo.GetAccountByCode("1201") // Piutang Usaha
+	if err != nil {
+		// Try fallback account codes
+		accountsReceivable, err = s.accountRepo.GetAccountByCode("1200")
+		if err != nil {
+			log.Printf("Error: No accounts receivable account found: %v", err)
+			return fmt.Errorf("accounts receivable account not found: %v", err)
+		}
+	}
+	
+	// Get Cash/Bank account
+	var cashBankAccount *models.Account
+	if payment.CashBankID != nil && *payment.CashBankID > 0 {
+		// Try to get account from CashBank record
+		var cashBank models.CashBank
+		if err := s.db.First(&cashBank, *payment.CashBankID).Error; err == nil {
+			cashBankAccount, err = s.accountRepo.FindByID(context.Background(), cashBank.AccountID)
+			if err != nil {
+				log.Printf("Warning: Could not find GL account for cash bank %d, using default cash account", *payment.CashBankID)
+			}
+		}
+	}
+	
+	// If no specific bank account found, use default cash account
+	if cashBankAccount == nil {
+		cashBankAccount, err = s.accountRepo.GetAccountByCode("1104") // Bank Mandiri or default bank
+		if err != nil {
+			// Try other bank accounts
+			cashBankAccount, err = s.accountRepo.GetAccountByCode("1102") // Bank BCA
+			if err != nil {
+				// Try cash account
+				cashBankAccount, err = s.accountRepo.GetAccountByCode("1101") // Kas
+				if err != nil {
+					return fmt.Errorf("no cash/bank account found for payment")
+				}
+			}
+		}
+	}
+	
+	// Get customer name for description
+	customerName := "Unknown Customer"
+	// Check if payment.Sale.Customer is loaded by checking the Customer.ID
+	if payment.Sale.ID > 0 && payment.Sale.Customer.ID > 0 {
+		customerName = payment.Sale.Customer.Name
+	} else {
+		// Load sale and customer if not preloaded
+		var sale models.Sale
+		if err := s.db.Preload("Customer").First(&sale, payment.SaleID).Error; err == nil {
+			if sale.Customer.ID > 0 {
+				customerName = sale.Customer.Name
+			}
+		}
+	}
+	
+	// Create journal entry
+	journalEntry := &models.JournalEntry{
+		EntryDate:       payment.Date,
+		Description:     fmt.Sprintf("Customer Payment %s - %s", payment.PaymentNumber, customerName),
+		Reference:       payment.PaymentNumber,
+		ReferenceType:   models.JournalRefPayment,
+		ReferenceID:     &payment.ID,
+		UserID:          userID,
+		Status:          models.JournalStatusDraft,
+		TotalDebit:      payment.Amount,
+		TotalCredit:     payment.Amount,
+		IsBalanced:      true,
+		IsAutoGenerated: true,
+		AccountID:       &cashBankAccount.ID, // Primary account for the entry
+	}
+	
+	// Create journal entry
+	if err := s.db.Create(journalEntry).Error; err != nil {
+		return fmt.Errorf("failed to create payment journal entry: %v", err)
+	}
+	
+	// Update account balances manually
+	// 1. Debit: Cash/Bank Account (increase cash/bank balance)
+	err = s.accountRepo.UpdateBalance(context.Background(), cashBankAccount.ID, payment.Amount, 0)
+	if err != nil {
+		return fmt.Errorf("failed to update cash/bank account balance: %v", err)
+	}
+	
+	// 2. Credit: Accounts Receivable (decrease AR balance)
+	err = s.accountRepo.UpdateBalance(context.Background(), accountsReceivable.ID, 0, payment.Amount)
+	if err != nil {
+		return fmt.Errorf("failed to update accounts receivable balance: %v", err)
+	}
+	
+	// Update journal entry status to posted since we've updated balances
+	now := time.Now()
+	journalEntry.Status = models.JournalStatusPosted
+	journalEntry.PostingDate = &now
+	journalEntry.PostedBy = &userID
+	
+	if err := s.db.Save(journalEntry).Error; err != nil {
+		return fmt.Errorf("failed to update journal entry status: %v", err)
+	}
+	
+	log.Printf("Successfully created and posted payment journal entry %d", journalEntry.ID)
+	return nil
 }
 
 func (s *SalesService) createReversalJournalEntries(sale *models.Sale, userID uint, reason string) error {
 	// Create reversal journal entries
 	
-	// Skip journal entries if journal service is not available
-	if s.journalService == nil {
-		log.Printf("Warning: Journal service not available, skipping reversal journal entries for sale %d", sale.ID)
-		return nil
+	// Try to use journal service interface first
+	if s.journalService != nil {
+		return s.journalService.CreateSaleReversalJournalEntries(sale, userID, reason)
 	}
 	
-	return s.journalService.CreateSaleReversalJournalEntries(sale, userID, reason)
+	// Fallback to direct accounting service implementation
+	log.Printf("Using direct reversal accounting service for sale %d", sale.ID)
+	return s.createSaleReversalJournalEntries(sale, userID, reason)
 }
 
+// validateDocumentTypeRequirements validates document type specific requirements
+func (s *SalesService) validateDocumentTypeRequirements(saleType string, validUntil *time.Time, date time.Time) error {
+	switch saleType {
+	case models.SaleTypeQuotation:
+		// Quotations must have a valid until date
+		if validUntil == nil || validUntil.IsZero() {
+			return errors.New("quotations must have a valid until date")
+		}
+		// Valid until date must be after the quotation date
+		if validUntil.Before(date) {
+			return errors.New("valid until date must be after the quotation date")
+		}
+	case models.SaleTypeInvoice:
+		// Invoices should have due dates calculated based on payment terms
+		// This validation is handled in the creation process
+	}
+	return nil
+}
 
 // getDefaultSalesRevenueAccount gets the default sales revenue account
 func (s *SalesService) getDefaultSalesRevenueAccount() (*models.Account, error) {

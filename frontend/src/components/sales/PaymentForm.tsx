@@ -21,17 +21,14 @@ import {
   Text,
   Box,
   Divider,
-  useToast,
-  NumberInput,
-  NumberInputField,
-  NumberInputStepper,
-  NumberIncrementStepper,
-  NumberDecrementStepper
+  useToast
 } from '@chakra-ui/react';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '@/contexts/AuthContext';
 import salesService, { Sale, SalePaymentRequest } from '@/services/salesService';
 import cashbankService from '@/services/cashbankService';
+import accountService from '@/services/accountService';
+import { Account as GLAccount } from '@/types/account';
 
 interface PaymentFormProps {
   isOpen: boolean;
@@ -59,8 +56,10 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   const { token, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [creditAccounts, setCreditAccounts] = useState<GLAccount[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
+  const [loadingCreditAccounts, setLoadingCreditAccounts] = useState(false);
   const toast = useToast();
 
   const {
@@ -73,12 +72,55 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   } = useForm<PaymentFormData>();
 
   const watchAmount = watch('amount');
+  const [displayAmount, setDisplayAmount] = useState('0');
+
+  // Format number to Rupiah display
+  const formatRupiah = (value: number | string): string => {
+    const numValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+    return new Intl.NumberFormat('id-ID').format(numValue);
+  };
+
+  // Parse Rupiah string to number
+  const parseRupiah = (value: string): number => {
+    // Remove Rp prefix, spaces, and convert Indonesian decimal format
+    const cleanValue = value
+      .replace(/^Rp\s*/, '') // Remove "Rp " prefix
+      .replace(/\./g, '') // Remove thousand separators (dots)
+      .replace(/,/, '.'); // Convert comma to decimal point
+    return parseFloat(cleanValue) || 0;
+  };
+
+  // Handle amount input change
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+    
+    // Only allow numbers, dots, commas, spaces, and "Rp"
+    const allowedCharsRegex = /^[Rp\d.,\s]*$/;
+    if (!allowedCharsRegex.test(inputValue)) {
+      return; // Ignore invalid characters
+    }
+    
+    const numericValue = parseRupiah(inputValue);
+    
+    // Validate max amount
+    if (sale && numericValue > sale.outstanding_amount) {
+      return; // Don't allow amount greater than outstanding
+    }
+    
+    // Update form value
+    setValue('amount', numericValue);
+    
+    // Update display value
+    setDisplayAmount(formatRupiah(numericValue));
+  };
 
   useEffect(() => {
     if (sale && isOpen) {
       // Set default values
       setValue('date', new Date().toISOString().split('T')[0]);
-      setValue('amount', sale.outstanding_amount || 0);
+      const defaultAmount = sale.outstanding_amount || 0;
+      setValue('amount', defaultAmount);
+      setDisplayAmount(formatRupiah(defaultAmount));
       setValue('method', 'BANK_TRANSFER');
       setValue('account_id', 0);
       setValue('reference', '');
@@ -102,8 +144,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     }
 
     // Check if user has permission to view accounts (based on RBAC)
-    const allowedRoles = ['ADMIN', 'FINANCE', 'DIRECTOR', 'EMPLOYEE'];
-    if (!allowedRoles.includes(user.role)) {
+    const allowedRoles = ['admin', 'finance', 'director', 'employee'];
+    if (!allowedRoles.includes(user.role.toLowerCase())) {
       toast({
         title: 'Access Denied',
         description: 'You do not have permission to view payment accounts.',
@@ -157,6 +199,68 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     }
   };
 
+  // Fetch credit accounts (liability) for credit card payment method selection
+  const loadCreditAccounts = async () => {
+    if (!token) return;
+    try {
+      setLoadingCreditAccounts(true);
+      
+      // Try catalog endpoint first for EMPLOYEE role, fallback to regular endpoint
+      if (user?.role === 'EMPLOYEE') {
+        try {
+          const catalogData = await accountService.getAccountCatalog(token, 'LIABILITY');
+          const formattedAccounts: GLAccount[] = catalogData.map(item => ({
+            id: item.id,
+            code: item.code,
+            name: item.name,
+            type: 'LIABILITY' as const,
+            is_active: item.active,
+            level: 1,
+            is_header: false,
+            balance: 0,
+            created_at: '',
+            updated_at: '',
+            description: '',
+          }));
+          console.log('Formatted credit accounts from catalog:', formattedAccounts);
+          setCreditAccounts(formattedAccounts);
+          return; // Success, exit early
+        } catch (catalogError: any) {
+          console.log('Catalog endpoint not available, trying regular endpoint:', catalogError.message);
+          // Fall through to try regular endpoint
+        }
+      }
+      
+      // Use full account data for other roles or as fallback for EMPLOYEE
+      try {
+        const data = await accountService.getAccounts(token, 'LIABILITY');
+        const list: GLAccount[] = Array.isArray(data) ? data : [];
+        console.log('Formatted credit accounts from regular endpoint:', list);
+        setCreditAccounts(list);
+      } catch (regularError: any) {
+        console.error('Regular accounts endpoint also failed:', regularError);
+        throw regularError; // Re-throw to be caught by outer catch
+      }
+    } catch (err: any) {
+      console.error('Error fetching credit accounts:', err);
+      // If both endpoints fail, fall back to manual entry mode
+      setCreditAccounts([]);
+      
+      // Only show warning for non-EMPLOYEE users or if it's not a permission error
+      if (user?.role !== 'EMPLOYEE' || !err.message?.includes('Insufficient permissions')) {
+        toast({
+          title: 'Limited Access',
+          description: 'Unable to load credit accounts list. Credit card payment will use default liability account.',
+          status: 'warning',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    } finally {
+      setLoadingCreditAccounts(false);
+    }
+  };
+
   const onSubmit = async (data: PaymentFormData) => {
     if (!sale) return;
 
@@ -186,11 +290,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
         notes: data.notes || '' // Ensure it's not undefined
       };
 
-      await salesService.createSalePayment(sale.id, paymentData);
+      await salesService.createIntegratedPayment(sale.id, paymentData);
 
       toast({
         title: 'Payment Recorded',
-        description: 'Payment has been recorded successfully',
+        description: 'Payment has been recorded successfully and will appear in Payment Management',
         status: 'success',
         duration: 3000
       });
@@ -319,14 +423,15 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
 
                 <FormControl isRequired isInvalid={!!errors.amount}>
                   <FormLabel>Amount *</FormLabel>
-                  <NumberInput 
-                    min={0.01} 
-                    max={sale?.outstanding_amount}
-                    precision={2}
-                    step={0.01}
-                  >
-                    <NumberInputField
-                      placeholder="0.00"
+                  <Box position="relative">
+                    <Input
+                      placeholder="Rp 0"
+                      value={`Rp ${displayAmount}`}
+                      onChange={handleAmountChange}
+                      textAlign="right"
+                      fontWeight="medium"
+                      fontSize="md"
+                      pl={8}
                       {...register('amount', {
                         required: 'Amount is required',
                         min: { value: 0.01, message: 'Amount must be greater than 0' },
@@ -335,26 +440,41 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                           message: 'Amount cannot exceed outstanding amount'
                         },
                         validate: {
-                          notZero: (value) => value > 0 || 'Amount must be greater than zero',
-                          hasDecimals: (value) => {
-                            const decimals = value.toString().split('.')[1];
-                            return !decimals || decimals.length <= 2 || 'Maximum 2 decimal places allowed';
-                          }
+                          notZero: (value) => value > 0 || 'Amount must be greater than zero'
                         }
                       })}
                     />
-                    <NumberInputStepper>
-                      <NumberIncrementStepper />
-                      <NumberDecrementStepper />
-                    </NumberInputStepper>
-                  </NumberInput>
+                  </Box>
+                  
+                  {/* Amount Info Display */}
+                  {watchAmount > 0 && (
+                    <Text fontSize="sm" color="gray.600" mt={1}>
+                      💰 Payment: <Text as="span" fontWeight="bold" color="green.600">
+                        Rp {formatRupiah(watchAmount)}
+                      </Text>
+                      {sale && watchAmount < sale.outstanding_amount && (
+                        <Text as="span" color="orange.500">
+                          {' • '} Remaining: Rp {formatRupiah(sale.outstanding_amount - watchAmount)}
+                        </Text>
+                      )}
+                      {sale && watchAmount === sale.outstanding_amount && (
+                        <Text as="span" color="green.500">
+                          {' • '} ✅ Full Payment
+                        </Text>
+                      )}
+                    </Text>
+                  )}
                   
                   {/* Quick Amount Selection Buttons */}
                   <HStack spacing={2} mt={2}>
                     <Button
                       size="xs"
                       variant="outline"
-                      onClick={() => setValue('amount', (sale?.outstanding_amount || 0) * 0.25)}
+                      onClick={() => {
+                        const amount = (sale?.outstanding_amount || 0) * 0.25;
+                        setValue('amount', amount);
+                        setDisplayAmount(formatRupiah(amount));
+                      }}
                       disabled={!sale?.outstanding_amount}
                     >
                       25%
@@ -362,7 +482,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                     <Button
                       size="xs"
                       variant="outline"
-                      onClick={() => setValue('amount', (sale?.outstanding_amount || 0) * 0.5)}
+                      onClick={() => {
+                        const amount = (sale?.outstanding_amount || 0) * 0.5;
+                        setValue('amount', amount);
+                        setDisplayAmount(formatRupiah(amount));
+                      }}
                       disabled={!sale?.outstanding_amount}
                     >
                       50%
@@ -370,7 +494,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                     <Button
                       size="xs"
                       variant="outline"
-                      onClick={() => setValue('amount', (sale?.outstanding_amount || 0) * 0.75)}
+                      onClick={() => {
+                        const amount = (sale?.outstanding_amount || 0) * 0.75;
+                        setValue('amount', amount);
+                        setDisplayAmount(formatRupiah(amount));
+                      }}
                       disabled={!sale?.outstanding_amount}
                     >
                       75%
@@ -379,7 +507,11 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                       size="xs"
                       variant="solid"
                       colorScheme="blue"
-                      onClick={() => setValue('amount', sale?.outstanding_amount || 0)}
+                      onClick={() => {
+                        const amount = sale?.outstanding_amount || 0;
+                        setValue('amount', amount);
+                        setDisplayAmount(formatRupiah(amount));
+                      }}
                       disabled={!sale?.outstanding_amount}
                     >
                       Full Payment
@@ -423,40 +555,43 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                   <FormErrorMessage>{errors.method?.message}</FormErrorMessage>
                 </FormControl>
 
-                <FormControl isRequired isInvalid={!!errors.account_id}>
-                  <FormLabel>Account *</FormLabel>
-                  <Select
-                    {...register('account_id', {
-                      required: 'Account is required',
-                      setValueAs: value => parseInt(value) || 0
-                    })}
-                    disabled={accountsLoading || accounts.length === 0}
-                  >
-                    {accountsLoading ? (
-                      <option value="">Loading accounts...</option>
-                    ) : accounts.length === 0 ? (
-                      <option value="">No accounts available</option>
-                    ) : (
-                      <>
-                        <option value="">Select payment account</option>
-                        {accounts.map(account => (
-                          <option key={account.id} value={account.id}>
-                            {account.type === 'BANK' && account.bank_name 
-                              ? `${account.code} - ${account.name} (${account.bank_name} - ${account.account_no})`
-                              : `${account.code} - ${account.name} (${account.type})`
-                            }
-                          </option>
-                        ))}
-                      </>
+                {/* Bank Account dropdown for all payment methods (including Credit Card) */}
+                {watch('method') && (
+                  <FormControl isRequired isInvalid={!!errors.account_id}>
+                    <FormLabel>{watch('method') === 'CREDIT_CARD' ? 'Credit Card Account *' : 'Bank Account *'}</FormLabel>
+                    <Select
+                      {...register('account_id', {
+                        required: watch('method') === 'CREDIT_CARD' ? 'Credit card account is required' : 'Bank account is required',
+                        setValueAs: value => parseInt(value) || 0
+                      })}
+                      disabled={accountsLoading || accounts.length === 0}
+                    >
+                      {accountsLoading ? (
+                        <option value="">Loading accounts...</option>
+                      ) : accounts.length === 0 ? (
+                        <option value="">No accounts available</option>
+                      ) : (
+                        <>
+                          <option value="">{watch('method') === 'CREDIT_CARD' ? 'Select credit card account' : 'Select bank account'}</option>
+                          {accounts.map(account => (
+                            <option key={account.id} value={account.id}>
+                              {account.type === 'BANK' && account.bank_name 
+                                ? `${account.code} - ${account.name} (${account.bank_name} - ${account.account_no})`
+                                : `${account.code} - ${account.name} (${account.type})`
+                              }
+                            </option>
+                          ))}
+                        </>
+                      )}
+                    </Select>
+                    <FormErrorMessage>{errors.account_id?.message}</FormErrorMessage>
+                    {accounts.length === 0 && !accountsLoading && (
+                      <Text fontSize="xs" color="orange.500" mt={1}>
+                        ⚠️ No {watch('method') === 'CREDIT_CARD' ? 'credit card' : 'bank'} accounts loaded. Contact your administrator if this persists.
+                      </Text>
                     )}
-                  </Select>
-                  <FormErrorMessage>{errors.account_id?.message}</FormErrorMessage>
-                  {accounts.length === 0 && !accountsLoading && (
-                    <Text fontSize="xs" color="orange.500" mt={1}>
-                      ⚠️ No payment accounts loaded. Contact your administrator if this persists.
-                    </Text>
-                  )}
-                </FormControl>
+                  </FormControl>
+                )}
               </HStack>
 
               <FormControl>

@@ -38,6 +38,7 @@ type Sale struct {
 	PaymentMethod      string          `json:"payment_method" gorm:"size:50"`
 	ShippingMethod     string          `json:"shipping_method" gorm:"size:50"`
 	ShippingCost       float64         `json:"shipping_cost" gorm:"type:decimal(15,2);default:0"`
+	ShippingTaxable    bool            `json:"shipping_taxable" gorm:"default:false"`
 	BillingAddress     string          `json:"billing_address" gorm:"type:text"`
 	ShippingAddress    string          `json:"shipping_address" gorm:"type:text"`
 	Status             string          `json:"status" gorm:"size:20"` // DRAFT, PENDING, CONFIRMED, CANCELLED
@@ -136,6 +137,7 @@ type SaleCreateRequest struct {
 	PaymentMethod    string              `json:"payment_method"`
 	ShippingMethod   string              `json:"shipping_method"`
 	ShippingCost     float64             `json:"shipping_cost"`
+	ShippingTaxable  bool                `json:"shipping_taxable"`
 	BillingAddress   string              `json:"billing_address"`
 	ShippingAddress  string              `json:"shipping_address"`
 	Notes            string              `json:"notes"`
@@ -158,6 +160,7 @@ type SaleUpdateRequest struct {
 	PaymentMethod    *string             `json:"payment_method"`
 	ShippingMethod   *string             `json:"shipping_method"`
 	ShippingCost     *float64            `json:"shipping_cost"`
+	ShippingTaxable  *bool               `json:"shipping_taxable"`
 	BillingAddress   *string             `json:"billing_address"`
 	ShippingAddress  *string             `json:"shipping_address"`
 	Notes            *string             `json:"notes"`

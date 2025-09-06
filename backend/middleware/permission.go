@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"app-sistem-akuntansi/models"
 	"github.com/gin-gonic/gin"
@@ -48,14 +50,18 @@ func (pm *PermissionMiddleware) CheckModulePermission(module string, action stri
 			role = roleStr
 		}
 
+		// Debug logging
+		log.Printf("[PERMISSION DEBUG] UserID: %d, Role: %s, Module: %s, Action: %s", userID, role, module, action)
+
 		// Check if user has specific permission in database
 		var permission models.ModulePermissionRecord
 		err := pm.db.Where("user_id = ? AND module = ?", userID, module).First(&permission).Error
 
 		hasPermission := false
 		
-		if err == nil {
+	if err == nil {
 			// Permission record found, check specific action
+			log.Printf("[PERMISSION DEBUG] Found custom permission record for user %d, module %s", userID, module)
 			switch action {
 			case "view":
 				hasPermission = permission.CanView
@@ -72,10 +78,13 @@ func (pm *PermissionMiddleware) CheckModulePermission(module string, action stri
 			default:
 				hasPermission = false
 			}
+			log.Printf("[PERMISSION DEBUG] Custom permission result: %v", hasPermission)
 		} else if err == gorm.ErrRecordNotFound {
 			// No custom permission, use default based on role
+			log.Printf("[PERMISSION DEBUG] No custom permission found, using default for role: %s", role)
 			defaultPerms := models.GetDefaultPermissions(role)
 			if modPerm, ok := defaultPerms[module]; ok {
+				log.Printf("[PERMISSION DEBUG] Found default permissions for module %s", module)
 				switch action {
 				case "view":
 					hasPermission = modPerm.CanView
@@ -90,17 +99,29 @@ func (pm *PermissionMiddleware) CheckModulePermission(module string, action stri
 				case "export":
 					hasPermission = modPerm.CanExport
 				}
+				log.Printf("[PERMISSION DEBUG] Default permission result: %v", hasPermission)
+			} else {
+				log.Printf("[PERMISSION DEBUG] No default permissions found for module %s", module)
 			}
+		} else {
+			log.Printf("[PERMISSION DEBUG] Database error: %v", err)
 		}
 
-		if !hasPermission {
+	log.Printf("[PERMISSION DEBUG] Final result - hasPermission: %v", hasPermission)
+	
+	if !hasPermission {
+			log.Printf("[PERMISSION DEBUG] Access denied for user %d, role %s, module %s, action %s", userID, role, module, action)
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "You don't have permission to " + action + " " + module,
 				"required_permission": action,
 				"module": module,
+				"user_role": role,
+				"debug_info": fmt.Sprintf("UserID: %d, Role: %s", userID, role),
 			})
 			c.Abort()
 			return
+		} else {
+			log.Printf("[PERMISSION DEBUG] Access granted for user %d, role %s, module %s, action %s", userID, role, module, action)
 		}
 
 		c.Next()

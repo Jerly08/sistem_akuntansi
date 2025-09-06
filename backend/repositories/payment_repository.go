@@ -226,9 +226,9 @@ func (r *PaymentRepository) CountByMonth(year, month int) (int64, error) {
 // CountJournalsByMonth counts payment journals by month for code generation
 func (r *PaymentRepository) CountJournalsByMonth(year, month int) (int64, error) {
 	var count int64
-	err := r.db.Model(&models.Journal{}).
-		Where("reference_type = ? AND EXTRACT(year FROM date) = ? AND EXTRACT(month FROM date) = ?", 
-			models.JournalRefTypePayment, year, month).
+	err := r.db.Model(&models.JournalEntry{}).
+		Where("reference_type = ? AND EXTRACT(year FROM entry_date) = ? AND EXTRACT(month FROM entry_date) = ?", 
+			models.JournalRefPayment, year, month).
 		Count(&count).Error
 	return count, err
 }

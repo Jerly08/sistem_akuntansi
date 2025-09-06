@@ -1,9 +1,12 @@
 package controllers
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
 
@@ -11,12 +14,14 @@ import (
 )
 
 type SalesController struct {
-	salesService *services.SalesService
+	salesService  *services.SalesService
+	paymentService *services.PaymentService
 }
 
-func NewSalesController(salesService *services.SalesService) *SalesController {
+func NewSalesController(salesService *services.SalesService, paymentService *services.PaymentService) *SalesController {
 	return &SalesController{
-		salesService: salesService,
+		salesService:  salesService,
+		paymentService: paymentService,
 	}
 }
 
@@ -279,6 +284,185 @@ func (sc *SalesController) CreateSalePayment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, payment)
+}
+
+// Integrated Payment Management - uses Payment Service for comprehensive payment tracking
+
+// CreateIntegratedPayment creates payment via Payment Management for better tracking
+func (sc *SalesController) CreateIntegratedPayment(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid sale ID"})
+		return
+	}
+
+	var request struct {
+		Amount        float64   `json:"amount" binding:"required,min=0"`
+		Date          time.Time `json:"date" binding:"required"`
+		Method        string    `json:"method" binding:"required"`
+		CashBankID    uint      `json:"cash_bank_id" binding:"required"`
+		Reference     string    `json:"reference"`
+		Notes         string    `json:"notes"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Printf("Payment creation validation error for sale %d: %v", id, err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request data",
+			"details": err.Error(),
+			"expected_fields": map[string]string{
+				"amount": "number (required, min=0)",
+				"date": "datetime string (required, ISO format)",
+				"method": "string (required)",
+				"cash_bank_id": "number (required)",
+				"reference": "string (optional)",
+				"notes": "string (optional)",
+			},
+		})
+		return
+	}
+
+	// Log successful request parsing
+	log.Printf("Received integrated payment request for sale %d: amount=%.2f, method=%s, cash_bank_id=%d", id, request.Amount, request.Method, request.CashBankID)
+	
+	// Get sale details to validate and get customer ID
+	sale, err := sc.salesService.GetSaleByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Sale not found",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Validate sale status
+	if sale.Status != models.SaleStatusInvoiced && sale.Status != models.SaleStatusOverdue {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Sale must be invoiced to receive payments",
+			"sale_status": sale.Status,
+		})
+		return
+	}
+
+	// Validate payment amount
+	if request.Amount > sale.OutstandingAmount {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Payment amount exceeds outstanding amount",
+			"outstanding_amount": sale.OutstandingAmount,
+			"requested_amount": request.Amount,
+		})
+		return
+	}
+
+	// Get user ID with error handling
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		log.Printf("Error: user_id not found in context for sale %d payment", id)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+			"details": "user_id not found in context",
+		})
+		return
+	}
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		log.Printf("Error: user_id has invalid type for sale %d payment: %T", id, userIDInterface)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid user authentication",
+			"details": "user_id has invalid type",
+		})
+		return
+	}
+
+	// Create payment request for Payment Management service
+	paymentRequest := services.PaymentCreateRequest{
+		ContactID:   sale.CustomerID,
+		CashBankID:  request.CashBankID,
+		Date:        request.Date,
+		Amount:      request.Amount,
+		Method:      request.Method,
+		Reference:   request.Reference,
+		Notes:       fmt.Sprintf("Payment for Invoice %s - %s", sale.InvoiceNumber, request.Notes),
+		Allocations: []services.InvoiceAllocation{
+			{
+				InvoiceID: uint(id),
+				Amount:    request.Amount,
+			},
+		},
+	}
+
+	// Use Payment Management service (needs to be injected)
+	log.Printf("Calling PaymentService.CreateReceivablePayment for sale %d with amount %.2f", id, paymentRequest.Amount)
+	payment, err := sc.paymentService.CreateReceivablePayment(paymentRequest, userID)
+	if err != nil {
+		log.Printf("Error in CreateReceivablePayment for sale %d: %v", id, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to create payment",
+			"details": err.Error(),
+		})
+		return
+	}
+	log.Printf("Payment created successfully: ID=%d, Code=%s", payment.ID, payment.Code)
+
+	// Return response with both payment info and updated sale status
+	updatedSale, err := sc.salesService.GetSaleByID(uint(id))
+	if err != nil {
+		// If we can't get updated sale info, still return success but with basic info
+		log.Printf("Warning: Could not fetch updated sale info after payment creation: %v", err)
+		c.JSON(http.StatusCreated, gin.H{
+			"payment": payment,
+			"message": "Payment created successfully via Payment Management",
+			"note": "Payment created but updated sale info unavailable",
+		})
+		return
+	}
+	
+	c.JSON(http.StatusCreated, gin.H{
+		"payment": payment,
+		"updated_sale": gin.H{
+			"id": updatedSale.ID,
+			"status": updatedSale.Status,
+			"paid_amount": updatedSale.PaidAmount,
+			"outstanding_amount": updatedSale.OutstandingAmount,
+		},
+		"message": "Payment created successfully via Payment Management",
+	})
+}
+
+// GetSaleForPayment gets sale details formatted for payment creation
+func (sc *SalesController) GetSaleForPayment(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid sale ID"})
+		return
+	}
+
+	sale, err := sc.salesService.GetSaleByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Sale not found"})
+		return
+	}
+
+	// Format response for payment creation
+	response := gin.H{
+		"sale_id": sale.ID,
+		"invoice_number": sale.InvoiceNumber,
+		"customer": gin.H{
+			"id": sale.Customer.ID,
+			"name": sale.Customer.Name,
+			"type": sale.Customer.Type,
+		},
+		"total_amount": sale.TotalAmount,
+		"paid_amount": sale.PaidAmount,
+		"outstanding_amount": sale.OutstandingAmount,
+		"status": sale.Status,
+		"date": sale.Date.Format("2006-01-02"),
+		"due_date": sale.DueDate.Format("2006-01-02"),
+		"can_receive_payment": sale.Status == models.SaleStatusInvoiced || sale.Status == models.SaleStatusOverdue,
+		"payment_url_suggestion": fmt.Sprintf("/api/sales/%d/integrated-payment", sale.ID),
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // Sales Returns

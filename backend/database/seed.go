@@ -247,6 +247,8 @@ func seedCashBankAccounts(db *gorm.DB) {
 	var count int64
 	db.Model(&models.CashBank{}).Count(&count)
 	if count > 0 {
+		// Cash bank accounts already exist - don't modify balances
+		// Balances should only come from legitimate transactions
 		return
 	}
 
@@ -255,21 +257,21 @@ func seedCashBankAccounts(db *gorm.DB) {
 			Code:     "CASH001",
 			Name:     "Kas Besar",
 			Type:     models.CashBankTypeCash,
-			Balance:  0,
+			Balance:  0, // Start with 0 - balance comes from transactions
 			IsActive: true,
 		},
 		{
 			Code:     "BANK001",
 			Name:     "Bank BCA - Operasional",
 			Type:     models.CashBankTypeBank,
-			Balance:  0,
+			Balance:  0, // Start with 0 - balance comes from transactions
 			IsActive: true,
 		},
 		{
 			Code:     "BANK002",
 			Name:     "Bank Mandiri - Payroll",
 			Type:     models.CashBankTypeBank,
-			Balance:  0,
+			Balance:  0, // Start with 0 - balance comes from transactions
 			IsActive: true,
 		},
 	}

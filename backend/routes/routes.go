@@ -304,8 +304,19 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			salesRepo := repositories.NewSalesRepository(db)
 			productRepo := repositories.NewProductRepository(db)
 			// Note: pdfService is already initialized earlier for purchase service
-		salesService := services.NewSalesService(db, salesRepo, productRepo, contactRepo, accountRepo, nil, pdfService)
-			salesController := controllers.NewSalesController(salesService)
+	salesService := services.NewSalesService(db, salesRepo, productRepo, contactRepo, accountRepo, nil, pdfService)
+
+	// Initialize Payment repositories, services and controllers
+	paymentRepo := repositories.NewPaymentRepository(db)
+	cashBankRepo := repositories.NewCashBankRepository(db)
+	paymentService := services.NewPaymentService(db, paymentRepo, salesRepo, purchaseRepo, cashBankRepo, accountRepo, contactRepo)
+	paymentController := controllers.NewPaymentController(paymentService)
+	cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
+	accountService := services.NewAccountService(accountRepo)
+	cashBankController := controllers.NewCashBankController(cashBankService, accountService)
+	
+	// Initialize SalesController with PaymentService integration
+	salesController := controllers.NewSalesController(salesService, paymentService)
 
 			// Notification routes
 			notifs := protected.Group("/notifications")
@@ -336,6 +347,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				// Payment management
 				sales.GET("/:id/payments", middleware.RoleRequired("admin", "finance", "director", "employee"), salesController.GetSalePayments)
 				sales.POST("/:id/payments", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateSalePayment)
+				
+				// Integrated Payment Management routes
+				sales.GET("/:id/for-payment", middleware.RoleRequired("admin", "finance", "director"), salesController.GetSaleForPayment)
+				sales.POST("/:id/integrated-payment", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateIntegratedPayment)
 
 				// Returns management
 				sales.POST("/:id/returns", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateSaleReturn)
@@ -355,14 +370,6 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				sales.GET("/customer/:customer_id/invoices", middleware.RoleRequired("admin", "finance", "director"), salesController.GetCustomerInvoices)
 			}
 
-	// Initialize Payment repositories, services and controllers
-	paymentRepo := repositories.NewPaymentRepository(db)
-	cashBankRepo := repositories.NewCashBankRepository(db)
-	paymentService := services.NewPaymentService(db, paymentRepo, salesRepo, purchaseRepo, cashBankRepo, accountRepo, contactRepo)
-	paymentController := controllers.NewPaymentController(paymentService)
-	cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
-	cashBankController := controllers.NewCashBankController(cashBankService)
-	
 	// Initialize Balance Monitoring service and controller
 	balanceMonitoringService := services.NewBalanceMonitoringService(db)
 	balanceMonitoringController := controllers.NewBalanceMonitoringController(balanceMonitoringService)
@@ -596,6 +603,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			debugWithAuth.GET("/finance-only", middleware.RoleRequired("finance"), func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"message": "You have finance role!"})
 			})
+			
+			// Test permission middleware
+			debugWithAuth.GET("/test-cashbank-permission", permMiddleware.CanView("cash_bank"), debugController.TestCashBankPermission)
+			debugWithAuth.GET("/test-payments-permission", permMiddleware.CanView("payments"), debugController.TestPaymentsPermission)
 		}
 	}
 }

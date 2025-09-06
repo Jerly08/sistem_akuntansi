@@ -3,6 +3,7 @@ package controllers
 import (
 	"app-sistem-akuntansi/services"
 	"app-sistem-akuntansi/repositories"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -232,6 +233,57 @@ func (c *PaymentController) CancelPayment(ctx *gin.Context) {
 	})
 }
 
+// DeletePayment godoc
+// @Summary Delete payment
+// @Description Delete payment and reverse if needed (Admin Only)
+// @Tags Payments
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Payment ID"
+// @Param reason body map[string]string true "Deletion reason"
+// @Success 200 {object} map[string]string
+// @Router /api/payments/{id} [delete]
+func (c *PaymentController) DeletePayment(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid payment ID",
+		})
+		return
+	}
+	
+	var request struct {
+		Reason string `json:"reason"`
+	}
+	
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		// If no JSON body, use default reason
+		request.Reason = "Deleted by admin"
+	}
+	
+	userID := ctx.GetUint("user_id")
+	if userID == 0 {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+		})
+		return
+	}
+	
+	err = c.paymentService.DeletePayment(uint(id), request.Reason, userID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to delete payment",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Payment deleted successfully",
+	})
+}
+
 // GetUnpaidInvoices godoc
 // @Summary Get unpaid invoices
 // @Description Get list of unpaid invoices for a customer
@@ -452,4 +504,151 @@ func (c *PaymentController) ExportPaymentReportExcel(ctx *gin.Context) {
 	ctx.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	ctx.Header("Content-Disposition", "attachment; filename="+filename)
 	ctx.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelData)
+}
+
+// Sales Integration endpoints
+
+// CreateSalesPayment creates payment specifically for sales invoices with pre-filled data
+func (c *PaymentController) CreateSalesPayment(ctx *gin.Context) {
+	var request struct {
+		SaleID        uint      `json:"sale_id" binding:"required"`
+		Amount        float64   `json:"amount" binding:"required,min=0"`
+		Date          time.Time `json:"date" binding:"required"`
+		Method        string    `json:"method" binding:"required"`
+		CashBankID    uint      `json:"cash_bank_id" binding:"required"`
+		Reference     string    `json:"reference"`
+		Notes         string    `json:"notes"`
+	}
+	
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request data",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// First get sale details to validate and get customer ID
+	sale, err := c.paymentService.GetSaleByID(request.SaleID) // Need to add this method
+	if err != nil {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"error": "Sale not found",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Get user ID from context
+	userID := ctx.GetUint("user_id")
+	if userID == 0 {
+		ctx.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+		})
+		return
+	}
+	
+	// Create payment request for receivables
+	paymentRequest := services.PaymentCreateRequest{
+		ContactID:   sale.CustomerID,
+		CashBankID:  request.CashBankID,
+		Date:        request.Date,
+		Amount:      request.Amount,
+		Method:      request.Method,
+		Reference:   request.Reference,
+		Notes:       fmt.Sprintf("Payment for Invoice %s - %s", sale.InvoiceNumber, request.Notes),
+		Allocations: []services.InvoiceAllocation{
+			{
+				InvoiceID: request.SaleID,
+				Amount:    request.Amount,
+			},
+		},
+	}
+	
+	payment, err := c.paymentService.CreateReceivablePayment(paymentRequest, userID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to create payment",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	ctx.JSON(http.StatusCreated, gin.H{
+		"payment": payment,
+		"message": "Payment created successfully for sales invoice",
+	})
+}
+
+// GetSalesUnpaidInvoices gets unpaid invoices for sales payment creation
+func (c *PaymentController) GetSalesUnpaidInvoices(ctx *gin.Context) {
+	customerID, err := strconv.ParseUint(ctx.Param("customer_id"), 10, 32)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid customer ID",
+		})
+		return
+	}
+	
+	// Get unpaid invoices from payment service
+	invoices, err := c.paymentService.GetUnpaidInvoices(uint(customerID))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve unpaid invoices",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Format for frontend consumption
+	response := gin.H{
+		"customer_id": customerID,
+		"invoices": invoices,
+		"count": len(invoices),
+	}
+	
+	ctx.JSON(http.StatusOK, response)
+}
+
+// GetRecentPayments godoc
+// @Summary Get recent payments for debugging integration
+// @Description Get recent payments to verify Sales-Payment integration
+// @Tags Payments
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param hours query int false "Hours back to check (default: 24)"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/payments/debug/recent [get]
+func (c *PaymentController) GetRecentPayments(ctx *gin.Context) {
+	hours := 24 // Default to last 24 hours
+	if h := ctx.Query("hours"); h != "" {
+		if parsed, err := strconv.Atoi(h); err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
+	
+	// Get all recent payments without filters
+	filter := repositories.PaymentFilter{
+		Page:  1,
+		Limit: 50, // Get up to 50 recent payments
+	}
+	
+	result, err := c.paymentService.GetPayments(filter)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve payments",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Recent payments from last %d hours", hours),
+		"total_payments": result.Total,
+		"payments": result.Data,
+		"debug_info": gin.H{
+			"query_time": time.Now().Format("2006-01-02 15:04:05"),
+			"filter_applied": filter,
+		},
+	})
 }

@@ -46,7 +46,8 @@ import {
 import { FiPlus, FiDollarSign, FiCreditCard, FiEdit2, FiEye, FiArrowRight, FiTrendingUp, FiTrendingDown, FiMoreVertical, FiTrash2 } from 'react-icons/fi';
 import cashbankService, { CashBank, BalanceSummary } from '@/services/cashbankService';
 import CashBankForm from '@/components/cashbank/CashBankForm';
-import DepositWithdrawalForm from '@/components/cashbank/DepositWithdrawalForm';
+import DepositWithdrawalForm from '@/components/cashbank/DepositWithdrawalForm'; // Used for withdrawal only
+import DepositFormImproved from '@/components/cashbank/DepositFormImproved'; // New improved form for deposits
 import TransferForm from '@/components/cashbank/TransferForm';
 import TransactionHistoryModal from '@/components/cashbank/TransactionHistoryModal';
 
@@ -366,9 +367,9 @@ const CashBankPage: React.FC = () => {
   const [selectedAccount, setSelectedAccount] = useState<CashBank | null>(null);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   
-  // Transaction form states
+  // Withdrawal form states (for withdrawal only)
   const [transactionAccount, setTransactionAccount] = useState<CashBank | null>(null);
-  const [transactionMode, setTransactionMode] = useState<'deposit' | 'withdrawal'>('deposit');
+  const [transactionMode, setTransactionMode] = useState<'withdrawal'>('withdrawal');
   
   const {
     isOpen: isDetailModalOpen,
@@ -393,6 +394,15 @@ const CashBankPage: React.FC = () => {
     onOpen: onTransactionHistoryModalOpen,
     onClose: onTransactionHistoryModalClose
   } = useDisclosure();
+  
+  const {
+    isOpen: isDepositModalOpen,
+    onOpen: onDepositModalOpen,
+    onClose: onDepositModalClose
+  } = useDisclosure();
+  
+  // Deposit form states
+  const [depositAccount, setDepositAccount] = useState<CashBank | null>(null);
 
   const fetchData = async () => {
     try {
@@ -446,9 +456,8 @@ const CashBankPage: React.FC = () => {
   };
 
   const handleDeposit = (account: CashBank) => {
-    setTransactionAccount(account);
-    setTransactionMode('deposit');
-    onTransactionModalOpen();
+    setDepositAccount(account);
+    onDepositModalOpen();
   };
 
   const handleWithdraw = (account: CashBank) => {
@@ -765,7 +774,7 @@ const CashBankPage: React.FC = () => {
         mode={formMode}
       />
 
-      {/* Transaction Modal */}
+      {/* Withdrawal Modal - Using legacy form for withdrawal only */}
       <DepositWithdrawalForm
         isOpen={isTransactionModalOpen}
         onClose={onTransactionModalClose}
@@ -1138,6 +1147,14 @@ const CashBankPage: React.FC = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      
+      {/* Deposit Modal - New Improved Form */}
+      <DepositFormImproved
+        isOpen={isDepositModalOpen}
+        onClose={onDepositModalClose}
+        onSuccess={handleTransactionSuccess}
+        account={depositAccount}
+      />
       
       {/* Transaction History Modal */}
       <TransactionHistoryModal

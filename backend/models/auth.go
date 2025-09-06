@@ -175,6 +175,7 @@ const (
 const (
 	RoleAdmin            = "admin"
 	RoleFinance          = "finance"
+	RoleFinanceManager   = "finance_manager"
 	RoleDirector         = "director"
 	RoleInventoryManager = "inventory_manager"
 	RoleEmployee         = "employee"

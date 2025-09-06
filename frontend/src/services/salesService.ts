@@ -1,4 +1,5 @@
 import api from './api';
+import { formatDateWithIndonesianMonth } from '../utils/dataFormatters';
 
 export interface Sale {
   id: number;
@@ -367,6 +368,22 @@ class SalesService {
     return response.data;
   }
 
+  // NEW: Integrated Payment Management endpoint
+  async createIntegratedPayment(saleId: number, data: SalePaymentRequest): Promise<any> {
+    // This endpoint creates payment records in both Sales and Payment Management
+    // Map frontend field names to backend expected field names
+    const backendData = {
+      amount: data.amount,                    // ✅ Correct
+      date: data.payment_date,               // ✅ Fixed: backend expects "date" not "payment_date"
+      method: data.payment_method,           // ✅ Fixed: backend expects "method" not "payment_method"
+      cash_bank_id: data.cash_bank_id,      // ✅ Correct
+      reference: data.reference || '',       // ✅ Correct
+      notes: data.notes || ''               // ✅ Correct
+    };
+    const response = await api.post(`/sales/${saleId}/integrated-payment`, backendData);
+    return response.data;
+  }
+
   // Returns and Credit Notes
   
   async createSaleReturn(saleId: number, data: SaleReturnRequest): Promise<SaleReturn> {
@@ -498,7 +515,8 @@ class SalesService {
   }
 
   formatDate(date: string): string {
-    return new Date(date).toLocaleDateString('id-ID');
+    // Use Indonesian month names for better clarity (e.g., "9 Juni 2025" instead of "9/6/2025")
+    return formatDateWithIndonesianMonth(date);
   }
 
   // Validation helpers

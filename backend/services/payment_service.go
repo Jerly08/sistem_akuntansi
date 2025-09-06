@@ -2,8 +2,10 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 	"app-sistem-akuntansi/models"
@@ -126,17 +128,43 @@ func (s *PaymentService) CreateReceivablePayment(request PaymentCreateRequest, u
 			return nil, err
 		}
 		
-		// Update invoice
+		// Update invoice (sales) status and amounts
 		sale.PaidAmount += allocatedAmount
 		sale.OutstandingAmount -= allocatedAmount
 		
+		// Update status based on payment completion
 		if sale.OutstandingAmount <= 0 {
 			sale.Status = models.SaleStatusPaid
+		} else if sale.PaidAmount > 0 && sale.Status == models.SaleStatusInvoiced {
+			// Partial payment - keep as invoiced but track partial payment
+			sale.Status = models.SaleStatusInvoiced
 		}
 		
 		if err := tx.Save(sale).Error; err != nil {
 			tx.Rollback()
 			return nil, err
+		}
+		
+		// Create a corresponding SalePayment record for cross-reference
+		salePayment := &models.SalePayment{
+			SaleID:        sale.ID,
+			PaymentNumber: fmt.Sprintf("PAY-%s", payment.Code),
+			Date:          payment.Date,
+			Amount:        allocatedAmount,
+			Method:        payment.Method,
+			Reference:     fmt.Sprintf("Payment ID: %d", payment.ID),
+			Notes:         fmt.Sprintf("Created from Payment Management - %s", payment.Notes),
+			CashBankID:    &request.CashBankID,
+			UserID:        userID,
+			PaymentID:     &payment.ID, // Cross-reference to main payment
+		}
+		
+		if err := tx.Create(salePayment).Error; err != nil {
+			// Log the error but don't fail the main transaction for backward compatibility
+			log.Printf("Warning: Failed to create sale payment cross-reference for payment %d, sale %d: %v", payment.ID, sale.ID, err)
+			// This is non-critical for Payment Management functionality
+		} else {
+			log.Printf("Successfully created sale payment cross-reference: payment_id=%d, sale_id=%d, amount=%.2f", payment.ID, sale.ID, allocatedAmount)
 		}
 		
 		remainingAmount -= allocatedAmount
@@ -163,8 +191,18 @@ func (s *PaymentService) CreateReceivablePayment(request PaymentCreateRequest, u
 		tx.Rollback()
 		return nil, err
 	}
-	
-	return payment, tx.Commit().Error
+
+	// Log successful payment creation
+	log.Printf("Successfully created payment: ID=%d, Code=%s, ContactID=%d, Amount=%.2f", payment.ID, payment.Code, payment.ContactID, payment.Amount)
+
+	commitErr := tx.Commit().Error
+	if commitErr != nil {
+		log.Printf("Error committing payment transaction: %v", commitErr)
+		return nil, commitErr
+	}
+
+	log.Printf("Payment transaction committed successfully for payment %d", payment.ID)
+	return payment, nil
 }
 
 // CreatePayablePayment creates payment for purchases/payables
@@ -287,15 +325,34 @@ func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, user
 func (s *PaymentService) updateCashBankBalance(tx *gorm.DB, cashBankID uint, amount float64, direction string, referenceID uint, userID uint) error {
 	var cashBank models.CashBank
 	if err := tx.First(&cashBank, cashBankID).Error; err != nil {
-		return err
+		return fmt.Errorf("cash/bank account not found: %v", err)
+	}
+	
+	log.Printf("Updating Cash/Bank Balance: ID=%d, Name=%s, CurrentBalance=%.2f, Amount=%.2f, Direction=%s", 
+		cashBankID, cashBank.Name, cashBank.Balance, amount, direction)
+	
+	// For receivable payments (IN), amount should be positive, balance increases
+	// For payable payments (OUT), amount should be negative, balance decreases
+	
+	// For outgoing payments, validate sufficient balance BEFORE updating
+	if direction == "OUT" && amount < 0 {
+		requiredAmount := -amount // Convert negative to positive
+		if cashBank.Balance < requiredAmount {
+			return fmt.Errorf("insufficient balance. Available: %.2f, Required: %.2f", cashBank.Balance, requiredAmount)
+		}
 	}
 	
 	// Update balance
-	cashBank.Balance += amount
+	newBalance := cashBank.Balance + amount
 	
-	if cashBank.Balance < 0 {
-		return errors.New("insufficient balance in cash/bank account")
+	// Final safety check - balance should never go negative
+	if newBalance < 0 {
+		return fmt.Errorf("transaction would result in negative balance. Current: %.2f, Change: %.2f, Result: %.2f", 
+			cashBank.Balance, amount, newBalance)
 	}
+	
+	cashBank.Balance = newBalance
+	log.Printf("Balance updated successfully: %.2f -> %.2f", cashBank.Balance-amount, cashBank.Balance)
 	
 	if err := tx.Save(&cashBank).Error; err != nil {
 		return err
@@ -326,26 +383,30 @@ func (s *PaymentService) createReceivablePaymentJournal(tx *gorm.DB, payment *mo
 		}
 		cashBankAccountID = cashBank.AccountID
 	} else {
-		// TODO: Implement GetAccountByCode in AccountRepository
-		// cashAccount, err := s.accountRepo.GetAccountByCode("1100")
-		// if err != nil {
-		//	return err
-		// }
-		// cashBankAccountID = cashAccount.ID
-		cashBankAccountID = 1 // Default cash account ID - should be from config or db
+		// If no specific bank account, use default Kas account (1101)
+		var kasAccount models.Account
+		if err := tx.Where("code = ?", "1101").First(&kasAccount).Error; err != nil {
+			return fmt.Errorf("default cash account (1101) not found: %v", err)
+		}
+		cashBankAccountID = kasAccount.ID
 	}
 
-	// TODO: Implement GetAccountByCode in AccountRepository
-	// arAccount, err := s.accountRepo.GetAccountByCode("1200") // Accounts Receivable
-	// if err != nil {
-	//	return err
-	// }
-	// Use default AR account ID for now
-	arAccountID := uint(2) // Default AR account ID - should be from config or db
+	// Get Accounts Receivable account (Piutang Usaha - 1201)
+	var arAccount models.Account
+	if err := tx.Where("code = ?", "1201").First(&arAccount).Error; err != nil {
+		log.Printf("Warning: Piutang Usaha account (1201) not found, using fallback")
+		// Fallback: try to find by name pattern
+		if err := tx.Where("LOWER(name) LIKE ?", "%piutang%usaha%").First(&arAccount).Error; err != nil {
+			return fmt.Errorf("accounts receivable account not found: %v", err)
+		}
+	}
+	arAccountID := arAccount.ID
+
+	log.Printf("Journal Entry Mapping: CashBank AccountID=%d, AR AccountID=%d (Code=%s)", cashBankAccountID, arAccountID, arAccount.Code)
 
 	// Create journal entry
 	journalEntry := &models.JournalEntry{
-		Code:          s.generateJournalCode("RCV"),
+		// Code will be auto-generated by BeforeCreate hook
 		EntryDate:     payment.Date,
 		Description:   fmt.Sprintf("Customer Payment %s", payment.Code),
 		ReferenceType: models.JournalRefPayment,
@@ -355,6 +416,7 @@ func (s *PaymentService) createReceivablePaymentJournal(tx *gorm.DB, payment *mo
 		Status:        models.JournalStatusPosted,
 		TotalDebit:    payment.Amount,
 		TotalCredit:   payment.Amount,
+		IsAutoGenerated: true,
 	}
 
 	// Journal lines
@@ -377,7 +439,20 @@ func (s *PaymentService) createReceivablePaymentJournal(tx *gorm.DB, payment *mo
 
 	journalEntry.JournalLines = journalLines
 
-	return tx.Create(journalEntry).Error
+	// Create journal entry
+	if err := tx.Create(journalEntry).Error; err != nil {
+		return err
+	}
+
+	// Update account balances based on journal lines
+	for _, line := range journalLines {
+		if err := s.accountRepo.UpdateBalance(context.Background(), line.AccountID, line.DebitAmount, line.CreditAmount); err != nil {
+			log.Printf("Warning: Failed to update balance for account %d: %v", line.AccountID, err)
+			// Don't fail the entire transaction for balance updates
+		}
+	}
+
+	return nil
 }
 
 // createPayablePaymentJournal creates journal entries for payable payment
@@ -410,7 +485,7 @@ func (s *PaymentService) createPayablePaymentJournal(tx *gorm.DB, payment *model
 
 	// Create journal entry
 	journalEntry := &models.JournalEntry{
-		Code:          s.generateJournalCode("PAY"),
+		// Code will be auto-generated by BeforeCreate hook
 		EntryDate:     payment.Date,
 		Description:   fmt.Sprintf("Vendor Payment %s", payment.Code),
 		ReferenceType: models.JournalRefPayment,
@@ -420,6 +495,7 @@ func (s *PaymentService) createPayablePaymentJournal(tx *gorm.DB, payment *model
 		Status:        models.JournalStatusPosted,
 		TotalDebit:    payment.Amount,
 		TotalCredit:   payment.Amount,
+		IsAutoGenerated: true,
 	}
 
 	// Journal lines
@@ -442,7 +518,20 @@ func (s *PaymentService) createPayablePaymentJournal(tx *gorm.DB, payment *model
 
 	journalEntry.JournalLines = journalLines
 
-	return tx.Create(journalEntry).Error
+	// Create journal entry
+	if err := tx.Create(journalEntry).Error; err != nil {
+		return err
+	}
+
+	// Update account balances based on journal lines
+	for _, line := range journalLines {
+		if err := s.accountRepo.UpdateBalance(context.Background(), line.AccountID, line.DebitAmount, line.CreditAmount); err != nil {
+			log.Printf("Warning: Failed to update balance for account %d: %v", line.AccountID, err)
+			// Don't fail the entire transaction for balance updates
+		}
+	}
+
+	return nil
 }
 
 // GetPayments retrieves payments with filters
@@ -453,6 +542,50 @@ func (s *PaymentService) GetPayments(filter repositories.PaymentFilter) (*reposi
 // GetPaymentByID retrieves payment by ID
 func (s *PaymentService) GetPaymentByID(id uint) (*models.Payment, error) {
 	return s.paymentRepo.FindByID(id)
+}
+
+// DeletePayment deletes a payment (admin only)
+func (s *PaymentService) DeletePayment(id uint, reason string, userID uint) error {
+	// Start transaction
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Get payment to verify it exists
+	var payment models.Payment
+	if err := tx.First(&payment, id).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("payment not found: %v", err)
+	}
+
+	// Check if payment is already failed/cancelled
+	if payment.Status == models.PaymentStatusFailed {
+		// If already failed, just soft delete
+		if err := tx.Delete(&payment).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to delete payment: %v", err)
+		}
+		log.Printf("Deleted failed payment %d (no reversal needed)", id)
+	} else {
+		// If payment is completed, we need to reverse it first
+		log.Printf("Canceling payment %d before deletion", id)
+		if err := s.cancelPaymentTransaction(tx, &payment, fmt.Sprintf("Deleted by admin: %s", reason), userID); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to cancel payment before deletion: %v", err)
+		}
+		
+		// Now soft delete the payment
+		if err := tx.Delete(&payment).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to delete payment after cancellation: %v", err)
+		}
+		log.Printf("Payment %d canceled and deleted successfully", id)
+	}
+
+	return tx.Commit().Error
 }
 
 // CancelPayment cancels a payment and reverses entries
@@ -470,9 +603,20 @@ func (s *PaymentService) CancelPayment(id uint, reason string, userID uint) erro
 		return errors.New("payment is already cancelled")
 	}
 	
+	// Use helper method to cancel payment
+	if err := s.cancelPaymentTransaction(tx, &payment, reason, userID); err != nil {
+		tx.Rollback()
+		return err
+	}
+	
+	return tx.Commit().Error
+}
+
+// cancelPaymentTransaction handles the cancellation logic (reusable helper)
+func (s *PaymentService) cancelPaymentTransaction(tx *gorm.DB, payment *models.Payment, reason string, userID uint) error {
 	// Reverse allocations
 	var allocations []models.PaymentAllocation
-	tx.Where("payment_id = ?", id).Find(&allocations)
+	tx.Where("payment_id = ?", payment.ID).Find(&allocations)
 	
 	for _, allocation := range allocations {
 		if allocation.InvoiceID != nil && *allocation.InvoiceID > 0 {
@@ -498,7 +642,7 @@ func (s *PaymentService) CancelPayment(id uint, reason string, userID uint) erro
 	
 	// Reverse cash/bank transaction
 	var cashBankTx models.CashBankTransaction
-	if err := tx.Where("reference_type = ? AND reference_id = ?", "PAYMENT", id).First(&cashBankTx).Error; err == nil {
+	if err := tx.Where("reference_type = ? AND reference_id = ?", "PAYMENT", payment.ID).First(&cashBankTx).Error; err == nil {
 		var cashBank models.CashBank
 		if err := tx.First(&cashBank, cashBankTx.CashBankID).Error; err == nil {
 			// Reverse the balance change
@@ -508,18 +652,15 @@ func (s *PaymentService) CancelPayment(id uint, reason string, userID uint) erro
 	}
 	
 	// Create reversal journal entries
-	s.createReversalJournal(tx, &payment, reason, userID)
+	if err := s.createReversalJournal(tx, payment, reason, userID); err != nil {
+		return err
+	}
 	
 	// Update payment status
 	payment.Status = models.PaymentStatusFailed
 	payment.Notes += fmt.Sprintf("\nCancelled on %s. Reason: %s", time.Now().Format("2006-01-02"), reason)
 	
-	if err := tx.Save(&payment).Error; err != nil {
-		tx.Rollback()
-		return err
-	}
-	
-	return tx.Commit().Error
+	return tx.Save(payment).Error
 }
 
 // createReversalJournal creates reversal journal entries
@@ -538,7 +679,7 @@ func (s *PaymentService) createReversalJournal(tx *gorm.DB, payment *models.Paym
 	
 	// Create reversal journal entry
 	reversalEntry := &models.JournalEntry{
-		Code:          s.generateJournalCode("REV"),
+		// Code will be auto-generated by BeforeCreate hook
 		EntryDate:     time.Now(),
 		Description:   fmt.Sprintf("Reversal of %s - %s", payment.Code, reason),
 		ReferenceType: models.JournalRefPayment,
@@ -549,6 +690,7 @@ func (s *PaymentService) createReversalJournal(tx *gorm.DB, payment *models.Paym
 		TotalDebit:    originalJournalEntry.TotalCredit,  // Swap totals
 		TotalCredit:   originalJournalEntry.TotalDebit,
 		ReversedID:    &originalJournalEntry.ID,
+		IsAutoGenerated: true,
 	}
 	
 	// Create the journal entry first
@@ -568,6 +710,11 @@ func (s *PaymentService) createReversalJournal(tx *gorm.DB, payment *models.Paym
 		}
 		if err := tx.Create(&reversalLine).Error; err != nil {
 			return err
+		}
+		
+		// Update account balance for reversal
+		if err := s.accountRepo.UpdateBalance(context.Background(), reversalLine.AccountID, reversalLine.DebitAmount, reversalLine.CreditAmount); err != nil {
+			log.Printf("Warning: Failed to update balance for reversal account %d: %v", reversalLine.AccountID, err)
 		}
 	}
 	
@@ -589,13 +736,7 @@ func (s *PaymentService) generatePaymentCode(prefix string) string {
 	return fmt.Sprintf("%s/%04d/%02d/%04d", prefix, year, month, count+1)
 }
 
-func (s *PaymentService) generateJournalCode(prefix string) string {
-	year := time.Now().Year()
-	month := time.Now().Month()
-	// Get count of existing journals for this month
-	count, _ := s.paymentRepo.CountJournalsByMonth(year, int(month))
-	return fmt.Sprintf("%s-JV/%04d/%02d/%04d", prefix, year, month, count+1)
-}
+// generateJournalCode is no longer used - journal codes are auto-generated by the JournalEntry BeforeCreate hook
 
 // DTOs
 type PaymentCreateRequest struct {
@@ -682,6 +823,11 @@ func (s *PaymentService) GetUnpaidBills(vendorID uint) ([]OutstandingBill, error
 	}
 	
 	return bills, nil
+}
+
+// GetSaleByID gets sale details for payment integration
+func (s *PaymentService) GetSaleByID(saleID uint) (*models.Sale, error) {
+	return s.salesRepo.FindByID(saleID)
 }
 
 // Outstanding item types

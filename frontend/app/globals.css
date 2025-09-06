@@ -168,7 +168,7 @@ body {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto; /* Only hide horizontal overflow, allow vertical overflow for dropdowns */
   box-shadow: var(--shadow);
 }
 
@@ -417,6 +417,37 @@ body {
     color: black !important;
     box-shadow: none !important;
   }
+}
+
+/* Menu dropdown styles - ensure they appear above other content */
+.chakra-menu__menu-list,
+.chakra-popover__popper {
+  z-index: 9999 !important;
+  box-shadow: var(--shadow-hover) !important;
+}
+
+[data-theme='dark'] .chakra-menu__menu-list,
+.dark .chakra-menu__menu-list {
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme='dark'] .chakra-menu__menu-item,
+.dark .chakra-menu__menu-item {
+  color: var(--text-primary) !important;
+  background-color: transparent !important;
+}
+
+[data-theme='dark'] .chakra-menu__menu-item:hover,
+.dark .chakra-menu__menu-item:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+/* Ensure table cells don't clip dropdown content */
+.table td {
+  position: relative;
+  overflow: visible;
 }
 
 /* Accessibility */
