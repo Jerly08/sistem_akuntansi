@@ -263,64 +263,74 @@ const ContactsPage = () => {
   };
 
   // Table columns definition (removed Type column since we're grouping by type)
-  const columns = [
-    { 
-      header: 'Name', 
-      accessor: 'name',
-      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
-      cellStyle: { padding: '12px 8px', fontSize: '14px' }
-    },
-    { 
-      header: 'External ID', 
-      accessor: (contact: Contact) => contact.external_id || '-',
-      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
-      cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
-    },
-    { 
-      header: 'PIC Name', 
-      accessor: (contact: Contact) => {
-        // Only show PIC for Customer/Vendor, show '-' for Employee
-        if (contact.type === 'CUSTOMER' || contact.type === 'VENDOR') {
-          return contact.pic_name || '-';
-        }
-        return '-';
+  // Dynamic columns based on contact type
+  const getColumnsForType = (contactType?: string) => {
+    const baseColumns = [
+      { 
+        header: 'Name', 
+        accessor: 'name',
+        headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
+        cellStyle: { padding: '12px 8px', fontSize: '14px' }
       },
-      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
-      cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
-    },
-    { 
-      header: 'Email', 
-      accessor: 'email',
-      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
-      cellStyle: { padding: '12px 8px', fontSize: '14px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-    },
-    { 
-      header: 'Phone', 
-      accessor: 'phone',
-      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
-      cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
-    },
-    { 
-      header: 'Address', 
-      accessor: (contact: Contact) => {
-        if (contact.address) {
-          // Truncate long address for table display
-          return contact.address.length > 50 
-            ? contact.address.substring(0, 50) + '...' 
-            : contact.address;
-        }
-        return '-';
+      { 
+        header: 'External ID', 
+        accessor: (contact: Contact) => contact.external_id || '-',
+        headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
+        cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
       },
-      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
-      cellStyle: { padding: '12px 8px', fontSize: '14px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
-    },
-    { 
-      header: 'Status', 
-      accessor: (contact: Contact) => (contact.is_active ? 'Active' : 'Inactive'),
-      headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
-      cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
-    },
-  ];
+    ];
+    
+    // Only add PIC Name column for Customer and Vendor groups, not for Employee
+    if (contactType !== 'EMPLOYEE') {
+      baseColumns.push({
+        header: 'PIC Name', 
+        accessor: (contact: Contact) => contact.pic_name || '-',
+        headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
+        cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
+      });
+    }
+    
+    // Add remaining columns
+    baseColumns.push(
+      { 
+        header: 'Email', 
+        accessor: 'email',
+        headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
+        cellStyle: { padding: '12px 8px', fontSize: '14px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+      },
+      { 
+        header: 'Phone', 
+        accessor: 'phone',
+        headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
+        cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
+      },
+      { 
+        header: 'Address', 
+        accessor: (contact: Contact) => {
+          if (contact.address) {
+            // Truncate long address for table display
+            return contact.address.length > 50 
+              ? contact.address.substring(0, 50) + '...' 
+              : contact.address;
+          }
+          return '-';
+        },
+        headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
+        cellStyle: { padding: '12px 8px', fontSize: '14px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+      },
+      { 
+        header: 'Status', 
+        accessor: (contact: Contact) => (contact.is_active ? 'Active' : 'Inactive'),
+        headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
+        cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
+      }
+    );
+    
+    return baseColumns;
+  };
+  
+  // Default columns (for backward compatibility)
+  const columns = getColumnsForType();
 
   const toast = useToast();
 
@@ -401,7 +411,7 @@ const ContactsPage = () => {
         )}
         
         <GroupedTable<Contact>
-          columns={columns}
+          columns={getColumnsForType}
           data={contacts}
           keyField="id"
           groupBy="type"

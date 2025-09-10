@@ -36,11 +36,12 @@ import {
   Grid,
   HStack
 } from '@chakra-ui/react';
-import { FiSearch, FiEdit, FiTrash2, FiUpload, FiEye, FiPlus, FiGrid, FiPackage } from 'react-icons/fi';
-import ProductService, { Product, Category } from '@/services/productService';
+import { FiSearch, FiEdit, FiTrash2, FiUpload, FiEye, FiPlus, FiGrid, FiPackage, FiMapPin } from 'react-icons/fi';
+import ProductService, { Product, Category, WarehouseLocation } from '@/services/productService';
 import ProductForm from './ProductForm';
 import CategoryForm from './CategoryForm';
 import UnitForm, { ProductUnit } from './UnitForm';
+import WarehouseLocationForm from './WarehouseLocationForm';
 import { formatIDR, formatCurrencyDetailed } from '@/utils/currency';
 
 const ProductCatalog: React.FC = () => {
@@ -54,12 +55,15 @@ const ProductCatalog: React.FC = () => {
   } = useModulePermissions('products');
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [warehouseLocations, setWarehouseLocations] = useState<WarehouseLocation[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<ProductUnit | null>(null);
+  const [selectedWarehouseLocation, setSelectedWarehouseLocation] = useState<WarehouseLocation | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [warehouseLocationFilter, setWarehouseLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -69,17 +73,19 @@ const ProductCatalog: React.FC = () => {
   const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
   const { isOpen: isCategoryModalOpen, onOpen: onCategoryModalOpen, onClose: onCategoryModalClose } = useDisclosure();
   const { isOpen: isUnitModalOpen, onOpen: onUnitModalOpen, onClose: onUnitModalClose } = useDisclosure();
+  const { isOpen: isWarehouseLocationModalOpen, onOpen: onWarehouseLocationModalOpen, onClose: onWarehouseLocationModalClose } = useDisclosure();
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const toast = useToast();
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchWarehouseLocations();
   }, []);
 
   useEffect(() => {
     fetchProducts();
-  }, [searchTerm, categoryFilter, statusFilter]);
+  }, [searchTerm, categoryFilter, warehouseLocationFilter, statusFilter]);
 
   const fetchProducts = async () => {
     try {
@@ -108,6 +114,22 @@ const ProductCatalog: React.FC = () => {
         status: 'error',
         isClosable: true,
       });
+    }
+  };
+
+  const fetchWarehouseLocations = async () => {
+    try {
+      const data = await ProductService.getWarehouseLocations();
+      setWarehouseLocations(data.data);
+      
+      // Show info message if using mock data
+      if (data.message && data.message.includes('mock')) {
+        console.info('Using mock warehouse locations data - implement backend API for full functionality');
+      }
+    } catch (error) {
+      console.error('Failed to fetch warehouse locations:', error);
+      // Set empty array instead of showing error to user
+      setWarehouseLocations([]);
     }
   };
 
@@ -270,6 +292,24 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedUnit(null);
   };
 
+  // Warehouse Location handlers
+  const handleAddWarehouseLocationClick = () => {
+    if (!canCreate) return;
+    setSelectedWarehouseLocation(null);
+    onWarehouseLocationModalOpen();
+  };
+
+  const handleSaveWarehouseLocation = (location: WarehouseLocation) => {
+    fetchWarehouseLocations(); // Refresh locations list
+    onWarehouseLocationModalClose();
+    setSelectedWarehouseLocation(null);
+  };
+
+  const handleCancelWarehouseLocation = () => {
+    onWarehouseLocationModalClose();
+    setSelectedWarehouseLocation(null);
+  };
+
   // Filtered and sorted products using useMemo for performance
 
   const filteredAndSortedProducts = useMemo(() => {
@@ -280,9 +320,11 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           product.code.toLowerCase().includes(searchTerm.toLowerCase()) : true;
         const matchesCategory = categoryFilter ? 
           product.category?.id === Number(categoryFilter) : true;
+        const matchesWarehouseLocation = warehouseLocationFilter ? 
+          product.warehouse_location?.id === Number(warehouseLocationFilter) : true;
         const matchesStatus = statusFilter ? 
           (statusFilter === 'active' ? product.is_active : !product.is_active) : true;
-        return matchesSearch && matchesCategory && matchesStatus;
+        return matchesSearch && matchesCategory && matchesWarehouseLocation && matchesStatus;
       })
       .sort((a, b) => {
         let comparison = 0;
@@ -297,7 +339,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         }
         return comparison;
       });
-  }, [products, searchTerm, categoryFilter, statusFilter, sortBy, sortOrder]);
+  }, [products, searchTerm, categoryFilter, warehouseLocationFilter, statusFilter, sortBy, sortOrder]);
 
   return (
     <SimpleLayout allowedRoles={['admin', 'inventory_manager', 'employee', 'finance', 'director']}>
@@ -319,6 +361,15 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                   variant="outline"
                 >
                   Add Category
+                </Button>
+                <Button 
+                  leftIcon={<FiMapPin />} 
+                  colorScheme="orange" 
+                  size="lg" 
+                  onClick={handleAddWarehouseLocationClick}
+                  variant="outline"
+                >
+                  Add Warehouse Location
                 </Button>
                 <Button 
                   leftIcon={<FiPackage />} 
@@ -370,6 +421,20 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                 </option>
               ))}
             </Select>
+
+            {/* Warehouse Location Filter */}
+            <Select
+              placeholder="All Locations"
+              value={warehouseLocationFilter}
+              onChange={(e) => setWarehouseLocationFilter(e.target.value)}
+              maxW="200px"
+            >
+              {warehouseLocations.map(location => (
+                <option key={location.id} value={location.id}>
+                  {location.name}
+                </option>
+              ))}
+            </Select>
             
             {/* Status Filter */}
             <Select
@@ -408,6 +473,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
               onClick={() => {
                 setSearchTerm('');
                 setCategoryFilter('');
+                setWarehouseLocationFilter('');
                 setStatusFilter('');
                 setSortBy('name');
                 setSortOrder('asc');
@@ -422,7 +488,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
           {/* Results Summary */}
           <Text fontSize="sm" color="gray.600">
 Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.length !== 1 ? 's' : ''}
-{(searchTerm || categoryFilter || statusFilter) ? ' (filtered)' : ''}
+{(searchTerm || categoryFilter || warehouseLocationFilter || statusFilter) ? ' (filtered)' : ''}
           </Text>
         </Box>
 
@@ -432,6 +498,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
               <Th>Product ID</Th>
               <Th>Name</Th>
               <Th>Category</Th>
+              <Th>Warehouse Location</Th>
               <Th>Actions</Th>
             </Tr>
           </Thead>
@@ -441,6 +508,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                 <Td>{product.code}</Td>
                 <Td>{product.name}</Td>
                 <Td>{product.category?.name}</Td>
+                <Td>{product.warehouse_location?.name || 'No Location'}</Td>
                 <Td>
                   <Button 
                     size="sm" 
@@ -585,6 +653,10 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                       <Box>
                         <Text fontWeight="semibold" color="gray.600">Unit:</Text>
                         <Text fontSize="md">{detailProduct.unit}</Text>
+                      </Box>
+                      <Box>
+                        <Text fontWeight="semibold" color="gray.600">Warehouse Location:</Text>
+                        <Text fontSize="md">{detailProduct.warehouse_location?.name || 'No Location Assigned'}</Text>
                       </Box>
                     </Grid>
                     {detailProduct.description && (
@@ -742,6 +814,26 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                   unit={selectedUnit || undefined} 
                   onSave={handleSaveUnit} 
                   onCancel={handleCancelUnit} 
+                />
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        )}
+
+        {/* Add/Edit Warehouse Location Modal */}
+        {canCreate && (
+          <Modal isOpen={isWarehouseLocationModalOpen} onClose={onWarehouseLocationModalClose} size="4xl">
+            <ModalOverlay />
+            <ModalContent>
+              <ModalHeader>
+                {selectedWarehouseLocation ? "Edit Warehouse Location" : "Add Warehouse Location"}
+              </ModalHeader>
+              <ModalCloseButton />
+              <ModalBody pb={6}>
+                <WarehouseLocationForm 
+                  location={selectedWarehouseLocation || undefined} 
+                  onSave={handleSaveWarehouseLocation} 
+                  onCancel={handleCancelWarehouseLocation} 
                 />
               </ModalBody>
             </ModalContent>

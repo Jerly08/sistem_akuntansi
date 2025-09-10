@@ -404,6 +404,62 @@ func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, activeAccounts)
 }
 
+// GetDepositSourceAccounts godoc
+// @Summary Get accounts for deposit source (Revenue + Equity)
+// @Description Get active revenue and equity accounts for deposit source selection
+// @Tags CashBank
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} gin.H{"revenue"=[]models.Account,"equity"=[]models.Account}
+// @Router /api/cashbank/deposit-source-accounts [get]
+func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
+	// Get Revenue accounts
+	revenueAccounts, err := c.accountService.GetRevenueAccounts(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve revenue accounts",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Get Equity accounts
+	equityAccounts, err := c.accountService.GetEquityAccounts(ctx.Request.Context())
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve equity accounts",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Filter active revenue accounts (exclude sales revenue for clean separation)
+	var activeRevenueAccounts []models.Account
+	for _, account := range revenueAccounts {
+		if account.IsActive && account.Code != "4101" { // Exclude main sales revenue
+			activeRevenueAccounts = append(activeRevenueAccounts, account)
+		}
+	}
+	
+	// Filter active equity accounts
+	var activeEquityAccounts []models.Account
+	for _, account := range equityAccounts {
+		if account.IsActive && !account.IsHeader {
+			activeEquityAccounts = append(activeEquityAccounts, account)
+		}
+	}
+	
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"revenue": activeRevenueAccounts,
+			"equity":  activeEquityAccounts,
+		},
+		"message": "Deposit source accounts retrieved successfully",
+	})
+}
+
 // GetPaymentAccounts godoc
 // @Summary Get payment accounts
 // @Description Get active cash and bank accounts for payment processing

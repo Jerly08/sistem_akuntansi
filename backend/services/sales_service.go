@@ -36,6 +36,9 @@ type PDFServiceInterface interface {
 	GenerateSalesReportPDF(sales []models.Sale, startDate, endDate string) ([]byte, error)
 	GeneratePaymentReportPDF(payments []models.Payment, startDate, endDate string) ([]byte, error)
 	GeneratePaymentDetailPDF(payment *models.Payment) ([]byte, error)
+	// Receipt PDF methods
+	GenerateReceiptPDF(receipt *models.PurchaseReceipt) ([]byte, error)
+	GenerateAllReceiptsPDF(purchase *models.Purchase, receipts []models.PurchaseReceipt) ([]byte, error)
 }
 
 type SalesResult struct {

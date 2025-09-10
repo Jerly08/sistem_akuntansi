@@ -561,7 +561,7 @@ const resetFilters = () => {
   
   if (loading && (!payments || payments.length === 0)) {
     return (
-      <SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
+      <SimpleLayout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
         <Box display="flex" justifyContent="center" alignItems="center" height="400px">
           <Spinner size="xl" thickness="4px" speed="0.65s" color="brand.500" />
           <Text ml={4} fontSize="lg">Loading payments...</Text>
@@ -571,7 +571,7 @@ const resetFilters = () => {
   }
 
   return (
-    <SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
+    <SimpleLayout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
       <Box bg={bgColor} minH="100vh" p={6}>
         <VStack spacing={6} align="stretch">
         {/* Summary Cards */}

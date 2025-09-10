@@ -144,6 +144,7 @@ type AccountCreateRequest struct {
 	ParentID       *uint       `json:"parent_id"`
 	Description    string      `json:"description"`
 	OpeningBalance float64     `json:"opening_balance"`
+	IsHeader       *bool       `json:"is_header"` // Allow manual header creation
 }
 
 type AccountUpdateRequest struct {
@@ -155,6 +156,7 @@ type AccountUpdateRequest struct {
 	ParentID       *uint       `json:"parent_id"`
 	IsActive       *bool       `json:"is_active"`
 	OpeningBalance *float64    `json:"opening_balance"`
+	IsHeader       *bool       `json:"is_header"` // Allow manual header update
 }
 
 type AccountImportRequest struct {

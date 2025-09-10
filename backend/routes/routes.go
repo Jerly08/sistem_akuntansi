@@ -82,7 +82,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	approvalService := services.NewApprovalService(db)
 	// Initialize services needed for purchase service
 	journalRepo := repositories.NewJournalEntryRepository(db)
-	pdfService := services.NewPDFService()
+	pdfService := services.NewPDFService(db)
 	purchaseService := services.NewPurchaseService(
 		db,
 		purchaseRepo,
@@ -104,6 +104,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	
 	// Initialize Security controller for security dashboard
 	securityController := controllers.NewSecurityController(db)
+	
+	// Initialize Journal Drilldown controller
+	journalDrilldownController := controllers.NewJournalDrilldownController(db)
 	
 	// Initialize JWT Manager
 	jwtManager := middleware.NewJWTManager(db)
@@ -223,26 +226,26 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				products.POST("/upload-image", permMiddleware.CanEdit("products"), productController.UploadProductImage)
 			}
 
-			// Category routes
+			// 📂 Category routes with enhanced permission checks
 			categories := protected.Group("/categories")
 			{
-				categories.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), categoryController.GetCategories)
-				categories.GET("/tree", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), categoryController.GetCategoryTree)
-				categories.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), categoryController.GetCategory)
-				categories.GET("/:id/products", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), categoryController.GetCategoryProducts)
-				categories.POST("", middleware.RoleRequired("admin", "inventory_manager"), categoryController.CreateCategory)
-				categories.PUT("/:id", middleware.RoleRequired("admin", "inventory_manager"), categoryController.UpdateCategory)
-				categories.DELETE("/:id", middleware.RoleRequired("admin"), categoryController.DeleteCategory)
+				categories.GET("", permMiddleware.CanView("products"), categoryController.GetCategories)
+				categories.GET("/tree", permMiddleware.CanView("products"), categoryController.GetCategoryTree)
+				categories.GET("/:id", permMiddleware.CanView("products"), categoryController.GetCategory)
+				categories.GET("/:id/products", permMiddleware.CanView("products"), categoryController.GetCategoryProducts)
+				categories.POST("", permMiddleware.CanCreate("products"), categoryController.CreateCategory)
+				categories.PUT("/:id", permMiddleware.CanEdit("products"), categoryController.UpdateCategory)
+				categories.DELETE("/:id", permMiddleware.CanDelete("products"), categoryController.DeleteCategory)
 			}
 
-			// Product Units routes
+			// 📏 Product Units routes with enhanced permission checks
 			units := protected.Group("/product-units")
 			{
-				units.GET("", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), unitController.GetProductUnits)
-				units.GET("/:id", middleware.RoleRequired("admin", "inventory_manager", "employee", "director", "finance"), unitController.GetProductUnit)
-				units.POST("", middleware.RoleRequired("admin"), unitController.CreateProductUnit)
-				units.PUT("/:id", middleware.RoleRequired("admin"), unitController.UpdateProductUnit)
-				units.DELETE("/:id", middleware.RoleRequired("admin"), unitController.DeleteProductUnit)
+				units.GET("", permMiddleware.CanView("products"), unitController.GetProductUnits)
+				units.GET("/:id", permMiddleware.CanView("products"), unitController.GetProductUnit)
+				units.POST("", permMiddleware.CanCreate("products"), unitController.CreateProductUnit)
+				units.PUT("/:id", permMiddleware.CanEdit("products"), unitController.UpdateProductUnit)
+				units.DELETE("/:id", permMiddleware.CanDelete("products"), unitController.DeleteProductUnit)
 			}
 
 			// 📊 Account routes (Chart of Accounts) dengan enhanced security
@@ -268,6 +271,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				accounts.POST("", permMiddleware.CanCreate("accounts"), accountHandler.CreateAccount)
 				accounts.PUT("/:code", permMiddleware.CanEdit("accounts"), accountHandler.UpdateAccount)
 				accounts.DELETE("/:code", permMiddleware.CanDelete("accounts"), accountHandler.DeleteAccount)
+				// Admin-only delete with cascade options
+				accounts.DELETE("/admin/:code", middleware.RoleRequired("admin"), accountHandler.AdminDeleteAccount)
 				accounts.POST("/import", permMiddleware.CanCreate("accounts"), accountHandler.ImportAccounts)
 				
 				// Export routes
@@ -321,15 +326,16 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Initialize SalesController with PaymentService integration
 	salesController := controllers.NewSalesController(salesService, paymentService)
 
-			// Notification routes
+			// 🔔 Notification routes (accessible by all authenticated users)
 			notifs := protected.Group("/notifications")
 			{
-				notifs.GET("", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.GetNotifications)
-				notifs.GET("/unread-count", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.GetUnreadCount)
-				notifs.PUT("/:id/read", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.MarkNotificationAsRead)
-				notifs.PUT("/read-all", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.MarkAllNotificationsAsRead)
-				notifs.GET("/type/:type", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.GetNotificationsByType)
-				notifs.GET("/approvals", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), notificationHandler.GetApprovalNotifications)
+				// Notification routes are generally accessible to all authenticated users since they're personal
+				notifs.GET("", notificationHandler.GetNotifications)
+				notifs.GET("/unread-count", notificationHandler.GetUnreadCount)
+				notifs.PUT("/:id/read", notificationHandler.MarkNotificationAsRead)
+				notifs.PUT("/read-all", notificationHandler.MarkAllNotificationsAsRead)
+				notifs.GET("/type/:type", notificationHandler.GetNotificationsByType)
+				notifs.GET("/approvals", notificationHandler.GetApprovalNotifications)
 			}
 
 			// Sales routes with permission checks
@@ -380,45 +386,50 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			// Setup Payment routes (including cash bank routes with GL fix functionality)
 			SetupPaymentRoutes(protected, paymentController, cashBankController, cashBankService, jwtManager, db)
 
-			// Purchases routes
+			// 💰 Purchases routes with enhanced permission checks
 			purchases := protected.Group("/purchases")
+	purchases.Use(enhancedSecurity.RequestMonitoring()) // 📊 Enhanced monitoring
 			{
-				// Basic CRUD operations
-				purchases.GET("", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), purchaseController.GetPurchases)
+				// Basic CRUD operations dengan enhanced security
+				purchases.GET("", permMiddleware.CanView("purchases"), purchaseController.GetPurchases)
 				// Approval statistics (must be defined before parameterized "/:id" route)
-				purchases.GET("/approval-stats", middleware.RoleRequired("admin", "finance", "director"), purchaseApprovalHandler.GetApprovalStats)
-				purchases.GET("/:id", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), purchaseController.GetPurchase)
-				purchases.POST("", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), purchaseController.CreatePurchase)
-				purchases.PUT("/:id", middleware.RoleRequired("admin", "finance", "inventory_manager"), purchaseController.UpdatePurchase)
-				purchases.DELETE("/:id", middleware.RoleRequired("admin"), purchaseController.DeletePurchase)
+				purchases.GET("/approval-stats", permMiddleware.CanApprove("purchases"), purchaseApprovalHandler.GetApprovalStats)
+				purchases.GET("/:id", permMiddleware.CanView("purchases"), purchaseController.GetPurchase)
+				purchases.POST("", permMiddleware.CanCreate("purchases"), purchaseController.CreatePurchase)
+				purchases.PUT("/:id", permMiddleware.CanEdit("purchases"), purchaseController.UpdatePurchase)
+				purchases.DELETE("/:id", permMiddleware.CanDelete("purchases"), purchaseController.DeletePurchase)
 				
-				// Approval operations
-				purchases.POST("/:id/submit-approval", middleware.RoleRequired("admin", "finance", "inventory_manager", "employee", "director"), purchaseController.SubmitForApproval)
-				purchases.POST("/:id/approve", middleware.RoleRequired("admin", "finance", "director"), purchaseController.ApprovePurchase)
-				purchases.POST("/:id/reject", middleware.RoleRequired("admin", "finance", "director"), purchaseController.RejectPurchase)
-				// Approval history endpoint (used by frontend)
-				purchases.GET("/:id/approval-history", purchaseApprovalHandler.GetApprovalHistory)
-				// Pending approvals (singular path for frontend compatibility)
-				purchases.GET("/pending-approval", middleware.RoleRequired("admin", "finance", "director"), purchaseApprovalHandler.GetPurchasesForApproval)
+				// Approval operations dengan permission checks
+				purchases.POST("/:id/submit-approval", permMiddleware.CanCreate("purchases"), purchaseController.SubmitForApproval)
+				purchases.POST("/:id/approve", permMiddleware.CanApprove("purchases"), purchaseController.ApprovePurchase)
+				purchases.POST("/:id/reject", permMiddleware.CanApprove("purchases"), purchaseController.RejectPurchase)
+				// Approval history endpoint (accessible by those who can view purchases)
+				purchases.GET("/:id/approval-history", permMiddleware.CanView("purchases"), purchaseApprovalHandler.GetApprovalHistory)
+				// Pending approvals (for those who can approve)
+				purchases.GET("/pending-approval", permMiddleware.CanApprove("purchases"), purchaseApprovalHandler.GetPurchasesForApproval)
 				
-				// Document management
-				purchases.POST("/:id/documents", middleware.RoleRequired("admin", "finance", "inventory_manager", "director"), purchaseController.UploadDocument)
-				purchases.GET("/:id/documents", middleware.RoleRequired("admin", "finance", "inventory_manager", "director"), purchaseController.GetPurchaseDocuments)
-				purchases.DELETE("/documents/:document_id", middleware.RoleRequired("admin", "finance"), purchaseController.DeleteDocument)
+				// Document management dengan permission checks
+				purchases.POST("/:id/documents", permMiddleware.CanEdit("purchases"), purchaseController.UploadDocument)
+				purchases.GET("/:id/documents", permMiddleware.CanView("purchases"), purchaseController.GetPurchaseDocuments)
+				purchases.DELETE("/documents/:document_id", permMiddleware.CanDelete("purchases"), purchaseController.DeleteDocument)
 				
-				// Receipt operations
-				purchases.POST("/receipts", middleware.RoleRequired("admin", "inventory_manager", "director"), purchaseController.CreatePurchaseReceipt)
-				purchases.GET("/:id/receipts", middleware.RoleRequired("admin", "finance", "inventory_manager", "director"), purchaseController.GetPurchaseReceipts)
+				// Receipt operations dengan permission checks
+				purchases.POST("/receipts", permMiddleware.CanEdit("purchases"), purchaseController.CreatePurchaseReceipt)
+				purchases.GET("/:id/receipts", permMiddleware.CanView("purchases"), purchaseController.GetPurchaseReceipts)
 				
-				// Analytics and reporting
-				purchases.GET("/summary", middleware.RoleRequired("admin", "finance", "director", "employee"), purchaseController.GetPurchasesSummary)
-				purchases.GET("/pending-approvals", middleware.RoleRequired("admin", "finance", "director"), purchaseController.GetPendingApprovals)
-				purchases.GET("/dashboard", middleware.RoleRequired("admin", "finance", "inventory_manager", "director"), purchaseController.GetPurchaseDashboard)
-				purchases.GET("/vendor/:vendor_id/summary", middleware.RoleRequired("admin", "finance"), purchaseController.GetVendorPurchaseSummary)
+				// Receipt PDF exports dengan permission checks
+				purchases.GET("/receipts/:receipt_id/pdf", permMiddleware.CanExport("purchases"), purchaseController.GetReceiptPDF)
+				purchases.GET("/:id/receipts/pdf", permMiddleware.CanExport("purchases"), purchaseController.GetAllReceiptsPDF)
 				
-				// Three-way matching
-				purchases.GET("/:id/matching", middleware.RoleRequired("admin", "finance"), purchaseController.GetPurchaseMatching)
-				purchases.POST("/:id/validate-matching", middleware.RoleRequired("admin", "finance"), purchaseController.ValidateThreeWayMatching)
+				// Analytics and reporting dengan permission checks
+				purchases.GET("/summary", permMiddleware.CanView("purchases"), purchaseController.GetPurchasesSummary)
+				purchases.GET("/pending-approvals", permMiddleware.CanApprove("purchases"), purchaseController.GetPendingApprovals)
+				purchases.GET("/dashboard", permMiddleware.CanView("purchases"), purchaseController.GetPurchaseDashboard)
+				purchases.GET("/vendor/:vendor_id/summary", permMiddleware.CanView("purchases"), purchaseController.GetVendorPurchaseSummary)
+				
+				// Three-way matching dengan permission checks
+				purchases.GET("/:id/matching", permMiddleware.CanView("purchases"), purchaseController.GetPurchaseMatching)
+				purchases.POST("/:id/validate-matching", permMiddleware.CanApprove("purchases"), purchaseController.ValidateThreeWayMatching)
 			}
 
 			// Expenses routes
@@ -429,34 +440,44 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				})
 			}
 
-			// Assets routes
+			// 🏢 Assets routes with enhanced permission checks dan audit logging
 			assets := protected.Group("/assets")
+			assets.Use(enhancedSecurity.RequestMonitoring()) // 📊 Enhanced monitoring
 			{
-				// Basic CRUD operations
-				assets.GET("", middleware.RoleRequired("admin", "finance", "director"), assetController.GetAssets)
-				assets.GET("/:id", middleware.RoleRequired("admin", "finance", "director"), assetController.GetAsset)
-				assets.POST("", middleware.RoleRequired("admin"), assetController.CreateAsset)
-				assets.PUT("/:id", middleware.RoleRequired("admin"), assetController.UpdateAsset)
-				assets.DELETE("/:id", middleware.RoleRequired("admin"), assetController.DeleteAsset)
-				assets.POST("/upload-image", middleware.RoleRequired("admin"), assetController.UploadAssetImage)
+				// Basic CRUD operations dengan enhanced security
+				assets.GET("", permMiddleware.CanView("assets"), assetController.GetAssets)
+				assets.GET("/:id", permMiddleware.CanView("assets"), assetController.GetAsset)
+				assets.POST("", permMiddleware.CanCreate("assets"), assetController.CreateAsset)
+				assets.PUT("/:id", permMiddleware.CanEdit("assets"), assetController.UpdateAsset)
+				assets.DELETE("/:id", permMiddleware.CanDelete("assets"), assetController.DeleteAsset)
+				assets.POST("/upload-image", permMiddleware.CanEdit("assets"), assetController.UploadAssetImage)
 				
-				// Reports and calculations
-				assets.GET("/summary", middleware.RoleRequired("admin", "finance", "director"), assetController.GetAssetsSummary)
-				assets.GET("/depreciation-report", middleware.RoleRequired("admin", "finance", "director"), assetController.GetDepreciationReport)
-				assets.GET("/:id/depreciation-schedule", middleware.RoleRequired("admin", "finance"), assetController.GetDepreciationSchedule)
-				assets.GET("/:id/calculate-depreciation", middleware.RoleRequired("admin", "finance"), assetController.CalculateCurrentDepreciation)
+				// 📊 Reports and calculations dengan permission checks
+				assets.GET("/summary", permMiddleware.CanView("assets"), assetController.GetAssetsSummary)
+				assets.GET("/depreciation-report", permMiddleware.CanView("assets"), assetController.GetDepreciationReport)
+				assets.GET("/:id/depreciation-schedule", permMiddleware.CanView("assets"), assetController.GetDepreciationSchedule)
+				assets.GET("/:id/calculate-depreciation", permMiddleware.CanView("assets"), assetController.CalculateCurrentDepreciation)
+				
+				// Export routes
+				assets.GET("/export/pdf", permMiddleware.CanExport("assets"), func(c *gin.Context) {
+					c.JSON(200, gin.H{"message": "Assets PDF export - coming soon"})
+				})
+				assets.GET("/export/excel", permMiddleware.CanExport("assets"), func(c *gin.Context) {
+					c.JSON(200, gin.H{"message": "Assets Excel export - coming soon"})
+				})
 			}
 
 		// Note: CashBank routes are already set up via SetupPaymentRoutes
 
-			// Inventory routes
+			// 📦 Inventory routes with enhanced permission checks
 			inventory := protected.Group("/inventory")
 			{
-				inventory.GET("/movements", inventoryController.GetInventoryMovements)
-				inventory.GET("/low-stock", inventoryController.GetLowStockProducts)
-				inventory.GET("/valuation", inventoryController.GetStockValuation)
-				inventory.GET("/report", middleware.RoleRequired("admin", "inventory_manager"), inventoryController.GetStockReport)
-				inventory.POST("/bulk-price-update", middleware.RoleRequired("admin", "inventory_manager"), inventoryController.BulkPriceUpdate)
+				// Basic inventory operations - accessible by those who can view products
+				inventory.GET("/movements", permMiddleware.CanView("products"), inventoryController.GetInventoryMovements)
+				inventory.GET("/low-stock", permMiddleware.CanView("products"), inventoryController.GetLowStockProducts)
+				inventory.GET("/valuation", permMiddleware.CanView("products"), inventoryController.GetStockValuation)
+				inventory.GET("/report", permMiddleware.CanExport("products"), inventoryController.GetStockReport)
+				inventory.POST("/bulk-price-update", permMiddleware.CanEdit("products"), inventoryController.BulkPriceUpdate)
 			}
 
 			// Approval workflows routes
@@ -470,11 +491,17 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			reportService := services.NewReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
 			professionalService := services.NewProfessionalReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
 			standardizedService := services.NewStandardizedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
+			
+			// Initialize Financial Report service for improved reports with journal entries integration
+			financialReportService := services.NewFinancialReportService(db, accountRepo, journalRepo)
+			
+			// Initialize Enhanced Financial Report service for accurate COGS categorization (for future use)
+			enhancedReportService := services.NewEnhancedFinancialReportService(db, accountRepo, journalRepo)
+			_ = enhancedReportService // Suppress unused variable error for now
+			
 			reportController := controllers.NewReportController(reportService, professionalService, standardizedService)
 			
-			// Initialize Financial Report services and controller
-			// Note: journalRepo is already initialized earlier for purchase service
-			financialReportService := services.NewFinancialReportService(db, accountRepo, journalRepo)
+			// Initialize Financial Report controller using already initialized financialReportService
 			financialReportController := controllers.NewFinancialReportController(financialReportService)
 			
 			// Setup Settings routes
@@ -515,6 +542,22 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			
 			// Setup Unified Financial Report Routes (at /api/unified-reports - different path)
 			SetupUnifiedReportRoutes(r, db)
+
+			// 📊 Journal Entry Drilldown routes (accessible by finance, admin, director)
+			journalDrilldown := protected.Group("/journal-drilldown")
+			{
+				// Main drill-down endpoint for POST requests with detailed filtering
+				journalDrilldown.POST("", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalDrilldown)
+				
+				// Alternative GET endpoint for simpler URL-based filtering
+				journalDrilldown.GET("/entries", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalDrilldownByParams)
+				
+				// Get detailed information for a specific journal entry
+				journalDrilldown.GET("/entries/:id", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalEntryDetail)
+				
+				// Get accounts that have activity in a period (useful for filters)
+				journalDrilldown.GET("/accounts", permMiddleware.CanView("reports"), journalDrilldownController.GetAccountsForPeriod)
+			}
 
 			// Monitoring routes (admin only)
 			monitoring := protected.Group("/monitoring")

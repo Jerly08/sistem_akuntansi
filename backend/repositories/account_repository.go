@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/utils"
 	"gorm.io/gorm"
@@ -14,6 +16,7 @@ type AccountRepository interface {
 	Create(ctx context.Context, req *models.AccountCreateRequest) (*models.Account, error)
 	Update(ctx context.Context, code string, req *models.AccountUpdateRequest) (*models.Account, error)
 	Delete(ctx context.Context, code string) error
+	AdminDelete(ctx context.Context, code string, cascadeDelete bool, newParentID *uint) error // Admin-only delete with cascade options
 	FindByCode(ctx context.Context, code string) (*models.Account, error)
 	GetAccountByCode(code string) (*models.Account, error)
 	FindByID(ctx context.Context, id uint) (*models.Account, error)
@@ -63,6 +66,16 @@ func (r *AccountRepo) Create(ctx context.Context, req *models.AccountCreateReque
 		return nil, utils.NewDatabaseError("check existing code", err)
 	}
 
+	// Validate header account specific rules
+	if req.IsHeader != nil && *req.IsHeader {
+		// Header accounts cannot have opening balance
+		if req.OpeningBalance != 0 {
+			return nil, utils.NewValidationError("Header accounts cannot have opening balance", map[string]string{
+				"opening_balance": "Header accounts must have zero opening balance",
+			})
+		}
+	}
+
 	// Calculate level if parent exists
 	level := 1
 	if req.ParentID != nil {
@@ -81,6 +94,12 @@ func (r *AccountRepo) Create(ctx context.Context, req *models.AccountCreateReque
 		}
 	}
 
+	// Determine if this is a header account
+	isHeader := false
+	if req.IsHeader != nil {
+		isHeader = *req.IsHeader
+	}
+
 	account := &models.Account{
 		Code:        req.Code,
 		Name:        req.Name,
@@ -91,7 +110,7 @@ func (r *AccountRepo) Create(ctx context.Context, req *models.AccountCreateReque
 		Description: req.Description,
 		Balance:     req.OpeningBalance,
 		IsActive:    true,
-		IsHeader:    false, // New accounts start as non-header
+		IsHeader:    isHeader,
 	}
 
 	if err := r.DB.WithContext(ctx).Create(account).Error; err != nil {
@@ -103,6 +122,13 @@ func (r *AccountRepo) Create(ctx context.Context, req *models.AccountCreateReque
 
 // Update updates an account
 func (r *AccountRepo) Update(ctx context.Context, code string, req *models.AccountUpdateRequest) (*models.Account, error) {
+	// Add timeout to prevent hanging
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	
+	log.Printf("UpdateAccount called with code: %s", code)
+	log.Printf("Update request data: %+v", req)
+	
 	var account models.Account
 	if err := r.DB.WithContext(ctx).Where("code = ?", code).First(&account).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -111,14 +137,29 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 		return nil, utils.NewDatabaseError("find account", err)
 	}
 
-	// Check if new code already exists (if code is being changed)
+	// Skip code validation if code is not being changed
 	if req.Code != "" && req.Code != code {
+		log.Printf("Code change detected: %s -> %s", code, req.Code)
 		var existingAccount models.Account
 		if err := r.DB.WithContext(ctx).Where("code = ? AND id != ?", req.Code, account.ID).First(&existingAccount).Error; err == nil {
 			errorMsg := fmt.Sprintf("Account code '%s' already exists (used by: %s)", req.Code, existingAccount.Name)
 			return nil, utils.NewConflictError(errorMsg)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.NewDatabaseError("check existing code", err)
+		}
+	}
+
+	// Validate header account specific rules for updates
+	if req.IsHeader != nil && *req.IsHeader {
+		// If changing to header, check if balance would be zero
+		balanceToSet := account.Balance
+		if req.OpeningBalance != nil {
+			balanceToSet = *req.OpeningBalance
+		}
+		if balanceToSet != 0 {
+			return nil, utils.NewValidationError("Header accounts cannot have balance", map[string]string{
+				"is_header": "Account must have zero balance to become a header account",
+			})
 		}
 	}
 
@@ -147,9 +188,22 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 	if req.OpeningBalance != nil {
 		account.Balance = *req.OpeningBalance
 	}
+	if req.IsHeader != nil {
+		account.IsHeader = *req.IsHeader
+	}
+	
+	// Fast path: if only updating simple fields (name, description) without parent/structure changes
+	if req.ParentID == nil && (req.Code == "" || req.Code == code) && req.Type == "" {
+		log.Printf("Fast path update for account %s - only updating metadata", code)
+		if err := r.DB.WithContext(ctx).Save(&account).Error; err != nil {
+			return nil, utils.NewDatabaseError("update account", err)
+		}
+		return &account, nil
+	}
 	
 	// Handle parent change and level recalculation
 	if req.ParentID != nil {
+		log.Printf("Parent change requested for account %s", code)
 		// Check if parent is valid and different from current
 		if oldParentID == nil || *oldParentID != *req.ParentID {
 			// Validate new parent exists
@@ -247,6 +301,103 @@ func (r *AccountRepo) Delete(ctx context.Context, code string) error {
 
 	if err := r.DB.WithContext(ctx).Delete(&account).Error; err != nil {
 		return utils.NewDatabaseError("delete account", err)
+	}
+
+	return nil
+}
+
+// AdminDelete deletes an account with admin privileges and cascade options
+func (r *AccountRepo) AdminDelete(ctx context.Context, code string, cascadeDelete bool, newParentID *uint) error {
+	var account models.Account
+	if err := r.DB.WithContext(ctx).Where("code = ?", code).First(&account).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return utils.NewNotFoundError("Account")
+		}
+		return utils.NewDatabaseError("find account", err)
+	}
+
+	// Get children
+	var children []models.Account
+	if err := r.DB.WithContext(ctx).Where("parent_id = ?", account.ID).Find(&children).Error; err != nil {
+		return utils.NewDatabaseError("find child accounts", err)
+	}
+
+	// Handle children if they exist
+	if len(children) > 0 {
+		if cascadeDelete {
+			// Recursively delete all children
+			for _, child := range children {
+				if err := r.AdminDelete(ctx, child.Code, true, nil); err != nil {
+					return utils.NewDatabaseError(fmt.Sprintf("cascade delete child %s", child.Code), err)
+				}
+			}
+		} else if newParentID != nil {
+			// Transfer children to new parent
+			var newParent models.Account
+			if err := r.DB.WithContext(ctx).First(&newParent, *newParentID).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return utils.NewNotFoundError("New parent account for transfer")
+				}
+				return utils.NewDatabaseError("find new parent account", err)
+			}
+
+			// Update all children to new parent
+			for _, child := range children {
+				child.ParentID = newParentID
+				child.Level = newParent.Level + 1
+				if err := r.DB.WithContext(ctx).Save(&child).Error; err != nil {
+					return utils.NewDatabaseError(fmt.Sprintf("transfer child %s to new parent", child.Code), err)
+				}
+			}
+
+			// Set new parent as header if it's not already
+			if !newParent.IsHeader {
+				if err := r.DB.WithContext(ctx).Model(&newParent).Update("is_header", true).Error; err != nil {
+					return utils.NewDatabaseError("update new parent header status", err)
+				}
+			}
+		} else {
+			// Move children to root level (no parent)
+			for _, child := range children {
+				child.ParentID = nil
+				child.Level = 1
+				if err := r.DB.WithContext(ctx).Save(&child).Error; err != nil {
+					return utils.NewDatabaseError(fmt.Sprintf("move child %s to root", child.Code), err)
+				}
+			}
+		}
+	}
+
+	// Check if account has transactions (admin can still delete, but warn)
+	var transactionCount int64
+	if err := r.DB.WithContext(ctx).Model(&models.Transaction{}).Where("account_id = ?", account.ID).Count(&transactionCount).Error; err != nil {
+		return utils.NewDatabaseError("count transactions", err)
+	}
+
+	if transactionCount > 0 {
+		// For admin delete, we allow deletion but this should be logged/warned
+		fmt.Printf("[WARNING] Admin deleting account %s with %d transactions\n", code, transactionCount)
+	}
+
+	// Delete the account
+	if err := r.DB.WithContext(ctx).Delete(&account).Error; err != nil {
+		return utils.NewDatabaseError("delete account", err)
+	}
+
+	// Clean up old parent header status if needed
+	if account.ParentID != nil {
+		// Check if old parent still has other children
+		var siblingCount int64
+		if err := r.DB.WithContext(ctx).Model(&models.Account{}).Where("parent_id = ? AND id != ?", *account.ParentID, account.ID).Count(&siblingCount).Error; err != nil {
+			// Log error but don't fail the delete
+			fmt.Printf("[WARNING] Failed to count siblings for parent cleanup: %v\n", err)
+		} else if siblingCount == 0 {
+			// Old parent has no more children, unset header status
+			if err := r.DB.WithContext(ctx).Model(&models.Account{}).Where("id = ?", *account.ParentID).Update("is_header", false).Error; err != nil {
+				// Log error but don't fail the delete
+				fmt.Printf("[WARNING] Failed to update parent header status: %v\n", err)
+			}
+		}
 	}
 
 	return nil

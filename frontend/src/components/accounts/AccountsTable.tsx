@@ -20,17 +20,21 @@ import {
 import { FiEdit, FiTrash2 } from 'react-icons/fi';
 import { Account } from '@/types/account';
 import { useModulePermissions } from '@/hooks/usePermissions';
+import { useAuth } from '@/contexts/AuthContext';
 import accountService from '@/services/accountService';
 
 interface AccountsTableProps {
   accounts: Account[];
   onEdit: (account: Account) => void;
   onDelete: (account: Account) => void;
+  onAdminDelete?: (account: Account) => void; // Admin-only delete for header accounts
 }
 
-const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelete }) => {
+const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelete, onAdminDelete }) => {
   // Permission checking
   const { canEdit, canDelete } = useModulePermissions('accounts');
+  const { user } = useAuth();
+  const isAdmin = user?.role?.toLowerCase() === 'admin';
   
   // Theme-aware colors
   const tableBg = useColorModeValue('white', 'var(--bg-secondary)');
@@ -179,6 +183,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
                 </Badge>
               </Td>
               <Td px={6} py={4} borderColor={borderColor}>
+                {/* Regular accounts - show normal edit/delete */}
                 {!account.is_header && (canEdit || canDelete) && (
                   <HStack spacing={1} justify="center">
                     {canEdit && (
@@ -210,9 +215,33 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
                     )}
                   </HStack>
                 )}
-                {!account.is_header && !canEdit && !canDelete && (
+                
+                {/* Header accounts - show admin-only delete (no edit) */}
+                {account.is_header && isAdmin && onAdminDelete && (
+                  <HStack spacing={1} justify="center">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      colorScheme="red"
+                      onClick={() => onAdminDelete(account)}
+                      px={2}
+                      _hover={{ bg: deleteHoverBg }}
+                      transition="all 0.2s ease"
+                    >
+                      <FiTrash2 size={16} />
+                    </Button>
+                  </HStack>
+                )}
+                
+                {/* No actions available */}
+                {(!account.is_header && !canEdit && !canDelete) && (
                   <Text fontSize="xs" color="gray.400" textAlign="center">
                     No actions available
+                  </Text>
+                )}
+                {(account.is_header && !isAdmin) && (
+                  <Text fontSize="xs" color="gray.400" textAlign="center">
+                    Admin only
                   </Text>
                 )}
               </Td>

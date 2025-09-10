@@ -509,6 +509,16 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 		return nil, err
 	}
 
+	// Update product stock when purchase is approved
+	fmt.Printf("🔄 Updating product stock for approved purchase %d\n", purchaseID)
+	err = s.updateProductStockOnApproval(purchase)
+	if err != nil {
+		fmt.Printf("⚠️ Warning: Failed to update product stock for purchase %d: %v\n", purchaseID, err)
+		// Don't fail the approval process, but log the issue
+	} else {
+		fmt.Printf("✅ Successfully updated product stock for purchase %d\n", purchaseID)
+	}
+
 	// Create and post journal entries for the approved purchase
 	// Skip if journal entries were already created (e.g., for credit purchases without approval)
 	hasExistingJournalEntries, checkErr := s.purchaseHasJournalEntries(purchaseID)
@@ -574,8 +584,19 @@ func (s *PurchaseService) CreatePurchaseReceipt(request models.PurchaseReceiptRe
 		return nil, err
 	}
 
-	// Create receipt items
+	// Process receipt items and check completion
+	allReceived := true
 	for _, itemReq := range request.ReceiptItems {
+		purchaseItem, err := s.purchaseRepo.GetPurchaseItemByID(itemReq.PurchaseItemID)
+		if err != nil {
+			return nil, err
+		}
+		
+		if purchaseItem.PurchaseID != request.PurchaseID {
+			return nil, errors.New("purchase item does not belong to this purchase")
+		}
+
+		// Create receipt item
 		receiptItem := &models.PurchaseReceiptItem{
 			ReceiptID:        createdReceipt.ID,
 			PurchaseItemID:   itemReq.PurchaseItemID,
@@ -588,12 +609,33 @@ func (s *PurchaseService) CreatePurchaseReceipt(request models.PurchaseReceiptRe
 		if err != nil {
 			return nil, err
 		}
+
+		// Check if all items are fully received
+		if itemReq.QuantityReceived < purchaseItem.Quantity {
+			allReceived = false
+		}
 	}
 
-	// Update receipt status based on quantities
-	err = s.updateReceiptStatus(createdReceipt.ID)
+	// Update receipt and purchase status directly
+	if allReceived {
+		createdReceipt.Status = models.ReceiptStatusComplete
+		purchase.Status = models.PurchaseStatusCompleted
+	} else {
+		createdReceipt.Status = models.ReceiptStatusPartial
+	}
+
+	// Update receipt status
+	createdReceipt, err = s.purchaseRepo.UpdateReceipt(createdReceipt)
 	if err != nil {
 		return nil, err
+	}
+
+	// Update purchase status if completed
+	if allReceived {
+		_, err = s.purchaseRepo.Update(purchase)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return s.purchaseRepo.FindReceiptByID(createdReceipt.ID)
@@ -690,6 +732,86 @@ func (s *PurchaseService) GetVendorPurchaseSummary(vendorID uint) (*models.Vendo
 	return s.purchaseRepo.GetVendorPurchaseSummary(vendorID)
 }
 
+// Receipt Management - Additional methods
+
+// GetPurchaseReceipts returns all receipts for a purchase
+func (s *PurchaseService) GetPurchaseReceipts(purchaseID uint) ([]models.PurchaseReceipt, error) {
+	// Verify purchase exists
+	_, err := s.purchaseRepo.FindByID(purchaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get receipts from repository
+	return s.purchaseRepo.FindReceiptsByPurchaseID(purchaseID)
+}
+
+// GetCompletedPurchaseReceipts returns only completed receipts for a purchase
+func (s *PurchaseService) GetCompletedPurchaseReceipts(purchaseID uint) ([]models.PurchaseReceipt, error) {
+	// Verify purchase exists
+	_, err := s.purchaseRepo.FindByID(purchaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get completed receipts from repository
+	return s.purchaseRepo.FindCompletedReceiptsByPurchaseID(purchaseID)
+}
+
+// GenerateReceiptPDF generates PDF for a specific receipt
+func (s *PurchaseService) GenerateReceiptPDF(receiptID uint) ([]byte, *models.PurchaseReceipt, error) {
+	// Get receipt with all related data
+	receipt, err := s.purchaseRepo.FindReceiptByID(receiptID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Check if PDF service is available
+	if s.pdfService == nil {
+		return nil, nil, errors.New("PDF service not available")
+	}
+
+	// Generate PDF using the PDF service
+	pdfBytes, err := s.pdfService.GenerateReceiptPDF(receipt)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate receipt PDF: %v", err)
+	}
+
+	return pdfBytes, receipt, nil
+}
+
+// GenerateAllReceiptsPDF generates combined PDF for all receipts of a purchase
+func (s *PurchaseService) GenerateAllReceiptsPDF(purchaseID uint) ([]byte, *models.Purchase, error) {
+	// Get purchase with all related data
+	purchase, err := s.purchaseRepo.FindByID(purchaseID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Get all receipts for this purchase
+	receipts, err := s.GetPurchaseReceipts(purchaseID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(receipts) == 0 {
+		return nil, nil, errors.New("no receipts found for this purchase")
+	}
+
+	// Check if PDF service is available
+	if s.pdfService == nil {
+		return nil, nil, errors.New("PDF service not available")
+	}
+
+	// Generate combined PDF using the PDF service
+	pdfBytes, err := s.pdfService.GenerateAllReceiptsPDF(purchase, receipts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate combined receipts PDF: %v", err)
+	}
+
+	return pdfBytes, purchase, nil
+}
+
 // Private helper methods
 
 func (s *PurchaseService) checkIfApprovalRequired(amount float64) bool {
@@ -774,12 +896,57 @@ func (s *PurchaseService) updateReceiptStatus(receiptID uint) error {
 		return err
 	}
 
-	// Logic to determine if receipt is complete or partial
-	// This is simplified - in reality you'd compare received vs ordered quantities
-	receipt.Status = models.ReceiptStatusComplete
+	// Get the purchase to check completion status
+	purchase, err := s.purchaseRepo.FindByID(receipt.PurchaseID)
+	if err != nil {
+		return err
+	}
 
-	_, err = s.purchaseRepo.Update(&models.Purchase{}) // Update receipt status
-	return err
+	// Get all receipt items for this receipt
+	receiptItems, err := s.purchaseRepo.GetReceiptItems(receiptID)
+	if err != nil {
+		return err
+	}
+
+	// Check if all purchase items are fully received
+	allReceived := true
+	for _, purchaseItem := range purchase.PurchaseItems {
+		totalReceived := 0
+		// Sum up all received quantities for this purchase item across all receipts
+		for _, receiptItem := range receiptItems {
+			if receiptItem.PurchaseItemID == purchaseItem.ID {
+				totalReceived += receiptItem.QuantityReceived
+			}
+		}
+		if totalReceived < purchaseItem.Quantity {
+			allReceived = false
+			break
+		}
+	}
+
+	// Update receipt status
+	if allReceived {
+		receipt.Status = models.ReceiptStatusComplete
+		// Update purchase status to COMPLETED
+		purchase.Status = models.PurchaseStatusCompleted
+	} else {
+		receipt.Status = models.ReceiptStatusPartial
+	}
+
+	// Update both receipt and purchase
+	_, err = s.purchaseRepo.UpdateReceipt(receipt)
+	if err != nil {
+		return err
+	}
+
+	if allReceived {
+		_, err = s.purchaseRepo.Update(purchase)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *PurchaseService) getDefaultCondition(condition string) string {
@@ -788,6 +955,7 @@ func (s *PurchaseService) getDefaultCondition(condition string) string {
 	}
 	return condition
 }
+
 
 // createMinimalApprovalRequestForRejection creates a minimal approval request for rejection tracking without workflow dependency
 func (s *PurchaseService) createMinimalApprovalRequestForRejection(purchase *models.Purchase, userID uint) error {
@@ -853,4 +1021,51 @@ func isImmediatePayment(paymentMethod string) bool {
 	return paymentMethod == models.PurchasePaymentCash ||
 		paymentMethod == models.PurchasePaymentTransfer ||
 		paymentMethod == models.PurchasePaymentCheck
+}
+
+// updateProductStockOnApproval updates product stock when purchase is approved
+func (s *PurchaseService) updateProductStockOnApproval(purchase *models.Purchase) error {
+	fmt.Printf("📦 Starting stock update for purchase %s with %d items\n", purchase.Code, len(purchase.PurchaseItems))
+	
+	for _, item := range purchase.PurchaseItems {
+		// Get current product data
+		product, err := s.productRepo.FindByID(item.ProductID)
+		if err != nil {
+			fmt.Printf("❌ Error finding product %d: %v\n", item.ProductID, err)
+			continue // Skip this item but continue with others
+		}
+		
+		fmt.Printf("📋 Product %d (%s): Current stock = %d, Adding quantity = %d\n", 
+			product.ID, product.Name, product.Stock, item.Quantity)
+		
+		// Update stock quantity (add purchased quantity)
+		oldStock := product.Stock
+		product.Stock += item.Quantity
+		
+		// Update cost price using weighted average if we have existing stock
+		if oldStock > 0 {
+			// Weighted average: (old_stock * old_price + new_qty * new_price) / total_qty
+			totalValue := (float64(oldStock) * product.PurchasePrice) + (float64(item.Quantity) * item.UnitPrice)
+			totalQuantity := oldStock + item.Quantity
+			product.PurchasePrice = totalValue / float64(totalQuantity)
+			fmt.Printf("💰 Updated weighted average price: %.2f (was %.2f)\n", 
+				product.PurchasePrice, (float64(oldStock) * product.PurchasePrice) / float64(oldStock))
+		} else {
+			// If no existing stock, use new price
+			product.PurchasePrice = item.UnitPrice
+			fmt.Printf("💰 Set new purchase price: %.2f\n", product.PurchasePrice)
+		}
+		
+		// Save updated product
+		err = s.productRepo.Update(context.Background(), product)
+		if err != nil {
+			fmt.Printf("❌ Failed to update product %d stock: %v\n", product.ID, err)
+			return fmt.Errorf("failed to update stock for product %d: %v", product.ID, err)
+		}
+		
+		fmt.Printf("✅ Product %d stock updated: %d → %d\n", product.ID, oldStock, product.Stock)
+	}
+	
+	fmt.Printf("🎉 Stock update completed for purchase %s\n", purchase.Code)
+	return nil
 }

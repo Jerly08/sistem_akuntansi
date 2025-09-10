@@ -807,11 +807,11 @@ func (s *CashBankService) createDepositJournalEntries(tx *gorm.DB, transaction *
 	
 	// Use custom source account if provided, otherwise use default
 	if request.SourceAccountID != nil && *request.SourceAccountID > 0 {
-		// Validate the provided source account
+		// Validate the provided source account (allow REVENUE or EQUITY)
 		sourceAccount = &models.Account{}
-		err = tx.Where("id = ? AND type = ? AND is_active = ?", *request.SourceAccountID, "REVENUE", true).First(sourceAccount).Error
+		err = tx.Where("id = ? AND type IN (?, ?) AND is_active = ?", *request.SourceAccountID, "REVENUE", "EQUITY", true).First(sourceAccount).Error
 		if err != nil {
-			return fmt.Errorf("invalid source account: must be active revenue account")
+			return fmt.Errorf("invalid source account: must be active revenue or equity account")
 		}
 	} else {
 		// Get or create default source account for automatic deposit
@@ -831,7 +831,7 @@ func (s *CashBankService) createDepositJournalEntries(tx *gorm.DB, transaction *
 			CreditAmount: 0,
 			LineNumber:   1,
 		},
-		// Credit: Source Account (Revenue increases)
+		// Credit: Source Account (Revenue/Equity increases)
 		{
 			AccountID:    sourceAccount.ID,
 			Description:  fmt.Sprintf("Deposit from %s - %s", account.Name, request.Notes),
@@ -841,7 +841,7 @@ func (s *CashBankService) createDepositJournalEntries(tx *gorm.DB, transaction *
 		},
 	}
 	
-	// Update source account balance (Revenue account - credit increases balance)
+	// Update source account balance (Revenue/Equity account - credit increases balance)
 	err = tx.Model(&models.Account{}).Where("id = ?", sourceAccount.ID).
 		Update("balance", gorm.Expr("balance + ?", request.Amount)).Error
 	if err != nil {

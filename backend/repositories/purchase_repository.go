@@ -217,7 +217,7 @@ func (r *PurchaseRepository) FindReceiptByID(id uint) (*models.PurchaseReceipt, 
 
 func (r *PurchaseRepository) FindReceiptsByPurchaseID(purchaseID uint) ([]models.PurchaseReceipt, error) {
 	var receipts []models.PurchaseReceipt
-	err := r.db.Preload("User").
+	err := r.db.Preload("Receiver").
 		Preload("ReceiptItems").
 		Where("purchase_id = ?", purchaseID).
 		Find(&receipts).Error
@@ -225,8 +225,29 @@ func (r *PurchaseRepository) FindReceiptsByPurchaseID(purchaseID uint) ([]models
 	return receipts, err
 }
 
+// FindCompletedReceiptsByPurchaseID gets only completed receipts for a purchase
+func (r *PurchaseRepository) FindCompletedReceiptsByPurchaseID(purchaseID uint) ([]models.PurchaseReceipt, error) {
+	var receipts []models.PurchaseReceipt
+	err := r.db.Preload("Receiver").
+		Preload("ReceiptItems").
+		Where("purchase_id = ? AND status = ?", purchaseID, models.ReceiptStatusComplete).
+		Find(&receipts).Error
+
+	return receipts, err
+}
+
 func (r *PurchaseRepository) CreateReceiptItem(item *models.PurchaseReceiptItem) error {
 	return r.db.Create(item).Error
+}
+
+// GetReceiptItems gets all receipt items for a specific receipt
+func (r *PurchaseRepository) GetReceiptItems(receiptID uint) ([]models.PurchaseReceiptItem, error) {
+	var items []models.PurchaseReceiptItem
+	err := r.db.Preload("PurchaseItem").
+		Preload("PurchaseItem.Product").
+		Where("receipt_id = ?", receiptID).
+		Find(&items).Error
+	return items, err
 }
 
 // Statistics and Analytics
@@ -261,8 +282,15 @@ func (r *PurchaseRepository) GetPurchasesSummary(startDate, endDate string) (*mo
 	if endDate != "" {
 		query2 = query2.Where("date <= ?", endDate)
 	}
+	
+	// Debug: Log the values being used in query
+	fmt.Printf("[DEBUG] Approved query - Status values: %v, Approval status: %v\n", []string{models.PurchaseStatusApproved, models.PurchaseStatusCompleted}, models.PurchaseApprovalApproved)
+	
 	query2.Where("status IN (?) AND approval_status = ?", []string{models.PurchaseStatusApproved, models.PurchaseStatusCompleted}, models.PurchaseApprovalApproved).
 		Select("COALESCE(SUM(total_amount), 0)").Scan(&totalApprovedAmount)
+	
+	// Debug: Log the result
+	fmt.Printf("[DEBUG] Total approved amount calculated: %f\n", totalApprovedAmount)
 
 	// Get status counts
 	var statusCounts []struct {

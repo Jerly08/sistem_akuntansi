@@ -121,6 +121,37 @@ func (h *AccountHandler) DeleteAccount(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
 }
 
+// AdminDeleteAccount deletes an account with admin privileges
+func (h *AccountHandler) AdminDeleteAccount(c *gin.Context) {
+	code := c.Param("code")
+	
+	// Parse request body for cascade options
+	type AdminDeleteRequest struct {
+		CascadeDelete bool  `json:"cascade_delete"`
+		NewParentID   *uint `json:"new_parent_id"`
+	}
+	
+	var req AdminDeleteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Default to no cascade, move to root
+		req.CascadeDelete = false
+		req.NewParentID = nil
+	}
+	
+	err := h.repo.(*repositories.AccountRepo).AdminDelete(c.Request.Context(), code, req.CascadeDelete, req.NewParentID)
+	if err != nil {
+		if appErr := utils.GetAppError(err); appErr != nil {
+			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))
+		} else {
+			internalErr := utils.NewInternalError("Failed to delete account", err)
+			c.JSON(internalErr.StatusCode, internalErr.ToErrorResponse(""))
+		}
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully (admin)", "cascade": req.CascadeDelete})
+}
+
 // ListAccounts lists all accounts with optional filtering
 func (h *AccountHandler) ListAccounts(c *gin.Context) {
 	accountType := c.Query("type")

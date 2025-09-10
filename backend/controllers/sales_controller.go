@@ -397,12 +397,14 @@ func (sc *SalesController) CreateIntegratedPayment(c *gin.Context) {
 	if err != nil {
 		log.Printf("Error in CreateReceivablePayment for sale %d: %v", id, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
 			"error": "Failed to create payment",
 			"details": err.Error(),
+			"status": "error",
 		})
 		return
 	}
-	log.Printf("Payment created successfully: ID=%d, Code=%s", payment.ID, payment.Code)
+	log.Printf("✅ Payment created successfully: ID=%d, Code=%s", payment.ID, payment.Code)
 
 	// Return response with both payment info and updated sale status
 	updatedSale, err := sc.salesService.GetSaleByID(uint(id))
@@ -410,14 +412,17 @@ func (sc *SalesController) CreateIntegratedPayment(c *gin.Context) {
 		// If we can't get updated sale info, still return success but with basic info
 		log.Printf("Warning: Could not fetch updated sale info after payment creation: %v", err)
 		c.JSON(http.StatusCreated, gin.H{
+			"success": true,
 			"payment": payment,
 			"message": "Payment created successfully via Payment Management",
 			"note": "Payment created but updated sale info unavailable",
+			"status": "success",
 		})
 		return
 	}
 	
 	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
 		"payment": payment,
 		"updated_sale": gin.H{
 			"id": updatedSale.ID,
@@ -426,6 +431,7 @@ func (sc *SalesController) CreateIntegratedPayment(c *gin.Context) {
 			"outstanding_amount": updatedSale.OutstandingAmount,
 		},
 		"message": "Payment created successfully via Payment Management",
+		"status": "success",
 	})
 }
 

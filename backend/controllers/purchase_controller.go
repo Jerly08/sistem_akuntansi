@@ -284,14 +284,84 @@ func (pc *PurchaseController) CreatePurchaseReceipt(c *gin.Context) {
 
 // GetPurchaseReceipts returns receipts for a purchase
 func (pc *PurchaseController) GetPurchaseReceipts(c *gin.Context) {
-	_, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid purchase ID"})
 		return
 	}
 
-	// This would need to be implemented in the service
-	c.JSON(http.StatusOK, gin.H{"message": "Get receipts endpoint - to be implemented"})
+	// Check if only completed receipts are requested
+	completedOnly := c.Query("completed_only") == "true"
+
+	var receipts []models.PurchaseReceipt
+	if completedOnly {
+		// Get only completed receipts
+		receipts, err = pc.purchaseService.GetCompletedPurchaseReceipts(uint(id))
+	} else {
+		// Get all receipts
+		receipts, err = pc.purchaseService.GetPurchaseReceipts(uint(id))
+	}
+	
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": receipts,
+		"count": len(receipts),
+		"completed_only": completedOnly,
+	})
+}
+
+// GetReceiptPDF generates PDF for a specific receipt
+func (pc *PurchaseController) GetReceiptPDF(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("receipt_id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid receipt ID"})
+		return
+	}
+
+	// Generate PDF
+	pdfBytes, receipt, err := pc.purchaseService.GenerateReceiptPDF(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Set headers for PDF download
+	filename := fmt.Sprintf("receipt_%s.pdf", receipt.ReceiptNumber)
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Length", fmt.Sprintf("%d", len(pdfBytes)))
+
+	// Send PDF
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+// GetAllReceiptsPDF generates combined PDF for all receipts of a purchase
+func (pc *PurchaseController) GetAllReceiptsPDF(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid purchase ID"})
+		return
+	}
+
+	// Generate combined PDF
+	pdfBytes, purchase, err := pc.purchaseService.GenerateAllReceiptsPDF(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Set headers for PDF download
+	filename := fmt.Sprintf("receipts_%s.pdf", purchase.Code)
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Header("Content-Length", fmt.Sprintf("%d", len(pdfBytes)))
+
+	// Send PDF
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
 // Document Operations

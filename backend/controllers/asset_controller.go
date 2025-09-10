@@ -37,6 +37,10 @@ type AssetCreateRequest struct {
 	Condition          string    `json:"condition"`
 	AssetAccountID     *uint     `json:"asset_account_id"`
 	DepreciationAccountID *uint  `json:"depreciation_account_id"`
+	PaymentMethod      string    `json:"payment_method"` // CASH, BANK, CREDIT
+	PaymentAccountID   *uint     `json:"payment_account_id"` // Specific CASH/BANK account
+	CreditAccountID    *uint     `json:"credit_account_id"`  // Specific LIABILITY account
+	UserID             uint      `json:"user_id" binding:"required"`
 }
 
 type AssetUpdateRequest struct {
@@ -60,7 +64,7 @@ type AssetUpdateRequest struct {
 
 func NewAssetController(db *gorm.DB) *AssetController {
 	assetRepo := repositories.NewAssetRepository(db)
-	assetService := services.NewAssetService(assetRepo)
+	assetService := services.NewAssetService(assetRepo, db)
 	
 	return &AssetController{
 		assetService: assetService,
@@ -150,7 +154,14 @@ func (ac *AssetController) CreateAsset(c *gin.Context) {
 		asset.IsActive = true
 	}
 
-	err := ac.assetService.CreateAsset(asset)
+	// Default payment method if not provided
+	paymentMethod := req.PaymentMethod
+	if paymentMethod == "" {
+		paymentMethod = "CREDIT" // Default to credit purchase
+	}
+
+	// Use CreateAssetWithJournal to automatically generate journal entries
+	err := ac.assetService.CreateAssetWithJournal(asset, req.UserID, paymentMethod, req.PaymentAccountID, req.CreditAccountID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Failed to create asset",

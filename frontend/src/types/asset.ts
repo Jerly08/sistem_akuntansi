@@ -54,6 +54,10 @@ export interface AssetFormData {
   condition?: string;
   assetAccountId?: number;
   depreciationAccountId?: number;
+  paymentMethod?: 'CASH' | 'BANK' | 'CREDIT';
+  paymentAccountId?: number;    // For CASH/BANK - specific account selection
+  creditAccountId?: number;     // For CREDIT - specific liability account selection
+  userId?: number;
 }
 
 export interface AssetsSummary {
@@ -93,7 +97,19 @@ export interface DepreciationCalculation {
   useful_life_years: number;
 }
 
+// Account interface for dropdowns
+export interface Account {
+  id: number;
+  code: string;
+  name: string;
+  type: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+  category: string;
+  balance: number;
+  is_active: boolean;
+}
+
 export const ASSET_CATEGORIES = [
+  'Fixed Asset',
   'Real Estate',
   'Computer Equipment',
   'Vehicle',

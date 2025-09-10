@@ -27,6 +27,7 @@ export interface AccountCreateRequest {
   parent_id?: number;
   description?: string;
   opening_balance?: number;
+  is_header?: boolean; // Allow manual header creation
 }
 
 export interface AccountUpdateRequest {
@@ -38,6 +39,7 @@ export interface AccountUpdateRequest {
   parent_id?: number;
   is_active?: boolean;
   opening_balance?: number;
+  is_header?: boolean; // Allow manual header update
 }
 
 export interface AccountImportRequest {

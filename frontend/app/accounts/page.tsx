@@ -46,6 +46,7 @@ import {
 import { FiPlus, FiEdit, FiTrash2, FiDownload, FiSearch, FiSettings } from 'react-icons/fi';
 import AccountForm from '@/components/accounts/AccountForm';
 import AccountTreeView from '@/components/accounts/AccountTreeView';
+import AdminDeleteDialog from '@/components/accounts/AdminDeleteDialog';
 import { Account, AccountCreateRequest, AccountUpdateRequest } from '@/types/account';
 import accountService from '@/services/accountService';
 
@@ -71,6 +72,9 @@ const AccountsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isHeaderMode, setIsHeaderMode] = useState(false); // Track if creating header account
+  const [isAdminDeleteOpen, setIsAdminDeleteOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
   const toast = useToast();
   
   // Theme-aware colors (hooks must be called unconditionally and before any early returns)
@@ -243,7 +247,7 @@ const AccountsPage = () => {
     }
   };
 
-  // Handle account deletion
+  // Handle regular account deletion
   const handleDelete = async (account: Account) => {
     console.log('Delete account:', account); // Debug log
     if (!window.confirm(`Are you sure you want to delete account "${account.name}"?`)) {
@@ -271,6 +275,52 @@ const AccountsPage = () => {
         duration: 5000,
         isClosable: true,
       });
+    }
+  };
+
+  // Handle admin delete (for header accounts)
+  const handleAdminDelete = (account: Account) => {
+    console.log('Admin delete account:', account);
+    setAccountToDelete(account);
+    setIsAdminDeleteOpen(true);
+  };
+
+  // Get children of an account
+  const getAccountChildren = (parentId: number): Account[] => {
+    return flatAccounts.filter(account => account.parent_id === parentId);
+  };
+
+  // Perform admin delete with options
+  const performAdminDelete = async (options: { cascade_delete: boolean; new_parent_id?: number }) => {
+    if (!accountToDelete || !token) return;
+    
+    setIsSubmitting(true);
+    try {
+      const result = await accountService.adminDeleteAccount(token, accountToDelete.code, options);
+      
+      toast({
+        title: 'Account deleted (Admin)',
+        description: `Account has been deleted successfully. ${options.cascade_delete ? 'All child accounts were also deleted.' : 'Child accounts were preserved.'}`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+      
+      // Close dialog and refresh data
+      setIsAdminDeleteOpen(false);
+      setAccountToDelete(null);
+      fetchAccountData();
+    } catch (err: any) {
+      const errorMessage = err.message || 'Error deleting account';
+      toast({
+        title: 'Admin Delete Error',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -360,6 +410,14 @@ const AccountsPage = () => {
   // Open modal for creating a new account
   const handleCreate = () => {
     setSelectedAccount(null);
+    setIsHeaderMode(false);
+    setIsModalOpen(true);
+  };
+  
+  // Open modal for creating a header account
+  const handleCreateHeader = () => {
+    setSelectedAccount(null);
+    setIsHeaderMode(true);
     setIsModalOpen(true);
   };
 
@@ -367,6 +425,7 @@ const AccountsPage = () => {
   const handleEdit = (account: Account) => {
     console.log('Edit account:', account); // Debug log
     setSelectedAccount(account);
+    setIsHeaderMode(false); // Reset header mode for edits
     setIsModalOpen(true);
   };
 
@@ -418,22 +477,41 @@ const AccountsPage = () => {
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="xl" color={headingColor} fontWeight="600">Chart of Accounts</Heading>
           {canCreate && (
-            <Button
-              colorScheme="blue"
-              leftIcon={<FiPlus />}
-              onClick={handleCreate}
-              size="md"
-              px={6}
-              py={2}
-              borderRadius="md"
-              fontWeight="medium"
-              _hover={{ 
-                transform: 'translateY(-1px)',
-                boxShadow: 'lg'
-              }}
-            >
-              Add Account
-            </Button>
+            <HStack spacing={3}>
+              <Button
+                variant="outline"
+                colorScheme="blue"
+                leftIcon={<FiPlus />}
+                onClick={handleCreateHeader}
+                size="md"
+                px={6}
+                py={2}
+                borderRadius="md"
+                fontWeight="medium"
+                _hover={{ 
+                  transform: 'translateY(-1px)',
+                  boxShadow: 'md'
+                }}
+              >
+                Add Header Account
+              </Button>
+              <Button
+                colorScheme="blue"
+                leftIcon={<FiPlus />}
+                onClick={handleCreate}
+                size="md"
+                px={6}
+                py={2}
+                borderRadius="md"
+                fontWeight="medium"
+                _hover={{ 
+                  transform: 'translateY(-1px)',
+                  boxShadow: 'lg'
+                }}
+              >
+                Add Account
+              </Button>
+            </HStack>
           )}
         </Flex>
         
@@ -512,6 +590,7 @@ const AccountsPage = () => {
                     accounts={hierarchicalAccounts}
                     onEdit={handleEdit}
                     onDelete={handleDelete}
+                    onAdminDelete={handleAdminDelete}
                   />
                 )}
               </TabPanel>
@@ -526,6 +605,7 @@ const AccountsPage = () => {
                   accounts={hierarchyAccounts}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onAdminDelete={handleAdminDelete}
                   showActions={true}
                   showBalance={true}
                 />
@@ -540,7 +620,7 @@ const AccountsPage = () => {
           <ModalOverlay />
           <ModalContent>
             <ModalHeader>
-              {selectedAccount ? 'Edit Account' : 'Create Account'}
+              {selectedAccount ? 'Edit Account' : (isHeaderMode ? 'Create Header Account' : 'Create Account')}
             </ModalHeader>
             <ModalCloseButton />
             <ModalBody pb={6}>
@@ -550,10 +630,22 @@ const AccountsPage = () => {
                 onSubmit={handleSubmit}
                 onCancel={() => setIsModalOpen(false)}
                 isSubmitting={isSubmitting}
+                isHeaderMode={isHeaderMode}
               />
             </ModalBody>
           </ModalContent>
         </Modal>
+        
+        {/* Admin Delete Dialog */}
+        <AdminDeleteDialog
+          isOpen={isAdminDeleteOpen}
+          onClose={() => setIsAdminDeleteOpen(false)}
+          account={accountToDelete}
+          parentAccounts={flatAccounts.filter(a => a.is_header)}
+          children={accountToDelete ? getAccountChildren(accountToDelete.id) : []}
+          onConfirm={performAdminDelete}
+          isSubmitting={isSubmitting}
+        />
       </Box>
     </SimpleLayout>
   );

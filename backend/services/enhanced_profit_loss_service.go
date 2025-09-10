@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
@@ -185,7 +186,7 @@ func (epls *EnhancedProfitLossService) GenerateEnhancedProfitLoss(startDate, end
 		case models.AccountTypeRevenue:
 			revenueItems = append(revenueItems, item)
 		case models.AccountTypeExpense:
-			if epls.isCOGSCategory(account.Category) {
+			if epls.isCOGSAccount(account) {
 				cogsItems = append(cogsItems, item)
 			} else if epls.isTaxExpenseCategory(account.Category) {
 				taxExpenseItems = append(taxExpenseItems, item)
@@ -265,7 +266,31 @@ func (epls *EnhancedProfitLossService) isCOGSCategory(category string) bool {
 		CategoryCostOfGoodsSold,
 		"COST_OF_GOODS_SOLD", // Legacy support
 	}
-	return contains(cogsCategories, category)
+	return containsString(cogsCategories, category)
+}
+
+// Check if account should be treated as COGS based on name pattern
+func (epls *EnhancedProfitLossService) isCOGSAccount(account models.Account) bool {
+	// Check category first
+	if epls.isCOGSCategory(account.Category) {
+		return true
+	}
+	
+	// Check by account code and name patterns for Indonesian COA
+	if account.Code == "5101" || 
+	   account.Name == "Harga Pokok Penjualan" ||
+	   account.Name == "Cost of Goods Sold" {
+		return true
+	}
+	
+	// Additional Indonesian COGS patterns
+	if strings.Contains(strings.ToLower(account.Name), "harga pokok") ||
+	   strings.Contains(strings.ToLower(account.Name), "pokok penjualan") ||
+	   strings.Contains(strings.ToLower(account.Name), "cost of goods") {
+		return true
+	}
+	
+	return false
 }
 
 func (epls *EnhancedProfitLossService) isOperatingExpenseCategory(category string) bool {
@@ -282,7 +307,7 @@ func (epls *EnhancedProfitLossService) isOperatingExpenseCategory(category strin
 		"DEPRECIATION_EXPENSE",
 		"OPERATING_EXPENSE",
 	}
-	return contains(opexCategories, category)
+	return containsString(opexCategories, category)
 }
 
 func (epls *EnhancedProfitLossService) isTaxExpenseCategory(category string) bool {
@@ -291,7 +316,7 @@ func (epls *EnhancedProfitLossService) isTaxExpenseCategory(category string) boo
 		"TAX_EXPENSE",
 		"INCOME_TAX_EXPENSE",
 	}
-	return contains(taxCategories, category)
+	return containsString(taxCategories, category)
 }
 
 // Build revenue sections
@@ -300,12 +325,19 @@ func (epls *EnhancedProfitLossService) buildRevenueSection(pl *EnhancedProfitLos
 
 	for _, item := range items {
 		switch item.Category {
-		case CategorySalesRevenue: // "SALES_REVENUE"
+		case CategorySalesRevenue, "OPERATING_REVENUE": // Handle existing category
 			salesItems = append(salesItems, item)
 		case CategoryServiceRevenue: // "SERVICE_REVENUE"
 			serviceItems = append(serviceItems, item)
-		default:
+		case CategoryOtherOperatingRev, CategoryNonOperatingRevenue, "OTHER_INCOME": // Handle existing categories
 			otherItems = append(otherItems, item)
+		default:
+			// Default operating revenue items go to sales
+			if item.Code == "4101" || item.Name == "Pendapatan Penjualan" {
+				salesItems = append(salesItems, item)
+			} else {
+				otherItems = append(otherItems, item)
+			}
 		}
 	}
 
@@ -485,25 +517,47 @@ func (epls *EnhancedProfitLossService) calculateAccountBalanceForPeriod(accountI
 		return 0
 	}
 
+	// First try to get period activity from journal lines
 	var totalDebits, totalCredits float64
-	epls.db.Table("journal_entries").
-		Joins("JOIN journals ON journal_entries.journal_id = journals.id").
-		Where("journal_entries.account_id = ? AND journals.date BETWEEN ? AND ? AND journals.status = ?", 
+	epls.db.Table("journal_lines").
+		Joins("JOIN journal_entries ON journal_lines.journal_entry_id = journal_entries.id").
+		Where("journal_lines.account_id = ? AND journal_entries.entry_date BETWEEN ? AND ? AND journal_entries.status = ?", 
 			accountID, startDate, endDate, models.JournalStatusPosted).
-		Select("COALESCE(SUM(journal_entries.debit_amount), 0) as total_debits, COALESCE(SUM(journal_entries.credit_amount), 0) as total_credits").
+		Select("COALESCE(SUM(journal_lines.debit_amount), 0) as total_debits, COALESCE(SUM(journal_lines.credit_amount), 0) as total_credits").
 		Row().Scan(&totalDebits, &totalCredits)
 
-	// For P&L accounts, we want the period activity
+	// Calculate period activity from journal entries
+	var periodActivity float64
 	switch account.Type {
 	case models.AccountTypeRevenue:
 		// Revenue: Credit is positive
-		return totalCredits - totalDebits
+		periodActivity = totalCredits - totalDebits
 	case models.AccountTypeExpense:
 		// Expenses: Debit is positive  
-		return totalDebits - totalCredits
+		periodActivity = totalDebits - totalCredits
 	default:
 		return 0
 	}
+
+	// IMPORTANT: After synchronization, we should ONLY rely on journal entries
+	// If there's no journal activity, check if we need to use cumulative balance
+	// for period reporting (when period spans from beginning of time)
+	if periodActivity == 0 && account.Balance != 0 {
+		// Check if period starts from a very early date (indicating full period report)
+		if startDate.Year() < 2020 || startDate.IsZero() {
+			// For full period reports, use account balance
+			switch account.Type {
+			case models.AccountTypeRevenue:
+				return account.Balance
+			case models.AccountTypeExpense:
+				return account.Balance
+			}
+		}
+		// For specific period reports, no journal activity means no activity
+		return 0
+	}
+
+	return periodActivity
 }
 
 func (epls *EnhancedProfitLossService) sumItems(items []EnhancedPLItem) float64 {
@@ -533,10 +587,10 @@ func (epls *EnhancedProfitLossService) getSharesOutstanding() float64 {
 		return profile.SharesOutstanding
 	}
 	
-	// Try to calculate from share capital accounts
+	// Try to calculate from share capital accounts - suppress error logging
 	var shareCapitalAccount models.Account
-	err := epls.db.Where("type = ? AND (category LIKE ? OR category LIKE ? OR name LIKE ?) AND is_active = ?", 
-		models.AccountTypeEquity, "%SHARE_CAPITAL%", "%MODAL_SAHAM%", "%share%", true).First(&shareCapitalAccount).Error
+	err := epls.db.Where("type = ? AND (category LIKE ? OR category LIKE ? OR name ILIKE ?) AND is_active = ?", 
+		models.AccountTypeEquity, "%SHARE_CAPITAL%", "%MODAL_SAHAM%", "%modal%", true).First(&shareCapitalAccount).Error
 	
 	if err == nil && shareCapitalAccount.Balance > 0 {
 		// Assuming par value of 1000 per share (can be configured in company profile)
@@ -557,8 +611,8 @@ func (epls *EnhancedProfitLossService) getSharesOutstanding() float64 {
 		return totalEquity / parValue
 	}
 	
-	// Return 0 if no equity data available (EPS cannot be calculated)
-	return 0
+	// Return default 1 share if no equity data available to avoid division by zero
+	return 1
 }
 
 func (epls *EnhancedProfitLossService) calculatePercentages(pl *EnhancedProfitLossData) {
@@ -635,7 +689,7 @@ func (epls *EnhancedProfitLossService) getCompanyInfo() CompanyInfo {
 }
 
 // Utility function
-func contains(slice []string, item string) bool {
+func containsString(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
 			return true

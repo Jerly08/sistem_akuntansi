@@ -39,7 +39,7 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 	
 	for _, itemReq := range items {
 		// Validate product exists
-		product, err := s.productRepo.FindByID(itemReq.ProductID)
+		_, err := s.productRepo.FindByID(itemReq.ProductID)
 		if err != nil {
 			// Add more detailed logging
 			fmt.Printf("[DEBUG] Failed to find product with ID %d: %v\n", itemReq.ProductID, err)
@@ -63,8 +63,8 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 		subtotalBeforeDiscount += lineSubtotal
 		itemDiscountAmount += item.Discount
 		
-		// Update product cost price (weighted average)
-		s.updateProductCostPrice(product, item.Quantity, item.UnitPrice)
+		// Note: Stock will be updated when purchase is approved, not during creation
+		// This ensures stock only changes when purchase is actually approved
 		
 		purchase.PurchaseItems = append(purchase.PurchaseItems, item)
 	}
@@ -129,22 +129,13 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 	return nil
 }
 
-// updateProductCostPrice updates product cost using weighted average
+// updateProductCostPrice - DEPRECATED: This method is no longer used
+// Stock and price updates are now handled in updateProductStockOnApproval() 
+// when purchase status changes to APPROVED
 func (s *PurchaseService) updateProductCostPrice(product *models.Product, newQuantity int, newPrice float64) {
-	if product.Stock == 0 {
-		product.PurchasePrice = newPrice
-	} else {
-		// Weighted average cost calculation
-		totalValue := (float64(product.Stock) * product.PurchasePrice) + (float64(newQuantity) * newPrice)
-		totalQuantity := product.Stock + newQuantity
-		product.PurchasePrice = totalValue / float64(totalQuantity)
-	}
-	
-	// Update stock quantity
-	product.Stock += newQuantity
-	
-	// TODO: Replace with proper save method when available
-	// s.productRepo.Update(product)
+	// This method is deprecated - stock updates now happen on approval, not on creation
+	fmt.Printf("⚠️ DEPRECATED: updateProductCostPrice called - stock updates now happen on approval\n")
+	// Method kept for backwards compatibility but does nothing
 }
 
 // recalculatePurchaseTotals recalculates purchase totals
@@ -241,24 +232,42 @@ func (s *PurchaseService) updatePurchaseItems(purchase *models.Purchase, items [
 // createPurchaseAccountingEntries creates journal entries for purchase
 // Adapted to match database schema that expects account_id in journal_entries table
 func (s *PurchaseService) createPurchaseAccountingEntries(purchase *models.Purchase, userID uint) (*models.JournalEntry, error) {
-	inventoryAccountID := uint(4) // Default inventory account ID
+	// Get the correct inventory account ID (Persediaan Barang Dagangan - 1301)
+	inventoryAccount, err := s.accountRepo.FindByCode(nil, "1301")
+	inventoryAccountID := uint(4) // Fallback default
+	if err != nil {
+		fmt.Printf("⚠️ Warning: Could not find inventory account 1301, using fallback ID 4: %v\n", err)
+	} else {
+		inventoryAccountID = inventoryAccount.ID
+		fmt.Printf("✅ Found inventory account 1301 with ID: %d\n", inventoryAccountID)
+	}
 
 	// For this database schema, we'll create one primary journal entry
-	// and use the main expense account as the account_id
+	// Primary account should be inventory (asset) for merchandise purchases
 	
-	// Find the primary expense account (most used or first one)
+	// Use inventory account as primary (this is an asset, not expense)
 	var primaryAccountID uint = inventoryAccountID
+	// Note: ExpenseAccountID in items is used for non-inventory purchases
+	// For inventory items, we should always use the inventory account
 	if len(purchase.PurchaseItems) > 0 {
+		// Check if this is a non-inventory purchase (services, etc.)
+		hasNonInventoryItems := false
 		for _, item := range purchase.PurchaseItems {
 			if item.ExpenseAccountID != 0 {
-				primaryAccountID = item.ExpenseAccountID
-				break // Use the first expense account found
+				hasNonInventoryItems = true
+				primaryAccountID = item.ExpenseAccountID // Use expense for non-inventory
+				break
 			}
+		}
+		if !hasNonInventoryItems {
+			fmt.Printf("📦 Using inventory account %d for merchandise purchase\n", inventoryAccountID)
+		} else {
+			fmt.Printf("📋 Using expense account %d for non-inventory purchase\n", primaryAccountID)
 		}
 	}
 	
 	// Calculate proper accounting totals
-	// Debit side: Expense accounts + PPN Masukan (always the same)
+	// Debit side: Inventory/Asset accounts + PPN Masukan (not expense until sold)
 	totalDebits := purchase.NetBeforeTax + purchase.PPNAmount
 	
 	// Credit side depends on payment method
@@ -314,15 +323,23 @@ func (s *PurchaseService) createPurchaseAccountingEntries(purchase *models.Purch
 	
 	// Add line items details in description
 	for _, item := range purchase.PurchaseItems {
+		// Determine which account to use
 		accountID := item.ExpenseAccountID
+		var accountName string
 		if accountID == 0 {
+			// This is inventory/merchandise
 			accountID = inventoryAccountID
+			accountName = "Persediaan Barang Dagangan"
+		} else {
+			// This is non-inventory (expense)
+			accountName = "Expense Account"
 		}
-		account, _ := s.accountRepo.FindByID(nil, accountID)
-		accountName := "Inventory"
-		if account != nil {
+		
+		// Try to get actual account name
+		if account, err := s.accountRepo.FindByID(nil, accountID); err == nil && account != nil {
 			accountName = account.Name
 		}
+		
 		detailsBuilder.WriteString(fmt.Sprintf("Dr. %s: %.2f\n", accountName, item.TotalPrice))
 	}
 	
@@ -400,15 +417,9 @@ func (s *PurchaseService) ProcessPurchaseReceipt(purchaseID uint, request models
 			return nil, err
 		}
 		
-		// Update inventory if condition is good
-		if itemReq.Condition == models.ReceiptConditionGood {
-			product, _ := s.productRepo.FindByID(purchaseItem.ProductID)
-			if product != nil {
-				product.Stock += itemReq.QuantityReceived
-				// TODO: Replace with proper update method when available
-				// s.productRepo.Update(product)
-			}
-		}
+		// Note: Stock is already updated when purchase was approved.
+		// Receipt is only for tracking physical delivery/condition.
+		// If you need to handle damaged goods or returns, implement separate logic.
 		
 		// Check if all items are fully received
 		if itemReq.QuantityReceived < purchaseItem.Quantity {

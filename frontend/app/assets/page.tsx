@@ -47,8 +47,9 @@ import {
   Image,
   Grid,
   GridItem,
+  Tooltip,
 } from '@chakra-ui/react';
-import { FiPlus, FiEdit, FiTrash2, FiEye, FiDownload, FiMapPin, FiExternalLink, FiX, FiUpload, FiSettings } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiEye, FiDownload, FiMapPin, FiExternalLink, FiX, FiUpload, FiSettings, FiInfo } from 'react-icons/fi';
 import { assetService, Asset as BackendAsset } from '@/services/assetService';
 import { ASSET_CATEGORIES, DEPRECIATION_METHOD_LABELS, AssetsSummary } from '@/types/asset';
 import AssetSummaryComponent from '@/components/assets/AssetSummary';
@@ -95,6 +96,13 @@ const AssetsPage = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryIndex, setEditingCategoryIndex] = useState<number | null>(null);
   
+  // Account management states
+  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
+  const [liabilityAccounts, setLiabilityAccounts] = useState<any[]>([]);
+  const [fixedAssetAccounts, setFixedAssetAccounts] = useState<any[]>([]);
+  const [depreciationAccounts, setDepreciationAccounts] = useState<any[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+  
   // Form state
   const [formData, setFormData] = useState<AssetFormData>({
     name: '',
@@ -110,7 +118,10 @@ const AssetsPage = () => {
     location: '',
     coordinates: '',
     serialNumber: '',
-    condition: 'Good'
+    condition: 'Good',
+    paymentMethod: 'CREDIT',
+    paymentAccountId: undefined,
+    creditAccountId: undefined
   });
 
   // Fetch assets from API
@@ -149,11 +160,35 @@ const AssetsPage = () => {
     }
   };
 
+  // Fetch accounts for dropdowns
+  const fetchAccounts = async () => {
+    try {
+      setIsLoadingAccounts(true);
+      const [bankAccountsRes, liabilityAccountsRes, fixedAssetAccountsRes, depreciationAccountsRes] = await Promise.all([
+        assetService.getBankAccounts(),
+        assetService.getLiabilityAccounts(),
+        assetService.getFixedAssetAccounts(),
+        assetService.getDepreciationExpenseAccounts()
+      ]);
+      
+      setBankAccounts(bankAccountsRes.data || []);
+      setLiabilityAccounts(liabilityAccountsRes.data || []);
+      setFixedAssetAccounts(fixedAssetAccountsRes.data || []);
+      setDepreciationAccounts(depreciationAccountsRes.data || []);
+    } catch (error: any) {
+      console.error('Error fetching accounts:', error);
+      // Don't show error toast for accounts as it's not critical
+    } finally {
+      setIsLoadingAccounts(false);
+    }
+  };
+
   // Load assets on component mount
   useEffect(() => {
     if (token) {
       fetchAssets();
       fetchAssetsSummary();
+      fetchAccounts();
     }
   }, [token]);
 
@@ -198,6 +233,10 @@ const AssetsPage = () => {
         condition: formData.condition || 'Good',
         asset_account_id: formData.assetAccountId,
         depreciation_account_id: formData.depreciationAccountId,
+        payment_method: formData.paymentMethod || 'CREDIT',
+        payment_account_id: formData.paymentAccountId,
+        credit_account_id: formData.creditAccountId,
+        user_id: 1, // TODO: Get from auth context
       };
       
       if (formData.id) {
@@ -290,7 +329,10 @@ const AssetsPage = () => {
       location: '',
       coordinates: '',
       serialNumber: '',
-      condition: 'Good'
+      condition: 'Good',
+      paymentMethod: 'CREDIT',
+      paymentAccountId: undefined,
+      creditAccountId: undefined
     });
   };
 
@@ -333,6 +375,7 @@ const AssetsPage = () => {
       condition: asset.condition || 'Good',
       assetAccountId: asset.asset_account_id,
       depreciationAccountId: asset.depreciation_account_id,
+      paymentMethod: 'CREDIT', // Default for edit mode
     });
     setIsModalOpen(true);
   };
@@ -792,7 +835,7 @@ const AssetsPage = () => {
   };
 
   return (
-<SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
+<SimpleLayout allowedRoles={['admin', 'finance', 'director', 'employee']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Box>
@@ -988,17 +1031,47 @@ const AssetsPage = () => {
                       </HStack>
                       
                       <HStack w="full" spacing={4}>
-                        <CurrencyInput
-                          value={formData.salvageValue || 0}
-                          onChange={(value) => handleInputChange('salvageValue', value)}
-                          label="Salvage Value"
-                          placeholder="Contoh: Rp 5.000.000"
-                          isRequired={false}
-                          isInvalid={hasFieldError(validationErrors, 'salvageValue')}
-                          errorMessage={getFieldError(validationErrors, 'salvageValue')}
-                          size="md"
-                          min={0}
-                        />
+                        <FormControl isInvalid={hasFieldError(validationErrors, 'salvageValue')}>
+                          <HStack spacing={2} align="center">
+                            <FormLabel fontSize="sm" fontWeight="medium" mb={0}>Salvage Value</FormLabel>
+                            <Tooltip
+                              label={
+                                <Box>
+                                  <Text fontWeight="semibold" mb={1}>💡 Salvage Value (Nilai Sisa)</Text>
+                                  <Text fontSize="xs" lineHeight="1.4">
+                                    Perkiraan nilai asset di akhir masa manfaat.
+                                  </Text>
+                                  <Text fontSize="xs" lineHeight="1.4" mt={1}>
+                                    Contoh: Mobil Rp 100 juta, setelah 5 tahun masih 
+                                    bernilai Rp 20 juta = salvage value Rp 20 juta.
+                                  </Text>
+                                  <Text fontSize="xs" lineHeight="1.4" mt={1} fontWeight="medium">
+                                    Mempengaruhi perhitungan depresiasi bulanan.
+                                  </Text>
+                                </Box>
+                              }
+                              hasArrow
+                              placement="top"
+                              bg="gray.800"
+                              color="white"
+                              borderRadius="md"
+                              p={3}
+                              maxW="280px"
+                            >
+                              <span><Icon as={FiInfo} color="blue.500" boxSize={4} /></span>
+                            </Tooltip>
+                          </HStack>
+                          <CurrencyInput
+                            value={formData.salvageValue || 0}
+                            onChange={(value) => handleInputChange('salvageValue', value)}
+                            placeholder="Contoh: Rp 5.000.000"
+                            isInvalid={hasFieldError(validationErrors, 'salvageValue')}
+                            errorMessage={getFieldError(validationErrors, 'salvageValue')}
+                            size="md"
+                            min={0}
+                            showLabel={false}
+                          />
+                        </FormControl>
                         
                         <FormControl isInvalid={hasFieldError(validationErrors, 'usefulLife')}>
                           <FormLabel fontSize="sm" fontWeight="medium">Useful Life (Years)</FormLabel>
@@ -1025,7 +1098,26 @@ const AssetsPage = () => {
                       
                       <HStack w="full" spacing={4}>
                         <FormControl>
-                          <FormLabel fontSize="sm" fontWeight="medium">Depreciation Method</FormLabel>
+                          <HStack spacing={2} align="center">
+                            <FormLabel fontSize="sm" fontWeight="medium" mb={0}>Depreciation Method</FormLabel>
+                            <Tooltip
+                              label={
+                                <Box>
+                                  <Text fontWeight="semibold" mb={1}>💡 Metode Depresiasi</Text>
+                                  <Text fontSize="xs">Straight Line: biaya depresiasi sama tiap periode.</Text>
+                                  <Text fontSize="xs">Declining Balance: biaya lebih besar di awal, makin kecil berikutnya.</Text>
+                                </Box>
+                              }
+                              hasArrow
+                              placement="top"
+                              bg="gray.800"
+                              color="white"
+                              borderRadius="md"
+                              p={3}
+                            >
+                              <span><Icon as={FiInfo} color="blue.500" boxSize={4} /></span>
+                            </Tooltip>
+                          </HStack>
                           <Select
                             value={formData.depreciationMethod || 'STRAIGHT_LINE'}
                             onChange={(e) => handleInputChange('depreciationMethod', e.target.value as 'STRAIGHT_LINE' | 'DECLINING_BALANCE')}
@@ -1047,6 +1139,163 @@ const AssetsPage = () => {
                             <option value="INACTIVE">⚪ Inactive</option>
                             <option value="SOLD">🔴 Sold</option>
                           </Select>
+                        </FormControl>
+                      </HStack>
+                      
+                      <HStack w="full" spacing={4}>
+                        <FormControl>
+                          <FormLabel fontSize="sm" fontWeight="medium">Payment Method</FormLabel>
+                          <Select
+                            value={formData.paymentMethod || 'CREDIT'}
+                            onChange={(e) => handleInputChange('paymentMethod', e.target.value as 'CASH' | 'BANK' | 'CREDIT')}
+                            size="md"
+                          >
+                            <option value="CASH">💰 Cash Payment</option>
+                            <option value="BANK">🏦 Bank Transfer</option>
+                            <option value="CREDIT">📋 Credit Purchase</option>
+                          </Select>
+                          <Text fontSize="xs" color="gray.500" mt={1}>
+                            💡 Select how this asset was paid for (affects journal entries)
+                          </Text>
+                        </FormControl>
+                        
+                        {/* Conditional Account Selection */}
+                        {(formData.paymentMethod === 'CASH' || formData.paymentMethod === 'BANK') && (
+                          <FormControl>
+                            <FormLabel fontSize="sm" fontWeight="medium">
+                              {formData.paymentMethod === 'CASH' ? '💰 Select Cash Account' : '🏦 Select Bank Account'}
+                            </FormLabel>
+                            <Select
+                              value={formData.paymentAccountId || ''}
+                              onChange={(e) => handleInputChange('paymentAccountId', e.target.value ? parseInt(e.target.value) : undefined)}
+                              placeholder={`Choose ${formData.paymentMethod === 'CASH' ? 'cash' : 'bank'} account`}
+                              size="md"
+                              isDisabled={isLoadingAccounts}
+                            >
+                              {bankAccounts
+                                .filter(account => 
+                                  formData.paymentMethod === 'CASH' 
+                                    ? account.type === 'CASH'
+                                    : account.type === 'BANK'
+                                )
+                                .map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.code} - {account.display_name || account.name} 
+                                  {account.balance_formatted && ` (${account.balance_formatted})`}
+                                </option>
+                              ))}
+                            </Select>
+                            <Text fontSize="xs" color="gray.500" mt={1}>
+                              💡 Select from integrated Cash & Bank accounts (linked to COA)
+                            </Text>
+                            {/* Enhanced feedback for better UX */}
+                            {(() => {
+                              const filteredAccounts = bankAccounts.filter(account => 
+                                formData.paymentMethod === 'CASH' 
+                                  ? account.type === 'CASH'
+                                  : account.type === 'BANK'
+                              );
+                              
+                              if (filteredAccounts.length === 0 && !isLoadingAccounts) {
+                                return (
+                                  <VStack spacing={2} mt={1} align="start">
+                                    <Text fontSize="xs" color="orange.500">
+                                      ⚠️ No {formData.paymentMethod === 'CASH' ? 'cash' : 'bank'} accounts found.
+                                    </Text>
+                                    {formData.paymentMethod === 'CASH' && bankAccounts.some(acc => acc.type === 'BANK') && (
+                                      <Text fontSize="xs" color="blue.500">
+                                        💡 Suggestion: Switch to "Bank Transfer" method - {bankAccounts.filter(acc => acc.type === 'BANK').length} bank accounts available.
+                                      </Text>
+                                    )}
+                                    {formData.paymentMethod === 'BANK' && bankAccounts.some(acc => acc.type === 'CASH') && (
+                                      <Text fontSize="xs" color="blue.500">
+                                        💡 Suggestion: Switch to "Cash Payment" method - {bankAccounts.filter(acc => acc.type === 'CASH').length} cash accounts available.
+                                      </Text>
+                                    )}
+                                    <Text fontSize="xs" color="gray.500">
+                                      Or create new {formData.paymentMethod === 'CASH' ? 'cash' : 'bank'} account in Cash & Bank module.
+                                    </Text>
+                                  </VStack>
+                                );
+                              }
+                              
+                              // Show count info when accounts are available
+                              if (filteredAccounts.length > 0) {
+                                return (
+                                  <Text fontSize="xs" color="green.500" mt={1}>
+                                    ✅ {filteredAccounts.length} {formData.paymentMethod === 'CASH' ? 'cash' : 'bank'} account{filteredAccounts.length > 1 ? 's' : ''} available
+                                  </Text>
+                                );
+                              }
+                              
+                              return null;
+                            })()}
+                          </FormControl>
+                        )}
+                        
+                        {formData.paymentMethod === 'CREDIT' && (
+                          <FormControl>
+                            <FormLabel fontSize="sm" fontWeight="medium">📋 Select Liability Account</FormLabel>
+                            <Select
+                              value={formData.creditAccountId || ''}
+                              onChange={(e) => handleInputChange('creditAccountId', e.target.value ? parseInt(e.target.value) : undefined)}
+                              placeholder="Choose liability account"
+                              size="md"
+                              isDisabled={isLoadingAccounts}
+                            >
+                              {liabilityAccounts.map((account) => (
+                                <option key={account.id} value={account.id}>
+                                  {account.code} - {account.name} ({formatCurrency(account.balance)})
+                                </option>
+                              ))}
+                            </Select>
+                            <Text fontSize="xs" color="gray.500" mt={1}>
+                              💡 Select the liability account for credit purchase (e.g., Hutang Bank, Hutang Supplier)
+                            </Text>
+                          </FormControl>
+                        )}
+                      </HStack>
+                      
+                      {/* Asset and Depreciation Account Selection */}
+                      <HStack w="full" spacing={4}>
+                        <FormControl>
+                          <FormLabel fontSize="sm" fontWeight="medium">🏢 Fixed Asset Account</FormLabel>
+                          <Select
+                            value={formData.assetAccountId || ''}
+                            onChange={(e) => handleInputChange('assetAccountId', e.target.value ? parseInt(e.target.value) : undefined)}
+                            placeholder="Choose fixed asset account"
+                            size="md"
+                            isDisabled={isLoadingAccounts}
+                          >
+                            {fixedAssetAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.code} - {account.name} ({formatCurrency(account.balance)})
+                              </option>
+                            ))}
+                          </Select>
+                          <Text fontSize="xs" color="gray.500" mt={1}>
+                            💡 This account will be debited (default: 1500 - Fixed Assets)
+                          </Text>
+                        </FormControl>
+                        
+                        <FormControl>
+                          <FormLabel fontSize="sm" fontWeight="medium">📉 Depreciation Expense Account</FormLabel>
+                          <Select
+                            value={formData.depreciationAccountId || ''}
+                            onChange={(e) => handleInputChange('depreciationAccountId', e.target.value ? parseInt(e.target.value) : undefined)}
+                            placeholder="Choose depreciation expense account"
+                            size="md"
+                            isDisabled={isLoadingAccounts}
+                          >
+                            {depreciationAccounts.map((account) => (
+                              <option key={account.id} value={account.id}>
+                                {account.code} - {account.name} ({formatCurrency(account.balance)})
+                              </option>
+                            ))}
+                          </Select>
+                          <Text fontSize="xs" color="gray.500" mt={1}>
+                            💡 For monthly depreciation entries (default: 6201 - Depreciation Expense)
+                          </Text>
                         </FormControl>
                       </HStack>
                     </VStack>

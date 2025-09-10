@@ -6,13 +6,16 @@ import (
 	"errors"
 	"math"
 	"strconv"
+	"strings"
 	"time"
+	"gorm.io/gorm"
 )
 
 type AssetServiceInterface interface {
 	GetAllAssets() ([]models.Asset, error)
 	GetAssetByID(id uint) (*models.Asset, error)
 	CreateAsset(asset *models.Asset) error
+	CreateAssetWithJournal(asset *models.Asset, userId uint, paymentMethod string, paymentAccountID *uint, creditAccountID *uint) error
 	UpdateAsset(asset *models.Asset) error
 	DeleteAsset(id uint) error
 	GenerateAssetCode(category string) (string, error)
@@ -20,10 +23,12 @@ type AssetServiceInterface interface {
 	GetDepreciationSchedule(asset *models.Asset) ([]DepreciationEntry, error)
 	GetAssetsSummary() (*AssetsSummary, error)
 	GetAssetsForDepreciationReport() ([]AssetDepreciationReport, error)
+	CreateDepreciationJournalEntry(asset *models.Asset, depreciationAmount float64, userId uint, entryDate time.Time) error
 }
 
 type AssetService struct {
 	assetRepo repositories.AssetRepositoryInterface
+	db        *gorm.DB
 }
 
 type DepreciationEntry struct {
@@ -51,9 +56,10 @@ type AssetDepreciationReport struct {
 	CurrentBookValue        float64      `json:"current_book_value"`
 }
 
-func NewAssetService(assetRepo repositories.AssetRepositoryInterface) AssetServiceInterface {
+func NewAssetService(assetRepo repositories.AssetRepositoryInterface, db *gorm.DB) AssetServiceInterface {
 	return &AssetService{
 		assetRepo: assetRepo,
+		db:        db,
 	}
 }
 
@@ -109,6 +115,97 @@ func (s *AssetService) CreateAsset(asset *models.Asset) error {
 	return s.assetRepo.Create(asset)
 }
 
+// CreateAssetWithJournal creates a new asset and generates corresponding journal entries
+func (s *AssetService) CreateAssetWithJournal(asset *models.Asset, userId uint, paymentMethod string, paymentAccountID *uint, creditAccountID *uint) error {
+	// Generate asset code OUTSIDE transaction to avoid transaction abort issues
+	if asset.Code == "" {
+		code, err := s.GenerateAssetCode(asset.Category)
+		if err != nil {
+			return err
+		}
+		asset.Code = code
+	}
+
+	// Set default status
+	if asset.Status == "" {
+		asset.Status = models.AssetStatusActive
+	}
+
+	// Validate purchase date
+	if asset.PurchaseDate.IsZero() {
+		return errors.New("purchase date is required")
+	}
+
+	// Validate purchase price
+	if asset.PurchasePrice <= 0 {
+		return errors.New("purchase price must be greater than 0")
+	}
+
+	// Validate useful life for depreciable assets
+	if asset.UsefulLife <= 0 && asset.DepreciationMethod != "" {
+		return errors.New("useful life must be greater than 0 for depreciable assets")
+	}
+
+	// Calculate initial depreciation if needed
+	if asset.AccumulatedDepreciation == 0 && asset.DepreciationMethod != "" {
+		depreciation, err := s.CalculateDepreciation(asset, time.Now())
+		if err == nil {
+			asset.AccumulatedDepreciation = depreciation
+		}
+	}
+
+	// Retry logic with fresh transaction for each attempt
+	const maxRetries = 5
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Start a fresh transaction for each attempt
+		tx := s.db.Begin()
+		if tx.Error != nil {
+			return tx.Error
+		}
+		
+		// Try to create the asset
+		createErr := tx.Create(asset).Error
+		if createErr == nil {
+			// Success! Generate and create journal entry
+			journalEntry := models.GenerateAssetJournalEntry(*asset, userId, paymentMethod, paymentAccountID, creditAccountID)
+			if err := tx.Create(journalEntry).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+
+			// Update account balances
+			if err := s.updateAccountBalances(tx, journalEntry); err != nil {
+				tx.Rollback()
+				return err
+			}
+
+			// Commit transaction and return success
+			return tx.Commit().Error
+		}
+		
+		// Rollback failed transaction immediately
+		tx.Rollback()
+		
+		// Check if it's a unique constraint violation on asset code
+		if isUniqueCodeError(createErr) && attempt < maxRetries {
+			// Generate new code and retry with fresh transaction
+			newCode, codeErr := s.GenerateAssetCode(asset.Category)
+			if codeErr != nil {
+				return errors.New("failed to generate new asset code after collision: " + codeErr.Error())
+			}
+			asset.Code = newCode
+			continue // Retry with new code and fresh transaction
+		}
+		
+		// If it's not a unique constraint error or we've exhausted retries, return the error
+		return createErr
+	}
+	
+	// Should never reach here, but just in case
+	return errors.New("exhausted all retry attempts")
+
+}
+
 // UpdateAsset updates an existing asset
 func (s *AssetService) UpdateAsset(asset *models.Asset) error {
 	// Validate purchase date
@@ -141,29 +238,23 @@ func (s *AssetService) DeleteAsset(id uint) error {
 func (s *AssetService) GenerateAssetCode(category string) (string, error) {
 	// Get category prefix
 	prefix := getCategoryPrefix(category)
+	year := time.Now().Format("2006")
 	
-	// Get current count for this category
-	assets, err := s.assetRepo.GetAssetsByCategory(category)
-	if err != nil {
-		return "", err
-	}
-	
-	// Generate code with sequence number
-	sequence := len(assets) + 1
-	code := prefix + "-" + time.Now().Format("2006") + "-" + padLeft(strconv.Itoa(sequence), 3, "0")
-	
-	// Check if code already exists and increment if needed
-	for {
+	// Start from sequence 1 and find the next available number
+	for sequence := 1; sequence <= 9999; sequence++ {
+		code := prefix + "-" + year + "-" + padLeft(strconv.Itoa(sequence), 3, "0")
+		
+		// Check if code exists in database
 		_, err := s.assetRepo.FindByCode(code)
 		if err != nil {
 			// Code doesn't exist, we can use it
-			break
+			return code, nil
 		}
-		sequence++
-		code = prefix + "-" + time.Now().Format("2006") + "-" + padLeft(strconv.Itoa(sequence), 3, "0")
+		// Code exists, try next sequence
 	}
 	
-	return code, nil
+	// If we reach here, all sequences are exhausted
+	return "", errors.New("unable to generate unique asset code: all sequences exhausted for category " + category)
 }
 
 // CalculateDepreciation calculates accumulated depreciation up to a specific date
@@ -317,6 +408,8 @@ func (s *AssetService) GetAssetsForDepreciationReport() ([]AssetDepreciationRepo
 
 func getCategoryPrefix(category string) string {
 	switch category {
+	case "Fixed Asset":
+		return "FA"
 	case "Real Estate":
 		return "RE"
 	case "Computer Equipment":
@@ -389,4 +482,81 @@ func (s *AssetService) calculateDecliningBalanceDepreciation(purchasePrice, salv
 	}
 	
 	return accumulated
+}
+
+// CreateDepreciationJournalEntry creates journal entry for asset depreciation
+func (s *AssetService) CreateDepreciationJournalEntry(asset *models.Asset, depreciationAmount float64, userId uint, entryDate time.Time) error {
+	// Start a database transaction
+	tx := s.db.Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+	defer tx.Rollback()
+
+	// Generate and create depreciation journal entry
+	journalEntry := models.GenerateDepreciationJournalEntry(*asset, depreciationAmount, userId, entryDate)
+	if err := tx.Create(journalEntry).Error; err != nil {
+		return err
+	}
+
+	// Update account balances
+	if err := s.updateAccountBalances(tx, journalEntry); err != nil {
+		return err
+	}
+
+	// Update asset's accumulated depreciation
+	asset.AccumulatedDepreciation += depreciationAmount
+	if err := tx.Save(asset).Error; err != nil {
+		return err
+	}
+
+	// Commit transaction
+	return tx.Commit().Error
+}
+
+// updateAccountBalances updates the account balances based on journal entry lines
+func (s *AssetService) updateAccountBalances(tx *gorm.DB, journalEntry *models.JournalEntry) error {
+	// Load journal lines
+	if err := tx.Preload("JournalLines").Find(journalEntry).Error; err != nil {
+		return err
+	}
+
+	// Update account balances for each journal line
+	for _, line := range journalEntry.JournalLines {
+		// Get the account
+		var account models.Account
+		if err := tx.First(&account, line.AccountID).Error; err != nil {
+			continue // Skip if account not found
+		}
+
+		// Calculate balance change based on normal balance type
+		normalBalance := account.GetNormalBalance()
+		var balanceChange float64
+
+		if normalBalance == models.NormalBalanceDebit {
+			// For debit accounts: debit increases, credit decreases
+			balanceChange = line.DebitAmount - line.CreditAmount
+		} else {
+			// For credit accounts: credit increases, debit decreases
+			balanceChange = line.CreditAmount - line.DebitAmount
+		}
+
+		// Update account balance
+		account.Balance += balanceChange
+		if err := tx.Save(&account).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// isUniqueCodeError checks if the error is due to unique constraint violation on asset code
+func isUniqueCodeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errorStr := err.Error()
+	// PostgreSQL unique violation for assets_code_key
+	return strings.Contains(errorStr, "SQLSTATE 23505") && strings.Contains(errorStr, "assets_code_key")
 }

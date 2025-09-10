@@ -361,6 +361,17 @@ class CashBankService {
       throw error;
     }
   }
+
+  // Get deposit source accounts (Revenue + Equity) for deposit form
+  async getDepositSourceAccounts(): Promise<{revenue: any[], equity: any[]}> {
+    try {
+      const response = await api.get(`${this.baseUrl}/deposit-source-accounts`);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error fetching deposit source accounts:', error);
+      throw error;
+    }
+  }
 }
 
 export default new CashBankService();

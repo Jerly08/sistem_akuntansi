@@ -58,34 +58,98 @@ class ReportService {
     if (!response.ok) {
       let errorData: any;
       try {
-        errorData = await response.json();
+        const textResponse = await response.text();
+        // Try to parse as JSON first
+        try {
+          errorData = JSON.parse(textResponse);
+        } catch {
+          // If not JSON, use text as error message
+          errorData = { message: textResponse || `HTTP ${response.status}: ${response.statusText}` };
+        }
       } catch {
         errorData = {
           error: { 
             code: 'NETWORK_ERROR',
-            message: `HTTP error! status: ${response.status}` 
+            message: `HTTP error! status: ${response.status} ${response.statusText}` 
           }
         };
       }
 
-      const errorMessage = errorData.error?.message || errorData.message || `HTTP error! status: ${response.status}`;
+      // Extract error message from various possible structures
+      const errorMessage = 
+        errorData.error?.message || 
+        errorData.message || 
+        errorData.errors?.[0] ||
+        `HTTP ${response.status}: ${response.statusText}`;
+      
       throw new Error(errorMessage);
     }
     
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const result = await response.json();
-      // Handle unified response structure
-      if (result.success !== undefined) {
-        if (!result.success) {
-          throw new Error(result.error?.message || 'Request failed');
-        }
-        return result.data;
+    const contentType = response.headers.get('content-type') || '';
+    
+    // Check for PDF, Excel, or other binary content
+    if (contentType.includes('application/pdf') || 
+        contentType.includes('application/vnd.openxmlformats') ||
+        contentType.includes('application/vnd.ms-excel') ||
+        contentType.includes('text/csv') ||
+        contentType.includes('application/octet-stream')) {
+      const blob = await response.blob();
+      if (blob.size === 0) {
+        throw new Error('Received empty file from server');
       }
-      return result.data || result;
+      return blob as any;
+    } else if (contentType.includes('application/json')) {
+      try {
+        const result = await response.json();
+        // Handle unified response structure
+        if (result.status === 'error') {
+          throw new Error(result.message || 'Request failed');
+        }
+        if (result.status === 'success' && result.data) {
+          return result.data;
+        }
+        if (result.success !== undefined) {
+          if (!result.success) {
+            throw new Error(result.error?.message || result.message || 'Request failed');
+          }
+          return result.data;
+        }
+        // Handle direct data response without wrapper
+        if (result.report_header || result.revenue || result.assets) {
+          return result;
+        }
+        return result.data || result;
+      } catch (jsonError) {
+        if (jsonError instanceof Error && jsonError.message.includes('Request failed')) {
+          throw jsonError;
+        }
+        throw new Error('Invalid JSON response from server');
+      }
     } else {
-      // Handle file responses (PDF, Excel, CSV)
-      return response.blob() as any;
+      // Fallback: try to get as text first
+      try {
+        const text = await response.text();
+        if (text && text.trim()) {
+          // Try parsing as JSON one more time
+          try {
+            const jsonData = JSON.parse(text);
+            if (jsonData.status === 'success') {
+              return jsonData.data;
+            }
+            return jsonData;
+          } catch {
+            // Not JSON, treat as error
+            throw new Error(`Unexpected response format: ${text.substring(0, 200)}`);
+          }
+        } else {
+          throw new Error('Received empty response from server');
+        }
+      } catch (textError) {
+        if (textError instanceof Error) {
+          throw textError;
+        }
+        throw new Error('Failed to process server response');
+      }
     }
   }
 
@@ -334,15 +398,31 @@ class ReportService {
   }
 
   // Download report as file
-  async downloadReport(reportData: Blob, fileName: string): Promise<void> {
-    const url = window.URL.createObjectURL(reportData);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+  async downloadReport(reportData: any, fileName: string): Promise<void> {
+    try {
+      // Check if reportData is actually a Blob
+      if (!(reportData instanceof Blob)) {
+        console.error('Invalid data type for download:', typeof reportData, reportData);
+        throw new Error('Download failed: Invalid file data received from server');
+      }
+
+      // Check if it's a valid blob with size > 0
+      if (reportData.size === 0) {
+        throw new Error('Download failed: Empty file received from server');
+      }
+
+      const url = window.URL.createObjectURL(reportData);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      throw new Error(`Failed to download report: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   // Get report templates (if implemented)

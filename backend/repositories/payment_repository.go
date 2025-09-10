@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"app-sistem-akuntansi/models"
+	"fmt"
 	"gorm.io/gorm"
 	"math"
 	"time"
@@ -217,7 +218,21 @@ func (r *PaymentRepository) CountByMonth(year, month int) (int64, error) {
 	endDate := startDate.AddDate(0, 1, 0).Add(-time.Second)
 	
 	err := r.db.Model(&models.Payment{}).
-		Where("created_at BETWEEN ? AND ?", startDate, endDate).
+		Where("created_at BETWEEN ? AND ? AND deleted_at IS NULL", startDate, endDate).
+		Count(&count).Error
+	
+	return count, err
+}
+
+// CountByMonthAndPrefix counts payments by month and code prefix for code generation
+func (r *PaymentRepository) CountByMonthAndPrefix(year, month int, prefix string) (int64, error) {
+	var count int64
+	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	endDate := startDate.AddDate(0, 1, 0).Add(-time.Second)
+	
+	pattern := fmt.Sprintf("%s/%04d/%02d/%%", prefix, year, month)
+	err := r.db.Model(&models.Payment{}).
+		Where("created_at BETWEEN ? AND ? AND code LIKE ? AND deleted_at IS NULL", startDate, endDate, pattern).
 		Count(&count).Error
 	
 	return count, err

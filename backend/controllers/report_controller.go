@@ -285,11 +285,11 @@ func (rc *ReportController) GetBalanceSheet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": report})
 }
 
-// GetProfitLoss generates a standard profit & loss statement
+// GetProfitLoss generates an enhanced profit & loss statement with proper COGS categorization
 func (rc *ReportController) GetProfitLoss(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
-	format := c.DefaultQuery("format", "json")
+	_ = c.DefaultQuery("format", "json") // Format not used in enhanced version
 
 	if startDate == "" || endDate == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "start_date and end_date are required"})
@@ -308,7 +308,8 @@ func (rc *ReportController) GetProfitLoss(c *gin.Context) {
 		return
 	}
 
-	report, err := rc.reportService.GenerateProfitLoss(start, end, format)
+	// Use Enhanced Profit Loss Service for accurate COGS categorization
+	report, err := rc.reportService.GenerateEnhancedProfitLoss(start, end)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return

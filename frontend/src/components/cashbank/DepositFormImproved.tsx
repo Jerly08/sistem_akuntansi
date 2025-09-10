@@ -34,9 +34,10 @@ import {
   HStack,
   Divider,
 } from '@chakra-ui/react';
-import { CashBank } from '@/services/cashbankService';
+import { CashBank, DepositRequest } from '@/services/cashbankService';
 import cashbankService from '@/services/cashbankService';
 import { useAuth } from '@/contexts/AuthContext';
+import { ErrorHandler } from '@/utils/errorHandler';
 
 interface Account {
   id: number;
@@ -46,6 +47,11 @@ interface Account {
   category: string;
   is_active: boolean;
   balance: number;
+}
+
+interface DepositSourceAccounts {
+  revenue: Account[];
+  equity: Account[];
 }
 
 interface DepositFormImprovedProps {
@@ -81,28 +87,29 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [revenueAccounts, setRevenueAccounts] = useState<Account[]>([]);
+  const [sourceAccounts, setSourceAccounts] = useState<DepositSourceAccounts>({ revenue: [], equity: [] });
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const toast = useToast();
 
-  // Load revenue accounts when form opens
+  // Load deposit source accounts when form opens
   useEffect(() => {
     if (isOpen && token) {
-      loadRevenueAccounts();
+      loadDepositSourceAccounts();
     }
   }, [isOpen, token]);
 
-  const loadRevenueAccounts = async () => {
+  const loadDepositSourceAccounts = async () => {
     try {
       setLoadingAccounts(true);
-      const accounts = await cashbankService.getRevenueAccounts();
-      setRevenueAccounts(accounts);
+      const accounts = await cashbankService.getDepositSourceAccounts();
+      setSourceAccounts(accounts);
     } catch (error) {
-      console.error('Error loading revenue accounts:', error);
-      // Set default revenue accounts as fallback
-      setRevenueAccounts([
-        { id: 0, code: '4900', name: 'Other Income (Default)', type: 'REVENUE', category: 'OTHER_REVENUE', is_active: true, balance: 0 }
-      ]);
+      console.error('Error loading deposit source accounts:', error);
+      // Set default accounts as fallback
+      setSourceAccounts({
+        revenue: [{ id: 0, code: '4900', name: 'Other Income (Default)', type: 'REVENUE', category: 'OTHER_REVENUE', is_active: true, balance: 0 }],
+        equity: []
+      });
     } finally {
       setLoadingAccounts(false);
     }
@@ -114,6 +121,82 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
       [field]: value
     }));
     setError(null);
+  };
+
+  // Enhanced error handling for deposit operations
+  const handleDepositError = (error: any) => {
+    const status = error?.response?.status || error?.status;
+    
+    // Handle permission error specially with simple, clear message
+    if (status === 403) {
+      const permissionMessage = (
+        <Box>
+          <Text fontSize="sm" fontWeight="medium" mb={2}>
+            You don't have permission to make deposits.
+          </Text>
+          <Text fontSize="sm" color="gray.600" mb={3}>
+            This requires "Cash & Bank" access permissions.
+          </Text>
+          <Box>
+            <Text fontSize="sm" fontWeight="medium" mb={1}>
+              What you can do:
+            </Text>
+            <Text fontSize="sm" color="gray.700">
+              • Contact your administrator<br/>
+              • Request Cash & Bank permissions<br/>
+              • Ask your manager for help
+            </Text>
+          </Box>
+        </Box>
+      );
+      
+      setError('Access denied - insufficient permissions');
+      toast({
+        title: 'Access Denied',
+        description: permissionMessage,
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+      });
+      return;
+    }
+    
+    // Handle 400 error with more specific information
+    if (status === 400) {
+      const validationMessage = error?.response?.data?.error || error?.response?.data?.message || 'Invalid data';
+      const detailedMessage = (
+        <Box>
+          <Text fontSize="sm" fontWeight="medium" mb={2}>
+            Request validation failed
+          </Text>
+          <Text fontSize="sm" color="gray.600" mb={2}>
+            {validationMessage}
+          </Text>
+          <Text fontSize="xs" color="gray.500">
+            Please check your input and try again.
+          </Text>
+        </Box>
+      );
+      
+      setError(`Validation error: ${validationMessage}`);
+      toast({
+        title: 'Invalid Request',
+        description: detailedMessage,
+        status: 'warning',
+        duration: 8000,
+        isClosable: true,
+      });
+      return;
+    }
+    
+    // Use existing error handler for other errors
+    const errorMessage = ErrorHandler.handleAPIError(error, toast, {
+      operation: 'process deposit',
+      fallbackMessage: 'Failed to process deposit. Please try again.',
+      duration: 6000
+    });
+    
+    setError(errorMessage);
   };
 
   const handleSubmit = async () => {
@@ -130,37 +213,62 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
         throw new Error('Amount must be greater than zero');
       }
 
-      // Prepare request data
-      const requestData: any = {
-        account_id: account.id,
-        date: formData.date,
-        amount: formData.amount,
-        reference: formData.reference,
-        notes: formData.notes,
+      // Validate and prepare request data
+      const requestData: DepositRequest = {
+        account_id: Number(account.id),
+        date: formData.date, // Should be in YYYY-MM-DD format
+        amount: Number(formData.amount),
+        reference: formData.reference || '',
+        notes: formData.notes || '',
       };
+      
+      // Validate required fields
+      if (!requestData.account_id || requestData.account_id <= 0) {
+        throw new Error('Invalid account selected');
+      }
+      
+      if (!requestData.date) {
+        throw new Error('Transaction date is required');
+      }
+      
+      if (!requestData.amount || requestData.amount <= 0) {
+        throw new Error('Amount must be greater than zero');
+      }
+      
+      // Validate date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(requestData.date)) {
+        throw new Error('Invalid date format. Please use YYYY-MM-DD format.');
+      }
 
       // Add source account ID if selected (not default)
       if (formData.source_account_id && formData.source_account_id !== '' && parseInt(formData.source_account_id) > 0) {
         requestData.source_account_id = parseInt(formData.source_account_id);
       }
 
+      // Debug logging
+      console.log('🔍 Deposit request data:', requestData);
+      console.log('🔍 Account info:', account);
+      console.log('🔍 Form data:', formData);
+      
       // Use cashbankService instead of direct fetch
       await cashbankService.processDeposit(requestData);
       
       // If we get here, it was successful
-      const selectedRevenue = revenueAccounts.find(acc => acc.id === parseInt(formData.source_account_id || '0'));
-      const sourceAccountName = selectedRevenue ? selectedRevenue.name : 'Other Income (Default)';
+      const allAccounts = [...sourceAccounts.revenue, ...sourceAccounts.equity];
+      const selectedAccount = allAccounts.find(acc => acc.id === parseInt(formData.source_account_id || '0'));
+      const sourceAccountName = selectedAccount ? selectedAccount.name : 'Other Income (Default)';
       
       toast({
         title: 'Deposit Successful! 💰',
         description: (
           <Box>
-            <Text fontSize="sm" fontWeight="bold">{account.currency} {formData.amount.toLocaleString('id-ID')} deposited to {account.name}</Text>
+            <Text fontSize="sm" fontWeight="bold">Rp {formData.amount.toLocaleString('id-ID')} deposited to {account.name}</Text>
             <Text fontSize="xs" color="gray.200" mt={1}>
-              ✅ Debit: {account.name} (+{formData.amount.toLocaleString('id-ID')})
+              ✅ Debit: {account.name} (+Rp {formData.amount.toLocaleString('id-ID')})
             </Text>
             <Text fontSize="xs" color="gray.200">
-              ✅ Credit: {sourceAccountName} (+{formData.amount.toLocaleString('id-ID')})
+              ✅ Credit: {sourceAccountName} (+Rp {formData.amount.toLocaleString('id-ID')})
             </Text>
             <Text fontSize="xs" color="green.200" mt={1} fontWeight="bold">
               📊 Double-entry balanced automatically!
@@ -176,14 +284,7 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
       onClose();
     } catch (err: any) {
       console.error('Error processing deposit:', err);
-      setError(err.message || 'Failed to process deposit');
-      toast({
-        title: 'Deposit Failed',
-        description: err.message || 'Failed to process deposit',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
+      handleDepositError(err);
     } finally {
       setLoading(false);
     }
@@ -204,12 +305,13 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
   if (!account) return null;
 
   const newBalance = account.balance + formData.amount;
-  const selectedRevenue = revenueAccounts.find(acc => acc.id === parseInt(formData.source_account_id || '0'));
-  const sourceAccountName = selectedRevenue ? selectedRevenue.name : 'Other Income (Default)';
+  const allAccounts = [...sourceAccounts.revenue, ...sourceAccounts.equity];
+  const selectedAccount = allAccounts.find(acc => acc.id === parseInt(formData.source_account_id || '0'));
+  const sourceAccountName = selectedAccount ? selectedAccount.name : 'Other Income (Default)';
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} size="xl" scrollBehavior="inside">
-      <ModalOverlay />
+    <Modal isOpen={isOpen} onClose={handleClose} size="2xl" scrollBehavior="inside">
+      <ModalOverlay bg="blackAlpha.600" />
       <ModalContent>
         <ModalHeader>
           <Flex alignItems="center" gap={3}>
@@ -230,9 +332,23 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
         
         <ModalBody>
           {error && (
-            <Alert status="error" mb={4}>
+            <Alert 
+              status={error.includes('Access denied') || error.includes('permission') ? 'error' : 'error'} 
+              mb={4}
+              variant="subtle"
+              borderRadius="md"
+            >
               <AlertIcon />
-              {error}
+              <Box>
+                <Text fontSize="sm" fontWeight="medium">
+                  {error}
+                </Text>
+                {(error.includes('Access denied') || error.includes('permission')) && (
+                  <Text fontSize="xs" color="gray.600" mt={1}>
+                    Check the notification above for more details.
+                  </Text>
+                )}
+              </Box>
             </Alert>
           )}
 
@@ -259,7 +375,7 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
                     color={account.balance < 0 ? 'red.500' : 'green.600'}
                     fontFamily="mono"
                   >
-                    {account.currency} {Math.abs(account.balance).toLocaleString('id-ID')}
+                    Rp {Math.abs(account.balance).toLocaleString('id-ID')}
                     {account.balance < 0 && ' (Dr)'}
                   </StatNumber>
                   <StatHelpText>
@@ -287,19 +403,36 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
                 </FormControl>
 
                 <FormControl isRequired>
-                  <FormLabel>Amount ({account.currency})</FormLabel>
-                  <NumberInput
-                    value={formData.amount}
-                    onChange={(_, value) => handleInputChange('amount', value || 0)}
-                    min={0}
-                    precision={2}
-                  >
-                    <NumberInputField />
-                    <NumberInputStepper>
-                      <NumberIncrementStepper />
-                      <NumberDecrementStepper />
-                    </NumberInputStepper>
-                  </NumberInput>
+                  <FormLabel>Amount (Rupiah)</FormLabel>
+                  <Box w="100%">
+                    <NumberInput
+                      value={formData.amount}
+                      onChange={(_, value) => handleInputChange('amount', value || 0)}
+                      min={0}
+                      precision={0} // No decimals for Rupiah
+                      format={(val) => `Rp ${val.toLocaleString('id-ID')}`}
+                      parse={(val) => {
+                        // Handle Indonesian format: Rp 1.000.000 (dots as thousand separators)
+                        return val.replace(/^Rp\s?/, '').replace(/\./g, '').replace(/,/g, '');
+                      }}
+                      w="100%"
+                    >
+                      <NumberInputField 
+                        placeholder="Rp 0" 
+                        fontFamily="mono"
+                        fontSize="md"
+                        textAlign="left"
+                        pr="12" // Add padding for stepper
+                      />
+                      <NumberInputStepper>
+                        <NumberIncrementStepper />
+                        <NumberDecrementStepper />
+                      </NumberInputStepper>
+                    </NumberInput>
+                  </Box>
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    💡 Enter amount without decimals (e.g., 1000000 for Rp 1.000.000)
+                  </Text>
                 </FormControl>
 
                 <FormControl>
@@ -323,35 +456,58 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
               </VStack>
             </Box>
 
-            {/* Revenue Account Selection */}
+            {/* Deposit Source Account Selection */}
             <Box>
               <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={3}>
-                📊 Revenue Account Selection
+                💰 Deposit Source Account Selection
               </Text>
               <Text fontSize="sm" color="gray.600" mb={3}>
-                Select the revenue account to be credited. Leave blank to use default "Other Income" account.
+                Select the source account to be credited. Leave blank to use default "Other Income" account.
               </Text>
               
               <FormControl>
-                <FormLabel>Credit Account (Revenue Source)</FormLabel>
+                <FormLabel>💳 Credit Account (Deposit Source)</FormLabel>
                 <Select
                   value={formData.source_account_id}
                   onChange={(e) => handleInputChange('source_account_id', e.target.value)}
                   placeholder="Use default 'Other Income' account"
                   isDisabled={loadingAccounts}
                 >
-                  {revenueAccounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.code} - {account.name}
-                      {account.balance > 0 && ` (Balance: ${account.balance.toLocaleString('id-ID')})`}
-                    </option>
-                  ))}
+                  {/* EQUITY SECTION */}
+                  {sourceAccounts.equity.length > 0 && (
+                    <optgroup label="💰 CAPITAL/EQUITY">
+                      {sourceAccounts.equity.map((account) => (
+                        <option key={`equity-${account.id}`} value={account.id}>
+                          {account.code} - {account.name}
+                          {account.balance !== 0 && ` (Balance: ${account.balance.toLocaleString('id-ID')})`}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  
+                  {/* REVENUE SECTION */}
+                  {sourceAccounts.revenue.length > 0 && (
+                    <optgroup label="📈 OTHER INCOME">
+                      {sourceAccounts.revenue.map((account) => (
+                        <option key={`revenue-${account.id}`} value={account.id}>
+                          {account.code} - {account.name}
+                          {account.balance !== 0 && ` (Balance: ${account.balance.toLocaleString('id-ID')})`}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </Select>
                 {loadingAccounts && (
                   <Text fontSize="xs" color="gray.500" mt={1}>
-                    Loading revenue accounts...
+                    Loading deposit source accounts...
                   </Text>
                 )}
+                
+                {/* Help Text */}
+                <Text fontSize="xs" color="gray.500" mt={2}>
+                  💡 <strong>Capital/Equity:</strong> For owner investment or retained earnings<br/>
+                  📈 <strong>Other Income:</strong> For non-sales revenue like consulting, interest, etc.
+                </Text>
               </FormControl>
             </Box>
 
@@ -384,7 +540,7 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
                         </Box>
                       </HStack>
                       <Text fontSize="sm" fontWeight="bold" fontFamily="mono" color="green.600">
-                        +{formData.amount.toLocaleString('id-ID')}
+                        +Rp {formData.amount.toLocaleString('id-ID')}
                       </Text>
                     </HStack>
                     
@@ -395,12 +551,12 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
                         <Box>
                           <Text fontSize="sm" fontWeight="medium">{sourceAccountName}</Text>
                           <Text fontSize="xs" color="gray.600" fontFamily="mono">
-                            {selectedRevenue?.code || '4900'}
+                            {selectedAccount?.code || '4900'}
                           </Text>
                         </Box>
                       </HStack>
                       <Text fontSize="sm" fontWeight="bold" fontFamily="mono" color="orange.600">
-                        +{formData.amount.toLocaleString('id-ID')}
+                        +Rp {formData.amount.toLocaleString('id-ID')}
                       </Text>
                     </HStack>
                     
@@ -409,7 +565,7 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
                     <HStack justify="space-between">
                       <Text fontSize="sm" fontWeight="bold">Total Balance:</Text>
                       <Text fontSize="sm" fontWeight="bold" color="green.600">
-                        DR {formData.amount.toLocaleString('id-ID')} = CR {formData.amount.toLocaleString('id-ID')} ✅
+                        DR Rp {formData.amount.toLocaleString('id-ID')} = CR Rp {formData.amount.toLocaleString('id-ID')} ✅
                       </Text>
                     </HStack>
                   </VStack>
@@ -430,7 +586,7 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
                       New balance after deposit:
                     </Text>
                     <Text fontSize="lg" fontWeight="bold" fontFamily="mono" mt={1}>
-                      {account.currency} {Math.abs(newBalance).toLocaleString('id-ID')}
+                      Rp {Math.abs(newBalance).toLocaleString('id-ID')}
                       {newBalance < 0 && ' (Dr)'}
                     </Text>
                     {newBalance < 0 && (

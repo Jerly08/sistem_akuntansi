@@ -22,12 +22,14 @@ import {
   FiFile 
 } from 'react-icons/fi';
 import { Account } from '@/types/account';
+import { useAuth } from '@/contexts/AuthContext';
 import accountService from '@/services/accountService';
 
 interface AccountTreeViewProps {
   accounts: Account[];
   onEdit?: (account: Account) => void;
   onDelete?: (account: Account) => void;
+  onAdminDelete?: (account: Account) => void; // Admin-only delete for header accounts
   showActions?: boolean;
   showBalance?: boolean;
 }
@@ -37,6 +39,7 @@ interface TreeNodeProps {
   level: number;
   onEdit?: (account: Account) => void;
   onDelete?: (account: Account) => void;
+  onAdminDelete?: (account: Account) => void;
   showActions?: boolean;
   showBalance?: boolean;
 }
@@ -46,9 +49,12 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   level,
   onEdit,
   onDelete,
+  onAdminDelete,
   showActions = true,
   showBalance = true,
 }) => {
+  const { user } = useAuth();
+  const isAdmin = user?.role?.toLowerCase() === 'admin';
   const { isOpen, onToggle } = useDisclosure();
   const hasChildren = account.children && account.children.length > 0;
   const indentWidth = level * 20;
@@ -61,6 +67,11 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete?.(account);
+  };
+
+  const handleAdminDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onAdminDelete?.(account);
   };
 
   return (
@@ -153,6 +164,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               );
             })()}
 
+            {/* Regular accounts actions */}
             {showActions && !account.is_header && (
               <HStack spacing={1}>
                 <Button
@@ -176,6 +188,21 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 </Button>
               </HStack>
             )}
+            
+            {/* Header accounts - admin only delete */}
+            {showActions && account.is_header && isAdmin && onAdminDelete && (
+              <HStack spacing={1}>
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  colorScheme="red"
+                  leftIcon={<FiTrash2 />}
+                  onClick={handleAdminDelete}
+                >
+                  Delete
+                </Button>
+              </HStack>
+            )}
           </HStack>
         </Flex>
       </Flex>
@@ -191,6 +218,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 level={level + 1}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                onAdminDelete={onAdminDelete}
                 showActions={showActions}
                 showBalance={showBalance}
               />
@@ -206,6 +234,7 @@ const AccountTreeView: React.FC<AccountTreeViewProps> = ({
   accounts,
   onEdit,
   onDelete,
+  onAdminDelete,
   showActions = true,
   showBalance = true,
 }) => {
@@ -226,6 +255,7 @@ const AccountTreeView: React.FC<AccountTreeViewProps> = ({
           level={0}
           onEdit={onEdit}
           onDelete={onDelete}
+          onAdminDelete={onAdminDelete}
           showActions={showActions}
           showBalance={showBalance}
         />

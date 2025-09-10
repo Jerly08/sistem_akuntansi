@@ -57,6 +57,13 @@ import {
   TableContainer,
   SimpleGrid,
   FormHelperText,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Link,
+  Icon
 } from '@chakra-ui/react';
 import { 
   FiPlus, 
@@ -68,7 +75,10 @@ import {
   FiCheckCircle,
   FiClock,
   FiXCircle,
-  FiAlertCircle 
+  FiAlertCircle,
+  FiPackage,
+  FiDownload,
+  FiFileText 
 } from 'react-icons/fi';
 import purchaseService, { Purchase, PurchaseFilterParams } from '@/services/purchaseService';
 import SubmitApprovalButton from '@/components/purchase/SubmitApprovalButton';
@@ -134,6 +144,37 @@ interface BankAccount {
   type: string;
   balance?: number;
   currency: string;
+}
+
+interface Receipt {
+  id: number;
+  receipt_number: string;
+  received_date: string;
+  status: string;
+  notes: string;
+  received_by: number;
+  receiver: {
+    id: number;
+    name: string;
+  };
+  receipt_items: ReceiptItem[];
+}
+
+interface ReceiptItem {
+  id: number;
+  purchase_item_id: number;
+  quantity_received: number;
+  condition: string;
+  notes: string;
+  purchase_item: {
+    id: number;
+    quantity: number;
+    product: {
+      id: number;
+      name: string;
+      code: string;
+    };
+  };
 }
 
 // Status color mapping
@@ -309,6 +350,9 @@ const PurchasesPage: React.FC = () => {
   const { isOpen: isEditOpen, onOpen: onEditOpen, onClose: onEditClose } = useDisclosure();
   const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCreateClose } = useDisclosure();
   
+  // Receipt Modal states
+  const { isOpen: isReceiptOpen, onOpen: onReceiptOpen, onClose: onReceiptClose } = useDisclosure();
+  
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -376,6 +420,25 @@ const PurchasesPage: React.FC = () => {
     sale_price: '0',
   });
   const [savingProduct, setSavingProduct] = useState(false);
+
+  // Receipt form state
+  const [receiptFormData, setReceiptFormData] = useState({
+    received_date: new Date().toISOString().split('T')[0],
+    notes: '',
+    receipt_items: [] as Array<{
+      purchase_item_id: number;
+      quantity_received: number;
+      condition: string;
+      notes: string;
+    }>
+  });
+  const [savingReceipt, setSavingReceipt] = useState(false);
+
+  // Receipts modal state
+  const { isOpen: isReceiptsOpen, onOpen: onReceiptsOpen, onClose: onReceiptsClose } = useDisclosure();
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [loadingReceipts, setLoadingReceipts] = useState(false);
+  const [selectedPurchaseForReceipts, setSelectedPurchaseForReceipts] = useState<Purchase | null>(null);
 
   // Role-based permissions
   const roleNorm = normalizeRole(user?.role as any);
@@ -856,6 +919,129 @@ const PurchasesPage: React.FC = () => {
     }
   };
 
+  // Handle create receipt for approved purchases
+  const handleCreateReceipt = async (purchase: Purchase) => {
+    try {
+      // Fetch detailed purchase data to get items
+      const detailResponse = await purchaseService.getById(purchase.id);
+      setSelectedPurchase(detailResponse);
+      
+      // Initialize receipt form data
+      const receiptItems = detailResponse.purchase_items?.map(item => ({
+        purchase_item_id: item.id,
+        quantity_received: item.quantity, // Default to full quantity
+        condition: 'GOOD',
+        notes: ''
+      })) || [];
+      
+      setReceiptFormData({
+        received_date: new Date().toISOString().split('T')[0],
+        notes: '',
+        receipt_items: receiptItems
+      });
+      
+      onReceiptOpen();
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch purchase details for receipt creation',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // Handle save receipt
+  const handleSaveReceipt = async () => {
+    if (!selectedPurchase) {
+      toast({
+        title: 'Error',
+        description: 'No purchase selected',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (receiptFormData.receipt_items.length === 0) {
+      toast({
+        title: 'Error',
+        description: 'Please add at least one receipt item',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      setSavingReceipt(true);
+      
+      const payload = {
+        purchase_id: selectedPurchase.id,
+        received_date: receiptFormData.received_date + 'T00:00:00Z',
+        notes: receiptFormData.notes,
+        receipt_items: receiptFormData.receipt_items.map(item => ({
+          purchase_item_id: item.purchase_item_id,
+          quantity_received: item.quantity_received,
+          condition: item.condition,
+          notes: item.notes
+        }))
+      };
+
+      // Call API to create receipt
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/receipts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create receipt');
+      }
+
+      const receiptData = await response.json();
+      
+      toast({
+        title: 'Success',
+        description: `Receipt ${receiptData.receipt_number} created successfully. Purchase status updated to COMPLETED.`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+
+      // Reset form and close modal
+      setReceiptFormData({
+        received_date: new Date().toISOString().split('T')[0],
+        notes: '',
+        receipt_items: []
+      });
+      
+      onReceiptClose();
+      
+      // Refresh the purchase list
+      await fetchPurchases();
+      
+    } catch (err: any) {
+      console.error('Error creating receipt:', err);
+      toast({
+        title: 'Error',
+        description: err.message || 'Failed to create receipt',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setSavingReceipt(false);
+    }
+  };
+
   // Fetch vendors
   const fetchVendors = async () => {
     if (!token) return;
@@ -1021,17 +1207,20 @@ const PurchasesPage: React.FC = () => {
     }
   };
 
-  // Fetch expense accounts (GL) for item expense_account_id
+  // Fetch both expense and inventory accounts for purchase items
   const fetchExpenseAccounts = async () => {
     if (!token) return;
     try {
       setLoadingExpenseAccounts(true);
       
+      let allAccounts: GLAccount[] = [];
+      
       // Try catalog endpoint first for EMPLOYEE role, fallback to regular endpoint
       if (user?.role === 'EMPLOYEE') {
         try {
-          const catalogData = await accountService.getAccountCatalog(token, 'EXPENSE');
-          const formattedAccounts: GLAccount[] = catalogData.map(item => ({
+          // Fetch expense accounts
+          const expenseCatalogData = await accountService.getAccountCatalog(token, 'EXPENSE');
+          const formattedExpenseAccounts: GLAccount[] = expenseCatalogData.map(item => ({
             id: item.id,
             code: item.code,
             name: item.name,
@@ -1044,11 +1233,36 @@ const PurchasesPage: React.FC = () => {
             updated_at: '',
             description: '',
           }));
-          console.log('Formatted expense accounts from catalog:', formattedAccounts);
-          setExpenseAccounts(formattedAccounts);
+          
+          // Fetch inventory account (current asset - persediaan)
+          try {
+            const assetCatalogData = await accountService.getAccountCatalog(token, 'ASSET');
+            const inventoryAccounts = assetCatalogData.filter(item => 
+              item.code === '1301' || item.name.toLowerCase().includes('persediaan')
+            ).map(item => ({
+              id: item.id,
+              code: item.code,
+              name: item.name,
+              type: 'ASSET' as const,
+              is_active: item.active,
+              level: 1,
+              is_header: false,
+              balance: 0,
+              created_at: '',
+              updated_at: '',
+              description: '',
+            }));
+            allAccounts = [...inventoryAccounts, ...formattedExpenseAccounts];
+          } catch (assetError) {
+            console.log('Could not fetch inventory accounts, using expense only:', assetError);
+            allAccounts = formattedExpenseAccounts;
+          }
+          
+          console.log('Formatted accounts from catalog (inventory + expense):', allAccounts);
+          setExpenseAccounts(allAccounts);
           setCanListExpenseAccounts(true);
-          if (formattedAccounts.length > 0) {
-            setDefaultExpenseAccountId(formattedAccounts[0].id as number);
+          if (allAccounts.length > 0) {
+            setDefaultExpenseAccountId(allAccounts[0].id as number);
           }
           return; // Success, exit early
         } catch (catalogError: any) {
@@ -1059,20 +1273,35 @@ const PurchasesPage: React.FC = () => {
       
       // Use full account data for other roles or as fallback for EMPLOYEE
       try {
-        const data = await accountService.getAccounts(token, 'EXPENSE');
-        const list: GLAccount[] = Array.isArray(data) ? data : [];
-        console.log('Formatted expense accounts from regular endpoint:', list);
-        setExpenseAccounts(list);
+        // Fetch expense accounts
+        const expenseData = await accountService.getAccounts(token, 'EXPENSE');
+        const expenseList: GLAccount[] = Array.isArray(expenseData) ? expenseData : [];
+        
+        // Try to fetch inventory accounts
+        let allAccountsList: GLAccount[] = expenseList;
+        try {
+          const assetData = await accountService.getAccounts(token, 'ASSET');
+          const assetList: GLAccount[] = Array.isArray(assetData) ? assetData : [];
+          const inventoryAccounts = assetList.filter(acc => 
+            acc.code === '1301' || acc.name.toLowerCase().includes('persediaan')
+          );
+          allAccountsList = [...inventoryAccounts, ...expenseList];
+        } catch (assetError) {
+          console.log('Could not fetch inventory accounts from regular endpoint, using expense only:', assetError);
+        }
+        
+        console.log('Formatted accounts from regular endpoint (inventory + expense):', allAccountsList);
+        setExpenseAccounts(allAccountsList);
         setCanListExpenseAccounts(true);
-        if (list.length > 0) {
-          setDefaultExpenseAccountId(list[0].id as number);
+        if (allAccountsList.length > 0) {
+          setDefaultExpenseAccountId(allAccountsList[0].id as number);
         }
       } catch (regularError: any) {
         console.error('Regular accounts endpoint also failed:', regularError);
         throw regularError; // Re-throw to be caught by outer catch
       }
     } catch (err: any) {
-      console.error('Error fetching expense accounts:', err);
+      console.error('Error fetching accounts:', err);
       // If both endpoints fail, fall back to manual entry mode
       setCanListExpenseAccounts(false);
       setExpenseAccounts([]);
@@ -1082,7 +1311,7 @@ const PurchasesPage: React.FC = () => {
       if (user?.role !== 'EMPLOYEE' || !err.message?.includes('Insufficient permissions')) {
         toast({
           title: 'Limited Access',
-          description: 'Unable to load expense accounts list. You can enter Expense Account ID manually in the items.',
+          description: 'Unable to load accounts list. You can enter Account ID manually in the items.',
           status: 'warning',
           duration: 5000,
           isClosable: true,
@@ -1090,6 +1319,148 @@ const PurchasesPage: React.FC = () => {
       }
     } finally {
       setLoadingExpenseAccounts(false);
+    }
+  };
+
+  // Helper function to get receiver name from user object
+  const getReceiverName = (receiver: any): string => {
+    if (!receiver) return 'N/A';
+    
+    // Try to build name from FirstName and LastName
+    if (receiver.first_name || receiver.last_name) {
+      return `${receiver.first_name || ''} ${receiver.last_name || ''}`.trim();
+    }
+    
+    // Fallback to username
+    if (receiver.username) {
+      return receiver.username;
+    }
+    
+    // Final fallback
+    return 'N/A';
+  };
+
+  // Handle view receipts
+  const handleViewReceipts = async (purchase: Purchase) => {
+    try {
+      setLoadingReceipts(true);
+      setSelectedPurchaseForReceipts(purchase);
+      
+      // Fetch only completed receipts to simplify the view
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/${purchase.id}/receipts?completed_only=true`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch receipts');
+      }
+
+      const data = await response.json();
+      setReceipts(data.data || []);
+      onReceiptsOpen();
+    } catch (err: any) {
+      console.error('Error fetching receipts:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch receipts',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoadingReceipts(false);
+    }
+  };
+
+  // Handle download receipt PDF
+  const handleDownloadReceiptPDF = async (receiptId: number, receiptNumber: string) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/receipts/${receiptId}/pdf`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate receipt PDF');
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `receipt_${receiptNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Success',
+        description: `Receipt ${receiptNumber} PDF downloaded successfully`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err: any) {
+      console.error('Error downloading receipt PDF:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to download receipt PDF',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // Handle download all receipts PDF
+  const handleDownloadAllReceiptsPDF = async (purchase: Purchase) => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/${purchase.id}/receipts/pdf`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate combined receipts PDF');
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `receipts_${purchase.code}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Success',
+        description: `All receipts for ${purchase.code} downloaded successfully`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err: any) {
+      console.error('Error downloading all receipts PDF:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to download receipts PDF',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
     }
   };
 
@@ -1443,6 +1814,43 @@ const handleCreate = async () => {
         >
           {actionProps.text}
         </Button>
+        
+        {/* Create Receipt button for APPROVED purchases for Inventory Manager, Admin, Director */}
+        {purchaseStatus === 'APPROVED' && 
+         (roleNorm === 'inventory_manager' || roleNorm === 'admin' || roleNorm === 'director') && (
+          <Button
+            size="sm"
+            colorScheme="green"
+            variant="solid"
+            leftIcon={<FiPackage />}
+            onClick={() => handleCreateReceipt(purchase)}
+            fontWeight="semibold"
+            _hover={{
+              transform: 'translateY(-1px)',
+              boxShadow: 'md'
+            }}
+          >
+            Create Receipt
+          </Button>
+        )}
+        
+        {/* View Receipts button for COMPLETED purchases for all roles */}
+        {purchaseStatus === 'COMPLETED' && (
+          <Button
+            size="sm"
+            colorScheme="blue"
+            variant="outline"
+            leftIcon={<FiFileText />}
+            onClick={() => handleViewReceipts(purchase)}
+            fontWeight="medium"
+            _hover={{
+              transform: 'translateY(-1px)',
+              boxShadow: 'md'
+            }}
+          >
+            Receipts
+          </Button>
+        )}
         
         {/* Delete button for ADMIN - can delete any status */}
         {normalizeRole(user?.role as any) === 'admin' && (
@@ -2421,23 +2829,136 @@ const handleCreate = async () => {
                                     </Flex>
                                   ) : (
                                     <HStack spacing={2}>
-                                      <Select
-                                        placeholder="Select product"
-                                        value={item.product_id}
-                                        onChange={(e) => {
-                                          const items = [...formData.items];
-                                          items[index] = { ...items[index], product_id: e.target.value };
-                                          setFormData({ ...formData, items });
-                                        }}
-                                        size="sm"
-                                        maxW="280px"
-                                      >
-                                        {products.map((p) => (
-                                          <option key={p.id} value={p.id?.toString()}>
-                                            {p?.id} - {p?.name || p?.code}
-                                          </option>
-                                        ))}
-                                      </Select>
+                                      <VStack spacing={2} align="stretch">
+                                        <Select
+                                          placeholder="🔍 Choose Product - V2.0 (Stock Available)"
+                                          value={item.product_id}
+                                          onChange={(e) => {
+                                            const items = [...formData.items];
+                                            items[index] = { ...items[index], product_id: e.target.value };
+                                            // Auto-fill unit price from product purchase_price if available
+                                            const selectedProduct = products.find(p => p.id?.toString() === e.target.value);
+                                            if (selectedProduct && selectedProduct.purchase_price) {
+                                              items[index] = { ...items[index], unit_price: selectedProduct.purchase_price.toString() };
+                                            }
+                                            // Reset quantity when switching products to prevent stock issues
+                                            if (selectedProduct) {
+                                              items[index] = { ...items[index], quantity: '1' };
+                                            }
+                                            setFormData({ ...formData, items });
+                                          }}
+                                          size="sm"
+                                          maxW="320px"
+                                          bg={cardBg}
+                                          borderColor={borderColor}
+                                          _hover={{ borderColor: inputHoverBorder }}
+                                          _focus={{ borderColor: inputFocusBorder, boxShadow: inputFocusShadow }}
+                                        >
+                                          {products.map((p) => {
+                                            // Handle unit display properly - some units might be numeric IDs
+                                            // We'll use a proper unit name or fallback to 'units'
+                                            
+                                            // Determine stock status and styling
+                                            const stockLevel = p?.stock || 0;
+                                            const minStock = p?.min_stock || 0;
+                                            
+                                            // Handle unit display - if unit is numeric (ID), use generic 'units'
+                                            // If unit is text, use it as-is
+                                            let productUnit = 'units';
+                                            if (p?.unit) {
+                                              if (typeof p.unit === 'string' && isNaN(Number(p.unit))) {
+                                                productUnit = p.unit;
+                                              } else {
+                                                // Unit seems to be an ID, use generic
+                                                productUnit = 'units';
+                                              }
+                                            }
+                                            const isOutOfStock = stockLevel === 0;
+                                            const isLowStock = stockLevel > 0 && stockLevel <= minStock;
+                                            
+                                            let stockStatus = '';
+                                            let stockColor = '#2d3748';
+                                            
+                                            if (isOutOfStock) {
+                                              stockStatus = ' ❌ OUT OF STOCK';
+                                              stockColor = '#999';
+                                            } else if (isLowStock) {
+                                              stockStatus = ' ⚠️ LOW STOCK';
+                                              stockColor = '#d69e2e';
+                                            } else if (stockLevel <= 10) {
+                                              stockStatus = ' ⏰ RUNNING LOW';
+                                              stockColor = '#e6a700';
+                                            } else {
+                                              stockStatus = ' ✅ AVAILABLE';
+                                              stockColor = '#2d3748';
+                                            }
+                                            
+                                            return (
+                                              <option 
+                                                key={p.id} 
+                                                value={p.id?.toString()}
+                                                disabled={isOutOfStock}
+                                                style={{
+                                                  color: stockColor,
+                                                  fontWeight: (isLowStock || isOutOfStock) ? '600' : 'normal',
+                                                  backgroundColor: isOutOfStock ? '#f7fafc' : 'white'
+                                                }}
+                                              >
+                                                🏆 NEW: {p?.code} - {p?.name} | Stock: {stockLevel} {productUnit}{stockStatus}
+                                              </option>
+                                            );
+                                          })}
+                                        </Select>
+                                        
+                                        {/* Stock status indicator for selected product */}
+                                        {item.product_id && (() => {
+                                          const selectedProduct = products.find(p => p.id?.toString() === item.product_id);
+                                          if (selectedProduct) {
+                                            const stockLevel = selectedProduct.stock || 0;
+                                            const minStock = selectedProduct.min_stock || 0;
+                                            
+                                            // Handle unit display consistently
+                                            let productUnit = 'units';
+                                            if (selectedProduct?.unit) {
+                                              if (typeof selectedProduct.unit === 'string' && isNaN(Number(selectedProduct.unit))) {
+                                                productUnit = selectedProduct.unit;
+                                              } else {
+                                                productUnit = 'units';
+                                              }
+                                            }
+                                            const isOutOfStock = stockLevel === 0;
+                                            const isLowStock = stockLevel > 0 && stockLevel <= minStock;
+                                            const isRunningLow = stockLevel > minStock && stockLevel <= 10;
+                                            
+                                            if (isOutOfStock) {
+                                              return (
+                                                <Badge colorScheme="red" size="sm" variant="solid">
+                                                  ❌ Out of Stock - Cannot Purchase
+                                                </Badge>
+                                              );
+                                            } else if (isLowStock) {
+                                              return (
+                                                <Badge colorScheme="orange" size="sm" variant="solid">
+                                                  ⚠️ Low Stock: {stockLevel} {productUnit} remaining
+                                                </Badge>
+                                              );
+                                            } else if (isRunningLow) {
+                                              return (
+                                                <Badge colorScheme="yellow" size="sm" variant="outline">
+                                                  ⏰ Running Low: {stockLevel} {productUnit} available
+                                                </Badge>
+                                              );
+                                            } else {
+                                              return (
+                                                <Badge colorScheme="green" size="sm" variant="subtle">
+                                                  ✅ Available: {stockLevel} {productUnit} in stock
+                                                </Badge>
+                                              );
+                                            }
+                                          }
+                                          return null;
+                                        })()}
+                                      </VStack>
                                       <IconButton 
                                         aria-label="Add new product"
                                         icon={<FiPlus />}
@@ -2452,23 +2973,83 @@ const handleCreate = async () => {
                                   )}
                                 </Td>
                                 <Td isNumeric>
-                                  <NumberInput 
-                                    size="sm" 
-                                    min={1} 
-                                    value={item.quantity} 
-                                    onChange={(valueString) => {
-                                      const items = [...formData.items];
-                                      items[index] = { ...items[index], quantity: valueString };
-                                      setFormData({ ...formData, items });
-                                    }} 
-                                    maxW="80px"
-                                  >
-                                    <NumberInputField textAlign="right" fontSize="sm" />
-                                    <NumberInputStepper>
-                                      <NumberIncrementStepper />
-                                      <NumberDecrementStepper />
-                                    </NumberInputStepper>
-                                  </NumberInput>
+                                  <VStack spacing={1} align="end">
+                                    {(() => {
+                                      const selectedProduct = products.find(p => p.id?.toString() === item.product_id);
+                                      const availableStock = selectedProduct?.stock || 0;
+                                      const currentQty = parseFloat(item.quantity) || 0;
+                                      const isExceedingStock = currentQty > availableStock;
+                                      
+                                      return (
+                                        <>
+                                          <NumberInput 
+                                            size="sm" 
+                                            min={1}
+                                            max={selectedProduct ? Math.max(1, availableStock) : undefined}
+                                            value={item.quantity} 
+                                            onChange={(valueString) => {
+                                              const items = [...formData.items];
+                                              const numValue = parseFloat(valueString) || 0;
+                                              
+                                              // Allow input but warn if exceeding stock
+                                              items[index] = { ...items[index], quantity: valueString };
+                                              setFormData({ ...formData, items });
+                                              
+                                              // Show toast warning for exceeding stock
+                                              if (selectedProduct && numValue > availableStock && availableStock > 0) {
+                                                toast({
+                                                  title: 'Stock Warning',
+                                                  description: `Quantity (${numValue}) exceeds available stock (${availableStock}). This purchase may face stock shortages.`,
+                                                  status: 'warning',
+                                                  duration: 4000,
+                                                  isClosable: true,
+                                                });
+                                              }
+                                            }} 
+                                            maxW="90px"
+                                            isInvalid={isExceedingStock && availableStock > 0}
+                                          >
+                                            <NumberInputField 
+                                              textAlign="right" 
+                                              fontSize="sm" 
+                                              bg={isExceedingStock && availableStock > 0 ? 'red.50' : cardBg}
+                                              borderColor={isExceedingStock && availableStock > 0 ? 'red.300' : borderColor}
+                                              _hover={{ 
+                                                borderColor: isExceedingStock && availableStock > 0 ? 'red.400' : inputHoverBorder 
+                                              }}
+                                              _focus={{ 
+                                                borderColor: isExceedingStock && availableStock > 0 ? 'red.500' : inputFocusBorder, 
+                                                boxShadow: isExceedingStock && availableStock > 0 ? '0 0 0 1px #e53e3e' : inputFocusShadow 
+                                              }}
+                                            />
+                                            <NumberInputStepper>
+                                              <NumberIncrementStepper 
+                                                isDisabled={selectedProduct && currentQty >= availableStock && availableStock > 0}
+                                              />
+                                              <NumberDecrementStepper />
+                                            </NumberInputStepper>
+                                          </NumberInput>
+                                          
+                                          {/* Stock validation indicator */}
+                                          {selectedProduct && availableStock > 0 && isExceedingStock && (
+                                            <Text fontSize="xs" color="red.500" fontWeight="bold" textAlign="center" w="90px">
+                                              ⚠️ Exceeds stock!
+                                            </Text>
+                                          )}
+                                          {selectedProduct && availableStock > 0 && currentQty > 0 && !isExceedingStock && (
+                                            <Text fontSize="xs" color="green.500" fontWeight="medium" textAlign="center" w="90px">
+                                              ✓ Stock OK
+                                            </Text>
+                                          )}
+                                          {selectedProduct && availableStock === 0 && currentQty > 0 && (
+                                            <Text fontSize="xs" color="red.600" fontWeight="bold" textAlign="center" w="90px">
+                                              ❌ No stock
+                                            </Text>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                  </VStack>
                                 </Td>
                                 <Td isNumeric>
                                   <Box maxW="160px">
@@ -2554,6 +3135,84 @@ const handleCreate = async () => {
                         </Tbody>
                       </Table>
                     </Box>
+                    
+                    {/* Stock Alert Summary */}
+                    {formData.items.length > 0 && (() => {
+                      const itemsWithStockIssues = formData.items.filter(item => {
+                        const selectedProduct = products.find(p => p.id?.toString() === item.product_id);
+                        const availableStock = selectedProduct?.stock || 0;
+                        const currentQty = parseFloat(item.quantity) || 0;
+                        return selectedProduct && (availableStock === 0 || currentQty > availableStock);
+                      });
+                      
+                      const outOfStockItems = formData.items.filter(item => {
+                        const selectedProduct = products.find(p => p.id?.toString() === item.product_id);
+                        return selectedProduct && selectedProduct.stock === 0;
+                      });
+                      
+                      const exceedsStockItems = formData.items.filter(item => {
+                        const selectedProduct = products.find(p => p.id?.toString() === item.product_id);
+                        const availableStock = selectedProduct?.stock || 0;
+                        const currentQty = parseFloat(item.quantity) || 0;
+                        return selectedProduct && availableStock > 0 && currentQty > availableStock;
+                      });
+                      
+                      const lowStockItems = formData.items.filter(item => {
+                        const selectedProduct = products.find(p => p.id?.toString() === item.product_id);
+                        const availableStock = selectedProduct?.stock || 0;
+                        const minStock = selectedProduct?.min_stock || 0;
+                        return selectedProduct && availableStock > 0 && availableStock <= minStock;
+                      });
+                      
+                      return (
+                        <VStack spacing={3} mt={4}>
+                          {/* Critical Stock Issues Alert */}
+                          {(outOfStockItems.length > 0 || exceedsStockItems.length > 0) && (
+                            <Alert status="error" variant="left-accent" borderRadius="md">
+                              <AlertIcon />
+                              <VStack align="start" spacing={1}>
+                                <AlertTitle fontSize="sm">Stock Issues Detected!</AlertTitle>
+                                <AlertDescription fontSize="xs">
+                                  {outOfStockItems.length > 0 && (
+                                    <Text>❌ {outOfStockItems.length} item(s) are out of stock</Text>
+                                  )}
+                                  {exceedsStockItems.length > 0 && (
+                                    <Text>⚠️ {exceedsStockItems.length} item(s) exceed available stock</Text>
+                                  )}
+                                  <Text fontWeight="medium">Purchase may face stock shortages or delivery delays.</Text>
+                                </AlertDescription>
+                              </VStack>
+                            </Alert>
+                          )}
+                          
+                          {/* Low Stock Warning */}
+                          {lowStockItems.length > 0 && outOfStockItems.length === 0 && exceedsStockItems.length === 0 && (
+                            <Alert status="warning" variant="left-accent" borderRadius="md">
+                              <AlertIcon />
+                              <VStack align="start" spacing={1}>
+                                <AlertTitle fontSize="sm">Low Stock Alert</AlertTitle>
+                                <AlertDescription fontSize="xs">
+                                  ⏰ {lowStockItems.length} item(s) have low stock levels. Consider increasing order quantities.
+                                </AlertDescription>
+                              </VStack>
+                            </Alert>
+                          )}
+                          
+                          {/* All Good Status */}
+                          {itemsWithStockIssues.length === 0 && lowStockItems.length === 0 && (
+                            <Alert status="success" variant="left-accent" borderRadius="md">
+                              <AlertIcon />
+                              <VStack align="start" spacing={1}>
+                                <AlertTitle fontSize="sm">Stock Status: All Good</AlertTitle>
+                                <AlertDescription fontSize="xs">
+                                  ✅ All selected products have sufficient stock for this purchase.
+                                </AlertDescription>
+                              </VStack>
+                            </Alert>
+                          )}
+                        </VStack>
+                      );
+                    })()}
                     
                     {/* Summary Row */}
                     {formData.items.length > 0 && (
@@ -3036,7 +3695,7 @@ const handleCreate = async () => {
                             <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Qty</Th>
                             <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Unit Price (IDR)</Th>
                             <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Discount (IDR)</Th>
-                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary}>Expense Account</Th>
+                            <Th fontSize="xs" fontWeight="semibold" color={textSecondary}>Account</Th>
                             <Th fontSize="xs" fontWeight="semibold" color={textSecondary} isNumeric>Line Total (IDR)</Th>
                             <Th fontSize="xs" fontWeight="semibold" color={textSecondary} w="60px">Action</Th>
                           </Tr>
@@ -3158,7 +3817,7 @@ const handleCreate = async () => {
                                           items[index] = { ...items[index], expense_account_id: value.toString() };
                                           setFormData({ ...formData, items });
                                         }}
-                                        placeholder="Pilih akun beban..."
+                                        placeholder="Pilih akun..."
                                         isLoading={loadingExpenseAccounts}
                                         displayFormat={(option) => `${option.code} - ${option.name}`}
                                       />
@@ -3175,7 +3834,7 @@ const handleCreate = async () => {
                                       maxW="240px"
                                       size="sm"
                                     >
-                                      <NumberInputField placeholder="Expense Account ID" fontSize="sm" />
+                                      <NumberInputField placeholder="Account ID" fontSize="sm" />
                                     </NumberInput>
                                   )}
                                 </Td>
@@ -3810,6 +4469,293 @@ const handleCreate = async () => {
                   flex={1}
                 >
                   Create Product
+                </Button>
+              </HStack>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* Create Receipt Modal */}
+        <Modal isOpen={isReceiptOpen} onClose={onReceiptClose} size="xl">
+          <ModalOverlay />
+          <ModalContent bg={modalContentBg}>
+            <ModalHeader bg={modalHeaderBg} borderBottomWidth={1} borderColor={borderColor}>
+              <HStack>
+                <Box w={1} h={6} bg={statColors.green} borderRadius="full" />
+                <Text fontSize="lg" fontWeight="bold" color={statColors.green}>
+                  Create Goods Receipt - {selectedPurchase?.code}
+                </Text>
+              </HStack>
+            </ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              {selectedPurchase && (
+                <VStack spacing={6} align="stretch">
+                  {/* Purchase Info */}
+                  <Card variant="outline">
+                    <CardBody p={4}>
+                      <SimpleGrid columns={3} spacing={4}>
+                        <FormControl>
+                          <FormLabel fontSize="sm">Purchase Code</FormLabel>
+                          <Text fontWeight="medium">{selectedPurchase.code}</Text>
+                        </FormControl>
+                        <FormControl>
+                          <FormLabel fontSize="sm">Vendor</FormLabel>
+                          <Text fontWeight="medium">{selectedPurchase.vendor?.name || 'N/A'}</Text>
+                        </FormControl>
+                        <FormControl>
+                          <FormLabel fontSize="sm">Total Amount</FormLabel>
+                          <Text fontWeight="medium" color="green.500">
+                            {formatCurrency(selectedPurchase.total_amount)}
+                          </Text>
+                        </FormControl>
+                      </SimpleGrid>
+                    </CardBody>
+                  </Card>
+
+                  {/* Receipt Details */}
+                  <SimpleGrid columns={2} spacing={4}>
+                    <FormControl isRequired>
+                      <FormLabel fontSize="sm">Received Date</FormLabel>
+                      <Input
+                        type="date"
+                        size="sm"
+                        value={receiptFormData.received_date}
+                        onChange={(e) => setReceiptFormData({
+                          ...receiptFormData,
+                          received_date: e.target.value
+                        })}
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel fontSize="sm">Receipt Notes</FormLabel>
+                      <Input
+                        size="sm"
+                        placeholder="General notes for this receipt"
+                        value={receiptFormData.notes}
+                        onChange={(e) => setReceiptFormData({
+                          ...receiptFormData,
+                          notes: e.target.value
+                        })}
+                      />
+                    </FormControl>
+                  </SimpleGrid>
+
+                  {/* Receipt Items */}
+                  <FormControl>
+                    <FormLabel fontSize="sm">Receipt Items</FormLabel>
+                    <TableContainer>
+                      <Table size="sm" bg={tableBg}>
+                        <Thead bg={tableHeaderBg}>
+                          <Tr>
+                            <Th fontSize="xs">Product</Th>
+                            <Th fontSize="xs" isNumeric>Ordered Qty</Th>
+                            <Th fontSize="xs" isNumeric>Received Qty</Th>
+                            <Th fontSize="xs">Condition</Th>
+                            <Th fontSize="xs">Notes</Th>
+                          </Tr>
+                        </Thead>
+                        <Tbody>
+                          {receiptFormData.receipt_items.map((receiptItem, index) => {
+                            const purchaseItem = selectedPurchase.purchase_items?.find(
+                              item => item.id === receiptItem.purchase_item_id
+                            );
+                            return (
+                              <Tr key={receiptItem.purchase_item_id}>
+                                <Td fontSize="sm">
+                                  {purchaseItem?.product?.name || 'Unknown Product'}
+                                </Td>
+                                <Td fontSize="sm" isNumeric>
+                                  {purchaseItem?.quantity || 0}
+                                </Td>
+                                <Td>
+                                  <NumberInput
+                                    size="sm"
+                                    min={0}
+                                    max={purchaseItem?.quantity || 0}
+                                    value={receiptItem.quantity_received}
+                                    onChange={(_, value) => {
+                                      const newItems = [...receiptFormData.receipt_items];
+                                      newItems[index].quantity_received = value || 0;
+                                      setReceiptFormData({
+                                        ...receiptFormData,
+                                        receipt_items: newItems
+                                      });
+                                    }}
+                                  >
+                                    <NumberInputField />
+                                    <NumberInputStepper>
+                                      <NumberIncrementStepper />
+                                      <NumberDecrementStepper />
+                                    </NumberInputStepper>
+                                  </NumberInput>
+                                </Td>
+                                <Td>
+                                  <Select
+                                    size="sm"
+                                    value={receiptItem.condition}
+                                    onChange={(e) => {
+                                      const newItems = [...receiptFormData.receipt_items];
+                                      newItems[index].condition = e.target.value;
+                                      setReceiptFormData({
+                                        ...receiptFormData,
+                                        receipt_items: newItems
+                                      });
+                                    }}
+                                  >
+                                    <option value="GOOD">Good</option>
+                                    <option value="DAMAGED">Damaged</option>
+                                    <option value="DEFECTIVE">Defective</option>
+                                  </Select>
+                                </Td>
+                                <Td>
+                                  <Input
+                                    size="sm"
+                                    placeholder="Item notes"
+                                    value={receiptItem.notes}
+                                    onChange={(e) => {
+                                      const newItems = [...receiptFormData.receipt_items];
+                                      newItems[index].notes = e.target.value;
+                                      setReceiptFormData({
+                                        ...receiptFormData,
+                                        receipt_items: newItems
+                                      });
+                                    }}
+                                  />
+                                </Td>
+                              </Tr>
+                            );
+                          })}
+                        </Tbody>
+                      </Table>
+                    </TableContainer>
+                  </FormControl>
+
+                  <Alert status="info" variant="left-accent">
+                    <AlertIcon />
+                    <VStack align="start" spacing={1}>
+                      <AlertTitle fontSize="sm">Receipt Information</AlertTitle>
+                      <AlertDescription fontSize="xs">
+                        Creating this receipt will mark the purchase as COMPLETED if all items are fully received.
+                        Stock quantities were already updated when the purchase was approved.
+                      </AlertDescription>
+                    </VStack>
+                  </Alert>
+                </VStack>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <HStack spacing={3} w="100%">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setReceiptFormData({
+                      received_date: new Date().toISOString().split('T')[0],
+                      notes: '',
+                      receipt_items: []
+                    });
+                    onReceiptClose();
+                  }}
+                  disabled={savingReceipt}
+                  flex={1}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  colorScheme="green"
+                  onClick={handleSaveReceipt}
+                  isLoading={savingReceipt}
+                  loadingText="Creating Receipt..."
+                  flex={1}
+                  leftIcon={<FiPackage />}
+                >
+                  Create Receipt
+                </Button>
+              </HStack>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* Receipts Modal */}
+        <Modal isOpen={isReceiptsOpen} onClose={onReceiptsClose} size="4xl">
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>
+              <HStack>
+                <Icon as={FiPackage} />
+                <VStack align="start" spacing={0}>
+                  <Text fontWeight="bold">Receipts for {selectedPurchaseForReceipts?.code}</Text>
+                  <Text fontSize="sm" color="gray.600">
+                    Vendor: {selectedPurchaseForReceipts?.vendor?.name}
+                  </Text>
+                </VStack>
+              </HStack>
+            </ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              {loadingReceipts ? (
+                <VStack spacing={4}>
+                  <Spinner size="lg" />
+                  <Text>Loading receipts...</Text>
+                </VStack>
+              ) : (
+                <Box>
+                  {receipts.length === 0 ? (
+                    <Alert status="info">
+                      <AlertIcon />
+                      <Text>No completed receipts found for this purchase.</Text>
+                    </Alert>
+                  ) : (
+                    <TableContainer>
+                      <Table size="sm">
+                        <Thead>
+                          <Tr>
+                            <Th>Receipt #</Th>
+                            <Th>Date</Th>
+                            <Th>Received By</Th>
+                            <Th>Status</Th>
+                            <Th>Items</Th>
+                          </Tr>
+                        </Thead>
+                        <Tbody>
+                          {receipts.map(receipt => (
+                            <Tr key={receipt.id}>
+                              <Td fontWeight="medium">{receipt.receipt_number}</Td>
+                              <Td>{formatDate(receipt.received_date)}</Td>
+                              <Td>{getReceiverName(receipt.receiver)}</Td>
+                              <Td>
+                                <Badge colorScheme={getStatusColor(receipt.status)}>
+                                  {receipt.status}
+                                </Badge>
+                              </Td>
+                              <Td>{receipt.receipt_items?.length || 0}</Td>
+                            </Tr>
+                          ))}
+                        </Tbody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </Box>
+              )}
+            </ModalBody>
+            <ModalFooter>
+              <HStack spacing={3} w="100%">
+                {receipts.length > 0 && (
+                  <Button
+                    leftIcon={<FiDownload />}
+                    colorScheme="green"
+                    onClick={() => selectedPurchaseForReceipts && handleDownloadAllReceiptsPDF(selectedPurchaseForReceipts)}
+                    flex={1}
+                  >
+                    Download Receipts
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  onClick={onReceiptsClose}
+                  flex={receipts.length > 0 ? 0 : 1}
+                >
+                  Close
                 </Button>
               </HStack>
             </ModalFooter>

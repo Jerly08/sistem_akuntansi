@@ -33,6 +33,9 @@ func SetupCashBankRoutes(router *gin.Engine, db *gorm.DB, jwtManager *middleware
 		// Revenue accounts endpoint - for deposit form source account dropdown
 		cashBank.GET("/revenue-accounts", middleware.RoleRequired("admin", "finance", "director", "employee"), cashBankController.GetRevenueAccounts)
 		
+		// Deposit source accounts endpoint - for deposit form with both revenue and equity accounts
+		cashBank.GET("/deposit-source-accounts", middleware.RoleRequired("admin", "finance", "director", "employee"), cashBankController.GetDepositSourceAccounts)
+		
 		cashBank.GET("/accounts/:id", middleware.RoleRequired("admin", "finance", "director"), cashBankController.GetAccountByID)
 		cashBank.POST("/accounts", middleware.RoleRequired("admin", "finance"), cashBankController.CreateAccount)
 		cashBank.PUT("/accounts/:id", middleware.RoleRequired("admin", "finance"), cashBankController.UpdateAccount)

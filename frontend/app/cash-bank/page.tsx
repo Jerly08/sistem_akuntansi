@@ -561,7 +561,7 @@ const CashBankPage: React.FC = () => {
 
   if (loading) {
     return (
-<SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
+      <SimpleLayout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
         <Box>
           <Text>{t('common.loading')}</Text>
         </Box>
@@ -570,7 +570,7 @@ const CashBankPage: React.FC = () => {
   }
 
   return (
-    <SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
+    <SimpleLayout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">{t('cashBank.title')}</Heading>

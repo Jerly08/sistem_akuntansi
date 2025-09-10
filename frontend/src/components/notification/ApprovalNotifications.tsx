@@ -17,6 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { FiBell, FiCheckCircle, FiXCircle, FiClock, FiShoppingCart } from 'react-icons/fi';
 import approvalService from '../../services/approvalService';
+import { formatIDR } from '@/utils/currency';
 
 interface NotificationItem {
   id: number;
@@ -119,6 +120,35 @@ const ApprovalNotifications: React.FC = () => {
     return date.toLocaleDateString('id-ID', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  const formatMessageCurrency = (message: string, data?: any) => {
+    if (!message) return '';
+
+    let result = message;
+
+    // If data contains total_amount, update inline amount
+    const parsed = (() => {
+      if (!data) return null;
+      try {
+        return typeof data === 'string' ? JSON.parse(data) : data;
+      } catch {
+        return null;
+      }
+    })();
+
+    const totalAmount = parsed?.total_amount ?? parsed?.amount ?? parsed?.totalAmount;
+    if (typeof totalAmount === 'number') {
+      result = result.replace(/\(\s*Amount\s*:\s*[^\)]*\)/i, () => `(${'Amount'}: ${formatIDR(totalAmount)})`);
+    }
+
+    result = result.replace(/(Amount|amount)\s*:\s*(\d+[\d.,]*)/g, (_m, lbl, num) => {
+      const normalized = parseFloat(String(num).replace(/\./g, '').replace(/,/g, '.'));
+      const formatted = isNaN(normalized) ? num : formatIDR(normalized);
+      return `${lbl}: ${formatted}`;
+    });
+
+    return result;
+  };
+
   const priorityColor = (priority: string) => {
     const p = (priority || '').toLowerCase();
     if (p === 'high' || p === 'urgent') return 'red.500';
@@ -174,7 +204,7 @@ const ApprovalNotifications: React.FC = () => {
                         <Text fontSize="sm" fontWeight={n.is_read ? 'normal' : 'semibold'}>{n.title}</Text>
                         {!n.is_read && <Box w={2} h={2} bg="blue.500" borderRadius="full" />}
                       </HStack>
-                      <Text fontSize="sm" color="gray.600" noOfLines={2}>{n.message}</Text>
+                      <Text fontSize="sm" color="gray.600" noOfLines={2}>{formatMessageCurrency(n.message, n.data)}</Text>
                       <HStack spacing={2} pt={1}>
                         <Text fontSize="xs" color="gray.500">{formatDate(n.created_at)}</Text>
                         <Badge colorScheme="gray" bg={priorityColor(n.priority)} color="white">{n.priority}</Badge>

@@ -8,6 +8,7 @@ import (
 
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
+	"app-sistem-akuntansi/utils"
 	"gorm.io/gorm"
 )
 
@@ -422,8 +423,8 @@ func (s *SmartNotificationService) CreatePurchaseNotification(
 			return s.CreateSmartNotification(
 				models.NotificationTypeApprovalPending,
 				"Purchase Approval Required",
-				fmt.Sprintf("Purchase %s requires approval (Amount: Rp %.2f)", 
-					purchase.Code, purchase.TotalAmount),
+				fmt.Sprintf("Purchase %s requires approval (Amount: %s)", 
+					purchase.Code, utils.FormatRupiahWithoutDecimals(purchase.TotalAmount)),
 				map[string]interface{}{
 					"purchase_id":   purchase.ID,
 					"purchase_code": purchase.Code,
@@ -441,8 +442,8 @@ func (s *SmartNotificationService) CreatePurchaseNotification(
 			s.CreateSmartNotification(
 				models.NotificationTypeHighValuePurchase,
 				"High-Value Purchase for Review",
-				fmt.Sprintf("High-value purchase %s needs review before director approval (Amount: Rp %.2f)", 
-					purchase.Code, purchase.TotalAmount),
+				fmt.Sprintf("High-value purchase %s needs review before director approval (Amount: %s)", 
+					purchase.Code, utils.FormatRupiahWithoutDecimals(purchase.TotalAmount)),
 				map[string]interface{}{
 					"purchase_id":   purchase.ID,
 					"purchase_code": purchase.Code,
@@ -460,8 +461,8 @@ func (s *SmartNotificationService) CreatePurchaseNotification(
 			return s.CreateSmartNotification(
 				models.NotificationTypeApprovalPending,
 				"High-Value Purchase Approval Required",
-				fmt.Sprintf("High-value purchase %s requires your approval (Amount: Rp %.2f)", 
-					purchase.Code, purchase.TotalAmount),
+				fmt.Sprintf("High-value purchase %s requires your approval (Amount: %s)", 
+					purchase.Code, utils.FormatRupiahWithoutDecimals(purchase.TotalAmount)),
 				map[string]interface{}{
 					"purchase_id":   purchase.ID,
 					"purchase_code": purchase.Code,
@@ -533,8 +534,8 @@ func (s *SmartNotificationService) CreatePurchaseNotification(
 		return s.CreateSmartNotification(
 			models.NotificationTypeApprovalEscalated,
 			"URGENT: Purchase Escalated for Approval",
-			fmt.Sprintf("Purchase %s has been escalated: %s (Amount: Rp %.2f)", 
-				purchase.Code, escalationReason, purchase.TotalAmount),
+			fmt.Sprintf("Purchase %s has been escalated: %s (Amount: %s)", 
+				purchase.Code, escalationReason, utils.FormatRupiahWithoutDecimals(purchase.TotalAmount)),
 			map[string]interface{}{
 				"purchase_id":   purchase.ID,
 				"purchase_code": purchase.Code,
@@ -566,7 +567,7 @@ func (s *SmartNotificationService) ProcessBatchNotifications() error {
 		title := fmt.Sprintf("%d %s Notifications", batch.ItemCount, batch.BatchType)
 		message := batch.Summary
 		if batch.TotalAmount > 0 {
-			message += fmt.Sprintf(" (Total: Rp %.2f)", batch.TotalAmount)
+			message += fmt.Sprintf(" (Total: %s)", utils.FormatRupiahWithoutDecimals(batch.TotalAmount))
 		}
 
 		notification := &models.Notification{

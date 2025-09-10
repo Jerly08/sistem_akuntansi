@@ -37,6 +37,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import approvalService from '../../services/approvalService';
 import axios from 'axios';
 import { API_BASE_URL } from '@/config/api';
+import { formatIDR } from '@/utils/currency';
 
 interface NotificationItem {
   id: number;
@@ -255,6 +256,30 @@ const UnifiedNotifications: React.FC = () => {
     });
   };
 
+  // Replace any inline numeric amount in message with formatted IDR
+  const formatMessageCurrency = (message: string, data?: any) => {
+    if (!message) return '';
+
+    let result = message;
+
+    // If structured data contains total_amount, ensure we append a nicely formatted value
+    const totalAmount = data?.total_amount ?? data?.amount ?? data?.totalAmount;
+    if (typeof totalAmount === 'number') {
+      // Replace patterns like (Amount: ...)
+      result = result.replace(/\(\s*Amount\s*:\s*[^\)]*\)/i, (m) => `(${'Amount'}: ${formatIDR(totalAmount)})`);
+    }
+
+    // Generic replacement: find "Amount: <number>" or "amount: <number>"
+    result = result.replace(/(Amount|amount)\s*:\s*(\d+[\d.,]*)/g, (_m, lbl, num) => {
+      // Normalize number
+      const normalized = parseFloat(String(num).replace(/\./g, '').replace(/,/g, '.'));
+      const formatted = isNaN(normalized) ? num : formatIDR(normalized);
+      return `${lbl}: ${formatted}`;
+    });
+
+    return result;
+  };
+
   const getUrgencyColor = (urgency: string) => {
     switch (urgency) {
       case 'critical': return 'red';
@@ -345,7 +370,7 @@ const UnifiedNotifications: React.FC = () => {
                               </Text>
                               {!n.is_read && <Box w={2} h={2} bg="blue.500" borderRadius="full" />}
                             </HStack>
-                            <Text fontSize="sm" color="gray.600" noOfLines={2}>{n.message}</Text>
+                            <Text fontSize="sm" color="gray.600" noOfLines={2}>{formatMessageCurrency(n.message, n.data)}</Text>
                             <HStack spacing={2} pt={1}>
                               <Text fontSize="xs" color="gray.500">{formatDate(n.created_at)}</Text>
                               <Badge colorScheme="gray" fontSize="0.6em">{n.priority}</Badge>
@@ -428,7 +453,7 @@ const UnifiedNotifications: React.FC = () => {
                                 </HStack>
                                 
                                 <Text fontSize="xs" color="gray.600" noOfLines={2}>
-                                  {notif.message}
+                                  {formatMessageCurrency(notif.message, notif.data)}
                                 </Text>
                                 
                                 {data && (
@@ -475,7 +500,7 @@ const UnifiedNotifications: React.FC = () => {
                         </Text>
                         {!n.is_read && <Box w={2} h={2} bg="blue.500" borderRadius="full" />}
                       </HStack>
-                      <Text fontSize="sm" color="gray.600" noOfLines={2}>{n.message}</Text>
+                      <Text fontSize="sm" color="gray.600" noOfLines={2}>{formatMessageCurrency(n.message, n.data)}</Text>
                       <HStack spacing={2} pt={1}>
                         <Text fontSize="xs" color="gray.500">{formatDate(n.created_at)}</Text>
                         <Badge colorScheme="gray" fontSize="0.6em">{n.priority}</Badge>

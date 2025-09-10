@@ -1549,10 +1549,10 @@ func (ers *EnhancedReportService) getSharesOutstanding() float64 {
 	err := ers.db.Where("type = ? AND (category LIKE ? OR category LIKE ? OR name LIKE ? OR name LIKE ?) AND is_active = ?", 
 		models.AccountTypeEquity, "%SHARE_CAPITAL%", "%MODAL_SAHAM%", "%share%", "%saham%", true).First(&shareCapitalAccount).Error
 	
-	// Handle record not found gracefully - this is expected if no share capital accounts exist
+	// Handle record not found gracefully - this is normal if no share capital accounts exist
+	// Only log unexpected database errors, not "record not found" which is normal
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		// Log only unexpected database errors, not "record not found"
-		log.Printf("Error querying share capital account: %v", err)
+		log.Printf("Unexpected error querying share capital account: %v", err)
 	}
 	
 	if err == nil && shareCapitalAccount.Balance > 0 {

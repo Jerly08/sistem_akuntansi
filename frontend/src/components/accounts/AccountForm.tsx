@@ -27,6 +27,7 @@ interface AccountFormProps {
   onSubmit: (data: AccountCreateRequest | AccountUpdateRequest) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  isHeaderMode?: boolean; // Pre-configure form for header account
 }
 
 // Helper function to determine smart category based on account type, account code, and parent
@@ -125,6 +126,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
   onSubmit,
   onCancel,
   isSubmitting = false,
+  isHeaderMode = false,
 }) => {
   const { user } = useAuth();
   const isAdmin = user?.role?.toLowerCase() === 'admin';
@@ -140,6 +142,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
     parent_id: null,
     opening_balance: 0,
     is_active: true,
+    is_header: isHeaderMode, // Pre-configure for header mode
     // Convert from account if provided
     ...(account && {
       code: account.code,
@@ -149,6 +152,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
       category: account.category,
       parent_id: account.parent_id,
       is_active: account.is_active,
+      is_header: account.is_header || false,
     }),
   });
 
@@ -170,6 +174,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
       parent_id: null,
       opening_balance: 0,
       is_active: true,
+      is_header: isHeaderMode, // Pre-configure for header mode
       // Convert from account if provided
       ...(account && {
         code: account.code,
@@ -179,9 +184,10 @@ const AccountForm: React.FC<AccountFormProps> = ({
         category: account.category,
         parent_id: account.parent_id,
         is_active: account.is_active,
+        is_header: account.is_header || false,
       }),
     });
-  }, [account]);
+  }, [account, isHeaderMode]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -193,7 +199,13 @@ const AccountForm: React.FC<AccountFormProps> = ({
     // Handle checkbox inputs
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
-      setFormData((prev) => ({ ...prev, [name]: checked }));
+      
+      // If is_header is checked, reset opening balance to 0
+      if (name === 'is_header' && checked) {
+        setFormData((prev) => ({ ...prev, [name]: checked, opening_balance: 0 }));
+      } else {
+        setFormData((prev) => ({ ...prev, [name]: checked }));
+      }
     } else {
       // Handle special field mappings
       let fieldValue: any = value;
@@ -256,6 +268,18 @@ const AccountForm: React.FC<AccountFormProps> = ({
 
   return (
     <form onSubmit={handleSubmit}>
+      {isHeaderMode && !account && (
+        <Alert status="info" mb={4} borderRadius="md">
+          <AlertIcon />
+          <Box>
+            <AlertTitle fontSize="sm">Creating Header Account</AlertTitle>
+            <AlertDescription fontSize="xs">
+              Header accounts are used to group other accounts in a hierarchy. 
+              They cannot have transactions or opening balance.
+            </AlertDescription>
+          </Box>
+        </Alert>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormField
           id="code"
@@ -354,14 +378,14 @@ const AccountForm: React.FC<AccountFormProps> = ({
               </Badge>
             )}
           </HStack>
-          <CurrencyInput
-            value={formData.opening_balance || 0}
-            onChange={(value) => setFormData((prev) => ({ ...prev, opening_balance: value }))}
-            placeholder="Contoh: Rp 1.000.000"
-            size="md"
-            min={0}
-            isDisabled={!canEditOpeningBalance}
-          />
+            <CurrencyInput
+              value={formData.opening_balance || 0}
+              onChange={(value) => setFormData((prev) => ({ ...prev, opening_balance: value }))}
+              placeholder="Contoh: Rp 1.000.000"
+              size="md"
+              min={0}
+              isDisabled={!canEditOpeningBalance || formData.is_header}
+            />
           {account?.id && !canEditOpeningBalance && (
             <Alert status="warning" size="sm" mt={2}>
               <AlertIcon boxSize={3} />
@@ -386,6 +410,17 @@ const AccountForm: React.FC<AccountFormProps> = ({
               </Box>
             </Alert>
           )}
+          {formData.is_header && (
+            <Alert status="warning" size="sm" mt={2}>
+              <AlertIcon boxSize={3} />
+              <Box fontSize="xs">
+                <Text fontWeight="medium" color="orange.600">Header Account Restriction</Text>
+                <Text color="orange.600">
+                  Header accounts cannot have opening balance. The opening balance has been set to zero.
+                </Text>
+              </Box>
+            </Alert>
+          )}
         </Box>
         
         <div className="md:col-span-2">
@@ -400,18 +435,48 @@ const AccountForm: React.FC<AccountFormProps> = ({
           />
         </div>
         
-        <div className="flex items-center">
-          <input
-            id="is_active"
-            type="checkbox"
-            checked={formData.is_active}
-            onChange={handleChange}
-            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            name="is_active"
-          />
-          <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700">
-            Active
-          </label>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center">
+            <input
+              id="is_active"
+              type="checkbox"
+              checked={formData.is_active}
+              onChange={handleChange}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              name="is_active"
+            />
+            <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700">
+              Active
+            </label>
+          </div>
+          
+          <div className="flex items-center">
+            <input
+              id="is_header"
+              type="checkbox"
+              checked={formData.is_header}
+              onChange={handleChange}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              name="is_header"
+              disabled={isHeaderMode && !account} // Disable in header mode for new accounts
+            />
+            <label htmlFor="is_header" className="ml-2 block text-sm text-gray-700">
+              Header Account
+            </label>
+            {isHeaderMode && !account && (
+              <Badge colorScheme="blue" size="sm" ml={2}>
+                FORCED ON
+              </Badge>
+            )}
+            <Tooltip 
+              label="Header accounts are used to group other accounts. They cannot have transactions or opening balance."
+              hasArrow
+            >
+              <span className="ml-2">
+                <Icon as={FiInfo} color="gray.500" boxSize={3} />
+              </span>
+            </Tooltip>
+          </div>
         </div>
       </div>
       

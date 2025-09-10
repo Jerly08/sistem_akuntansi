@@ -364,6 +364,17 @@ func AutoMigrate(db *gorm.DB) {
 		
 		// Migration tracking models
 		&models.MigrationRecord{},
+		
+		// Settings model
+		&models.Settings{},
+		
+		// Security models
+		&models.SecurityIncident{},
+		&models.SystemAlert{},
+		&models.RequestLog{},
+		&models.IpWhitelist{},
+		&models.SecurityConfig{},
+		&models.SecurityMetrics{},
 	)
 	
 	if err != nil {
@@ -409,6 +420,9 @@ func AutoMigrate(db *gorm.DB) {
 	
 	// Run enhanced cashbank model migration
 	EnhanceCashBankModel(db)
+	
+	// Run settings table migration
+	RunSettingsMigration(db)
 
 	// PRODUCTION SAFETY: All balance synchronization logic disabled to prevent account balance resets
 	// Balance sync operations have been permanently disabled to protect production data
@@ -431,6 +445,22 @@ func createIndexes(db *gorm.DB) {
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_products_stock ON products(stock)`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_date ON inventories(transaction_date)`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)`)
+	
+	// Security and authentication indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_blacklisted_tokens_token ON blacklisted_tokens(token)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_blacklisted_tokens_expires_at ON blacklisted_tokens(expires_at)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_incidents_created_at ON security_incidents(created_at)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_incidents_client_ip ON security_incidents(client_ip)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_incidents_incident_type ON security_incidents(incident_type)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_logs_timestamp ON request_logs(timestamp)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_logs_client_ip ON request_logs(client_ip)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_logs_is_suspicious ON request_logs(is_suspicious)`)
+	
+	// Notification indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_notifications_user_type ON notifications(user_id, type)`)
 	
 	// Composite indexes for better query performance
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_customer_date ON sales(customer_id, date)`)

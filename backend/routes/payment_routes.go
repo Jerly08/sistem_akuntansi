@@ -68,6 +68,9 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 		// Revenue accounts endpoint - for deposit form source account dropdown
 		cashbank.GET("/revenue-accounts", permissionMiddleware.CanView("cash_bank"), cashBankController.GetRevenueAccounts)
 		
+		// Deposit source accounts endpoint - for deposit form with both revenue and equity accounts
+		cashbank.GET("/deposit-source-accounts", permissionMiddleware.CanView("cash_bank"), cashBankController.GetDepositSourceAccounts)
+		
 		cashbank.GET("/accounts/:id", permissionMiddleware.CanView("cash_bank"), cashBankController.GetAccountByID)
 cashbank.POST("/accounts", permissionMiddleware.CanCreate("cash_bank"), cashBankController.CreateAccount)
 cashbank.PUT("/accounts/:id", permissionMiddleware.CanEdit("cash_bank"), cashBankController.UpdateAccount)

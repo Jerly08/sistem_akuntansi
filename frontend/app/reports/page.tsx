@@ -30,7 +30,11 @@ import {
   Select,
   Spinner,
   useDisclosure,
-  useColorModeValue
+  useColorModeValue,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription
 } from '@chakra-ui/react';
 import { 
   FiFileText, 
@@ -41,9 +45,14 @@ import {
   FiDownload,
   FiEye,
   FiList,
-  FiBook
+  FiBook,
+  FiSearch
 } from 'react-icons/fi';
 import { reportService, ReportParameters } from '../../src/services/reportService';
+import { useJournalDrilldown } from '../../src/hooks/useJournalDrilldown';
+import JournalDrilldownModal from '../../src/components/reports/JournalDrilldownModal';
+import JournalDrilldownButton from '../../src/components/reports/JournalDrilldownButton';
+import { formatCurrency } from '../../src/utils/formatters';
 
 // Define reports data matching the UI design
 const getAvailableReports = (t: any) => [
@@ -116,6 +125,7 @@ const ReportsPage: React.FC = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isPreviewOpen, onOpen: onPreviewOpen, onClose: onPreviewClose } = useDisclosure();
   const toast = useToast();
+  const journalDrilldown = useJournalDrilldown();
 
   // Color mode values
   const cardBg = useColorModeValue('white', 'gray.800');
@@ -145,6 +155,93 @@ const ReportsPage: React.FC = () => {
 
   const resetParams = () => {
     setReportParams({});
+  };
+
+
+  // Helper function to handle journal drill-down for different report types
+  const handleJournalDrilldown = (itemName: string, accountCode?: string, amount?: number) => {
+    if (!previewReport || !previewData) return;
+
+    const reportId = previewReport.id;
+    
+    // Extract date parameters from the last used parameters or current preview data
+    let startDate: string = '';
+    let endDate: string = '';
+    let asOfDate: string = '';
+
+    if (reportId === 'balance-sheet' || reportId === 'trial-balance') {
+      asOfDate = new Date().toISOString().split('T')[0]; // Default to today
+    } else {
+      // For P&L, cash flow, etc.
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      startDate = firstDayOfMonth.toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+    }
+
+    // Call appropriate drill-down method based on report type
+    switch (reportId) {
+      case 'profit-loss':
+        journalDrilldown.drillDownProfitLoss(
+          itemName,
+          accountCode ? [accountCode] : [],
+          [],
+          startDate,
+          endDate
+        );
+        break;
+      case 'balance-sheet':
+        journalDrilldown.drillDownBalanceSheet(
+          itemName,
+          accountCode ? [accountCode] : [],
+          [],
+          asOfDate
+        );
+        break;
+      case 'trial-balance':
+        if (accountCode) {
+          journalDrilldown.drillDownAccount(
+            accountCode,
+            itemName,
+            new Date(new Date(asOfDate).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // One year ago
+            asOfDate,
+            'TRIAL_BALANCE'
+          );
+        }
+        break;
+      case 'general-ledger':
+        if (accountCode) {
+          journalDrilldown.drillDownAccount(
+            accountCode,
+            itemName,
+            startDate,
+            endDate,
+            'GENERAL_LEDGER'
+          );
+        }
+        break;
+      case 'cash-flow':
+        journalDrilldown.drillDownCashFlow(
+          itemName,
+          accountCode ? [accountCode] : [],
+          [],
+          startDate,
+          endDate,
+          ['CASH_BANK', 'PAYMENT', 'DEPOSIT', 'WITHDRAWAL']
+        );
+        break;
+      default:
+        // Generic drill-down for other reports
+        journalDrilldown.openDrilldown({
+          start_date: startDate || new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          end_date: endDate || new Date().toISOString().split('T')[0],
+          line_item_name: itemName,
+          account_codes: accountCode ? [accountCode] : undefined,
+          report_type: reportId.toUpperCase(),
+          page: 1,
+          limit: 20
+        }, `Journal Entries - ${itemName}`);
+    }
   };
 
   const handleViewReport = async (report: any) => {
@@ -285,34 +382,55 @@ const ReportsPage: React.FC = () => {
           throw new Error('Invalid balance sheet data structure');
 
         case 'profit-loss':
-          // Handle ProfitLossData structure from backend
-          if (reportData.company || reportData.revenue || reportData.total_revenue !== undefined) {
+          // Handle ProfitLossStatement structure from backend
+          console.log('Processing profit-loss data:', reportData);
+          
+          // Check if it's the new ProfitLossStatement format
+          if (reportData.report_header || reportData.revenue || reportData.total_revenue !== undefined) {
             const sections = [];
             
-            // Revenue section
-            if (reportData.revenue) {
+            // Revenue section - handle array format from FinancialReportService
+            if (reportData.revenue && Array.isArray(reportData.revenue)) {
               sections.push({
                 name: 'REVENUE',
-                items: reportData.revenue.items || [],
-                total: reportData.revenue.subtotal || reportData.total_revenue || 0
+                items: reportData.revenue.map((item: any) => ({
+                  name: `${item.account_code || ''} - ${item.account_name || ''}`,
+                  amount: item.balance || 0
+                })),
+                total: reportData.total_revenue || 0
               });
             }
             
-            // Cost of Goods Sold section
-            if (reportData.cost_of_goods_sold) {
+            // Cost of Goods Sold section - handle array format
+            if (reportData.cost_of_goods_sold && Array.isArray(reportData.cost_of_goods_sold)) {
               sections.push({
                 name: 'COST OF GOODS SOLD',
-                items: reportData.cost_of_goods_sold.items || [],
-                total: reportData.cost_of_goods_sold.subtotal || 0
+                items: reportData.cost_of_goods_sold.map((item: any) => ({
+                  name: `${item.account_code || ''} - ${item.account_name || ''}`,
+                  amount: item.balance || 0
+                })),
+                total: reportData.total_cogs || 0
               });
             }
             
-            // Operating Expenses section
-            if (reportData.operating_expenses) {
+            // Gross Profit section
+            if (reportData.gross_profit !== undefined) {
+              sections.push({
+                name: 'GROSS PROFIT',
+                items: [{ name: 'Gross Profit', amount: reportData.gross_profit || 0 }],
+                total: reportData.gross_profit || 0
+              });
+            }
+            
+            // Operating Expenses section - handle array format
+            if (reportData.expenses && Array.isArray(reportData.expenses)) {
               sections.push({
                 name: 'OPERATING EXPENSES',
-                items: reportData.operating_expenses.items || [],
-                total: reportData.operating_expenses.subtotal || 0
+                items: reportData.expenses.map((item: any) => ({
+                  name: `${item.account_code || ''} - ${item.account_name || ''}`,
+                  amount: item.balance || 0
+                })),
+                total: reportData.total_expenses || 0
               });
             }
             
@@ -323,13 +441,31 @@ const ReportsPage: React.FC = () => {
               total: reportData.net_income || 0
             });
 
+            // Extract period from report header or generate default
+            let period = `${new Date().toLocaleDateString('id-ID')}`;
+            if (reportData.report_header) {
+              const startDate = new Date(reportData.report_header.start_date || Date.now());
+              const endDate = new Date(reportData.report_header.end_date || Date.now());
+              period = `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`;
+            }
+
             return {
-              title: 'Profit and Loss Statement',
-              period: reportData.period || `${new Date().toLocaleDateString('id-ID')}`,
-              sections
+              title: reportData.report_header?.report_title || 'Profit and Loss Statement',
+              period,
+              sections,
+              hasData: sections.some(section => section.items && section.items.length > 0)
             };
           }
-          throw new Error('Invalid profit & loss data structure');
+          
+          // If no valid data structure found, return empty state with error info
+          return {
+            title: 'Profit and Loss Statement',
+            period: `${new Date().toLocaleDateString('id-ID')}`,
+            sections: [],
+            hasData: false,
+            error: true,
+            message: 'No financial data available for the selected period. Please check if there are any journal entries posted during this period.'
+          };
 
         case 'cash-flow':
           if (reportData.company && reportData.operating_activities) {
@@ -578,6 +714,19 @@ const ReportsPage: React.FC = () => {
     try {
       let result;
       
+      // Validate required parameters
+      if (['profit-loss', 'cash-flow', 'sales-summary', 'purchase-summary', 'general-ledger'].includes(selectedReport.id)) {
+        if (!reportParams.start_date || !reportParams.end_date) {
+          throw new Error('Start date and end date are required for this report');
+        }
+      }
+      
+      if (['balance-sheet', 'trial-balance'].includes(selectedReport.id)) {
+        if (!reportParams.as_of_date) {
+          throw new Error('As of date is required for this report');
+        }
+      }
+      
       // Use professional report service for specific reports
       if (["balance-sheet", "profit-loss", "cash-flow", "sales-summary", "purchase-summary"].includes(selectedReport.id)) {
         result = await reportService.generateProfessionalReport(selectedReport.id, reportParams);
@@ -585,25 +734,50 @@ const ReportsPage: React.FC = () => {
         result = await reportService.generateReport(selectedReport.id, reportParams);
       }
       
-      // Handle the result - Always download file since we only support PDF and CSV
-      const fileName = `${selectedReport.id}_professional_report.${reportParams.format}`;
-      await reportService.downloadReport(result as Blob, fileName);
-      toast({
-        title: 'Report Downloaded',
-        description: `${selectedReport.name} has been downloaded successfully.`,
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
+      // Verify result is valid before attempting download
+      if (!result) {
+        throw new Error('No data received from server');
+      }
+      
+      // Check if result is a Blob (for file downloads)
+      if (result instanceof Blob) {
+        if (result.size === 0) {
+          throw new Error('Empty file received from server');
+        }
+        
+        // Handle the result - Download file
+        const fileName = `${selectedReport.id}_report_${new Date().toISOString().split('T')[0]}.${reportParams.format}`;
+        await reportService.downloadReport(result, fileName);
+        toast({
+          title: 'Report Downloaded',
+          description: `${selectedReport.name} has been downloaded successfully.`,
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+        });
+      } else {
+        // If not a Blob, probably an error or unexpected data format
+        console.error('Unexpected result format:', typeof result, result);
+        throw new Error('Invalid response format from server');
+      }
       
       onClose();
     } catch (error) {
       console.error('Failed to generate report:', error);
+      
+      // More detailed error message
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
       toast({
-        title: 'Error',
-        description: `Failed to generate report: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: 'Report Generation Failed',
+        description: errorMessage,
         status: 'error',
-        duration: 5000,
+        duration: 8000,
         isClosable: true,
       });
     } finally {
@@ -612,12 +786,35 @@ const ReportsPage: React.FC = () => {
   };
 
   return (
-    <SimpleLayout allowedRoles={['admin', 'finance', 'director']}>
+    <SimpleLayout allowedRoles={['admin', 'finance', 'director', 'inventory_manager']}>
       <Box p={8}>
         <VStack spacing={8} align="stretch">
-          <Heading as="h1" size="xl" color={headingColor} fontWeight="medium">
-            Financial Reports
-          </Heading>
+          <VStack align="start" spacing={4}>
+            <Heading as="h1" size="xl" color={headingColor} fontWeight="medium">
+              Financial Reports
+            </Heading>
+            
+            {/* Journal Drilldown Feature Banner */}
+            <Alert 
+              status="info" 
+              variant="left-accent" 
+              borderRadius="md"
+              bg={useColorModeValue('blue.50', 'blue.900')}
+              borderColor={useColorModeValue('blue.200', 'blue.600')}
+            >
+              <AlertIcon color={useColorModeValue('blue.500', 'blue.300')} />
+              <Box>
+                <AlertTitle fontSize="sm" mb={1}>
+                  🆕 New Feature: Journal Entry Drill-down! 
+                </AlertTitle>
+                <Text fontSize="sm">
+                  🔍 Try the <strong>"Try Journal Drilldown"</strong> button on financial reports below, or 
+                  📊 visit <strong>Enhanced Reports</strong> in the sidebar for full interactive experience.
+                  Click any line item in reports to see underlying journal entries!
+                </Text>
+              </Box>
+            </Alert>
+          </VStack>
           
           {/* Financial Reports Grid */}
           <SimpleGrid columns={[1, 2, 3]} spacing={6}>
@@ -687,6 +884,45 @@ const ReportsPage: React.FC = () => {
                           Generate
                         </Button>
                       </HStack>
+                      
+                      {/* Demo Journal Drilldown Button */}
+                      {report.type === 'FINANCIAL' && (
+                        <HStack spacing={2} width="full" mt={2} pt={2} borderTop="1px" borderColor={borderColor}>
+                          <Text fontSize="xs" color={descriptionColor} flex="1">
+                            📊 New Feature:
+                          </Text>
+                          <Button
+                            colorScheme="purple"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              // Demo journal drilldown dengan data sample
+                              const today = new Date();
+                              const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+                              
+                              if (report.id === 'balance-sheet' || report.id === 'trial-balance') {
+                                journalDrilldown.drillDownBalanceSheet(
+                                  `Demo ${report.name}`,
+                                  ['1000', '2000', '3000'], // Sample account codes
+                                  [],
+                                  today.toISOString().split('T')[0]
+                                );
+                              } else {
+                                journalDrilldown.drillDownProfitLoss(
+                                  `Demo ${report.name}`,
+                                  ['4000', '5000', '6000'], // Sample account codes
+                                  [],
+                                  firstDayOfMonth.toISOString().split('T')[0],
+                                  today.toISOString().split('T')[0]
+                                );
+                              }
+                            }}
+                            leftIcon={<FiSearch />}
+                          >
+                            Try Journal Drilldown
+                          </Button>
+                        </HStack>
+                      )}
                     </VStack>
                   </VStack>
                 </CardBody>
@@ -924,14 +1160,31 @@ const ReportsPage: React.FC = () => {
                         {section.items?.map((item: any, itemIndex: number) => (
                           <HStack key={itemIndex} justify="space-between" py={2} px={4} 
                                  bg={itemIndex % 2 === 0 ? evenRowBg : oddRowBg} 
-                                 borderRadius="md">
-                            <Text fontSize="sm" color={textColor}>
-                              {item.name}
-                            </Text>
-                            <Text fontSize="sm" fontWeight="medium" 
-                                  color={item.amount >= 0 ? "black" : "red.500"}>
-                              {formatCurrency(item.amount)}
-                            </Text>
+                                 borderRadius="md"
+                                 _hover={{ bg: useColorModeValue('blue.50', 'blue.900') }}
+                                 transition="background 0.2s">
+                            <HStack spacing={3} flex={1}>
+                              <Text fontSize="sm" color={textColor} flex={1}>
+                                {item.name}
+                              </Text>
+                              <Text fontSize="sm" fontWeight="medium" 
+                                    color={item.amount >= 0 ? "black" : "red.500"} minW="120px" textAlign="right">
+                                {formatCurrency(item.amount)}
+                              </Text>
+                            </HStack>
+                            <Box>
+                              <JournalDrilldownButton
+                                onClick={() => {
+                                  // Extract account code from item name if available (e.g., "1000 - Cash" or "4000-Revenue")
+                                  const accountCodeMatch = item.name.match(/^([0-9A-Z-]+)\s*[-\s]/);
+                                  const accountCode = accountCodeMatch ? accountCodeMatch[1] : undefined;
+                                  handleJournalDrilldown(item.name, accountCode, item.amount);
+                                }}
+                                size="xs"
+                                label={`View journal entries for ${item.name}`}
+                                variant="search"
+                              />
+                            </Box>
                           </HStack>
                         ))}
                         
@@ -939,13 +1192,26 @@ const ReportsPage: React.FC = () => {
                         <HStack justify="space-between" py={3} px={4} 
                                bg={sectionTotalBg} borderRadius="md" 
                                borderTop="2px" borderColor={sectionTotalBorderColor} mt={2}>
-                          <Text fontSize="md" fontWeight="bold" color={sectionTotalTextColor}>
-                            Total {section.name}
-                          </Text>
-                          <Text fontSize="md" fontWeight="bold" 
-                                color={section.total >= 0 ? sectionTotalTextColor : "red.500"}>
-                            {formatCurrency(section.total)}
-                          </Text>
+                          <HStack spacing={3} flex={1}>
+                            <Text fontSize="md" fontWeight="bold" color={sectionTotalTextColor} flex={1}>
+                              Total {section.name}
+                            </Text>
+                            <Text fontSize="md" fontWeight="bold" 
+                                  color={section.total >= 0 ? sectionTotalTextColor : "red.500"} minW="120px" textAlign="right">
+                              {formatCurrency(section.total)}
+                            </Text>
+                          </HStack>
+                          <Box>
+                            <JournalDrilldownButton
+                              onClick={() => {
+                                // For section totals, we use the section name for drill-down
+                                handleJournalDrilldown(`Total ${section.name}`, undefined, section.total);
+                              }}
+                              size="xs"
+                              label={`View journal entries for Total ${section.name}`}
+                              variant="eye"
+                            />
+                          </Box>
                         </HStack>
                       </VStack>
                     </Box>
@@ -989,6 +1255,16 @@ const ReportsPage: React.FC = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Journal Drilldown Modal */}
+      {journalDrilldown.drilldownRequest && (
+        <JournalDrilldownModal
+          isOpen={journalDrilldown.isOpen}
+          onClose={journalDrilldown.closeDrilldown}
+          drilldownRequest={journalDrilldown.drilldownRequest}
+          title={journalDrilldown.title}
+        />
+      )}
     </SimpleLayout>
   );
 };

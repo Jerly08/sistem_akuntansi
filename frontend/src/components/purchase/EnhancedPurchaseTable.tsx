@@ -70,14 +70,14 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
   canDelete = false,
   userRole,
 }) => {
-  // Theme colors
-  const headingColor = useColorModeValue('gray.800', 'var(--text-primary)');
-  const tableBg = useColorModeValue('white', 'var(--bg-secondary)');
-  const borderColor = useColorModeValue('gray.200', 'var(--border-color)');
-  const textColor = useColorModeValue('gray.600', 'var(--text-secondary)');
-  const primaryTextColor = useColorModeValue('gray.800', 'var(--text-primary)');
-  const hoverBg = useColorModeValue('gray.50', 'var(--bg-tertiary)');
-  const theadBg = useColorModeValue('gray.50', 'var(--bg-tertiary)');
+  // Theme colors with improved compatibility - using Chakra theme tokens with CSS variable fallbacks
+  const headingColor = useColorModeValue('gray.800', 'gray.100');
+  const tableBg = useColorModeValue('white', 'gray.800');
+  const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const textColor = useColorModeValue('gray.600', 'gray.400');
+  const primaryTextColor = useColorModeValue('gray.800', 'gray.100');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const theadBg = useColorModeValue('gray.50', 'gray.700');
 
   // Status color mapping for purchases
   const getStatusColor = (status: string) => {
@@ -135,7 +135,7 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
       <CardBody p={0}>
         {loading ? (
           <Flex justify="center" align="center" py={10}>
-            <Spinner size="lg" color="var(--accent-color)" />
+            <Spinner size="lg" color={useColorModeValue('blue.500', 'blue.400')} />
             <Text ml={4} color={textColor}>Loading transactions...</Text>
           </Flex>
         ) : purchases.length === 0 ? (

@@ -53,6 +53,225 @@ func NewReportService(
 	}
 }
 
+// GenerateEnhancedProfitLoss generates an enhanced P&L with proper COGS categorization
+func (rs *ReportService) GenerateEnhancedProfitLoss(startDate, endDate time.Time) (interface{}, error) {
+	// Initialize Enhanced Profit Loss Service
+	enhancedPLService := NewEnhancedProfitLossService(rs.DB, rs.AccountRepo)
+	
+	// Generate enhanced profit loss data
+	enhancedData, err := enhancedPLService.GenerateEnhancedProfitLoss(startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate enhanced profit loss: %v", err)
+	}
+	
+	// Convert to frontend-compatible format
+	frontendFormat := rs.convertToFrontendFormat(enhancedData)
+	
+	return frontendFormat, nil
+}
+
+// convertToFrontendFormat converts Enhanced P&L data to frontend-expected format
+func (rs *ReportService) convertToFrontendFormat(enhanced *EnhancedProfitLossData) map[string]interface{} {
+	return map[string]interface{}{
+		"company": enhanced.Company,
+		"start_date": enhanced.StartDate,
+		"end_date": enhanced.EndDate,
+		"currency": enhanced.Currency,
+		"generated_at": enhanced.GeneratedAt,
+		
+		// Revenue Section
+		"revenue": map[string]interface{}{
+			"name": "Revenue",
+			"items": rs.combineRevenueItems(enhanced),
+			"subtotal": enhanced.Revenue.TotalRevenue,
+		},
+		
+		// COGS Section  
+		"cost_of_goods_sold": map[string]interface{}{
+			"name": "Cost of Goods Sold",
+			"items": rs.combineCOGSItems(enhanced),
+			"subtotal": enhanced.CostOfGoodsSold.TotalCOGS,
+		},
+		
+		// Gross Profit
+		"gross_profit": enhanced.GrossProfit,
+		"gross_profit_margin": enhanced.GrossProfitMargin,
+		
+		// Operating Expenses
+		"operating_expenses": map[string]interface{}{
+			"name": "Operating Expenses",
+			"items": rs.combineOperatingExpenseItems(enhanced),
+			"subtotal": enhanced.OperatingExpenses.TotalOpex,
+		},
+		
+		// Other Income
+		"other_income": map[string]interface{}{
+			"name": "Other Income",
+			"items": rs.combineOtherIncomeItems(enhanced),
+			"subtotal": enhanced.OtherIncomeExpense.NetOtherIncome,
+		},
+		
+		// Other Expenses
+		"other_expenses": map[string]interface{}{
+			"name": "Other Expenses",
+			"items": rs.combineOtherExpenseItems(enhanced),
+			"subtotal": enhanced.OtherIncomeExpense.InterestExpense.Subtotal + enhanced.OtherIncomeExpense.OtherExpense.Subtotal,
+		},
+		
+		// Final calculations
+		"operating_income": enhanced.OperatingIncome,
+		"ebit": enhanced.OperatingIncome,
+		"ebitda": enhanced.EBITDA,
+		"net_income_before_tax": enhanced.IncomeBeforeTax,
+		"tax_expense": enhanced.TaxExpense,
+		"net_income": enhanced.NetIncome,
+		"net_income_margin": enhanced.NetIncomeMargin,
+		"earnings_per_share": enhanced.EarningsPerShare,
+		"diluted_eps": enhanced.EarningsPerShare, // Assuming same as basic EPS
+		"shares_outstanding": enhanced.SharesOutstanding,
+	}
+}
+
+// Helper methods to combine items for frontend
+func (rs *ReportService) combineRevenueItems(enhanced *EnhancedProfitLossData) []map[string]interface{} {
+	var items []map[string]interface{}
+	
+	// Add all revenue items
+	for _, item := range enhanced.Revenue.SalesRevenue.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	for _, item := range enhanced.Revenue.ServiceRevenue.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	for _, item := range enhanced.Revenue.OtherRevenue.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	
+	return items
+}
+
+func (rs *ReportService) combineCOGSItems(enhanced *EnhancedProfitLossData) []map[string]interface{} {
+	var items []map[string]interface{}
+	
+	// Add all COGS items
+	for _, item := range enhanced.CostOfGoodsSold.DirectMaterials.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	for _, item := range enhanced.CostOfGoodsSold.OtherCOGS.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	
+	return items
+}
+
+func (rs *ReportService) combineOperatingExpenseItems(enhanced *EnhancedProfitLossData) []map[string]interface{} {
+	var items []map[string]interface{}
+	
+	// Add all operating expense items
+	for _, item := range enhanced.OperatingExpenses.Administrative.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	for _, item := range enhanced.OperatingExpenses.General.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	
+	return items
+}
+
+func (rs *ReportService) combineOtherIncomeItems(enhanced *EnhancedProfitLossData) []map[string]interface{} {
+	var items []map[string]interface{}
+	
+	// Add other income items
+	for _, item := range enhanced.OtherIncomeExpense.InterestIncome.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	for _, item := range enhanced.OtherIncomeExpense.OtherIncome.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	
+	return items
+}
+
+func (rs *ReportService) combineOtherExpenseItems(enhanced *EnhancedProfitLossData) []map[string]interface{} {
+	var items []map[string]interface{}
+	
+	// Add other expense items
+	for _, item := range enhanced.OtherIncomeExpense.InterestExpense.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	for _, item := range enhanced.OtherIncomeExpense.OtherExpense.Items {
+		items = append(items, map[string]interface{}{
+			"account_id": item.AccountID,
+			"code": item.Code,
+			"name": item.Name,
+			"amount": item.Amount,
+			"percentage": item.Percentage,
+		})
+	}
+	
+	return items
+}
+
 // GetUnifiedPaymentReport generates a comprehensive report combining both sales payments and payment management data
 func (rs *ReportService) GetUnifiedPaymentReport(startDate, endDate time.Time, format string) (*models.ReportResponse, error) {
 	// Get data from both payment systems

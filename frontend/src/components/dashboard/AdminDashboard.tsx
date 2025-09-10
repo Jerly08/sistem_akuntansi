@@ -273,6 +273,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
                     borderRadius: '8px',
                     color: chartColors.textColor,
                   }}
+                  formatter={(value: number, name: string) => [
+                    formatCurrency(value),
+                    name === 'sales' ? 'Penjualan' : 'Pembelian'
+                  ]}
                 />
                 <Legend wrapperStyle={{ color: chartColors.textColor }} />
                 <Line type="monotone" dataKey="sales" stroke={chartColors.primary} activeDot={{ r: 8 }} strokeWidth={2} />
@@ -316,6 +320,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
                     borderRadius: '8px',
                     color: chartColors.textColor,
                   }}
+                  formatter={(value: number) => [formatCurrency(value), 'Saldo']}
                 />
                 <Legend wrapperStyle={{ color: chartColors.textColor }} />
               </RechartsPieChart>
@@ -352,6 +357,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
                   borderRadius: '8px',
                   color: chartColors.textColor,
                 }}
+                formatter={(value: number, name: string) => [
+                  formatCurrency(value),
+                  name === 'inflow' ? 'Arus Masuk' : 
+                  name === 'outflow' ? 'Arus Keluar' : 'Saldo'
+                ]}
               />
               <Legend wrapperStyle={{ color: chartColors.textColor }} />
               <Bar dataKey="inflow" fill={chartColors.secondary} name="Arus Masuk" />

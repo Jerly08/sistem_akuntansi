@@ -10,14 +10,17 @@ import (
 	"app-sistem-akuntansi/models"
 
 	"github.com/jung-kurt/gofpdf"
+	"gorm.io/gorm"
 )
 
 // PDFService implements PDFServiceInterface
-type PDFService struct{}
+type PDFService struct{
+	db *gorm.DB
+}
 
 // NewPDFService creates a new PDF service instance
-func NewPDFService() PDFServiceInterface {
-	return &PDFService{}
+func NewPDFService(db *gorm.DB) PDFServiceInterface {
+	return &PDFService{db: db}
 }
 
 // formatRupiah formats a number as Indonesian Rupiah
@@ -32,6 +35,22 @@ func (p *PDFService) formatRupiah(amount float64) string {
 	formattedAmount := p.addThousandSeparators(amountStr)
 	
 	return "Rp " + formattedAmount
+}
+
+// getCompanyInfo retrieves company information from settings
+func (p *PDFService) getCompanyInfo() (*models.Settings, error) {
+	var settings models.Settings
+	err := p.db.First(&settings).Error
+	if err != nil {
+		// Return default company info if settings not found
+		return &models.Settings{
+			CompanyName:    "PT. Sistem Akuntansi Indonesia",
+			CompanyAddress: "Jl. Sudirman Kav. 45-46, Jakarta Pusat 10210, Indonesia",
+			CompanyPhone:   "+62-21-5551234",
+			CompanyEmail:   "info@sistemakuntansi.co.id",
+		}, nil
+	}
+	return &settings, nil
 }
 
 // addThousandSeparators adds dots as thousand separators for Indonesian currency format
@@ -86,16 +105,22 @@ func (p *PDFService) GenerateInvoicePDF(sale *models.Sale) ([]byte, error) {
 	pdf.Cell(190, 10, "INVOICE")
 	pdf.Ln(15)
 
-	// Company info (you can customize this based on your company settings)
+	// Get company info from settings
+	companyInfo, err := p.getCompanyInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company info: %v", err)
+	}
+	
+	// Company info from settings
 	pdf.SetFont("Arial", "B", 12)
-	pdf.Cell(95, 8, "Your Company Name")
+	pdf.Cell(95, 8, companyInfo.CompanyName)
 	pdf.SetFont("Arial", "", 10)
 	pdf.Ln(6)
-	pdf.Cell(95, 5, "Your Company Address")
+	pdf.Cell(95, 5, companyInfo.CompanyAddress)
 	pdf.Ln(5)
-	pdf.Cell(95, 5, "Phone: Your Phone Number")
+	pdf.Cell(95, 5, fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone))
 	pdf.Ln(5)
-	pdf.Cell(95, 5, "Email: your@email.com")
+	pdf.Cell(95, 5, fmt.Sprintf("Email: %s", companyInfo.CompanyEmail))
 	pdf.Ln(10)
 
 	// Invoice details
@@ -257,7 +282,7 @@ func (p *PDFService) GenerateInvoicePDF(sale *models.Sale) ([]byte, error) {
 
 	// Output to buffer
 	var buf bytes.Buffer
-	err := pdf.Output(&buf)
+	err = pdf.Output(&buf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate PDF: %v", err)
 	}
@@ -580,16 +605,22 @@ func (p *PDFService) GeneratePaymentDetailPDF(payment *models.Payment) ([]byte, 
 	pdf.Cell(190, 10, "PAYMENT VOUCHER")
 	pdf.Ln(15)
 
-	// Company info (you can customize this based on your company settings)
+	// Get company info from settings
+	companyInfo, err := p.getCompanyInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company info: %v", err)
+	}
+	
+	// Company info from settings
 	pdf.SetFont("Arial", "B", 12)
-	pdf.Cell(95, 8, "Your Company Name")
+	pdf.Cell(95, 8, companyInfo.CompanyName)
 	pdf.SetFont("Arial", "", 10)
 	pdf.Ln(6)
-	pdf.Cell(95, 5, "Your Company Address")
+	pdf.Cell(95, 5, companyInfo.CompanyAddress)
 	pdf.Ln(5)
-	pdf.Cell(95, 5, "Phone: Your Phone Number")
+	pdf.Cell(95, 5, fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone))
 	pdf.Ln(5)
-	pdf.Cell(95, 5, "Email: your@email.com")
+	pdf.Cell(95, 5, fmt.Sprintf("Email: %s", companyInfo.CompanyEmail))
 	pdf.Ln(10)
 
 	// Payment details
@@ -674,9 +705,401 @@ func (p *PDFService) GeneratePaymentDetailPDF(payment *models.Payment) ([]byte, 
 
 	// Output to buffer
 	var buf bytes.Buffer
-	err := pdf.Output(&buf)
+	err = pdf.Output(&buf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate payment detail PDF: %v", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// GenerateReceiptPDF generates PDF for a single purchase receipt
+func (p *PDFService) GenerateReceiptPDF(receipt *models.PurchaseReceipt) ([]byte, error) {
+	// Create new PDF document
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+
+	// Set font
+	pdf.SetFont("Arial", "B", 16)
+	
+	// Receipt header
+	pdf.Cell(190, 10, "GOODS RECEIPT")
+	pdf.Ln(15)
+
+	// Get company info from settings
+	companyInfo, err := p.getCompanyInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company info: %v", err)
+	}
+	
+	// Company info from settings
+	pdf.SetFont("Arial", "B", 12)
+	pdf.Cell(95, 8, companyInfo.CompanyName)
+	pdf.SetFont("Arial", "", 10)
+	pdf.Ln(6)
+	pdf.Cell(95, 5, companyInfo.CompanyAddress)
+	pdf.Ln(5)
+	pdf.Cell(95, 5, fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone))
+	pdf.Ln(5)
+	pdf.Cell(95, 5, fmt.Sprintf("Email: %s", companyInfo.CompanyEmail))
+	pdf.Ln(10)
+
+	// Receipt details
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(95, 6, fmt.Sprintf("Receipt Number: %s", receipt.ReceiptNumber))
+	pdf.Cell(95, 6, fmt.Sprintf("Date: %s", receipt.ReceivedDate.Format("02/01/2006")))
+	pdf.Ln(6)
+	if receipt.Purchase.Code != "" {
+		pdf.Cell(95, 6, fmt.Sprintf("Purchase Order: %s", receipt.Purchase.Code))
+	}
+	pdf.Cell(95, 6, fmt.Sprintf("Status: %s", receipt.Status))
+	pdf.Ln(6)
+	receiverName := ""
+	if receipt.Receiver.FirstName != "" || receipt.Receiver.LastName != "" {
+		receiverName = strings.TrimSpace(receipt.Receiver.FirstName + " " + receipt.Receiver.LastName)
+	} else if receipt.Receiver.Username != "" {
+		receiverName = receipt.Receiver.Username
+	}
+	
+	if receiverName != "" {
+		pdf.Cell(190, 6, fmt.Sprintf("Received By: %s", receiverName))
+		pdf.Ln(6)
+	}
+	pdf.Ln(5)
+
+	// Vendor info
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(190, 6, "Vendor Information:")
+	pdf.Ln(6)
+	pdf.SetFont("Arial", "", 10)
+	if receipt.Purchase.Vendor.ID != 0 {
+		pdf.Cell(190, 5, receipt.Purchase.Vendor.Name)
+		pdf.Ln(5)
+		if receipt.Purchase.Vendor.Address != "" {
+			pdf.Cell(190, 5, receipt.Purchase.Vendor.Address)
+			pdf.Ln(5)
+		}
+		if receipt.Purchase.Vendor.Phone != "" {
+			pdf.Cell(190, 5, fmt.Sprintf("Phone: %s", receipt.Purchase.Vendor.Phone))
+			pdf.Ln(5)
+		}
+	}
+	pdf.Ln(5)
+
+	// Table headers
+	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFillColor(220, 220, 220)
+	pdf.CellFormat(15, 8, "#", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(65, 8, "Product", "1", 0, "L", true, 0, "")
+	pdf.CellFormat(25, 8, "Ordered", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(25, 8, "Received", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(25, 8, "Condition", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(35, 8, "Notes", "1", 0, "L", true, 0, "")
+	pdf.Ln(8)
+
+	// Table data
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetFillColor(255, 255, 255)
+	
+	for i, item := range receipt.ReceiptItems {
+		// Check if we need a new page
+		if pdf.GetY() > 250 {
+			pdf.AddPage()
+			// Re-add headers
+			pdf.SetFont("Arial", "B", 10)
+			pdf.SetFillColor(220, 220, 220)
+			pdf.CellFormat(15, 8, "#", "1", 0, "C", true, 0, "")
+			pdf.CellFormat(65, 8, "Product", "1", 0, "L", true, 0, "")
+			pdf.CellFormat(25, 8, "Ordered", "1", 0, "C", true, 0, "")
+			pdf.CellFormat(25, 8, "Received", "1", 0, "C", true, 0, "")
+			pdf.CellFormat(25, 8, "Condition", "1", 0, "C", true, 0, "")
+			pdf.CellFormat(35, 8, "Notes", "1", 0, "L", true, 0, "")
+			pdf.Ln(8)
+			pdf.SetFont("Arial", "", 9)
+			pdf.SetFillColor(255, 255, 255)
+		}
+
+		// Item data
+		itemNumber := strconv.Itoa(i + 1)
+		productName := "Product"
+		orderedQty := "0"
+		if item.PurchaseItem.Product.ID != 0 {
+			productName = item.PurchaseItem.Product.Name
+			orderedQty = strconv.Itoa(item.PurchaseItem.Quantity)
+		}
+
+		receivedQty := strconv.Itoa(item.QuantityReceived)
+		condition := item.Condition
+		notes := item.Notes
+		if len(notes) > 20 {
+			notes = notes[:17] + "..."
+		}
+		
+		pdf.CellFormat(15, 6, itemNumber, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(65, 6, productName, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(25, 6, orderedQty, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(25, 6, receivedQty, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(25, 6, condition, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(35, 6, notes, "1", 0, "L", false, 0, "")
+		pdf.Ln(6)
+	}
+
+	// Notes section
+	if receipt.Notes != "" {
+		pdf.Ln(10)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(190, 6, "Receipt Notes:")
+		pdf.Ln(6)
+		pdf.SetFont("Arial", "", 9)
+		pdf.MultiCell(190, 4, receipt.Notes, "", "", false)
+	}
+
+	// Signature section
+	pdf.Ln(20)
+	pdf.SetFont("Arial", "", 10)
+	pdf.Cell(63, 5, "Received by:")
+	pdf.Cell(64, 5, "")
+	pdf.Cell(63, 5, "Verified by:")
+	pdf.Ln(15)
+	pdf.Cell(63, 5, "_____________________")
+	pdf.Cell(64, 5, "")
+	pdf.Cell(63, 5, "_____________________")
+	pdf.Ln(5)
+	pdf.SetFont("Arial", "", 8)
+	receiverName = ""
+	if receipt.Receiver.FirstName != "" || receipt.Receiver.LastName != "" {
+		receiverName = strings.TrimSpace(receipt.Receiver.FirstName + " " + receipt.Receiver.LastName)
+	} else if receipt.Receiver.Username != "" {
+		receiverName = receipt.Receiver.Username
+	}
+	
+	if receiverName != "" {
+		pdf.Cell(63, 5, receiverName)
+	} else {
+		pdf.Cell(63, 5, "Warehouse Staff")
+	}
+	pdf.Cell(64, 5, "")
+	pdf.Cell(63, 5, "Manager")
+
+	// Footer
+	pdf.Ln(15)
+	pdf.SetFont("Arial", "I", 8)
+	pdf.Cell(190, 4, fmt.Sprintf("Generated on %s", time.Now().Format("02/01/2006 15:04")))
+
+	// Output to buffer
+	var buf bytes.Buffer
+	err = pdf.Output(&buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate receipt PDF: %v", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// GenerateAllReceiptsPDF generates combined PDF for all receipts of a purchase
+func (p *PDFService) GenerateAllReceiptsPDF(purchase *models.Purchase, receipts []models.PurchaseReceipt) ([]byte, error) {
+	// Create new PDF document
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+
+	// Set font
+	pdf.SetFont("Arial", "B", 16)
+	
+	// Title
+	pdf.Cell(190, 10, "PURCHASE RECEIPTS SUMMARY")
+	pdf.Ln(15)
+
+	// Get company info from settings
+	companyInfo, err := p.getCompanyInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company info: %v", err)
+	}
+	
+	// Company info from settings
+	pdf.SetFont("Arial", "B", 12)
+	pdf.Cell(95, 8, companyInfo.CompanyName)
+	pdf.SetFont("Arial", "", 10)
+	pdf.Ln(6)
+	pdf.Cell(95, 5, companyInfo.CompanyAddress)
+	pdf.Ln(5)
+	pdf.Cell(95, 5, fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone))
+	pdf.Ln(10)
+
+	// Purchase details
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(95, 6, fmt.Sprintf("Purchase Order: %s", purchase.Code))
+	pdf.Cell(95, 6, fmt.Sprintf("Date: %s", purchase.Date.Format("02/01/2006")))
+	pdf.Ln(6)
+	pdf.Cell(95, 6, fmt.Sprintf("Vendor: %s", purchase.Vendor.Name))
+	pdf.Cell(95, 6, fmt.Sprintf("Total Receipts: %d", len(receipts)))
+	pdf.Ln(10)
+
+	// Receipts summary table
+	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFillColor(220, 220, 220)
+	pdf.Cell(190, 8, "RECEIPTS SUMMARY")
+	pdf.Ln(8)
+	
+	pdf.CellFormat(15, 8, "#", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(45, 8, "Receipt Number", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(25, 8, "Date", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(40, 8, "Received By", "1", 0, "L", true, 0, "")
+	pdf.CellFormat(25, 8, "Status", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(40, 8, "Items Count", "1", 0, "C", true, 0, "")
+	pdf.Ln(8)
+
+	// Receipts data
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetFillColor(255, 255, 255)
+
+	for i, receipt := range receipts {
+		itemNumber := strconv.Itoa(i + 1)
+		receiptNumber := receipt.ReceiptNumber
+		date := receipt.ReceivedDate.Format("02/01/06")
+		receivedBy := "N/A"
+		if receipt.Receiver.FirstName != "" || receipt.Receiver.LastName != "" {
+			receivedBy = strings.TrimSpace(receipt.Receiver.FirstName + " " + receipt.Receiver.LastName)
+		} else if receipt.Receiver.Username != "" {
+			receivedBy = receipt.Receiver.Username
+		}
+		if len(receivedBy) > 25 {
+			receivedBy = receivedBy[:22] + "..."
+		}
+		status := receipt.Status
+		itemsCount := strconv.Itoa(len(receipt.ReceiptItems))
+
+		pdf.CellFormat(15, 6, itemNumber, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(45, 6, receiptNumber, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(25, 6, date, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(40, 6, receivedBy, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(25, 6, status, "1", 0, "C", false, 0, "")
+		pdf.CellFormat(40, 6, itemsCount, "1", 0, "C", false, 0, "")
+		pdf.Ln(6)
+	}
+
+	// Add each receipt as separate page
+	for _, receipt := range receipts {
+		pdf.AddPage()
+		
+		// Generate individual receipt content (simplified version)
+		pdf.SetFont("Arial", "B", 14)
+		pdf.Cell(190, 10, fmt.Sprintf("Receipt: %s", receipt.ReceiptNumber))
+		pdf.Ln(10)
+		
+		pdf.SetFont("Arial", "", 10)
+		pdf.Cell(95, 6, fmt.Sprintf("Date: %s", receipt.ReceivedDate.Format("02/01/2006")))
+		pdf.Cell(95, 6, fmt.Sprintf("Status: %s", receipt.Status))
+		pdf.Ln(6)
+		receiverName := ""
+		if receipt.Receiver.FirstName != "" || receipt.Receiver.LastName != "" {
+			receiverName = strings.TrimSpace(receipt.Receiver.FirstName + " " + receipt.Receiver.LastName)
+		} else if receipt.Receiver.Username != "" {
+			receiverName = receipt.Receiver.Username
+		}
+		
+		if receiverName != "" {
+			pdf.Cell(190, 6, fmt.Sprintf("Received By: %s", receiverName))
+			pdf.Ln(6)
+		}
+		pdf.Ln(5)
+
+		// Items table for this receipt
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetFillColor(220, 220, 220)
+		pdf.CellFormat(15, 7, "#", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(60, 7, "Product", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(20, 7, "Ordered", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(20, 7, "Received", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(25, 7, "Condition", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(50, 7, "Notes", "1", 0, "L", true, 0, "")
+		pdf.Ln(7)
+
+		pdf.SetFont("Arial", "", 8)
+		pdf.SetFillColor(255, 255, 255)
+		
+		for j, item := range receipt.ReceiptItems {
+			itemNumber := strconv.Itoa(j + 1)
+			productName := "Product"
+			orderedQty := "0"
+			if item.PurchaseItem.Product.ID != 0 {
+				productName = item.PurchaseItem.Product.Name
+				if len(productName) > 35 {
+					productName = productName[:32] + "..."
+				}
+				orderedQty = strconv.Itoa(item.PurchaseItem.Quantity)
+			}
+
+			receivedQty := strconv.Itoa(item.QuantityReceived)
+			condition := item.Condition
+			notes := item.Notes
+			if len(notes) > 30 {
+				notes = notes[:27] + "..."
+			}
+
+			pdf.CellFormat(15, 5, itemNumber, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(60, 5, productName, "1", 0, "L", false, 0, "")
+			pdf.CellFormat(20, 5, orderedQty, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(20, 5, receivedQty, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(25, 5, condition, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(50, 5, notes, "1", 0, "L", false, 0, "")
+			pdf.Ln(5)
+		}
+
+		// Notes for this receipt
+		if receipt.Notes != "" {
+			pdf.Ln(5)
+			pdf.SetFont("Arial", "B", 9)
+			pdf.Cell(190, 5, "Notes:")
+			pdf.Ln(5)
+			pdf.SetFont("Arial", "", 8)
+			pdf.MultiCell(190, 4, receipt.Notes, "", "", false)
+		}
+	}
+
+	// Final summary page
+	pdf.AddPage()
+	pdf.SetFont("Arial", "B", 14)
+	pdf.Cell(190, 10, "COMPLETION SUMMARY")
+	pdf.Ln(15)
+
+	// Calculate completion statistics
+	totalItems := len(purchase.PurchaseItems)
+	totalReceiptItems := 0
+	totalReceived := 0
+	totalOrdered := 0
+
+	for _, item := range purchase.PurchaseItems {
+		totalOrdered += item.Quantity
+	}
+
+	for _, receipt := range receipts {
+		totalReceiptItems += len(receipt.ReceiptItems)
+		for _, item := range receipt.ReceiptItems {
+			totalReceived += item.QuantityReceived
+		}
+	}
+
+	completionRate := float64(totalReceived) / float64(totalOrdered) * 100
+
+	pdf.SetFont("Arial", "", 10)
+	pdf.Cell(95, 6, fmt.Sprintf("Purchase Items: %d", totalItems))
+	pdf.Cell(95, 6, fmt.Sprintf("Total Ordered: %d", totalOrdered))
+	pdf.Ln(6)
+	pdf.Cell(95, 6, fmt.Sprintf("Total Receipts: %d", len(receipts)))
+	pdf.Cell(95, 6, fmt.Sprintf("Total Received: %d", totalReceived))
+	pdf.Ln(6)
+	pdf.Cell(190, 6, fmt.Sprintf("Completion Rate: %.1f%%", completionRate))
+	pdf.Ln(10)
+
+	// Footer
+	pdf.SetFont("Arial", "I", 8)
+	pdf.Cell(190, 4, fmt.Sprintf("Generated on %s", time.Now().Format("02/01/2006 15:04")))
+
+	// Output to buffer
+	var buf bytes.Buffer
+	err = pdf.Output(&buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate combined receipts PDF: %v", err)
 	}
 
 	return buf.Bytes(), nil

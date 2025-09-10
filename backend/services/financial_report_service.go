@@ -41,37 +41,38 @@ func NewFinancialReportService(
 	}
 }
 
-// GenerateProfitLossStatement generates a Profit & Loss statement
+// GenerateProfitLossStatement generates a Profit & Loss statement from journal entries
 func (s *FinancialReportServiceImpl) GenerateProfitLossStatement(ctx context.Context, req *models.FinancialReportRequest) (*models.ProfitLossStatement, error) {
-	// Get all revenue accounts
-	revenueAccounts, err := s.getAccountBalancesByType(ctx, models.AccountTypeRevenue, req.StartDate, req.EndDate, req.ShowZero)
+	// Get all revenue accounts with balances from journal entries
+	revenueAccounts, err := s.getAccountBalancesFromJournal(ctx, models.AccountTypeRevenue, req.StartDate, req.EndDate, req.ShowZero)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get all expense accounts
-	expenseAccounts, err := s.getAccountBalancesByType(ctx, models.AccountTypeExpense, req.StartDate, req.EndDate, req.ShowZero)
+	// Get all expense accounts with balances from journal entries
+	expenseAccounts, err := s.getAccountBalancesFromJournal(ctx, models.AccountTypeExpense, req.StartDate, req.EndDate, req.ShowZero)
 	if err != nil {
 		return nil, err
 	}
 
-	// Separate COGS from other expenses
+	// Separate COGS from other expenses based on account categories
 	var cogsAccounts, operatingExpenses []models.AccountLineItem
 	for _, expense := range expenseAccounts {
 		if expense.Category == models.CategoryCostOfGoodsSold || 
 		   expense.Category == models.CategoryDirectMaterial ||
 		   expense.Category == models.CategoryDirectLabor ||
-		   expense.Category == models.CategoryManufacturingOverhead {
+		   expense.Category == models.CategoryManufacturingOverhead ||
+		   expense.Category == models.CategoryFreightIn {
 			cogsAccounts = append(cogsAccounts, expense)
 		} else {
 			operatingExpenses = append(operatingExpenses, expense)
 		}
 	}
 
-	// Calculate totals
-	totalRevenue := s.calculateTotalBalance(revenueAccounts)
-	totalCOGS := s.calculateTotalBalance(cogsAccounts)
-	totalExpenses := s.calculateTotalBalance(operatingExpenses)
+	// Calculate totals - Revenue is normally credit balance, so we use absolute value
+	totalRevenue := s.calculateTotalCreditBalance(revenueAccounts)
+	totalCOGS := s.calculateTotalDebitBalance(cogsAccounts)
+	totalExpenses := s.calculateTotalDebitBalance(operatingExpenses)
 	
 	grossProfit := totalRevenue - totalCOGS
 	netIncome := grossProfit - totalExpenses
@@ -124,22 +125,34 @@ func (s *FinancialReportServiceImpl) GenerateProfitLossStatement(ctx context.Con
 	return pnl, nil
 }
 
-// GenerateBalanceSheet generates a Balance Sheet
+// GenerateBalanceSheet generates a Balance Sheet from journal entries
 func (s *FinancialReportServiceImpl) GenerateBalanceSheet(ctx context.Context, req *models.FinancialReportRequest) (*models.BalanceSheet, error) {
-	// Get account balances by type as of end date
-	assetAccounts, err := s.getAccountBalancesAsOfDate(ctx, models.AccountTypeAsset, req.EndDate, req.ShowZero)
+	// Get account balances by type as of end date from journal entries
+	assetAccounts, err := s.getAccountBalancesFromJournalAsOfDate(ctx, models.AccountTypeAsset, req.EndDate, req.ShowZero)
 	if err != nil {
 		return nil, err
 	}
 
-	liabilityAccounts, err := s.getAccountBalancesAsOfDate(ctx, models.AccountTypeLiability, req.EndDate, req.ShowZero)
+	liabilityAccounts, err := s.getAccountBalancesFromJournalAsOfDate(ctx, models.AccountTypeLiability, req.EndDate, req.ShowZero)
 	if err != nil {
 		return nil, err
 	}
 
-	equityAccounts, err := s.getAccountBalancesAsOfDate(ctx, models.AccountTypeEquity, req.EndDate, req.ShowZero)
+	equityAccounts, err := s.getAccountBalancesFromJournalAsOfDate(ctx, models.AccountTypeEquity, req.EndDate, req.ShowZero)
 	if err != nil {
 		return nil, err
+	}
+
+	// Calculate net income for current period and add to retained earnings
+	netIncome, err := s.calculateNetIncomeForPeriod(ctx, req.EndDate)
+	if err == nil && netIncome != 0 {
+		// Add net income to equity accounts (retained earnings)
+		for i, equity := range equityAccounts {
+			if equity.Category == models.CategoryRetainedEarnings {
+				equityAccounts[i].Balance += netIncome
+				break
+			}
+		}
 	}
 
 	// Group accounts by categories
@@ -197,6 +210,257 @@ func (s *FinancialReportServiceImpl) GenerateBalanceSheet(ctx context.Context, r
 }
 
 // GenerateCashFlowStatement generates a Cash Flow statement (indirect method)
+// Helper methods for accessing journal entries data
+
+// getAccountBalancesFromJournal gets account balances from journal entries for a period
+func (s *FinancialReportServiceImpl) getAccountBalancesFromJournal(ctx context.Context, accountType string, startDate, endDate time.Time, showZero bool) ([]models.AccountLineItem, error) {
+	var accountItems []models.AccountLineItem
+	
+	// Query untuk mendapatkan balances dari journal entries yang sudah di-post
+	query := `
+		SELECT 
+			a.id as account_id,
+			a.code as account_code,
+			a.name as account_name,
+			a.type as account_type,
+			a.category,
+			COALESCE(SUM(jl.debit_amount), 0) as total_debit,
+			COALESCE(SUM(jl.credit_amount), 0) as total_credit,
+			COALESCE(SUM(jl.debit_amount) - SUM(jl.credit_amount), 0) as balance
+		FROM accounts a
+		LEFT JOIN journal_lines jl ON a.id = jl.account_id
+		LEFT JOIN journal_entries je ON jl.journal_entry_id = je.id
+		WHERE a.type = ? 
+			AND a.is_active = true
+			AND (je.id IS NULL OR (je.status = 'POSTED' AND je.entry_date BETWEEN ? AND ?))
+			AND a.deleted_at IS NULL
+		GROUP BY a.id, a.code, a.name, a.type, a.category
+	`
+	
+	if !showZero {
+		query += " HAVING ABS(COALESCE(SUM(jl.debit_amount) - SUM(jl.credit_amount), 0)) > 0.01"
+	}
+	
+	query += " ORDER BY a.code"
+	
+	type QueryResult struct {
+		AccountID     uint    `db:"account_id"`
+		AccountCode   string  `db:"account_code"`
+		AccountName   string  `db:"account_name"`
+		AccountType   string  `db:"account_type"`
+		Category      string  `db:"category"`
+		TotalDebit    float64 `db:"total_debit"`
+		TotalCredit   float64 `db:"total_credit"`
+		Balance       float64 `db:"balance"`
+	}
+	
+	var results []QueryResult
+	err := s.db.Raw(query, accountType, startDate, endDate).Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account balances from journal: %v", err)
+	}
+	
+	for _, result := range results {
+		// Adjust balance based on account normal balance
+		var adjustedBalance float64
+		if accountType == models.AccountTypeRevenue || accountType == models.AccountTypeLiability || accountType == models.AccountTypeEquity {
+			// Credit accounts - show as positive when credit > debit
+			adjustedBalance = result.TotalCredit - result.TotalDebit
+		} else {
+			// Debit accounts (Assets, Expenses) - show as positive when debit > credit
+			adjustedBalance = result.TotalDebit - result.TotalCredit
+		}
+		
+		accountItems = append(accountItems, models.AccountLineItem{
+			AccountID:   result.AccountID,
+			AccountCode: result.AccountCode,
+			AccountName: result.AccountName,
+			AccountType: result.AccountType,
+			Category:    result.Category,
+			Balance:     adjustedBalance,
+		})
+	}
+	
+	return accountItems, nil
+}
+
+// getAccountBalancesFromJournalAsOfDate gets account balances as of a specific date
+func (s *FinancialReportServiceImpl) getAccountBalancesFromJournalAsOfDate(ctx context.Context, accountType string, asOfDate time.Time, showZero bool) ([]models.AccountLineItem, error) {
+	var accountItems []models.AccountLineItem
+	
+	// Query untuk mendapatkan balance sampai dengan tanggal tertentu
+	query := `
+		SELECT 
+			a.id as account_id,
+			a.code as account_code,
+			a.name as account_name,
+			a.type as account_type,
+			a.category,
+			COALESCE(SUM(jl.debit_amount), 0) as total_debit,
+			COALESCE(SUM(jl.credit_amount), 0) as total_credit
+		FROM accounts a
+		LEFT JOIN journal_lines jl ON a.id = jl.account_id
+		LEFT JOIN journal_entries je ON jl.journal_entry_id = je.id
+		WHERE a.type = ? 
+			AND a.is_active = true
+			AND (je.id IS NULL OR (je.status = 'POSTED' AND je.entry_date <= ?))
+			AND a.deleted_at IS NULL
+		GROUP BY a.id, a.code, a.name, a.type, a.category
+	`
+	
+	if !showZero {
+		query += " HAVING ABS(COALESCE(SUM(jl.debit_amount) - SUM(jl.credit_amount), 0)) > 0.01"
+	}
+	
+	query += " ORDER BY a.code"
+	
+	type QueryResult struct {
+		AccountID     uint    `db:"account_id"`
+		AccountCode   string  `db:"account_code"`
+		AccountName   string  `db:"account_name"`
+		AccountType   string  `db:"account_type"`
+		Category      string  `db:"category"`
+		TotalDebit    float64 `db:"total_debit"`
+		TotalCredit   float64 `db:"total_credit"`
+	}
+	
+	var results []QueryResult
+	err := s.db.Raw(query, accountType, asOfDate).Scan(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account balances as of date from journal: %v", err)
+	}
+	
+	for _, result := range results {
+		// Adjust balance based on account normal balance
+		var adjustedBalance float64
+		if accountType == models.AccountTypeRevenue || accountType == models.AccountTypeLiability || accountType == models.AccountTypeEquity {
+			// Credit accounts
+			adjustedBalance = result.TotalCredit - result.TotalDebit
+		} else {
+			// Debit accounts
+			adjustedBalance = result.TotalDebit - result.TotalCredit
+		}
+		
+		accountItems = append(accountItems, models.AccountLineItem{
+			AccountID:   result.AccountID,
+			AccountCode: result.AccountCode,
+			AccountName: result.AccountName,
+			AccountType: result.AccountType,
+			Category:    result.Category,
+			Balance:     adjustedBalance,
+		})
+	}
+	
+	return accountItems, nil
+}
+
+// calculateTotalCreditBalance calculates total for credit normal balance accounts
+func (s *FinancialReportServiceImpl) calculateTotalCreditBalance(accounts []models.AccountLineItem) float64 {
+	total := 0.0
+	for _, account := range accounts {
+		total += account.Balance
+	}
+	return total
+}
+
+// calculateTotalDebitBalance calculates total for debit normal balance accounts
+func (s *FinancialReportServiceImpl) calculateTotalDebitBalance(accounts []models.AccountLineItem) float64 {
+	total := 0.0
+	for _, account := range accounts {
+		total += account.Balance
+	}
+	return total
+}
+
+// calculateNetIncomeForPeriod calculates net income for a period to include in balance sheet
+func (s *FinancialReportServiceImpl) calculateNetIncomeForPeriod(ctx context.Context, endDate time.Time) (float64, error) {
+	// Calculate from beginning of year to end date
+	startOfYear := time.Date(endDate.Year(), 1, 1, 0, 0, 0, 0, endDate.Location())
+	
+	// Get total revenue
+	revenueQuery := `
+		SELECT COALESCE(SUM(jl.credit_amount - jl.debit_amount), 0) as total_revenue
+		FROM journal_lines jl
+		JOIN journal_entries je ON jl.journal_entry_id = je.id
+		JOIN accounts a ON jl.account_id = a.id
+		WHERE a.type = 'REVENUE' 
+			AND je.status = 'POSTED'
+			AND je.entry_date BETWEEN ? AND ?
+	`
+	
+	var totalRevenue float64
+	err := s.db.Raw(revenueQuery, startOfYear, endDate).Scan(&totalRevenue).Error
+	if err != nil {
+		return 0, err
+	}
+	
+	// Get total expenses
+	expenseQuery := `
+		SELECT COALESCE(SUM(jl.debit_amount - jl.credit_amount), 0) as total_expenses
+		FROM journal_lines jl
+		JOIN journal_entries je ON jl.journal_entry_id = je.id
+		JOIN accounts a ON jl.account_id = a.id
+		WHERE a.type = 'EXPENSE'
+			AND je.status = 'POSTED'
+			AND je.entry_date BETWEEN ? AND ?
+	`
+	
+	var totalExpenses float64
+	err = s.db.Raw(expenseQuery, startOfYear, endDate).Scan(&totalExpenses).Error
+	if err != nil {
+		return 0, err
+	}
+	
+	return totalRevenue - totalExpenses, nil
+}
+
+// groupAccountsByCategory groups accounts by their categories for balance sheet
+func (s *FinancialReportServiceImpl) groupAccountsByCategory(accounts []models.AccountLineItem) models.BalanceSheetSection {
+	categoryMap := make(map[string][]models.AccountLineItem)
+	totalBalance := 0.0
+	
+	for _, account := range accounts {
+		category := account.Category
+		if category == "" {
+			category = "Other"
+		}
+		categoryMap[category] = append(categoryMap[category], account)
+		totalBalance += account.Balance
+	}
+	
+	var categories []models.BalanceSheetCategory
+	for categoryName, categoryAccounts := range categoryMap {
+		categoryTotal := 0.0
+		for _, account := range categoryAccounts {
+			categoryTotal += account.Balance
+		}
+		
+		categories = append(categories, models.BalanceSheetCategory{
+			Name:     categoryName,
+			Accounts: categoryAccounts,
+			Total:    categoryTotal,
+		})
+	}
+	
+	return models.BalanceSheetSection{
+		Categories: categories,
+		Total:      totalBalance,
+	}
+}
+
+// calculatePreviousPeriod calculates previous period dates for comparison
+func (s *FinancialReportServiceImpl) calculatePreviousPeriod(startDate, endDate time.Time) (time.Time, time.Time) {
+	duration := endDate.Sub(startDate)
+	prevEndDate := startDate.Add(-24 * time.Hour)
+	prevStartDate := prevEndDate.Add(-duration)
+	return prevStartDate, prevEndDate
+}
+
+// calculatePreviousYearEnd calculates previous year end date
+func (s *FinancialReportServiceImpl) calculatePreviousYearEnd(endDate time.Time) time.Time {
+	return time.Date(endDate.Year()-1, endDate.Month(), endDate.Day(), endDate.Hour(), endDate.Minute(), endDate.Second(), endDate.Nanosecond(), endDate.Location())
+}
+
 func (s *FinancialReportServiceImpl) GenerateCashFlowStatement(ctx context.Context, req *models.FinancialReportRequest) (*models.CashFlowStatement, error) {
 	// Get cash account balances at beginning and end of period
 	beginningCash, err := s.getTotalCashBalance(ctx, req.StartDate)
@@ -251,144 +515,216 @@ func (s *FinancialReportServiceImpl) GenerateCashFlowStatement(ctx context.Conte
 	return cashFlow, nil
 }
 
-// GenerateTrialBalance generates a Trial Balance
+// GenerateTrialBalance generates a Trial Balance from journal entries
 func (s *FinancialReportServiceImpl) GenerateTrialBalance(ctx context.Context, req *models.FinancialReportRequest) (*models.TrialBalance, error) {
+	// Get all accounts with their balances from journal entries
 	var trialBalanceItems []models.TrialBalanceItem
-
-	// Get all accounts with their balances
-	var accounts []models.Account
-	query := s.db.WithContext(ctx).Where("is_active = ?", true)
+	
+	query := `
+		SELECT 
+			a.id as account_id,
+			a.code as account_code,
+			a.name as account_name,
+			a.type as account_type,
+			COALESCE(SUM(jl.debit_amount), 0) as total_debit,
+			COALESCE(SUM(jl.credit_amount), 0) as total_credit
+		FROM accounts a
+		LEFT JOIN journal_lines jl ON a.id = jl.account_id
+		LEFT JOIN journal_entries je ON jl.journal_entry_id = je.id
+		WHERE a.is_active = true
+			AND (je.id IS NULL OR (je.status = 'POSTED' AND je.entry_date <= ?))
+			AND a.deleted_at IS NULL
+		GROUP BY a.id, a.code, a.name, a.type
+	`
 	
 	if !req.ShowZero {
-		query = query.Where("balance != ?", 0)
+		query += " HAVING ABS(COALESCE(SUM(jl.debit_amount) - SUM(jl.credit_amount), 0)) > 0.01"
 	}
-
-	err := query.Find(&accounts).Error
+	
+	query += " ORDER BY a.code"
+	
+	type QueryResult struct {
+		AccountID     uint    `db:"account_id"`
+		AccountCode   string  `db:"account_code"`
+		AccountName   string  `db:"account_name"`
+		AccountType   string  `db:"account_type"`
+		TotalDebit    float64 `db:"total_debit"`
+		TotalCredit   float64 `db:"total_credit"`
+	}
+	
+	var results []QueryResult
+	err := s.db.Raw(query, req.EndDate).Scan(&results).Error
 	if err != nil {
-		return nil, utils.NewInternalError("Failed to get accounts for trial balance", err)
+		return nil, fmt.Errorf("failed to generate trial balance: %v", err)
 	}
-
+	
 	var totalDebits, totalCredits float64
-
-	for _, account := range accounts {
-		balance := account.Balance
+	
+	for _, result := range results {
+		// For trial balance, we show actual debit/credit balances
 		var debitBalance, creditBalance float64
-
-		// Determine if balance should be shown as debit or credit based on account type and normal balance
-		normalBalance := account.GetNormalBalance()
 		
-		if (balance >= 0 && normalBalance == models.NormalBalanceDebit) || (balance < 0 && normalBalance == models.NormalBalanceCredit) {
-			debitBalance = math.Abs(balance)
-			totalDebits += debitBalance
+		// Determine which side the balance should appear on
+		netBalance := result.TotalDebit - result.TotalCredit
+		
+		if netBalance > 0 {
+			debitBalance = netBalance
+			creditBalance = 0
+		} else if netBalance < 0 {
+			debitBalance = 0
+			creditBalance = -netBalance
 		} else {
-			creditBalance = math.Abs(balance)
-			totalCredits += creditBalance
+			debitBalance = 0
+			creditBalance = 0
 		}
-
+		
+		totalDebits += debitBalance
+		totalCredits += creditBalance
+		
 		trialBalanceItems = append(trialBalanceItems, models.TrialBalanceItem{
-			AccountID:     account.ID,
-			AccountCode:   account.Code,
-			AccountName:   account.Name,
-			AccountType:   account.Type,
+			AccountID:     result.AccountID,
+			AccountCode:   result.AccountCode,
+			AccountName:   result.AccountName,
+			AccountType:   result.AccountType,
 			DebitBalance:  debitBalance,
 			CreditBalance: creditBalance,
 		})
 	}
-
-	return &models.TrialBalance{
+	
+	trialBalance := &models.TrialBalance{
 		ReportHeader: models.ReportHeader{
-			ReportType:  models.ReportTypeTrialBalance,
-			CompanyName: "PT. Sample Company",
-			ReportTitle: "Trial Balance",
-			StartDate:   req.StartDate,
-			EndDate:     req.EndDate,
-			GeneratedAt: time.Now(),
-			Currency:    "IDR",
+			ReportType:    models.ReportTypeTrialBalance,
+			CompanyName:   "PT. Sample Company",
+			ReportTitle:   "Trial Balance",
+			StartDate:     req.StartDate,
+			EndDate:       req.EndDate,
+			GeneratedAt:   time.Now(),
+			Currency:      "IDR",
+			IsComparative: false,
 		},
 		Accounts:     trialBalanceItems,
 		TotalDebits:  totalDebits,
 		TotalCredits: totalCredits,
 		IsBalanced:   math.Abs(totalDebits-totalCredits) < 0.01,
-	}, nil
+	}
+	
+	return trialBalance, nil
 }
 
-// GenerateGeneralLedger generates a General Ledger for a specific account
+// GenerateGeneralLedger generates a General Ledger for a specific account from journal entries
 func (s *FinancialReportServiceImpl) GenerateGeneralLedger(ctx context.Context, accountID uint, startDate, endDate time.Time) (*models.GeneralLedger, error) {
-	// Get account details
-	account, err := s.accountRepo.FindByID(ctx, accountID)
+	// Get account information
+	var account models.Account
+	err := s.db.Where("id = ? AND is_active = true", accountID).First(&account).Error
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("account not found: %v", err)
 	}
-
-	// Get beginning balance (balance at start of period)
-	beginningBalance, err := s.getAccountBalanceAsOfDate(ctx, accountID, startDate.AddDate(0, 0, -1))
+	
+	// Get beginning balance (before start date)
+	beginningBalanceQuery := `
+		SELECT COALESCE(SUM(jl.debit_amount - jl.credit_amount), 0) as beginning_balance
+		FROM journal_lines jl
+		JOIN journal_entries je ON jl.journal_entry_id = je.id
+		WHERE jl.account_id = ?
+			AND je.status = 'POSTED'
+			AND je.entry_date < ?
+	`
+	
+	var beginningBalance float64
+	err = s.db.Raw(beginningBalanceQuery, accountID, startDate).Scan(&beginningBalance).Error
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get beginning balance: %v", err)
 	}
-
-	// Get all journal entries for this account in the period
-	filter := &models.JournalEntryFilter{
-		AccountID: fmt.Sprintf("%d", accountID),
-		StartDate: startDate.Format("2006-01-02"),
-		EndDate:   endDate.Format("2006-01-02"),
-		Status:    models.JournalStatusPosted, // Only posted entries
-		Limit:     1000,
+	
+	// Adjust beginning balance based on account type
+	if account.Type == models.AccountTypeRevenue || account.Type == models.AccountTypeLiability || account.Type == models.AccountTypeEquity {
+		beginningBalance = -beginningBalance // Credit accounts
 	}
-
-	entries, _, err := s.journalRepo.FindAll(ctx, filter)
+	
+	// Get all transactions for the period
+	transactionQuery := `
+		SELECT 
+			je.entry_date,
+			je.code as journal_code,
+			je.description,
+			je.reference,
+			jl.debit_amount,
+			jl.credit_amount
+		FROM journal_lines jl
+		JOIN journal_entries je ON jl.journal_entry_id = je.id
+		WHERE jl.account_id = ?
+			AND je.status = 'POSTED'
+			AND je.entry_date BETWEEN ? AND ?
+		ORDER BY je.entry_date, je.code
+	`
+	
+	type TransactionResult struct {
+		EntryDate    time.Time `db:"entry_date"`
+		JournalCode  string    `db:"journal_code"`
+		Description  string    `db:"description"`
+		Reference    string    `db:"reference"`
+		DebitAmount  float64   `db:"debit_amount"`
+		CreditAmount float64   `db:"credit_amount"`
+	}
+	
+	var transactions []TransactionResult
+	err = s.db.Raw(transactionQuery, accountID, startDate, endDate).Scan(&transactions).Error
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get transactions: %v", err)
 	}
-
-	// Build transaction list
-	var transactions []models.GeneralLedgerEntry
-	var totalDebits, totalCredits float64
+	
+	// Build general ledger entries with running balance
+	var ledgerEntries []models.GeneralLedgerEntry
 	runningBalance := beginningBalance
-
-	for _, entry := range entries {
-		for _, line := range entry.JournalLines {
-			if line.AccountID == accountID {
-				// Calculate running balance
-				normalBalance := account.GetNormalBalance()
-				if normalBalance == models.NormalBalanceDebit {
-					runningBalance += line.DebitAmount - line.CreditAmount
-				} else {
-					runningBalance += line.CreditAmount - line.DebitAmount
-				}
-
-				totalDebits += line.DebitAmount
-				totalCredits += line.CreditAmount
-
-				transactions = append(transactions, models.GeneralLedgerEntry{
-					Date:         entry.EntryDate,
-					JournalCode:  entry.Code,
-					Description:  line.Description,
-					Reference:    entry.Reference,
-					DebitAmount:  line.DebitAmount,
-					CreditAmount: line.CreditAmount,
-					Balance:      runningBalance,
-				})
-			}
+	totalDebits := 0.0
+	totalCredits := 0.0
+	
+	for _, txn := range transactions {
+		// Calculate balance change
+		var balanceChange float64
+		if account.Type == models.AccountTypeRevenue || account.Type == models.AccountTypeLiability || account.Type == models.AccountTypeEquity {
+			// Credit accounts
+			balanceChange = txn.CreditAmount - txn.DebitAmount
+		} else {
+			// Debit accounts
+			balanceChange = txn.DebitAmount - txn.CreditAmount
 		}
+		
+		runningBalance += balanceChange
+		totalDebits += txn.DebitAmount
+		totalCredits += txn.CreditAmount
+		
+		ledgerEntries = append(ledgerEntries, models.GeneralLedgerEntry{
+			Date:          txn.EntryDate,
+			JournalCode:   txn.JournalCode,
+			Description:   txn.Description,
+			Reference:     txn.Reference,
+			DebitAmount:   txn.DebitAmount,
+			CreditAmount:  txn.CreditAmount,
+			Balance:       runningBalance,
+		})
 	}
-
-	return &models.GeneralLedger{
+	
+	generalLedger := &models.GeneralLedger{
 		ReportHeader: models.ReportHeader{
-			ReportType:  models.ReportTypeGeneralLedger,
-			CompanyName: "PT. Sample Company",
-			ReportTitle: fmt.Sprintf("General Ledger - %s (%s)", account.Name, account.Code),
-			StartDate:   startDate,
-			EndDate:     endDate,
-			GeneratedAt: time.Now(),
-			Currency:    "IDR",
+			ReportType:    models.ReportTypeGeneralLedger,
+			CompanyName:   "PT. Sample Company",
+			ReportTitle:   fmt.Sprintf("General Ledger - %s (%s)", account.Name, account.Code),
+			StartDate:     startDate,
+			EndDate:       endDate,
+			GeneratedAt:   time.Now(),
+			Currency:      "IDR",
+			IsComparative: false,
 		},
-		Account:          *account,
-		Transactions:     transactions,
+		Account:          account,
+		Transactions:     ledgerEntries,
 		BeginningBalance: beginningBalance,
 		EndingBalance:    runningBalance,
 		TotalDebits:      totalDebits,
 		TotalCredits:     totalCredits,
-	}, nil
+	}
+	
+	return generalLedger, nil
 }
 
 // GenerateFinancialDashboard generates a comprehensive financial dashboard
@@ -684,47 +1020,7 @@ func (s *FinancialReportServiceImpl) calculateTotalBalance(accounts []models.Acc
 	return total
 }
 
-func (s *FinancialReportServiceImpl) groupAccountsByCategory(accounts []models.AccountLineItem) models.BalanceSheetSection {
-	categoryMap := make(map[string][]models.AccountLineItem)
-	
-	for _, account := range accounts {
-		category := account.Category
-		if category == "" {
-			category = "Other"
-		}
-		categoryMap[category] = append(categoryMap[category], account)
-	}
-
-	var categories []models.BalanceSheetCategory
-	var totalBalance float64
-
-	for categoryName, categoryAccounts := range categoryMap {
-		categoryTotal := s.calculateTotalBalance(categoryAccounts)
-		totalBalance += categoryTotal
-
-		categories = append(categories, models.BalanceSheetCategory{
-			Name:     categoryName,
-			Accounts: categoryAccounts,
-			Total:    categoryTotal,
-		})
-	}
-
-	return models.BalanceSheetSection{
-		Categories: categories,
-		Total:      totalBalance,
-	}
-}
-
-func (s *FinancialReportServiceImpl) calculatePreviousPeriod(startDate, endDate time.Time) (time.Time, time.Time) {
-	duration := endDate.Sub(startDate)
-	prevEndDate := startDate.Add(-time.Hour * 24)
-	prevStartDate := prevEndDate.Add(-duration)
-	return prevStartDate, prevEndDate
-}
-
-func (s *FinancialReportServiceImpl) calculatePreviousYearEnd(date time.Time) time.Time {
-	return time.Date(date.Year()-1, date.Month(), date.Day(), 23, 59, 59, 0, date.Location())
-}
+// Methods are already defined above, removing duplicates
 
 func (s *FinancialReportServiceImpl) calculateAccountBalanceForPeriod(ctx context.Context, accountID uint, startDate, endDate time.Time) float64 {
 	// This is a simplified implementation

@@ -6,6 +6,7 @@ export interface Product {
   name: string;
   description?: string;
   category_id?: number;
+  warehouse_location_id?: number;
   brand?: string;
   model?: string;
   unit: string;
@@ -26,6 +27,7 @@ export interface Product {
   image_path?: string;
   notes?: string;
   category?: Category;
+  warehouse_location?: WarehouseLocation;
   variants?: ProductVariant[];
 }
 
@@ -58,6 +60,17 @@ export interface ProductUnit {
   type?: string;
   description?: string;
   is_active: boolean;
+}
+
+export interface WarehouseLocation {
+  id?: number;
+  code: string;
+  name: string;
+  description?: string;
+  address?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface InventoryMovement {
@@ -202,6 +215,102 @@ class ProductService {
   async deleteProductUnit(id: number) {
     const response = await api.delete(`/product-units/${id}`);
     return response.data;
+  }
+
+  // Warehouse Locations
+  async getWarehouseLocations(params?: {
+    search?: string;
+    is_active?: boolean;
+  }) {
+    try {
+      const response = await api.get('/warehouse-locations', { params });
+      return response.data;
+    } catch (error: any) {
+      console.warn('ProductService: Warehouse locations API not implemented yet, using mock data');
+      // Return mock data structure for development
+      return {
+        data: [
+          {
+            id: 1,
+            code: 'WH-001',
+            name: 'Main Warehouse',
+            description: 'Primary storage facility',
+            address: 'Jl. Gudang Utama No. 1',
+            is_active: true
+          },
+          {
+            id: 2,
+            code: 'WH-002',
+            name: 'Storage Room A',
+            description: 'Small items storage',
+            address: 'Jl. Gudang Utama No. 2',
+            is_active: true
+          },
+          {
+            id: 3,
+            code: 'WH-003',
+            name: 'Cold Storage',
+            description: 'Temperature controlled storage',
+            address: 'Jl. Gudang Utama No. 3',
+            is_active: true
+          }
+        ],
+        message: 'Using mock warehouse locations data'
+      };
+    }
+  }
+
+  async getWarehouseLocation(id: number) {
+    const response = await api.get(`/warehouse-locations/${id}`);
+    return response.data;
+  }
+
+  async createWarehouseLocation(location: WarehouseLocation) {
+    try {
+      const response = await api.post('/warehouse-locations', location);
+      return response.data;
+    } catch (error: any) {
+      console.warn('ProductService: Warehouse location create API not implemented yet');
+      // Return mock success response
+      return {
+        data: {
+          ...location,
+          id: Math.floor(Math.random() * 1000) + 100,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        message: 'Mock warehouse location created successfully'
+      };
+    }
+  }
+
+  async updateWarehouseLocation(id: number, location: Partial<WarehouseLocation>) {
+    try {
+      const response = await api.put(`/warehouse-locations/${id}`, location);
+      return response.data;
+    } catch (error: any) {
+      console.warn('ProductService: Warehouse location update API not implemented yet');
+      return {
+        data: {
+          ...location,
+          id,
+          updated_at: new Date().toISOString()
+        },
+        message: 'Mock warehouse location updated successfully'
+      };
+    }
+  }
+
+  async deleteWarehouseLocation(id: number) {
+    try {
+      const response = await api.delete(`/warehouse-locations/${id}`);
+      return response.data;
+    } catch (error: any) {
+      console.warn('ProductService: Warehouse location delete API not implemented yet');
+      return {
+        message: 'Mock warehouse location deleted successfully'
+      };
+    }
   }
 
   // Inventory

@@ -153,6 +153,20 @@ class AccountService {
     await this.handleResponse(response);
   }
 
+  // Admin delete account with cascade options
+  async adminDeleteAccount(token: string, code: string, options: {
+    cascade_delete?: boolean;
+    new_parent_id?: number;
+  }): Promise<{ message: string; cascade: boolean }> {
+    const response = await fetch(`${API_BASE_URL}/accounts/admin/${code}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(token),
+      body: JSON.stringify(options),
+    });
+    
+    return this.handleResponse(response);
+  }
+
   // Get account hierarchy
   async getAccountHierarchy(token: string): Promise<Account[]> {
     const response = await fetch(`${API_BASE_URL}/accounts/hierarchy`, {

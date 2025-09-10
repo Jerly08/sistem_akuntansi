@@ -26,7 +26,7 @@ import {
   SimpleGrid
 } from '@chakra-ui/react';
 import { FiSave, FiX, FiUpload, FiTrash2 } from 'react-icons/fi';
-import ProductService, { Product, Category, ProductUnit } from '@/services/productService';
+import ProductService, { Product, Category, ProductUnit, WarehouseLocation } from '@/services/productService';
 import CurrencyInput from '@/components/common/CurrencyInput';
 
 interface ProductFormProps {
@@ -41,6 +41,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
     name: '',
     description: '',
     category_id: undefined,
+    warehouse_location_id: undefined,
     brand: '',
     model: '',
     unit: '',
@@ -64,6 +65,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<ProductUnit[]>([]);
+  const [warehouseLocations, setWarehouseLocations] = useState<WarehouseLocation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -72,6 +74,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
   useEffect(() => {
     fetchCategories();
     fetchUnits();
+    fetchWarehouseLocations();
     if (product) {
       setFormData(product);
     }
@@ -100,6 +103,22 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
         status: 'error',
         isClosable: true,
       });
+    }
+  };
+
+  const fetchWarehouseLocations = async () => {
+    try {
+      const data = await ProductService.getWarehouseLocations();
+      setWarehouseLocations(data.data);
+      
+      // Show info message if using mock data
+      if (data.message && data.message.includes('mock')) {
+        console.info('Using mock warehouse locations data - implement backend API for full functionality');
+      }
+    } catch (error) {
+      console.error('Failed to fetch warehouse locations:', error);
+      // Set empty array instead of showing error to user
+      setWarehouseLocations([]);
     }
   };
 
@@ -226,7 +245,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
                 />
               </FormControl>
             </GridItem>
-            <GridItem colSpan={2}>
+            <GridItem>
               <FormControl>
                 <FormLabel>Kategori</FormLabel>
                 <Select
@@ -237,6 +256,22 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
                   {categories.map(category => (
                     <option key={category.id} value={category.id}>
                       {category.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+            </GridItem>
+            <GridItem>
+              <FormControl>
+                <FormLabel>Lokasi Gudang</FormLabel>
+                <Select
+                  value={formData.warehouse_location_id || ''}
+                  onChange={(e) => handleInputChange('warehouse_location_id', e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="Pilih lokasi gudang"
+                >
+                  {warehouseLocations.map(location => (
+                    <option key={location.id} value={location.id}>
+                      {location.name} ({location.code})
                     </option>
                   ))}
                 </Select>
