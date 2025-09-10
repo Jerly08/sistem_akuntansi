@@ -53,10 +53,16 @@ func (r *CashBankRepository) Create(account *models.CashBank) (*models.CashBank,
 
 // Update updates a cash/bank account
 func (r *CashBankRepository) Update(account *models.CashBank) (*models.CashBank, error) {
-	if err := r.db.Save(account).Error; err != nil {
+	// Avoid overwriting immutable/linked fields like AccountID
+	// Only update allowed columns explicitly
+	updateTx := r.db.Model(&models.CashBank{}).
+		Where("id = ?", account.ID).
+		Select("Code", "Name", "Type", "BankName", "AccountNo", "Currency", "Balance", "MinBalance", "MaxBalance", "DailyLimit", "MonthlyLimit", "IsActive", "IsRestricted", "Description")
+
+	if err := updateTx.Updates(account).Error; err != nil {
 		return nil, err
 	}
-	
+
 	return r.FindByID(account.ID)
 }
 

@@ -185,10 +185,16 @@ func (s *SalesService) createSaleAccountingEntries(sale *models.Sale, userID uin
 	journalLines := []models.JournalLine{}
 	lineNumber := 1
 	
-	// Calculate amounts
+	// Calculate amounts correctly
 	subtotal := sale.TotalAmount - sale.Tax - sale.ShippingCost
 	totalCOGS := 0.0
-	
+
+	// Calculate potential PPh withholding amount up front (based on subtotal)
+	pphAmount := 0.0
+	if sale.PPhPercent > 0 {
+		pphAmount = subtotal * sale.PPhPercent / 100
+	}
+
 	// Calculate COGS from items
 	for _, item := range sale.SaleItems {
 		product, _ := s.productRepo.FindByID(item.ProductID)
@@ -196,17 +202,18 @@ func (s *SalesService) createSaleAccountingEntries(sale *models.Sale, userID uin
 			totalCOGS += float64(item.Quantity) * product.CostPrice
 		}
 	}
-	
-	// 1. Debit: Accounts Receivable (Total Amount)
+
+	// 1. Debit: Accounts Receivable (Net of PPh withholding if applicable)
+	arDebit := sale.TotalAmount - pphAmount
 	journalLines = append(journalLines, models.JournalLine{
 		AccountID:     accountsReceivable.ID,
 		Description:   fmt.Sprintf("AR - Invoice %s", sale.InvoiceNumber),
-		DebitAmount:   sale.TotalAmount,
+		DebitAmount:   arDebit,
 		CreditAmount:  0,
 		LineNumber:    lineNumber,
 	})
 	lineNumber++
-	
+
 	// 2. Credit: Sales Revenue (Subtotal)
 	journalLines = append(journalLines, models.JournalLine{
 		AccountID:     salesRevenue.ID,
@@ -216,23 +223,40 @@ func (s *SalesService) createSaleAccountingEntries(sale *models.Sale, userID uin
 		LineNumber:    lineNumber,
 	})
 	lineNumber++
-	
-	// 3. Credit: PPN Payable (if applicable)
-	if sale.PPNPercent > 0 && ppnAccount != nil {
-		ppnAmount := subtotal * sale.PPNPercent / 100
+
+	// 3. Credit: Tax (use the actual Tax amount from sale)
+	if sale.Tax > 0 && ppnAccount != nil {
 		journalLines = append(journalLines, models.JournalLine{
 			AccountID:     ppnAccount.ID,
 			Description:   fmt.Sprintf("PPN %.0f%% - Invoice %s", sale.PPNPercent, sale.InvoiceNumber),
 			DebitAmount:   0,
-			CreditAmount:  ppnAmount,
+			CreditAmount:  sale.Tax,
 			LineNumber:    lineNumber,
 		})
 		lineNumber++
 	}
-	
-	// 4. Debit: PPh Receivable (if applicable)
+
+	// 4. Credit: Shipping Cost (if applicable)
+	if sale.ShippingCost > 0 {
+		// Find or create a shipping revenue account
+		shippingAccount, err := s.accountRepo.GetAccountByCode("4102") // Shipping Revenue
+		if err != nil {
+			// Use sales revenue account as fallback
+			shippingAccount = salesRevenue
+		}
+		journalLines = append(journalLines, models.JournalLine{
+			AccountID:     shippingAccount.ID,
+			Description:   fmt.Sprintf("Shipping Cost - Invoice %s", sale.InvoiceNumber),
+			DebitAmount:   0,
+			CreditAmount:  sale.ShippingCost,
+			LineNumber:    lineNumber,
+		})
+		lineNumber++
+	}
+
+	// 5. Debit: PPh Receivable (if applicable) - moved after shipping
 	if sale.PPhPercent > 0 && pphAccount != nil {
-		pphAmount := subtotal * sale.PPhPercent / 100
+		// pphAmount already calculated above based on subtotal
 		journalLines = append(journalLines, models.JournalLine{
 			AccountID:     pphAccount.ID,
 			Description:   fmt.Sprintf("PPh %s %.2f%% - Invoice %s", sale.PPhType, sale.PPhPercent, sale.InvoiceNumber),
