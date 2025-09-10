@@ -13,13 +13,14 @@ const (
 )
 
 type Product struct {
-	ID            uint           `json:"id" gorm:"primaryKey"`
-	Code          string         `json:"code" gorm:"unique;not null;size:20"`
-	Name          string         `json:"name" gorm:"not null;size:100"`
-	Description   string         `json:"description" gorm:"type:text"`
-	CategoryID    *uint          `json:"category_id" gorm:"index"`
-	Brand         string         `json:"brand" gorm:"size:50"`
-	Model         string         `json:"model" gorm:"size:50"`
+	ID                    uint           `json:"id" gorm:"primaryKey"`
+	Code                  string         `json:"code" gorm:"unique;not null;size:20"`
+	Name                  string         `json:"name" gorm:"not null;size:100"`
+	Description           string         `json:"description" gorm:"type:text"`
+	CategoryID            *uint          `json:"category_id" gorm:"index"`
+	WarehouseLocationID   *uint          `json:"warehouse_location_id" gorm:"index"`
+	Brand                 string         `json:"brand" gorm:"size:50"`
+	Model                 string         `json:"model" gorm:"size:50"`
 	Unit          string         `json:"unit" gorm:"not null;size:20"` // pcs, kg, liter, etc
 	PurchasePrice float64        `json:"purchase_price" gorm:"type:decimal(15,2);default:0"`
 	CostPrice     float64        `json:"cost_price" gorm:"type:decimal(15,2);default:0"`
@@ -47,11 +48,12 @@ type Product struct {
 	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
 	
 	// Relations
-	Category      *ProductCategory `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
-	SaleItems     []SaleItem       `json:"-" gorm:"foreignKey:ProductID"`
-	PurchaseItems []PurchaseItem   `json:"-" gorm:"foreignKey:ProductID"`
-	Inventories   []Inventory      `json:"-" gorm:"foreignKey:ProductID"`
-	Variants      []ProductVariant `json:"variants,omitempty" gorm:"foreignKey:ProductID"`
+	Category          *ProductCategory   `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
+	WarehouseLocation *WarehouseLocation `json:"warehouse_location,omitempty" gorm:"foreignKey:WarehouseLocationID"`
+	SaleItems         []SaleItem         `json:"-" gorm:"foreignKey:ProductID"`
+	PurchaseItems     []PurchaseItem     `json:"-" gorm:"foreignKey:ProductID"`
+	Inventories       []Inventory        `json:"-" gorm:"foreignKey:ProductID"`
+	Variants          []ProductVariant   `json:"variants,omitempty" gorm:"foreignKey:ProductID"`
 }
 
 type ProductVariant struct {

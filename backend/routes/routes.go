@@ -76,6 +76,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Update ProductController with stockMonitoringService
 	productController := controllers.NewProductController(db, stockMonitoringService)
 	
+	// Initialize WarehouseLocationController
+	warehouseLocationController := controllers.NewWarehouseLocationController(db)
+	
 	// Purchase repositories, services and controllers
 	purchaseRepo := repositories.NewPurchaseRepository(db)
 	productRepo := repositories.NewProductRepository(db)
@@ -246,6 +249,16 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				units.POST("", permMiddleware.CanCreate("products"), unitController.CreateProductUnit)
 				units.PUT("/:id", permMiddleware.CanEdit("products"), unitController.UpdateProductUnit)
 				units.DELETE("/:id", permMiddleware.CanDelete("products"), unitController.DeleteProductUnit)
+			}
+
+			// 🏢 Warehouse Location routes with enhanced permission checks
+			warehouseLocations := protected.Group("/warehouse-locations")
+			{
+				warehouseLocations.GET("", permMiddleware.CanView("products"), warehouseLocationController.GetWarehouseLocations)
+				warehouseLocations.GET("/:id", permMiddleware.CanView("products"), warehouseLocationController.GetWarehouseLocation)
+				warehouseLocations.POST("", permMiddleware.CanCreate("products"), warehouseLocationController.CreateWarehouseLocation)
+				warehouseLocations.PUT("/:id", permMiddleware.CanEdit("products"), warehouseLocationController.UpdateWarehouseLocation)
+				warehouseLocations.DELETE("/:id", permMiddleware.CanDelete("products"), warehouseLocationController.DeleteWarehouseLocation)
 			}
 
 			// 📊 Account routes (Chart of Accounts) dengan enhanced security

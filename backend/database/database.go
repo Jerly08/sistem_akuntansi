@@ -290,6 +290,7 @@ func AutoMigrate(db *gorm.DB) {
 		&models.ProductCategory{},
 		&models.Product{},
 		&models.ProductUnit{},
+		&models.WarehouseLocation{},
 		&models.Inventory{},
 		
 		// Sales

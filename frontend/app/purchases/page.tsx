@@ -1234,12 +1234,35 @@ const PurchasesPage: React.FC = () => {
             description: '',
           }));
           
-          // Fetch inventory account (current asset - persediaan)
+          // Fetch asset accounts (inventory + fixed assets)
           try {
             const assetCatalogData = await accountService.getAccountCatalog(token, 'ASSET');
-            const inventoryAccounts = assetCatalogData.filter(item => 
-              item.code === '1301' || item.name.toLowerCase().includes('persediaan')
-            ).map(item => ({
+            // Include both inventory and fixed asset accounts
+            const assetAccounts = assetCatalogData.filter(item => {
+              const code = item.code || '';
+              const name = (item.name || '').toLowerCase();
+              
+              // Inventory accounts (current assets)
+              const isInventory = code === '1301' || name.includes('persediaan');
+              
+              // Fixed asset accounts (codes 1500-1599 and specific account codes)
+              const isFixedAsset = 
+                (code.startsWith('15') && code.length >= 4) || // Fixed asset codes 1500-1599
+                ['1501', '1502', '1503', '1504', '1505', '1509'].includes(code) || // Specific known fixed asset accounts
+                name.includes('fixed asset') ||
+                name.includes('asset tetap') ||
+                name.includes('peralatan') ||
+                name.includes('mesin') ||
+                name.includes('printer') ||
+                name.includes('komputer') ||
+                name.includes('equipment') ||
+                name.includes('furniture') ||
+                name.includes('kendaraan') ||
+                name.includes('bangunan') ||
+                name.includes('gedung');
+              
+              return isInventory || isFixedAsset;
+            }).map(item => ({
               id: item.id,
               code: item.code,
               name: item.name,
@@ -1252,13 +1275,13 @@ const PurchasesPage: React.FC = () => {
               updated_at: '',
               description: '',
             }));
-            allAccounts = [...inventoryAccounts, ...formattedExpenseAccounts];
+            allAccounts = [...assetAccounts, ...formattedExpenseAccounts];
           } catch (assetError) {
-            console.log('Could not fetch inventory accounts, using expense only:', assetError);
+            console.log('Could not fetch asset accounts, using expense only:', assetError);
             allAccounts = formattedExpenseAccounts;
           }
           
-          console.log('Formatted accounts from catalog (inventory + expense):', allAccounts);
+          console.log('Formatted accounts from catalog (inventory + fixed assets + expense):', allAccounts);
           setExpenseAccounts(allAccounts);
           setCanListExpenseAccounts(true);
           if (allAccounts.length > 0) {
@@ -1277,20 +1300,42 @@ const PurchasesPage: React.FC = () => {
         const expenseData = await accountService.getAccounts(token, 'EXPENSE');
         const expenseList: GLAccount[] = Array.isArray(expenseData) ? expenseData : [];
         
-        // Try to fetch inventory accounts
+        // Try to fetch asset accounts (inventory + fixed assets)
         let allAccountsList: GLAccount[] = expenseList;
         try {
           const assetData = await accountService.getAccounts(token, 'ASSET');
           const assetList: GLAccount[] = Array.isArray(assetData) ? assetData : [];
-          const inventoryAccounts = assetList.filter(acc => 
-            acc.code === '1301' || acc.name.toLowerCase().includes('persediaan')
-          );
-          allAccountsList = [...inventoryAccounts, ...expenseList];
+          const assetAccounts = assetList.filter(acc => {
+            const code = acc.code || '';
+            const name = (acc.name || '').toLowerCase();
+            
+            // Inventory accounts (current assets)
+            const isInventory = code === '1301' || name.includes('persediaan');
+            
+            // Fixed asset accounts (codes 1500-1599 and specific account codes)
+            const isFixedAsset = 
+              (code.startsWith('15') && code.length >= 4) || // Fixed asset codes 1500-1599
+              ['1501', '1502', '1503', '1504', '1505', '1509'].includes(code) || // Specific known fixed asset accounts
+              name.includes('fixed asset') ||
+              name.includes('asset tetap') ||
+              name.includes('peralatan') ||
+              name.includes('mesin') ||
+              name.includes('printer') ||
+              name.includes('komputer') ||
+              name.includes('equipment') ||
+              name.includes('furniture') ||
+              name.includes('kendaraan') ||
+              name.includes('bangunan') ||
+              name.includes('gedung');
+            
+            return isInventory || isFixedAsset;
+          });
+          allAccountsList = [...assetAccounts, ...expenseList];
         } catch (assetError) {
-          console.log('Could not fetch inventory accounts from regular endpoint, using expense only:', assetError);
+          console.log('Could not fetch asset accounts from regular endpoint, using expense only:', assetError);
         }
         
-        console.log('Formatted accounts from regular endpoint (inventory + expense):', allAccountsList);
+        console.log('Formatted accounts from regular endpoint (inventory + fixed assets + expense):', allAccountsList);
         setExpenseAccounts(allAccountsList);
         setCanListExpenseAccounts(true);
         if (allAccountsList.length > 0) {

@@ -287,10 +287,26 @@ func EnsureCashBankAccountIntegrity(db *gorm.DB, cashBankID uint) error {
 		return fmt.Errorf("cash bank not found: %v", err)
 	}
 
+	needsAccountCreation := false
+
+	// Check if account_id is missing or invalid
 	if cashBank.AccountID == 0 {
-		// Account ID is missing, create one
+		needsAccountCreation = true
 		log.Printf("⚠️  Cash bank %d (%s) has missing account_id, creating...", cashBank.ID, cashBank.Name)
-		
+	} else {
+		// Validate existing account_id
+		var account models.Account
+		if err := db.Where("id = ? AND deleted_at IS NULL", cashBank.AccountID).First(&account).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				log.Printf("⚠️  Cash bank %d has invalid account_id %d, creating new account...", cashBank.ID, cashBank.AccountID)
+				needsAccountCreation = true
+			} else {
+				return fmt.Errorf("failed to validate account_id: %v", err)
+			}
+		}
+	}
+
+	if needsAccountCreation {
 		// Generate account code
 		var accountCode string
 		if cashBank.Type == "CASH" {
@@ -335,26 +351,13 @@ func EnsureCashBankAccountIntegrity(db *gorm.DB, cashBankID uint) error {
 			return fmt.Errorf("failed to create GL account: %v", err)
 		}
 
-		// Update cash bank
-		if err := db.Model(&cashBank).Update("account_id", newAccount.ID).Error; err != nil {
+		// Update cash bank with explicit field assignment to avoid GORM issues
+		cashBank.AccountID = newAccount.ID
+		if err := db.Save(&cashBank).Error; err != nil {
 			return fmt.Errorf("failed to update cash bank account_id: %v", err)
 		}
 
 		log.Printf("✅ Created GL account %s (%s) for cash bank %s", newAccount.Code, newAccount.Name, cashBank.Name)
-	} else {
-		// Validate existing account_id
-		var account models.Account
-		if err := db.Where("id = ? AND deleted_at IS NULL", cashBank.AccountID).First(&account).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				log.Printf("⚠️  Cash bank %d has invalid account_id %d, fixing...", cashBank.ID, cashBank.AccountID)
-				// Recursively call this function to fix the missing account_id
-				if err := db.Model(&cashBank).Update("account_id", 0).Error; err != nil {
-					return fmt.Errorf("failed to reset invalid account_id: %v", err)
-				}
-				return EnsureCashBankAccountIntegrity(db, cashBankID)
-			}
-			return fmt.Errorf("failed to validate account_id: %v", err)
-		}
 	}
 
 	return nil

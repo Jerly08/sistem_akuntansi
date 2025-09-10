@@ -135,6 +135,12 @@ func (s *CashBankService) UpdateCashBankAccount(id uint, request CashBankUpdateR
 		// Continue with update, but log the issue
 	}
 	
+	// Reload cash bank to get updated account_id after integrity check
+	cashBank, err = s.cashBankRepo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	
 	// Update fields
 	if request.Name != "" {
 		cashBank.Name = request.Name

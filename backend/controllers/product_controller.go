@@ -29,7 +29,7 @@ func NewProductController(db *gorm.DB, stockMonitoringService *services.StockMon
 func (pc *ProductController) GetProducts(c *gin.Context) {
 	var products []models.Product
 	
-	query := pc.DB.Where("is_active = ?", true).Preload("Category")
+	query := pc.DB.Where("is_active = ?", true).Preload("Category").Preload("WarehouseLocation")
 	
 	// Add search functionality
 	if search := c.Query("search"); search != "" {
@@ -60,7 +60,7 @@ func (pc *ProductController) GetProduct(c *gin.Context) {
 	}
 
 	var product models.Product
-	if err := pc.DB.Preload("Category").First(&product, id).Error; err != nil {
+	if err := pc.DB.Preload("Category").Preload("WarehouseLocation").First(&product, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
 		return
 	}
@@ -201,8 +201,8 @@ func (pc *ProductController) CreateProduct(c *gin.Context) {
 		return
 	}
 
-	// Load the category relation
-	if err := pc.DB.Preload("Category").First(&product, product.ID).Error; err != nil {
+	// Load the relations
+	if err := pc.DB.Preload("Category").Preload("WarehouseLocation").First(&product, product.ID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load product relations"})
 		return
 	}
@@ -246,8 +246,8 @@ func (pc *ProductController) UpdateProduct(c *gin.Context) {
 		return
 	}
 
-	// Load the updated product with category relation
-	if err := pc.DB.Preload("Category").First(&product, id).Error; err != nil {
+	// Load the updated product with relations
+	if err := pc.DB.Preload("Category").Preload("WarehouseLocation").First(&product, id).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to load updated product relations"})
 		return
 	}
