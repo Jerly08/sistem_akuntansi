@@ -69,6 +69,13 @@ type Config struct {
 	
 	// Development Flags
 	SkipBalanceReset bool
+	
+	// Swagger Configuration
+	SwaggerHost        string
+	SwaggerScheme      string
+	SwaggerBasePath    string
+	SwaggerTitle       string
+	SwaggerDescription string
 }
 
 func LoadConfig() *Config {
@@ -144,6 +151,13 @@ func LoadConfig() *Config {
 		
 		// Development Flags
 		SkipBalanceReset: parseBool(getEnv("SKIP_BALANCE_RESET", "false")),
+		
+		// Swagger Configuration
+		SwaggerHost:        getEnv("SWAGGER_HOST", ""), // Empty means dynamic
+		SwaggerScheme:      getEnv("SWAGGER_SCHEME", "http"), // Default to http, production should set to https
+		SwaggerBasePath:    getEnv("SWAGGER_BASE_PATH", "/api/v1"),
+		SwaggerTitle:       getEnv("SWAGGER_TITLE", "Sistema Akuntansi API"),
+		SwaggerDescription: getEnv("SWAGGER_DESCRIPTION", "API untuk aplikasi sistem akuntansi yang komprehensif dengan fitur lengkap manajemen keuangan, inventory, sales, purchases, dan reporting."),
 	}
 	
 	// Production security warnings

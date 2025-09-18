@@ -665,24 +665,11 @@ definitions:
     required:
     - account_id
     type: object
-  models.LoginData:
-    properties:
-      refresh_token:
-        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-        type: string
-      token:
-        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-        type: string
-      user:
-        $ref: '#/definitions/models.User'
-    type: object
   models.LoginRequest:
     properties:
       password:
-        example: password123
         type: string
       username:
-        example: admin
         type: string
     required:
     - password
@@ -690,11 +677,10 @@ definitions:
     type: object
   models.LoginResponse:
     properties:
-      data:
-        $ref: '#/definitions/models.LoginData'
-      status:
-        example: success
+      token:
         type: string
+      user:
+        $ref: '#/definitions/models.User'
     type: object
   models.Payment:
     properties:
@@ -1059,7 +1045,6 @@ definitions:
   models.RefreshTokenRequest:
     properties:
       refresh_token:
-        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
     required:
     - refresh_token
@@ -1067,23 +1052,17 @@ definitions:
   models.RegisterRequest:
     properties:
       email:
-        example: john@example.com
         type: string
       first_name:
-        example: John
         type: string
       last_name:
-        example: Doe
         type: string
       password:
-        example: password123
         minLength: 6
         type: string
       role:
-        example: employee
         type: string
       username:
-        example: john_doe
         type: string
     required:
     - email

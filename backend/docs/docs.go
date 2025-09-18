@@ -4341,22 +4341,6 @@ const docTemplate = `{
                 }
             }
         },
-        "models.LoginData": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                },
-                "token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                },
-                "user": {
-                    "$ref": "#/definitions/models.User"
-                }
-            }
-        },
         "models.LoginRequest": {
             "type": "object",
             "required": [
@@ -4365,24 +4349,21 @@ const docTemplate = `{
             ],
             "properties": {
                 "password": {
-                    "type": "string",
-                    "example": "password123"
+                    "type": "string"
                 },
                 "username": {
-                    "type": "string",
-                    "example": "admin"
+                    "type": "string"
                 }
             }
         },
         "models.LoginResponse": {
             "type": "object",
             "properties": {
-                "data": {
-                    "$ref": "#/definitions/models.LoginData"
+                "token": {
+                    "type": "string"
                 },
-                "status": {
-                    "type": "string",
-                    "example": "success"
+                "user": {
+                    "$ref": "#/definitions/models.User"
                 }
             }
         },
@@ -4937,8 +4918,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "refresh_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    "type": "string"
                 }
             }
         },
@@ -4951,29 +4931,23 @@ const docTemplate = `{
             ],
             "properties": {
                 "email": {
-                    "type": "string",
-                    "example": "john@example.com"
+                    "type": "string"
                 },
                 "first_name": {
-                    "type": "string",
-                    "example": "John"
+                    "type": "string"
                 },
                 "last_name": {
-                    "type": "string",
-                    "example": "Doe"
+                    "type": "string"
                 },
                 "password": {
                     "type": "string",
-                    "minLength": 6,
-                    "example": "password123"
+                    "minLength": 6
                 },
                 "role": {
-                    "type": "string",
-                    "example": "employee"
+                    "type": "string"
                 },
                 "username": {
-                    "type": "string",
-                    "example": "john_doe"
+                    "type": "string"
                 }
             }
         },

@@ -10,7 +10,15 @@ go build -o main.exe cmd/main.go
 ```
 
 ### 2. **Access Swagger UI**
-Open browser and navigate to:
+**The URL is now DYNAMIC!** 🎉
+
+Check the startup logs for the actual URL:
+```bash
+🚀 Swagger Configuration:
+   Swagger URL: http://localhost:8080/swagger/index.html  # ← Your actual URL
+```
+
+Default development URL:
 ```
 http://localhost:8080/swagger/index.html
 ```
@@ -81,15 +89,22 @@ Now you can test any protected endpoint like:
 
 ## 🔧 Configuration
 
-### Development (Auto-enabled)
+### Development (Auto-enabled) 🎉 **NO HARDCODE!**
 ```env
-ENV=development
+ENVIRONMENT=development      # Auto-detects localhost:8080
+SERVER_PORT=8080            # Dynamic host = localhost:8080
+SWAGGER_HOST=               # Empty = auto-detect
+ALLOWED_ORIGINS=            # Empty = dev defaults
 ```
 
-### Production  
+### Production 🚀 **Fully Dynamic!**
 ```env
-ENV=production
+ENVIRONMENT=production
 ENABLE_SWAGGER=true
+SWAGGER_HOST=api.yourdomain.com     # Your domain!
+SWAGGER_SCHEME=https                # Auto HTTPS
+ALLOWED_ORIGINS=https://app.com     # Your frontend
+ENABLE_HTTPS=true
 ```
 
 ## 📚 Full Documentation

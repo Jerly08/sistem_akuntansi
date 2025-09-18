@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"app-sistem-akuntansi/config"
 	"app-sistem-akuntansi/database"
@@ -74,14 +75,21 @@ func main() {
 	// Configure trusted proxies for security
 	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 
-	// CORS middleware
+	// CORS middleware with dynamic origins
+	allowedOrigins := config.GetAllowedOrigins(cfg)
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:3001"},
+		AllowOrigins:     allowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 	}))
+
+	// Update Swagger docs with dynamic configuration
+	if cfg.Environment == "development" || os.Getenv("ENABLE_SWAGGER") == "true" {
+		config.UpdateSwaggerDocs()
+		config.PrintSwaggerInfo()
+	}
 
 	// Setup routes
 	routes.SetupRoutes(r, db, startupService)
