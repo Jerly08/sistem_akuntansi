@@ -36,6 +36,7 @@ import {
   FiAlertCircle,
   FiClock,
   FiTrash2,
+  FiDollarSign,
 } from 'react-icons/fi';
 import { Purchase } from '@/services/purchaseService';
 
@@ -46,6 +47,7 @@ interface PurchaseTableProps {
   onEdit?: (purchase: Purchase) => void;
   onSubmitForApproval?: (purchaseId: number) => void;
   onDelete?: (purchaseId: number) => void;
+  onRecordPayment?: (purchase: Purchase) => void;
   renderActions?: (purchase: Purchase) => React.ReactNode;
   title?: string;
   formatCurrency: (amount: number) => string;
@@ -62,6 +64,7 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
   onEdit,
   onSubmitForApproval,
   onDelete,
+  onRecordPayment,
   renderActions,
   title = 'Purchase Transactions',
   formatCurrency,
@@ -85,6 +88,8 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
       case 'approved':
       case 'completed':
         return 'green';
+      case 'paid':
+        return 'teal'; // Special color for PAID status to distinguish from other green statuses
       case 'draft':
       case 'pending_approval':
         return 'yellow';
@@ -151,6 +156,8 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">VENDOR</Th>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">DATE</Th>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">TOTAL</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">PAID AMOUNT</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">OUTSTANDING</Th>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">STATUS</Th>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">APPROVAL STATUS</Th>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold" textAlign="center">ACTIONS</Th>
@@ -183,6 +190,20 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
                     <Td borderColor={borderColor} py={3}>
                       <Text fontWeight="medium" fontSize="sm" color={primaryTextColor}>
                         {formatCurrency(purchase.total_amount)}
+                      </Text>
+                    </Td>
+                    <Td borderColor={borderColor} py={3}>
+                      <Text fontSize="sm" color={purchase.paid_amount > 0 ? "green.600" : textColor}>
+                        {formatCurrency(purchase.paid_amount || 0)}
+                      </Text>
+                    </Td>
+                    <Td borderColor={borderColor} py={3}>
+                      <Text 
+                        fontSize="sm" 
+                        color={purchase.outstanding_amount > 0 ? "orange.600" : "green.600"}
+                        fontWeight={purchase.outstanding_amount > 0 ? "semibold" : "normal"}
+                      >
+                        {formatCurrency(purchase.outstanding_amount || 0)}
                       </Text>
                     </Td>
                     <Td borderColor={borderColor} py={3}>
@@ -240,6 +261,22 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
                               >
                                 Submit for Approval
                               </MenuItem>
+                            )}
+                            {/* Record Payment - Only for APPROVED credit purchases with outstanding amount */}
+                            {purchase.status === 'APPROVED' && 
+                             purchase.payment_method === 'CREDIT' && 
+                             (purchase.outstanding_amount || 0) > 0 && 
+                             onRecordPayment && (
+                              <>
+                                <MenuDivider />
+                                <MenuItem 
+                                  icon={<FiDollarSign />} 
+                                  onClick={() => onRecordPayment(purchase)}
+                                  color="green.600"
+                                >
+                                  Record Payment
+                                </MenuItem>
+                              </>
                             )}
                             {canDelete && onDelete && (
                               <>

@@ -35,7 +35,7 @@ func NewPaymentController(paymentService *services.PaymentService) *PaymentContr
 // @Param method query string false "Filter by payment method"
 // @Param start_date query string false "Start date (YYYY-MM-DD)"
 // @Param end_date query string false "End date (YYYY-MM-DD)"
-// @Success 200 {object} services.PaymentResult
+// @Success 200 {object} models.APIResponse
 // @Router /api/payments [get]
 func (c *PaymentController) GetPayments(ctx *gin.Context) {
 	// Parse query parameters

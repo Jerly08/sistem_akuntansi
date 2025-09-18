@@ -242,7 +242,9 @@ class CashBankService {
   // Process deposit
   async processDeposit(data: DepositRequest): Promise<CashBankTransaction> {
     try {
-      const response = await api.post(`${this.baseUrl}/deposit`, data);
+      const response = await api.post(`${this.baseUrl}/deposit`, data, {
+        timeout: 60000 // 60 seconds timeout for deposit operations
+      });
       return response.data;
     } catch (error) {
       console.error('Error processing deposit:', error);
@@ -253,7 +255,9 @@ class CashBankService {
   // Process withdrawal
   async processWithdrawal(data: WithdrawalRequest): Promise<CashBankTransaction> {
     try {
-      const response = await api.post(`${this.baseUrl}/withdrawal`, data);
+      const response = await api.post(`${this.baseUrl}/withdrawal`, data, {
+        timeout: 60000 // 60 seconds timeout for withdrawal operations
+      });
       return response.data;
     } catch (error) {
       console.error('Error processing withdrawal:', error);

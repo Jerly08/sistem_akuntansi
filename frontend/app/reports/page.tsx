@@ -31,10 +31,6 @@ import {
   Spinner,
   useDisclosure,
   useColorModeValue,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription
 } from '@chakra-ui/react';
 import { 
   FiFileText, 
@@ -46,12 +42,9 @@ import {
   FiEye,
   FiList,
   FiBook,
-  FiSearch
+  FiDatabase
 } from 'react-icons/fi';
 import { reportService, ReportParameters } from '../../src/services/reportService';
-import { useJournalDrilldown } from '../../src/hooks/useJournalDrilldown';
-import JournalDrilldownModal from '../../src/components/reports/JournalDrilldownModal';
-import JournalDrilldownButton from '../../src/components/reports/JournalDrilldownButton';
 import { formatCurrency } from '../../src/utils/formatters';
 
 // Define reports data matching the UI design
@@ -59,7 +52,7 @@ const getAvailableReports = (t: any) => [
   {
     id: 'profit-loss',
     name: t('reports.profitLossStatement'),
-    description: t('reports.description.profitLoss'),
+    description: 'Comprehensive profit and loss statement with enhanced analysis. Automatically integrates journal entry data for accurate revenue, COGS, and expense reporting with detailed financial metrics.',
     type: 'FINANCIAL',
     icon: FiTrendingUp
   },
@@ -104,6 +97,13 @@ const getAvailableReports = (t: any) => [
     description: t('reports.description.generalLedger'),
     type: 'FINANCIAL',
     icon: FiBook
+  },
+  {
+    id: 'journal-entry-analysis',
+    name: 'Journal Entry Analysis',
+    description: 'Complete analysis of all journal entries showing all transactions with detailed breakdown by accounts, dates, and amounts',
+    type: 'FINANCIAL',
+    icon: FiDatabase
   }
 ];
 
@@ -125,7 +125,6 @@ const ReportsPage: React.FC = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { isOpen: isPreviewOpen, onOpen: onPreviewOpen, onClose: onPreviewClose } = useDisclosure();
   const toast = useToast();
-  const journalDrilldown = useJournalDrilldown();
 
   // Color mode values
   const cardBg = useColorModeValue('white', 'gray.800');
@@ -150,98 +149,12 @@ const ReportsPage: React.FC = () => {
   const noDataIconColor = useColorModeValue('gray.400', 'gray.500');
   const noDataTextColor = useColorModeValue('gray.500', 'gray.400');
   const previewPeriodTextColor = useColorModeValue('gray.500', 'gray.400');
+  const rowHoverBg = useColorModeValue('blue.50', 'blue.900');
   
   const availableReports = getAvailableReports(t);
 
   const resetParams = () => {
     setReportParams({});
-  };
-
-
-  // Helper function to handle journal drill-down for different report types
-  const handleJournalDrilldown = (itemName: string, accountCode?: string, amount?: number) => {
-    if (!previewReport || !previewData) return;
-
-    const reportId = previewReport.id;
-    
-    // Extract date parameters from the last used parameters or current preview data
-    let startDate: string = '';
-    let endDate: string = '';
-    let asOfDate: string = '';
-
-    if (reportId === 'balance-sheet' || reportId === 'trial-balance') {
-      asOfDate = new Date().toISOString().split('T')[0]; // Default to today
-    } else {
-      // For P&L, cash flow, etc.
-      const today = new Date();
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      startDate = firstDayOfMonth.toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
-    }
-
-    // Call appropriate drill-down method based on report type
-    switch (reportId) {
-      case 'profit-loss':
-        journalDrilldown.drillDownProfitLoss(
-          itemName,
-          accountCode ? [accountCode] : [],
-          [],
-          startDate,
-          endDate
-        );
-        break;
-      case 'balance-sheet':
-        journalDrilldown.drillDownBalanceSheet(
-          itemName,
-          accountCode ? [accountCode] : [],
-          [],
-          asOfDate
-        );
-        break;
-      case 'trial-balance':
-        if (accountCode) {
-          journalDrilldown.drillDownAccount(
-            accountCode,
-            itemName,
-            new Date(new Date(asOfDate).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // One year ago
-            asOfDate,
-            'TRIAL_BALANCE'
-          );
-        }
-        break;
-      case 'general-ledger':
-        if (accountCode) {
-          journalDrilldown.drillDownAccount(
-            accountCode,
-            itemName,
-            startDate,
-            endDate,
-            'GENERAL_LEDGER'
-          );
-        }
-        break;
-      case 'cash-flow':
-        journalDrilldown.drillDownCashFlow(
-          itemName,
-          accountCode ? [accountCode] : [],
-          [],
-          startDate,
-          endDate,
-          ['CASH_BANK', 'PAYMENT', 'DEPOSIT', 'WITHDRAWAL']
-        );
-        break;
-      default:
-        // Generic drill-down for other reports
-        journalDrilldown.openDrilldown({
-          start_date: startDate || new Date(new Date().getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          end_date: endDate || new Date().toISOString().split('T')[0],
-          line_item_name: itemName,
-          account_codes: accountCode ? [accountCode] : undefined,
-          report_type: reportId.toUpperCase(),
-          page: 1,
-          limit: 20
-        }, `Journal Entries - ${itemName}`);
-    }
   };
 
   const handleViewReport = async (report: any) => {
@@ -294,6 +207,16 @@ const ReportsPage: React.FC = () => {
         quickViewParams = {
           start_date: firstDayOfMonth.toISOString().split('T')[0],
           end_date: today.toISOString().split('T')[0],
+          format: 'json'
+        };
+      } else if (report.id === 'journal-entry-analysis') {
+        const today = new Date();
+        const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        quickViewParams = {
+          start_date: firstDayOfMonth.toISOString().split('T')[0],
+          end_date: today.toISOString().split('T')[0],
+          status: 'POSTED', // Default to show posted entries
+          reference_type: 'ALL',
           format: 'json'
         };
       }
@@ -382,11 +305,257 @@ const ReportsPage: React.FC = () => {
           throw new Error('Invalid balance sheet data structure');
 
         case 'profit-loss':
-          // Handle ProfitLossStatement structure from backend
-          console.log('Processing profit-loss data:', reportData);
+          // Handle Enhanced ProfitLossData structure from backend
+          console.log('Processing enhanced profit-loss data:', reportData);
           
-          // Check if it's the new ProfitLossStatement format
-          if (reportData.report_header || reportData.revenue || reportData.total_revenue !== undefined) {
+          // Check if it's the enhanced ProfitLossData format (from EnhancedProfitLossService)
+          if (reportData.company || reportData.revenue || reportData.cost_of_goods_sold || reportData.generated_at) {
+            const sections = [];
+            
+            // Revenue section - handle enhanced structure
+            if (reportData.revenue) {
+              const revenueSection = {
+                name: 'REVENUE',
+                items: [] as any[],
+                total: reportData.revenue.total_revenue || 0,
+                subsections: [] as any[]
+              };
+              
+              // Sales Revenue subsection
+              if (reportData.revenue.sales_revenue && reportData.revenue.sales_revenue.items && reportData.revenue.sales_revenue.items.length > 0) {
+                revenueSection.subsections.push({
+                  name: 'Sales Revenue',
+                  items: reportData.revenue.sales_revenue.items.map((item: any) => ({
+                    name: `${item.code || ''} - ${item.name || ''}`,
+                    amount: item.amount || 0,
+                    accountCode: item.code
+                  })),
+                  total: reportData.revenue.sales_revenue.subtotal || 0
+                });
+              }
+              
+              // Service Revenue subsection
+              if (reportData.revenue.service_revenue && reportData.revenue.service_revenue.items && reportData.revenue.service_revenue.items.length > 0) {
+                revenueSection.subsections.push({
+                  name: 'Service Revenue',
+                  items: reportData.revenue.service_revenue.items.map((item: any) => ({
+                    name: `${item.code || ''} - ${item.name || ''}`,
+                    amount: item.amount || 0,
+                    accountCode: item.code
+                  })),
+                  total: reportData.revenue.service_revenue.subtotal || 0
+                });
+              }
+              
+              // Other Revenue subsection
+              if (reportData.revenue.other_revenue && reportData.revenue.other_revenue.items && reportData.revenue.other_revenue.items.length > 0) {
+                revenueSection.subsections.push({
+                  name: 'Other Revenue',
+                  items: reportData.revenue.other_revenue.items.map((item: any) => ({
+                    name: `${item.code || ''} - ${item.name || ''}`,
+                    amount: item.amount || 0,
+                    accountCode: item.code
+                  })),
+                  total: reportData.revenue.other_revenue.subtotal || 0
+                });
+              }
+              
+              // If no subsections but has total, create simple revenue items
+              if (revenueSection.subsections.length === 0 && reportData.revenue.total_revenue > 0) {
+                revenueSection.items.push({
+                  name: 'Total Revenue',
+                  amount: reportData.revenue.total_revenue,
+                  accountCode: '4000' // Generic revenue account
+                });
+              }
+              
+              sections.push(revenueSection);
+            }
+            
+            // Cost of Goods Sold section - handle enhanced structure
+            if (reportData.cost_of_goods_sold) {
+              const cogsSection = {
+                name: 'COST OF GOODS SOLD',
+                items: [] as any[],
+                total: reportData.cost_of_goods_sold.total_cogs || 0,
+                subsections: [] as any[]
+              };
+              
+              // Add subsections for detailed COGS breakdown
+              if (reportData.cost_of_goods_sold.direct_materials?.items?.length > 0) {
+                cogsSection.subsections.push({
+                  name: 'Direct Materials',
+                  items: reportData.cost_of_goods_sold.direct_materials.items.map((item: any) => ({
+                    name: `${item.code || ''} - ${item.name || ''}`,
+                    amount: item.amount || 0,
+                    accountCode: item.code
+                  })),
+                  total: reportData.cost_of_goods_sold.direct_materials.subtotal || 0
+                });
+              }
+              
+              if (reportData.cost_of_goods_sold.other_cogs?.items?.length > 0) {
+                cogsSection.subsections.push({
+                  name: 'Other COGS',
+                  items: reportData.cost_of_goods_sold.other_cogs.items.map((item: any) => ({
+                    name: `${item.code || ''} - ${item.name || ''}`,
+                    amount: item.amount || 0,
+                    accountCode: item.code
+                  })),
+                  total: reportData.cost_of_goods_sold.other_cogs.subtotal || 0
+                });
+              }
+              
+              // If no subsections but has total, create simple COGS items
+              if (cogsSection.subsections.length === 0 && reportData.cost_of_goods_sold.total_cogs > 0) {
+                cogsSection.items.push({
+                  name: 'Cost of Goods Sold',
+                  amount: reportData.cost_of_goods_sold.total_cogs,
+                  accountCode: '5101' // Standard COGS account
+                });
+              }
+              
+              // Only add COGS section if there's data or total amount
+              if (cogsSection.subsections.length > 0 || cogsSection.items.length > 0 || cogsSection.total !== 0) {
+                sections.push(cogsSection);
+              }
+            }
+            
+            // Gross Profit section with margin
+            if (reportData.gross_profit !== undefined) {
+              sections.push({
+                name: 'GROSS PROFIT',
+                items: [
+                  { name: 'Gross Profit', amount: reportData.gross_profit || 0 },
+                  { name: 'Gross Profit Margin', amount: reportData.gross_profit_margin || 0, isPercentage: true }
+                ],
+                total: reportData.gross_profit || 0,
+                isCalculated: true
+              });
+            }
+            
+            // Operating Expenses section - handle enhanced structure
+            if (reportData.operating_expenses) {
+              const opexSection = {
+                name: 'OPERATING EXPENSES',
+                items: [] as any[],
+                total: reportData.operating_expenses.total_opex || 0,
+                subsections: [] as any[]
+              };
+              
+              // Add subsections for detailed operating expenses breakdown
+              if (reportData.operating_expenses.administrative?.items?.length > 0) {
+                opexSection.subsections.push({
+                  name: 'Administrative Expenses',
+                  items: reportData.operating_expenses.administrative.items.map((item: any) => ({
+                    name: `${item.code || ''} - ${item.name || ''}`,
+                    amount: item.amount || 0,
+                    accountCode: item.code
+                  })),
+                  total: reportData.operating_expenses.administrative.subtotal || 0
+                });
+              }
+              
+              if (reportData.operating_expenses.selling_marketing?.items?.length > 0) {
+                opexSection.subsections.push({
+                  name: 'Selling & Marketing Expenses',
+                  items: reportData.operating_expenses.selling_marketing.items.map((item: any) => ({
+                    name: `${item.code || ''} - ${item.name || ''}`,
+                    amount: item.amount || 0,
+                    accountCode: item.code
+                  })),
+                  total: reportData.operating_expenses.selling_marketing.subtotal || 0
+                });
+              }
+              
+              if (reportData.operating_expenses.general?.items?.length > 0) {
+                opexSection.subsections.push({
+                  name: 'General Expenses',
+                  items: reportData.operating_expenses.general.items.map((item: any) => ({
+                    name: `${item.code || ''} - ${item.name || ''}`,
+                    amount: item.amount || 0,
+                    accountCode: item.code
+                  })),
+                  total: reportData.operating_expenses.general.subtotal || 0
+                });
+              }
+              
+              // If no subsections but has total, create simple operating expense items
+              if (opexSection.subsections.length === 0 && reportData.operating_expenses.total_opex > 0) {
+                opexSection.items.push({
+                  name: 'Operating Expenses',
+                  amount: reportData.operating_expenses.total_opex,
+                  accountCode: '6000' // Generic expense account
+                });
+              }
+              
+              // Only add section if there's data or total amount
+              if (opexSection.subsections.length > 0 || opexSection.items.length > 0 || opexSection.total !== 0) {
+                sections.push(opexSection);
+              }
+            }
+            
+            // Operating Income and EBITDA section
+            if (reportData.operating_income !== undefined) {
+              sections.push({
+                name: 'OPERATING PERFORMANCE',
+                items: [
+                  { name: 'Operating Income (EBIT)', amount: reportData.operating_income || 0 },
+                  { name: 'Operating Margin', amount: reportData.operating_margin || 0, isPercentage: true },
+                  { name: 'EBITDA', amount: reportData.ebitda || 0 },
+                  { name: 'EBITDA Margin', amount: reportData.ebitda_margin || 0, isPercentage: true }
+                ],
+                total: reportData.operating_income || 0,
+                isCalculated: true
+              });
+            }
+            
+            // Net Income section with comprehensive metrics
+            sections.push({
+              name: 'NET INCOME',
+              items: [
+                { name: 'Income Before Tax', amount: reportData.income_before_tax || 0 },
+                { name: 'Tax Expense', amount: reportData.tax_expense || 0 },
+                { name: 'Net Income', amount: reportData.net_income || 0 },
+                { name: 'Net Income Margin', amount: reportData.net_income_margin || 0, isPercentage: true }
+              ],
+              total: reportData.net_income || 0,
+              isCalculated: true
+            });
+
+            // Extract period from enhanced data
+            let period = `${new Date().toLocaleDateString('id-ID')}`;
+            if (reportData.start_date && reportData.end_date) {
+              const startDate = new Date(reportData.start_date);
+              const endDate = new Date(reportData.end_date);
+              period = `${startDate.toLocaleDateString('id-ID')} - ${endDate.toLocaleDateString('id-ID')}`;
+            }
+
+            const hasData = sections.some(section => section.items && section.items.length > 0 && section.total !== 0);
+            
+            return {
+              title: 'Enhanced Profit and Loss Statement',
+              period,
+              sections,
+              hasData,
+              company: reportData.company,
+              financialMetrics: {
+                grossProfit: reportData.gross_profit || 0,
+                grossProfitMargin: reportData.gross_profit_margin || 0,
+                operatingIncome: reportData.operating_income || 0,
+                operatingMargin: reportData.operating_margin || 0,
+                ebitda: reportData.ebitda || 0,
+                ebitdaMargin: reportData.ebitda_margin || 0,
+                netIncome: reportData.net_income || 0,
+                netIncomeMargin: reportData.net_income_margin || 0
+              },
+              enhanced: true,
+              message: !hasData ? 'No P&L relevant transactions found for this period. The journal entries contain mainly asset purchases, payments, and deposits which affect the Balance Sheet rather than P&L. To generate meaningful P&L data, record sales transactions, operating expenses, and cost of goods sold.' : undefined
+            };
+          }
+          
+          // Fallback: Handle legacy ProfitLossStatement structure
+          else if (reportData.report_header || reportData.revenue || reportData.total_revenue !== undefined) {
             const sections = [];
             
             // Revenue section - handle array format from FinancialReportService
@@ -453,7 +622,8 @@ const ReportsPage: React.FC = () => {
               title: reportData.report_header?.report_title || 'Profit and Loss Statement',
               period,
               sections,
-              hasData: sections.some(section => section.items && section.items.length > 0)
+              hasData: sections.some(section => section.items && section.items.length > 0),
+              enhanced: false
             };
           }
           
@@ -638,6 +808,162 @@ const ReportsPage: React.FC = () => {
             message: (!purchasesByPeriod || purchasesByPeriod.length === 0) ? 'No purchase data available for the selected period' : undefined
           };
 
+        case 'journal-entry-analysis':
+          // Handle Journal Entry Analysis data structure from reportService.generateJournalEntryAnalysis
+          const journalEntries = reportData.journal_entries || reportData.entries || reportData.data || [];
+          const totalEntries = reportData.total_entries || reportData.total || journalEntries.length || 0;
+          
+          console.log('Processing journal entry analysis data:', reportData);
+          console.log('Journal entries array:', journalEntries);
+          
+          if (Array.isArray(journalEntries) && journalEntries.length > 0) {
+            // Group entries by date for better organization
+            const groupedEntries = journalEntries.reduce((acc: any, entry: any) => {
+              // Use entry_date from journal entry model
+              const date = entry.entry_date || entry.transaction_date || entry.date || entry.created_at || 'Unknown Date';
+              let dateKey: string;
+              try {
+                dateKey = new Date(date).toISOString().split('T')[0];
+              } catch {
+                dateKey = 'Invalid Date';
+              }
+              
+              if (!acc[dateKey]) {
+                acc[dateKey] = [];
+              }
+              acc[dateKey].push(entry);
+              return acc;
+            }, {});
+            
+            const sections = Object.keys(groupedEntries)
+              .sort((a, b) => new Date(b).getTime() - new Date(a).getTime()) // Sort by date descending
+              .slice(0, 10) // Show only latest 10 dates for preview
+              .map(dateKey => {
+                const entries = groupedEntries[dateKey];
+                const dateFormatted = dateKey === 'Invalid Date' ? 'Invalid Date' : new Date(dateKey).toLocaleDateString('id-ID');
+                
+                return {
+                  name: `Journal Entries - ${dateFormatted}`,
+                  items: entries.map((entry: any) => {
+                    // Use journal entry model fields
+                    const debitAmount = entry.total_debit || entry.debit_amount || entry.debit || 0;
+                    const creditAmount = entry.total_credit || entry.credit_amount || entry.credit || 0;
+                    
+                    // Format the entry display name more professionally
+                    const referenceCode = entry.code || entry.reference || `JE-${entry.id}`;
+                    const description = entry.description || 'No description';
+                    const referenceType = entry.reference_type ? ` [${entry.reference_type}]` : '';
+                    
+                    return {
+                      name: `${referenceCode}${referenceType}`,
+                      description: description,
+                      amount: debitAmount, // Show debit amount as primary amount
+                      debit: debitAmount,
+                      credit: creditAmount,
+                      reference: referenceCode,
+                      date: entry.entry_date || entry.transaction_date || entry.date,
+                      status: entry.status || 'DRAFT',
+                      referenceType: entry.reference_type || 'MANUAL',
+                      isBalanced: entry.is_balanced || false,
+                      accountName: entry.account?.name || 'General',
+                      accountCode: entry.account?.code || ''
+                    };
+                  }),
+                  total: entries.reduce((sum: number, entry: any) => {
+                    const debit = entry.total_debit || entry.debit_amount || entry.debit || 0;
+                    return sum + debit; // Sum total debit amounts
+                  }, 0),
+                  creditTotal: entries.reduce((sum: number, entry: any) => {
+                    const credit = entry.total_credit || entry.credit_amount || entry.credit || 0;
+                    return sum + credit; // Sum total credit amounts
+                  }, 0),
+                  entryCount: entries.length,
+                  balancedCount: entries.filter((entry: any) => entry.is_balanced).length
+                };
+              });
+            
+            // Calculate totals across all sections
+            const totalDebit = sections.reduce((sum: number, section: any) => sum + (section.total || 0), 0);
+            const totalCredit = sections.reduce((sum: number, section: any) => sum + (section.creditTotal || 0), 0);
+            const totalBalancedEntries = sections.reduce((sum: number, section: any) => sum + (section.balancedCount || 0), 0);
+            
+            return {
+              title: 'Journal Entry Analysis Report',
+              period: `${new Date(reportData.start_date || Date.now()).toLocaleDateString('id-ID')} - ${new Date(reportData.end_date || Date.now()).toLocaleDateString('id-ID')}`,
+              sections,
+              hasData: sections.length > 0,
+              totalEntries,
+              summary: `Analysis of ${totalEntries} journal entries across ${sections.length} transaction dates`,
+              financialSummary: {
+                totalDebit: totalDebit,
+                totalCredit: totalCredit,
+                balancedEntries: totalBalancedEntries,
+                unbalancedEntries: totalEntries - totalBalancedEntries,
+                balanceAccuracy: totalEntries > 0 ? (totalBalancedEntries / totalEntries * 100).toFixed(1) : '0'
+              },
+              reportMetadata: {
+                generatedAt: new Date().toISOString(),
+                dateRange: {
+                  start: reportData.start_date,
+                  end: reportData.end_date
+                },
+                entriesAnalyzed: totalEntries,
+                periodsIncluded: sections.length
+              }
+            };
+          }
+          
+          // Handle case where journal_entries might be in a different structure
+          if (reportData.accounts && Array.isArray(reportData.accounts)) {
+            // Similar to general ledger but focused on transactions
+            const sections = reportData.accounts
+              .filter((account: any) => account.transactions && account.transactions.length > 0)
+              .slice(0, 5) // Limit for preview
+              .map((account: any) => ({
+                name: `${account.account_code || account.code} - ${account.account_name || account.name}`,
+                items: (account.transactions || []).map((txn: any) => ({
+                  name: `${txn.description || 'Transaction'} (Ref: ${txn.reference || 'N/A'})`,
+                  amount: (txn.debit_amount || txn.debit || 0) - (txn.credit_amount || txn.credit || 0),
+                  debit: txn.debit_amount || txn.debit || 0,
+                  credit: txn.credit_amount || txn.credit || 0,
+                  date: txn.date,
+                  reference: txn.reference || ''
+                })),
+                total: account.transactions.reduce((sum: number, txn: any) => {
+                  return sum + ((txn.debit_amount || txn.debit || 0) - (txn.credit_amount || txn.credit || 0));
+                }, 0)
+              }));
+            
+            return {
+              title: 'Journal Entry Analysis',
+              period: `${new Date(reportData.start_date || Date.now()).toLocaleDateString('id-ID')} - ${new Date(reportData.end_date || Date.now()).toLocaleDateString('id-ID')}`,
+              sections,
+              hasData: sections.length > 0,
+              summary: `Showing transactions for ${sections.length} accounts`
+            };
+          }
+          
+          // If no valid data structure found, return empty state with more debugging info
+          console.log('No valid journal entries found. Raw reportData:', reportData);
+          
+          return {
+            title: 'Journal Entry Analysis',
+            period: reportData.start_date && reportData.end_date ? 
+              `${new Date(reportData.start_date).toLocaleDateString('id-ID')} - ${new Date(reportData.end_date).toLocaleDateString('id-ID')}` :
+              `${new Date().toLocaleDateString('id-ID')}`,
+            sections: [],
+            hasData: false,
+            message: `No journal entries found for the selected period. Data received: ${Array.isArray(journalEntries) ? journalEntries.length : 'not an array'} entries. Please check if there are any posted transactions recorded during this period.`,
+            totalEntries: totalEntries,
+            debug: {
+              hasJournalEntries: !!journalEntries,
+              isArray: Array.isArray(journalEntries),
+              length: Array.isArray(journalEntries) ? journalEntries.length : 'N/A',
+              totalEntries,
+              dataKeys: Object.keys(reportData || {})
+            }
+          };
+
         default:
           throw new Error(`Unsupported report type: ${report.id}`);
       }
@@ -696,6 +1022,17 @@ const ReportsPage: React.FC = () => {
         end_date: today.toISOString().split('T')[0],
         format: 'pdf'
       });
+    } else if (report.id === 'journal-entry-analysis') {
+      // Set default start date to first day of current month and end date to today
+      const today = new Date();
+      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      setReportParams({
+        start_date: firstDayOfMonth.toISOString().split('T')[0],
+        end_date: today.toISOString().split('T')[0],
+        status: 'POSTED', // Default to show posted entries
+        reference_type: 'ALL',
+        format: 'pdf'
+      });
     }
     
     onOpen();
@@ -715,7 +1052,7 @@ const ReportsPage: React.FC = () => {
       let result;
       
       // Validate required parameters
-      if (['profit-loss', 'cash-flow', 'sales-summary', 'purchase-summary', 'general-ledger'].includes(selectedReport.id)) {
+      if (['profit-loss', 'cash-flow', 'sales-summary', 'purchase-summary', 'general-ledger', 'journal-entry-analysis'].includes(selectedReport.id)) {
         if (!reportParams.start_date || !reportParams.end_date) {
           throw new Error('Start date and end date are required for this report');
         }
@@ -794,26 +1131,6 @@ const ReportsPage: React.FC = () => {
               Financial Reports
             </Heading>
             
-            {/* Journal Drilldown Feature Banner */}
-            <Alert 
-              status="info" 
-              variant="left-accent" 
-              borderRadius="md"
-              bg={useColorModeValue('blue.50', 'blue.900')}
-              borderColor={useColorModeValue('blue.200', 'blue.600')}
-            >
-              <AlertIcon color={useColorModeValue('blue.500', 'blue.300')} />
-              <Box>
-                <AlertTitle fontSize="sm" mb={1}>
-                  🆕 New Feature: Journal Entry Drill-down! 
-                </AlertTitle>
-                <Text fontSize="sm">
-                  🔍 Try the <strong>"Try Journal Drilldown"</strong> button on financial reports below, or 
-                  📊 visit <strong>Enhanced Reports</strong> in the sidebar for full interactive experience.
-                  Click any line item in reports to see underlying journal entries!
-                </Text>
-              </Box>
-            </Alert>
           </VStack>
           
           {/* Financial Reports Grid */}
@@ -884,45 +1201,6 @@ const ReportsPage: React.FC = () => {
                           Generate
                         </Button>
                       </HStack>
-                      
-                      {/* Demo Journal Drilldown Button */}
-                      {report.type === 'FINANCIAL' && (
-                        <HStack spacing={2} width="full" mt={2} pt={2} borderTop="1px" borderColor={borderColor}>
-                          <Text fontSize="xs" color={descriptionColor} flex="1">
-                            📊 New Feature:
-                          </Text>
-                          <Button
-                            colorScheme="purple"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              // Demo journal drilldown dengan data sample
-                              const today = new Date();
-                              const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-                              
-                              if (report.id === 'balance-sheet' || report.id === 'trial-balance') {
-                                journalDrilldown.drillDownBalanceSheet(
-                                  `Demo ${report.name}`,
-                                  ['1000', '2000', '3000'], // Sample account codes
-                                  [],
-                                  today.toISOString().split('T')[0]
-                                );
-                              } else {
-                                journalDrilldown.drillDownProfitLoss(
-                                  `Demo ${report.name}`,
-                                  ['4000', '5000', '6000'], // Sample account codes
-                                  [],
-                                  firstDayOfMonth.toISOString().split('T')[0],
-                                  today.toISOString().split('T')[0]
-                                );
-                              }
-                            }}
-                            leftIcon={<FiSearch />}
-                          >
-                            Try Journal Drilldown
-                          </Button>
-                        </HStack>
-                      )}
                     </VStack>
                   </VStack>
                 </CardBody>
@@ -1055,6 +1333,58 @@ const ReportsPage: React.FC = () => {
                   </>
                 )}
                 
+                {/* Journal Entry Analysis Parameters */}
+                {selectedReport.id === 'journal-entry-analysis' && (
+                  <>
+                    <FormControl isRequired>
+                      <FormLabel>Start Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="start_date" 
+                        value={reportParams.start_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                    <FormControl isRequired>
+                      <FormLabel>End Date</FormLabel>
+                      <Input 
+                        type="date" 
+                        name="end_date" 
+                        value={reportParams.end_date || ''} 
+                        onChange={handleInputChange} 
+                      />
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Status Filter</FormLabel>
+                      <Select 
+                        name="status" 
+                        value={reportParams.status || 'ALL'} 
+                        onChange={handleInputChange}
+                      >
+                        <option value="ALL">All Status</option>
+                        <option value="DRAFT">Draft</option>
+                        <option value="POSTED">Posted</option>
+                        <option value="REVERSED">Reversed</option>
+                      </Select>
+                    </FormControl>
+                    <FormControl>
+                      <FormLabel>Reference Type</FormLabel>
+                      <Select 
+                        name="reference_type" 
+                        value={reportParams.reference_type || 'ALL'} 
+                        onChange={handleInputChange}
+                      >
+                        <option value="ALL">All Types</option>
+                        <option value="PURCHASE">Purchase</option>
+                        <option value="SALE">Sale</option>
+                        <option value="PAYMENT">Payment</option>
+                        <option value="CASH_BANK">Cash/Bank</option>
+                        <option value="MANUAL">Manual</option>
+                      </Select>
+                    </FormControl>
+                  </>
+                )}
+                
                 {/* Format selection for all reports */}
                 <FormControl>
                   <FormLabel>Format</FormLabel>
@@ -1157,65 +1487,81 @@ const ReportsPage: React.FC = () => {
                         {section.name}
                       </Heading>
                       <VStack spacing={2} align="stretch">
+                        {/* Header row for professional layout */}
+                        <HStack py={2} px={4} fontSize="xs" color={summaryTextColor}>
+                          <Text flex={2}>Reference</Text>
+                          <Text flex={3}>Description</Text>
+                          <Text flex={1}>Status</Text>
+                          <Text flex={1} textAlign="right">Debit</Text>
+                          <Text flex={1} textAlign="right">Credit</Text>
+                        </HStack>
                         {section.items?.map((item: any, itemIndex: number) => (
-                          <HStack key={itemIndex} justify="space-between" py={2} px={4} 
+                          <HStack key={itemIndex} py={2} px={4} 
                                  bg={itemIndex % 2 === 0 ? evenRowBg : oddRowBg} 
                                  borderRadius="md"
-                                 _hover={{ bg: useColorModeValue('blue.50', 'blue.900') }}
+                                 _hover={{ bg: rowHoverBg }}
                                  transition="background 0.2s">
-                            <HStack spacing={3} flex={1}>
-                              <Text fontSize="sm" color={textColor} flex={1}>
-                                {item.name}
-                              </Text>
-                              <Text fontSize="sm" fontWeight="medium" 
-                                    color={item.amount >= 0 ? "black" : "red.500"} minW="120px" textAlign="right">
-                                {formatCurrency(item.amount)}
-                              </Text>
-                            </HStack>
-                            <Box>
-                              <JournalDrilldownButton
-                                onClick={() => {
-                                  // Extract account code from item name if available (e.g., "1000 - Cash" or "4000-Revenue")
-                                  const accountCodeMatch = item.name.match(/^([0-9A-Z-]+)\s*[-\s]/);
-                                  const accountCode = accountCodeMatch ? accountCodeMatch[1] : undefined;
-                                  handleJournalDrilldown(item.name, accountCode, item.amount);
-                                }}
-                                size="xs"
-                                label={`View journal entries for ${item.name}`}
-                                variant="search"
-                              />
-                            </Box>
+                            <Text fontSize="sm" color={textColor} flex={2}>
+                              {item.name}{item.accountCode ? ` (${item.accountCode})` : ''}
+                            </Text>
+                            <Text fontSize="sm" color={summaryTextColor} flex={3}>
+                              {item.description}
+                            </Text>
+                            <Text fontSize="sm" color={textColor} flex={1}>
+                              {item.status}
+                            </Text>
+                            <Text fontSize="sm" fontWeight="medium" color="black" minW="120px" textAlign="right" flex={1}>
+                              {formatCurrency(item.debit || 0)}
+                            </Text>
+                            <Text fontSize="sm" fontWeight="medium" color="black" minW="120px" textAlign="right" flex={1}>
+                              {formatCurrency(item.credit || 0)}
+                            </Text>
                           </HStack>
                         ))}
                         
-                        {/* Section Total */}
+                        {/* Section Totals */}
                         <HStack justify="space-between" py={3} px={4} 
                                bg={sectionTotalBg} borderRadius="md" 
                                borderTop="2px" borderColor={sectionTotalBorderColor} mt={2}>
-                          <HStack spacing={3} flex={1}>
-                            <Text fontSize="md" fontWeight="bold" color={sectionTotalTextColor} flex={1}>
-                              Total {section.name}
-                            </Text>
-                            <Text fontSize="md" fontWeight="bold" 
-                                  color={section.total >= 0 ? sectionTotalTextColor : "red.500"} minW="120px" textAlign="right">
-                              {formatCurrency(section.total)}
-                            </Text>
-                          </HStack>
-                          <Box>
-                            <JournalDrilldownButton
-                              onClick={() => {
-                                // For section totals, we use the section name for drill-down
-                                handleJournalDrilldown(`Total ${section.name}`, undefined, section.total);
-                              }}
-                              size="xs"
-                              label={`View journal entries for Total ${section.name}`}
-                              variant="eye"
-                            />
-                          </Box>
+                          <Text fontSize="md" fontWeight="bold" color={sectionTotalTextColor} flex={6}>
+                            Total {section.name} (Entries: {section.entryCount}{section.balancedCount !== undefined ? `, Balanced: ${section.balancedCount}` : ''})
+                          </Text>
+                          <Text fontSize="md" fontWeight="bold" color={sectionTotalTextColor} minW="120px" textAlign="right" flex={1}>
+                            {formatCurrency(section.total || 0)}
+                          </Text>
+                          <Text fontSize="md" fontWeight="bold" color={sectionTotalTextColor} minW="120px" textAlign="right" flex={1}>
+                            {formatCurrency(section.creditTotal || 0)}
+                          </Text>
                         </HStack>
                       </VStack>
                     </Box>
                   ))}
+                  
+                  {/* Overall Summary for Journal Entry Analysis */}
+                  {previewData.financialSummary && (
+                    <Box bg={summaryBg} p={4} borderRadius="md" mt={2}>
+                      <HStack justify="space-between">
+                        <Text fontSize="sm" color={summaryTextColor}>Total Debit</Text>
+                        <Text fontSize="sm" fontWeight="bold">{formatCurrency(previewData.financialSummary.totalDebit || 0)}</Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text fontSize="sm" color={summaryTextColor}>Total Credit</Text>
+                        <Text fontSize="sm" fontWeight="bold">{formatCurrency(previewData.financialSummary.totalCredit || 0)}</Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text fontSize="sm" color={summaryTextColor}>Balanced Entries</Text>
+                        <Text fontSize="sm" fontWeight="bold">{previewData.financialSummary.balancedEntries || 0}</Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text fontSize="sm" color={summaryTextColor}>Unbalanced Entries</Text>
+                        <Text fontSize="sm" fontWeight="bold">{previewData.financialSummary.unbalancedEntries || 0}</Text>
+                      </HStack>
+                      <HStack justify="space-between">
+                        <Text fontSize="sm" color={summaryTextColor}>Balance Accuracy</Text>
+                        <Text fontSize="sm" fontWeight="bold">{previewData.financialSummary.balanceAccuracy || '0'}%</Text>
+                      </HStack>
+                    </Box>
+                  )}
                   
                   {/* Report Summary */}
                   <Box bg={summaryBg} p={4} borderRadius="md" mt={4}>
@@ -1255,16 +1601,6 @@ const ReportsPage: React.FC = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
-
-      {/* Journal Drilldown Modal */}
-      {journalDrilldown.drilldownRequest && (
-        <JournalDrilldownModal
-          isOpen={journalDrilldown.isOpen}
-          onClose={journalDrilldown.closeDrilldown}
-          drilldownRequest={journalDrilldown.drilldownRequest}
-          title={journalDrilldown.title}
-        />
-      )}
     </SimpleLayout>
   );
 };

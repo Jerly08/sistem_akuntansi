@@ -30,7 +30,7 @@ func NewFixCashBankController(db *gorm.DB, cashBankService *services.CashBankSer
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} gin.H
+// @Success 200 {object} models.APIResponse
 // @Router /api/admin/fix-cashbank-gl-links [post]
 func (c *FixCashBankController) FixCashBankGLLinks(ctx *gin.Context) {
 	// Get all cash banks
@@ -174,7 +174,7 @@ func (c *FixCashBankController) FixCashBankGLLinks(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} gin.H
+// @Success 200 {object} models.APIResponse
 // @Router /api/admin/check-cashbank-gl-links [get]
 func (c *FixCashBankController) CheckCashBankGLLinks(ctx *gin.Context) {
 	type AccountStatus struct {

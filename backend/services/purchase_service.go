@@ -152,6 +152,14 @@ func (s *PurchaseService) CreatePurchase(request models.PurchaseCreateRequest, u
 			fmt.Printf("Warning: Failed to create journal entries for credit purchase %d: %v\n", createdPurchase.ID, err)
 			// Don't fail the purchase creation, but log the issue
 		}
+		
+		// Also create payment tracking records for immediate credit purchases
+		fmt.Printf("Creating payment tracking records for immediate credit purchase %s\n", purchase.Code)
+		err = s.createPaymentTrackingForCreditPurchase(createdPurchase, userID)
+		if err != nil {
+			fmt.Printf("Warning: Failed to create payment tracking for credit purchase %d: %v\n", createdPurchase.ID, err)
+			// Don't fail the purchase creation, but log the issue
+		}
 	}
 
 	return s.GetPurchaseByID(createdPurchase.ID)
@@ -275,6 +283,16 @@ func (s *PurchaseService) SubmitForApproval(id uint, userID uint) error {
 		// No approval required, move directly to approved
 		purchase.Status = models.PurchaseStatusApproved
 		purchase.ApprovalStatus = models.PurchaseApprovalNotRequired
+		
+		// CRITICAL FIX: Initialize payment amounts for CREDIT purchases when approved
+		if purchase.PaymentMethod == models.PurchasePaymentCredit {
+			// Set outstanding amount to total amount (nothing paid yet)
+			purchase.OutstandingAmount = purchase.TotalAmount
+			purchase.PaidAmount = 0
+			fmt.Printf("💳 Initialized CREDIT purchase payment tracking (no approval): Total=%.2f, Outstanding=%.2f, Paid=%.2f\n", 
+				purchase.TotalAmount, purchase.OutstandingAmount, purchase.PaidAmount)
+		}
+		
 		_, err = s.purchaseRepo.Update(purchase)
 		return err
 	}
@@ -504,6 +522,15 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 	purchase.ApprovedBy = &userID
 	purchase.UpdatedAt = now
 
+	// CRITICAL FIX: Initialize payment amounts for CREDIT purchases when approved
+	if purchase.PaymentMethod == models.PurchasePaymentCredit {
+		// Set outstanding amount to total amount (nothing paid yet)
+		purchase.OutstandingAmount = purchase.TotalAmount
+		purchase.PaidAmount = 0
+		fmt.Printf("💳 Initialized CREDIT purchase payment tracking: Total=%.2f, Outstanding=%.2f, Paid=%.2f\n", 
+			purchase.TotalAmount, purchase.OutstandingAmount, purchase.PaidAmount)
+	}
+
 	_, err = s.purchaseRepo.Update(purchase)
 	if err != nil {
 		return nil, err
@@ -537,6 +564,16 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 		}
 	} else {
 		fmt.Printf("Journal entries already exist for purchase %d, skipping creation\n", purchaseID)
+	}
+
+	// For credit purchases, create payment tracking records to manage accounts payable
+	if purchase.PaymentMethod == models.PurchasePaymentCredit {
+		fmt.Printf("Creating payment tracking records for credit purchase %d\n", purchaseID)
+		err = s.createPaymentTrackingForCreditPurchase(purchase, userID)
+		if err != nil {
+			fmt.Printf("Warning: Failed to create payment tracking for credit purchase %d: %v\n", purchaseID, err)
+			// Don't fail the approval process, but log the issue
+		}
 	}
 
 	result["message"] = "Purchase approved successfully"
@@ -1016,6 +1053,228 @@ func (s *PurchaseService) purchaseHasJournalEntries(purchaseID uint) (bool, erro
 	return existingEntry != nil, nil
 }
 
+// Purchase Payment Integration Methods
+
+// CreateIntegratedPayment creates a payment in both Purchase and Payment Management systems
+func (s *PurchaseService) CreateIntegratedPayment(
+	purchaseID uint,
+	amount float64,
+	date time.Time,
+	method string,
+	cashBankID *uint,
+	reference string,
+	notes string,
+	userID uint,
+) (map[string]interface{}, error) {
+	// Start transaction
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Get purchase with vendor details
+	purchase, err := s.purchaseRepo.FindByID(purchaseID)
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("purchase not found: %v", err)
+	}
+
+	// Validate purchase can receive payment
+	if purchase.Status != models.PurchaseStatusApproved {
+		tx.Rollback()
+		return nil, errors.New("purchase must be approved to receive payment")
+	}
+
+	if purchase.PaymentMethod != "CREDIT" {
+		tx.Rollback()
+		return nil, errors.New("only credit purchases can receive payments")
+	}
+
+	if purchase.OutstandingAmount <= 0 {
+		tx.Rollback()
+		return nil, errors.New("purchase is already fully paid")
+	}
+
+	if amount <= 0 {
+		tx.Rollback()
+		return nil, errors.New("payment amount must be greater than zero")
+	}
+
+	if amount > purchase.OutstandingAmount {
+		tx.Rollback()
+		return nil, fmt.Errorf("payment amount (%.2f) exceeds outstanding amount (%.2f)", amount, purchase.OutstandingAmount)
+	}
+
+	// Validate cash/bank account is provided
+	if cashBankID == nil {
+		tx.Rollback()
+		return nil, errors.New("cash/bank account is required for payment")
+	}
+
+	// Create payment record directly in Payment Management
+	// Generate payment code
+	paymentCode := fmt.Sprintf("PAY/%04d/%02d/%04d", date.Year(), date.Month(), time.Now().Unix()%9999)
+	
+	// Create payment record
+	payment := &models.Payment{
+		Code:      paymentCode,
+		ContactID: purchase.VendorID,
+		UserID:    userID,
+		Date:      date,
+		Amount:    amount,
+		Method:    method,
+		Reference: reference,
+		Status:    models.PaymentStatusCompleted,
+		Notes:     fmt.Sprintf("Payment for purchase %s. %s", purchase.Code, notes),
+	}
+	
+	if err := tx.Create(payment).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to create payment: %v", err)
+	}
+	
+	// Create payment allocation
+	paymentAllocation := &models.PaymentAllocation{
+		PaymentID:       payment.ID,
+		BillID:          &purchaseID,
+		AllocatedAmount: amount,
+	}
+	
+	if err := tx.Create(paymentAllocation).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to create payment allocation: %v", err)
+	}
+
+	// Create cross-reference record in purchase_payments
+	purchasePayment := &models.PurchasePayment{
+		PurchaseID:     purchaseID,
+		PaymentNumber:  payment.Code,
+		Date:           date,
+		Amount:         amount,
+		Method:         method,
+		Reference:      reference,
+		Notes:          notes,
+		CashBankID:     cashBankID,
+		UserID:         userID,
+		PaymentID:      &payment.ID, // Cross-reference to payments table
+	}
+
+	// Save purchase payment
+	if err := tx.Create(purchasePayment).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to create purchase payment record: %v", err)
+	}
+
+	// Update purchase payment tracking
+	purchase.PaidAmount += amount
+	purchase.OutstandingAmount -= amount
+
+	// Update purchase status if fully paid
+	if purchase.OutstandingAmount <= 0.01 { // Allow for rounding errors
+		purchase.Status = models.PurchaseStatusPaid
+		purchase.OutstandingAmount = 0 // Ensure exact zero
+	}
+
+	// Save updated purchase
+	if err := tx.Save(purchase).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to update purchase: %v", err)
+	}
+
+	// Update cash/bank balance (decrease for payment OUT)
+	if cashBankID != nil {
+		var cashBank models.CashBank
+		if err := tx.First(&cashBank, *cashBankID).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("cash/bank account not found: %v", err)
+		}
+
+		// Check sufficient balance for outgoing payment
+		if cashBank.Balance < amount {
+			tx.Rollback()
+			return nil, fmt.Errorf("insufficient balance. Available: %.2f, Required: %.2f", cashBank.Balance, amount)
+		}
+
+		// Decrease cash/bank balance for payment OUT
+		cashBank.Balance -= amount
+		if err := tx.Save(&cashBank).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to update cash/bank balance: %v", err)
+		}
+
+		// Create cash/bank transaction record
+		cashBankTransaction := &models.CashBankTransaction{
+			CashBankID:      *cashBankID,
+			ReferenceType:   "PAYMENT",
+			ReferenceID:     payment.ID,
+			Amount:          -amount, // Negative for outgoing payment
+			BalanceAfter:    cashBank.Balance,
+			TransactionDate: date,
+			Notes:           fmt.Sprintf("Vendor payment - %s", purchase.Code),
+		}
+
+		if err := tx.Create(cashBankTransaction).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to create cash/bank transaction: %v", err)
+		}
+	}
+
+	// Create journal entries for vendor payment
+	// Debit: Accounts Payable (reduce liability)
+	// Credit: Cash/Bank (reduce asset)
+	if cashBankID != nil {
+		if err := s.createVendorPaymentJournalEntries(tx, payment, purchase, *cashBankID, userID); err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to create journal entries: %v", err)
+		}
+	} else {
+		// Handle case where no cash/bank account specified
+		// This shouldn't happen in normal flow but we need to handle it gracefully
+		tx.Rollback()
+		return nil, errors.New("cash/bank account is required for payment")
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	// Return success response
+	return map[string]interface{}{
+		"payment": map[string]interface{}{
+			"id":     payment.ID,
+			"code":   payment.Code,
+			"amount": payment.Amount,
+			"status": payment.Status,
+		},
+		"updated_purchase": map[string]interface{}{
+			"id":                purchase.ID,
+			"status":            purchase.Status,
+			"paid_amount":       purchase.PaidAmount,
+			"outstanding_amount": purchase.OutstandingAmount,
+		},
+		"message": "Payment created successfully via Payment Management",
+	}, nil
+}
+
+// GetPurchasePayments returns all payments for a purchase
+func (s *PurchaseService) GetPurchasePayments(purchaseID uint) ([]models.PurchasePayment, error) {
+	var payments []models.PurchasePayment
+	err := s.db.Where("purchase_id = ?", purchaseID).
+		Preload("CashBank").
+		Preload("User").
+		Order("date DESC").
+		Find(&payments).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get purchase payments: %v", err)
+	}
+
+	return payments, nil
+}
+
 // isImmediatePayment checks if payment method requires immediate payment
 func isImmediatePayment(paymentMethod string) bool {
 	return paymentMethod == models.PurchasePaymentCash ||
@@ -1067,5 +1326,170 @@ func (s *PurchaseService) updateProductStockOnApproval(purchase *models.Purchase
 	}
 	
 	fmt.Printf("🎉 Stock update completed for purchase %s\n", purchase.Code)
+	return nil
+}
+
+// createPaymentTrackingForCreditPurchase creates payment tracking records for approved credit purchases
+func (s *PurchaseService) createPaymentTrackingForCreditPurchase(purchase *models.Purchase, userID uint) error {
+	// Check if payment tracking already exists for this purchase
+	existingPayments, err := s.GetPurchasePayments(purchase.ID)
+	if err != nil {
+		return fmt.Errorf("failed to check existing payments: %v", err)
+	}
+
+	// If payments already exist, don't create duplicates
+	if len(existingPayments) > 0 {
+		fmt.Printf("Payment tracking already exists for purchase %d, skipping creation\n", purchase.ID)
+		return nil
+	}
+
+	// Create a payable record in the Payment Management system
+	// This represents the debt that needs to be paid to the vendor
+	paymentCode := fmt.Sprintf("PAY-%s", purchase.Code[3:]) // Remove "PO/" prefix to shorten
+	
+	// Create payment record in payments table (status: PENDING for payables)
+	payment := &models.Payment{
+		Code:      paymentCode,
+		ContactID: purchase.VendorID,
+		UserID:    userID,
+		Date:      purchase.Date,
+		Amount:    purchase.TotalAmount, // Total amount to be paid
+		Method:    "PAYABLE",             // Special method for payables
+		Reference: fmt.Sprintf("Purchase %s - Due %s", purchase.Code, purchase.DueDate.Format("2006-01-02")),
+		Status:    models.PaymentStatusPending, // PENDING until actual payment is made
+		Notes:     fmt.Sprintf("Accounts payable for purchase %s. Due date: %s", purchase.Code, purchase.DueDate.Format("2006-01-02")),
+	}
+	
+	if err := s.db.Create(payment).Error; err != nil {
+		return fmt.Errorf("failed to create payment record: %v", err)
+	}
+	
+	// Create payment allocation linking to this purchase
+	paymentAllocation := &models.PaymentAllocation{
+		PaymentID:       payment.ID,
+		BillID:          &purchase.ID,
+		AllocatedAmount: purchase.TotalAmount,
+	}
+	
+	if err := s.db.Create(paymentAllocation).Error; err != nil {
+		return fmt.Errorf("failed to create payment allocation: %v", err)
+	}
+	
+	// Create cross-reference record in purchase_payments table
+	purchasePayment := &models.PurchasePayment{
+		PurchaseID:    purchase.ID,
+		PaymentNumber: payment.Code,
+		Date:          purchase.Date,
+		Amount:        purchase.TotalAmount,
+		Method:        "PAYABLE",
+		Reference:     fmt.Sprintf("Due %s", purchase.DueDate.Format("2006-01-02")),
+		Notes:         "Accounts payable - awaiting payment",
+		UserID:        userID,
+		PaymentID:     &payment.ID, // Cross-reference to payments table
+	}
+	
+	if err := s.db.Create(purchasePayment).Error; err != nil {
+		return fmt.Errorf("failed to create purchase payment record: %v", err)
+	}
+	
+	fmt.Printf("✅ Created payment tracking for credit purchase %s: Payment ID %d, Amount %.2f\n", 
+		purchase.Code, payment.ID, payment.Amount)
+	
+	return nil
+}
+
+// createVendorPaymentJournalEntries creates journal entries for vendor payment
+// Debit: Accounts Payable (reduce liability)
+// Credit: Cash/Bank (reduce asset)
+func (s *PurchaseService) createVendorPaymentJournalEntries(tx *gorm.DB, payment *models.Payment, purchase *models.Purchase, cashBankID uint, userID uint) error {
+	// Get accounts payable account (liability account)
+	var apAccount models.Account
+	if err := tx.Where("code = ?", "2101").First(&apAccount).Error; err != nil {
+		// Fallback to search by name
+		if err := tx.Where("LOWER(name) LIKE ?", "%utang%usaha%").First(&apAccount).Error; err != nil {
+			return fmt.Errorf("accounts payable account not found: %v", err)
+		}
+	}
+
+	// Get cash/bank account linked to GL
+	var cashBank models.CashBank
+	if err := tx.Preload("Account").First(&cashBank, cashBankID).Error; err != nil {
+		return fmt.Errorf("cash/bank account not found: %v", err)
+	}
+
+	if cashBank.AccountID == 0 {
+		return fmt.Errorf("cash/bank account %d is not linked to chart of accounts", cashBankID)
+	}
+
+	// Create journal entry
+	journalEntry := &models.JournalEntry{
+		EntryDate:       payment.Date,
+		Description:     fmt.Sprintf("Vendor Payment %s - %s", payment.Code, purchase.Code),
+		ReferenceType:   models.JournalRefPayment,
+		ReferenceID:     &payment.ID,
+		Reference:       payment.Code,
+		UserID:          userID,
+		Status:          models.JournalStatusPosted,
+		TotalDebit:      payment.Amount,
+		TotalCredit:     payment.Amount,
+		IsAutoGenerated: true,
+	}
+
+	// Journal lines
+	journalLines := []models.JournalLine{
+		// Debit Accounts Payable (reduce liability)
+		{
+			AccountID:    apAccount.ID,
+			Description:  fmt.Sprintf("Vendor payment - %s", payment.Code),
+			DebitAmount:  payment.Amount,
+			CreditAmount: 0,
+		},
+		// Credit Cash/Bank (reduce asset)
+		{
+			AccountID:    cashBank.AccountID,
+			Description:  fmt.Sprintf("Payment out - %s", payment.Code),
+			DebitAmount:  0,
+			CreditAmount: payment.Amount,
+		},
+	}
+
+	journalEntry.JournalLines = journalLines
+
+	if err := tx.Create(journalEntry).Error; err != nil {
+		return fmt.Errorf("failed to create journal entry: %v", err)
+	}
+
+	// Update account balances
+	// Accounts Payable: Decrease by debiting (normal credit balance account)
+	// UPDATE accounts SET balance = balance - amount WHERE id = ap_account_id
+	if err := tx.Exec("UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+		payment.Amount, apAccount.ID).Error; err != nil {
+		return fmt.Errorf("failed to update accounts payable balance: %v", err)
+	}
+
+	// Cash/Bank: Decrease by crediting (normal debit balance account)
+	// UPDATE accounts SET balance = balance - amount WHERE id = cash_account_id
+	if err := tx.Exec("UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", 
+		payment.Amount, cashBank.AccountID).Error; err != nil {
+		return fmt.Errorf("failed to update cash/bank account balance: %v", err)
+	}
+
+	return nil
+}
+
+// UpdatePurchasePaymentAmounts updates purchase paid amounts and status after payment
+func (s *PurchaseService) UpdatePurchasePaymentAmounts(purchaseID uint, paidAmount, outstandingAmount float64, status string) error {
+	// Update purchase payment fields
+	err := s.db.Model(&models.Purchase{}).Where("id = ?", purchaseID).Updates(map[string]interface{}{
+		"paid_amount":        paidAmount,
+		"outstanding_amount": outstandingAmount,
+		"status":             status,
+		"updated_at":         time.Now(),
+	}).Error
+	
+	if err != nil {
+		return fmt.Errorf("failed to update purchase payment amounts: %v", err)
+	}
+	
 	return nil
 }

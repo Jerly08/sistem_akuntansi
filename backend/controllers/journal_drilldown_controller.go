@@ -1,6 +1,10 @@
 package controllers
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,12 +37,23 @@ func NewJournalDrilldownController(db *gorm.DB) *JournalDrilldownController {
 // @Failure 400 {object} utils.ErrorResponse
 // @Router /journal-drilldown [post]
 func (c *JournalDrilldownController) GetJournalDrilldown(ctx *gin.Context) {
+	// Debug: Log raw request body
+	body, _ := ctx.GetRawData()
+	log.Printf("🔍 Raw request body: %s", string(body))
+	
+	// Reset body for binding
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+	
 	var req services.JournalDrilldownRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		appError := utils.NewBadRequestError("Invalid request payload")
+		log.Printf("❌ JSON binding error: %v", err)
+		log.Printf("❌ Request body was: %s", string(body))
+		appError := utils.NewBadRequestError(fmt.Sprintf("Invalid request payload: %v", err))
 		ctx.JSON(appError.StatusCode, appError.ToErrorResponse(""))
 		return
 	}
+	
+	log.Printf("✅ Successfully parsed request: %+v", req)
 
 	// Validate required fields
 	if req.StartDate.IsZero() || req.EndDate.IsZero() {

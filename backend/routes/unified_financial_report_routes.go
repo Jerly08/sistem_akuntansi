@@ -44,8 +44,7 @@ func SetupUnifiedReportRoutes(router *gin.Engine, db *gorm.DB) {
 	{
 		// ============== FINANCIAL STATEMENTS ==============
 		
-		// Profit & Loss Statement
-		unifiedReportsGroup.GET("/profit-loss", unifiedController.GetProfitLossStatement)
+		// Note: Basic P&L endpoint removed - use /enhanced/profit-loss instead
 		
 		// Balance Sheet
 		unifiedReportsGroup.GET("/balance-sheet", unifiedController.GetBalanceSheet)

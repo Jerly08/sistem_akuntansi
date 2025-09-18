@@ -13,7 +13,7 @@ import (
 func AutoFixMigration(db *gorm.DB) {
 	log.Println("🔧 Starting Auto Fix Migration for common issues...")
 
-	migrationID := "auto_fix_migration_v2.0"
+	migrationID := "auto_fix_migration_v2.1"
 	
 	// Check if this migration has already been run
 	var existingMigration models.MigrationRecord
@@ -63,11 +63,16 @@ func AutoFixMigration(db *gorm.DB) {
 		fixesApplied = append(fixesApplied, "Sales journal balance issues")
 	}
 
+	// Fix 6: Fix purchase payment outstanding amounts and status
+	if err := fixPurchasePaymentAmounts(tx); err == nil {
+		fixesApplied = append(fixesApplied, "Purchase payment amounts and status")
+	}
+
 	// Record this migration as completed
 	migrationRecord := models.MigrationRecord{
 		MigrationID: migrationID,
 		Description: fmt.Sprintf("Auto fix migration applied: %v", fixesApplied),
-		Version:     "2.0",
+		Version:     "2.1",
 		AppliedAt:   time.Now(),
 	}
 
@@ -356,5 +361,130 @@ func fixSalesJournalBalance(tx *gorm.DB) error {
 	// For now, just log that we're monitoring this
 	log.Println("    ✅ Sales journal balance monitoring active")
 	
+	return nil
+}
+
+// fixPurchasePaymentAmounts fixes purchase payment outstanding amounts and status issues
+func fixPurchasePaymentAmounts(tx *gorm.DB) error {
+	log.Println("  💳 Fixing purchase payment amounts and status...")
+	
+	// Check if this specific fix has been applied before
+	var migrationExists bool
+	err := tx.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM migration_records 
+			WHERE migration_id = 'purchase_payment_amounts_fix'
+		)
+	`).Scan(&migrationExists).Error
+	
+	if err != nil {
+		log.Printf("    ⚠️  Error checking migration status: %v", err)
+	} else if migrationExists {
+		log.Println("    ✅ Purchase payment amounts fix already applied")
+		return nil
+	}
+	
+	// Step 1: Update outstanding amounts for APPROVED CREDIT purchases that haven't been paid
+	result := tx.Exec(`
+		UPDATE purchases 
+		SET 
+			outstanding_amount = total_amount,
+			paid_amount = 0
+		WHERE 
+			payment_method = 'CREDIT' 
+			AND status = 'APPROVED' 
+			AND (outstanding_amount IS NULL OR outstanding_amount = 0)
+			AND total_amount > 0
+	`)
+	
+	if result.Error != nil {
+		log.Printf("    ❌ Failed to initialize outstanding amounts: %v", result.Error)
+		return result.Error
+	}
+	
+	if result.RowsAffected > 0 {
+		log.Printf("    ✅ Initialized outstanding amounts for %d CREDIT purchases", result.RowsAffected)
+	}
+	
+	// Step 2: Update outstanding amounts for purchases with existing payments
+	result = tx.Exec(`
+		UPDATE purchases p
+		SET 
+			outstanding_amount = GREATEST(0, p.total_amount - COALESCE((
+				SELECT SUM(pa.allocated_amount)
+				FROM payment_allocations pa
+				INNER JOIN payments pay ON pa.payment_id = pay.id
+				WHERE pa.bill_id = p.id AND pay.status = 'COMPLETED'
+			), 0)),
+			paid_amount = COALESCE((
+				SELECT SUM(pa.allocated_amount)
+				FROM payment_allocations pa
+				INNER JOIN payments pay ON pa.payment_id = pay.id
+				WHERE pa.bill_id = p.id AND pay.status = 'COMPLETED'
+			), 0)
+		WHERE 
+			p.payment_method = 'CREDIT' 
+			AND p.status IN ('APPROVED', 'PAID')
+			AND p.total_amount > 0
+	`)
+	
+	if result.Error != nil {
+		log.Printf("    ❌ Failed to recalculate payment amounts: %v", result.Error)
+		return result.Error
+	}
+	
+	if result.RowsAffected > 0 {
+		log.Printf("    ✅ Recalculated payment amounts for %d purchases", result.RowsAffected)
+	}
+	
+	// Step 3: Update status to PAID for purchases that are fully paid
+	result = tx.Exec(`
+		UPDATE purchases 
+		SET status = 'PAID'
+		WHERE 
+			payment_method = 'CREDIT' 
+			AND status = 'APPROVED' 
+			AND outstanding_amount = 0
+			AND paid_amount > 0
+	`)
+	
+	if result.Error != nil {
+		log.Printf("    ❌ Failed to update status to PAID: %v", result.Error)
+		return result.Error
+	}
+	
+	if result.RowsAffected > 0 {
+		log.Printf("    ✅ Updated status to PAID for %d fully paid purchases", result.RowsAffected)
+	}
+	
+	// Step 4: Add performance indexes if they don't exist
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_purchases_payment_method ON purchases(payment_method)",
+		"CREATE INDEX IF NOT EXISTS idx_purchases_status ON purchases(status)", 
+		"CREATE INDEX IF NOT EXISTS idx_payment_allocations_bill_id ON payment_allocations(bill_id)",
+	}
+	
+	for _, indexSQL := range indexes {
+		if err := tx.Exec(indexSQL).Error; err != nil {
+			log.Printf("    ⚠️  Failed to create index: %v", err)
+		} else {
+			log.Printf("    ✅ Created performance index")
+		}
+	}
+	
+	// Step 5: Record this migration as completed
+	migrationRecord := models.MigrationRecord{
+		MigrationID: "purchase_payment_amounts_fix",
+		Description: "Fixed purchase payment outstanding amounts and status for CREDIT purchases",
+		Version:     "1.0",
+		AppliedAt:   time.Now(),
+	}
+	
+	if err := tx.Create(&migrationRecord).Error; err != nil {
+		log.Printf("    ⚠️  Failed to record migration: %v", err)
+		// Don't return error here, the actual fix was successful
+	}
+	
+	log.Println("    ✅ Purchase payment amounts fix completed successfully")
 	return nil
 }

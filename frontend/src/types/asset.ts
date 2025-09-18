@@ -54,9 +54,6 @@ export interface AssetFormData {
   condition?: string;
   assetAccountId?: number;
   depreciationAccountId?: number;
-  paymentMethod?: 'CASH' | 'BANK' | 'CREDIT';
-  paymentAccountId?: number;    // For CASH/BANK - specific account selection
-  creditAccountId?: number;     // For CREDIT - specific liability account selection
   userId?: number;
 }
 

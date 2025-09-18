@@ -30,7 +30,10 @@ import {
   NumberInputStepper,
   NumberIncrementStepper,
   NumberDecrementStepper,
+  Tooltip,
+  Icon,
 } from '@chakra-ui/react';
+import { FiInfo } from 'react-icons/fi';
 import { useTranslation } from '@/hooks/useTranslation';
 import api from '@/services/api';
 
@@ -57,11 +60,6 @@ interface SystemSettings {
   quote_next_number: number;
   purchase_prefix: string;
   purchase_next_number: number;
-  email_notifications: boolean;
-  smtp_host?: string;
-  smtp_port?: number;
-  smtp_username?: string;
-  smtp_from?: string;
 }
 
 interface SettingsEditModalProps {
@@ -101,11 +99,6 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
     quote_next_number: 1,
     purchase_prefix: 'PO',
     purchase_next_number: 1,
-    email_notifications: true,
-    smtp_host: '',
-    smtp_port: 587,
-    smtp_username: '',
-    smtp_from: '',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof SystemSettings, string>>>({});
@@ -135,10 +128,6 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
 
     if (formData.decimal_places < 0 || formData.decimal_places > 4) {
       newErrors.decimal_places = t('settings.validation.invalidDecimalPlaces');
-    }
-
-    if (formData.smtp_port && (formData.smtp_port < 0 || formData.smtp_port > 65535)) {
-      newErrors.smtp_port = t('settings.validation.invalidPort');
     }
 
     setErrors(newErrors);
@@ -201,10 +190,42 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
         <ModalBody>
           <Tabs>
             <TabList>
-              <Tab>{t('settings.companyInfo')}</Tab>
-              <Tab>{t('settings.systemConfig')}</Tab>
-              <Tab>{t('settings.invoiceSettings')}</Tab>
-              <Tab>{t('settings.emailSettings')}</Tab>
+              <Tab>
+                <HStack spacing={2}>
+                  <span>{t('settings.companyInfo')}</span>
+                  <Tooltip
+                    label={t('settings.tooltips.companyInfo') || 'Configure your company information including name, address, contact details, and tax number. This information will appear on invoices and reports.'}
+                    placement="top"
+                    hasArrow
+                  >
+                    <Icon as={FiInfo} boxSize={3} color="blue.500" cursor="help" />
+                  </Tooltip>
+                </HStack>
+              </Tab>
+              <Tab>
+                <HStack spacing={2}>
+                  <span>{t('settings.systemConfig')}</span>
+                  <Tooltip
+                    label={t('settings.tooltips.systemConfig') || 'System-wide configuration including language, timezone, number formats, and fiscal year settings.'}
+                    placement="top"
+                    hasArrow
+                  >
+                    <Icon as={FiInfo} boxSize={3} color="green.500" cursor="help" />
+                  </Tooltip>
+                </HStack>
+              </Tab>
+              <Tab>
+                <HStack spacing={2}>
+                  <span>{t('settings.invoiceSettings')}</span>
+                  <Tooltip
+                    label={t('settings.tooltips.invoiceSettings') || 'Configure numbering systems for invoices, quotes, and purchase orders. Set prefixes and next numbers for automatic generation.'}
+                    placement="top"
+                    hasArrow
+                  >
+                    <Icon as={FiInfo} boxSize={3} color="purple.500" cursor="help" />
+                  </Tooltip>
+                </HStack>
+              </Tab>
             </TabList>
 
             <TabPanels>
@@ -280,22 +301,6 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                 <VStack spacing={4}>
                   <HStack width="full" spacing={4}>
                     <FormControl flex={1}>
-                      <FormLabel>{t('settings.currency')}</FormLabel>
-                      <Select
-                        value={formData.currency}
-                        onChange={(e) => handleInputChange('currency', e.target.value)}
-                      >
-                        <option value="IDR">IDR - Indonesian Rupiah</option>
-                        <option value="USD">USD - US Dollar</option>
-                        <option value="EUR">EUR - Euro</option>
-                        <option value="SGD">SGD - Singapore Dollar</option>
-                        <option value="MYR">MYR - Malaysian Ringgit</option>
-                        <option value="JPY">JPY - Japanese Yen</option>
-                        <option value="CNY">CNY - Chinese Yuan</option>
-                      </Select>
-                    </FormControl>
-
-                    <FormControl flex={1}>
                       <FormLabel>{t('settings.language')}</FormLabel>
                       <Select
                         value={formData.language}
@@ -304,6 +309,9 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                         <option value="id">{t('settings.indonesian')}</option>
                         <option value="en">{t('settings.english')}</option>
                       </Select>
+                    </FormControl>
+
+                    <FormControl flex={1}>
                     </FormControl>
                   </HStack>
 
@@ -321,7 +329,18 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                     </FormControl>
 
                     <FormControl flex={1}>
-                      <FormLabel>{t('settings.fiscalYearStart')}</FormLabel>
+                      <FormLabel>
+                        <HStack spacing={1}>
+                          <span>{t('settings.fiscalYearStart')}</span>
+                          <Tooltip
+                            label="Start date of your company's fiscal year. Affects financial reporting periods and year-end calculations."
+                            placement="top"
+                            hasArrow
+                          >
+                            <Icon as={FiInfo} boxSize={3} color="blue.400" cursor="help" />
+                          </Tooltip>
+                        </HStack>
+                      </FormLabel>
                       <Select
                         value={formData.fiscal_year_start}
                         onChange={(e) => handleInputChange('fiscal_year_start', e.target.value)}
@@ -335,8 +354,19 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                   </HStack>
 
                   <HStack width="full" spacing={4}>
-                    <FormControl flex={1} isInvalid={!!errors.default_tax_rate}>
-                      <FormLabel>{t('settings.defaultTaxRate')} (%)</FormLabel>
+                  <FormControl flex={1} isInvalid={!!errors.default_tax_rate}>
+                      <FormLabel>
+                        <HStack spacing={1}>
+                          <span>{t('settings.defaultTaxRate')} (%)</span>
+                          <Tooltip
+                            label="Default tax rate applied to transactions. In Indonesia, standard VAT is 11%. Range: 0-100%"
+                            placement="top"
+                            hasArrow
+                          >
+                            <Icon as={FiInfo} boxSize={3} color="blue.400" cursor="help" />
+                          </Tooltip>
+                        </HStack>
+                      </FormLabel>
                       <NumberInput
                         value={formData.default_tax_rate}
                         onChange={(_, value) => handleInputChange('default_tax_rate', value)}
@@ -490,68 +520,6 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                       </NumberInput>
                     </FormControl>
                   </HStack>
-                </VStack>
-              </TabPanel>
-
-              {/* Email Settings Tab */}
-              <TabPanel>
-                <VStack spacing={4}>
-                  <FormControl display="flex" alignItems="center">
-                    <FormLabel mb="0">{t('settings.emailNotifications')}</FormLabel>
-                    <Switch
-                      isChecked={formData.email_notifications}
-                      onChange={(e) => handleInputChange('email_notifications', e.target.checked)}
-                    />
-                  </FormControl>
-
-                  {formData.email_notifications && (
-                    <>
-                      <HStack width="full" spacing={4}>
-                        <FormControl flex={2}>
-                          <FormLabel>{t('settings.smtpHost')}</FormLabel>
-                          <Input
-                            value={formData.smtp_host || ''}
-                            onChange={(e) => handleInputChange('smtp_host', e.target.value)}
-                            placeholder="smtp.gmail.com"
-                          />
-                        </FormControl>
-
-                        <FormControl flex={1} isInvalid={!!errors.smtp_port}>
-                          <FormLabel>{t('settings.smtpPort')}</FormLabel>
-                          <NumberInput
-                            value={formData.smtp_port || 587}
-                            onChange={(_, value) => handleInputChange('smtp_port', value)}
-                            min={1}
-                            max={65535}
-                          >
-                            <NumberInputField />
-                          </NumberInput>
-                          <FormErrorMessage>{errors.smtp_port}</FormErrorMessage>
-                        </FormControl>
-                      </HStack>
-
-                      <HStack width="full" spacing={4}>
-                        <FormControl flex={1}>
-                          <FormLabel>{t('settings.smtpUsername')}</FormLabel>
-                          <Input
-                            value={formData.smtp_username || ''}
-                            onChange={(e) => handleInputChange('smtp_username', e.target.value)}
-                            placeholder="your-email@gmail.com"
-                          />
-                        </FormControl>
-
-                        <FormControl flex={1}>
-                          <FormLabel>{t('settings.smtpFrom')}</FormLabel>
-                          <Input
-                            type="email"
-                            value={formData.smtp_from || ''}
-                            onChange={(e) => handleInputChange('smtp_from', e.target.value)}
-                            placeholder="noreply@company.com"
-                          />
-                        </FormControl>
-                      </HStack>
-                    </>
-                  )}
                 </VStack>
               </TabPanel>
             </TabPanels>

@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface JournalDrilldownRequest {
   account_codes?: string[];
-  account_ids?: number[];
+  account_ids?: number[];  // Will be converted to uint in backend
   start_date: string;
   end_date: string;
   report_type?: string;

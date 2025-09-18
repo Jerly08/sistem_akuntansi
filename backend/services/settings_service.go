@@ -93,13 +93,6 @@ func (s *SettingsService) validateSettings(updates map[string]interface{}) error
 		}
 	}
 	
-	// Validate SMTP port if present
-	if smtpPort, ok := updates["smtp_port"].(int); ok {
-		if smtpPort < 0 || smtpPort > 65535 {
-			return errors.New("invalid SMTP port")
-		}
-	}
-	
 	// Validate decimal places
 	if decimalPlaces, ok := updates["decimal_places"].(int); ok {
 		if decimalPlaces < 0 || decimalPlaces > 4 {
@@ -114,20 +107,6 @@ func (s *SettingsService) validateSettings(updates map[string]interface{}) error
 		}
 	}
 	
-	// Validate currency
-	if currency, ok := updates["currency"].(string); ok {
-		validCurrencies := []string{"IDR", "USD", "EUR", "SGD", "MYR", "JPY", "CNY"}
-		isValid := false
-		for _, valid := range validCurrencies {
-			if currency == valid {
-				isValid = true
-				break
-			}
-		}
-		if !isValid {
-			return errors.New("invalid currency code")
-		}
-	}
 	
 	return nil
 }
@@ -154,7 +133,6 @@ func (s *SettingsService) createDefaultSettings() models.Settings {
 		QuoteNextNumber:    1,
 		PurchasePrefix:     "PO",
 		PurchaseNextNumber: 1,
-		EmailNotifications: true,
 	}
 }
 

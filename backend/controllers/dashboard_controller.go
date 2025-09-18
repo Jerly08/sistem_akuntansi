@@ -25,6 +25,16 @@ func NewDashboardController(db *gorm.DB, stockMonitoringService *services.StockM
 }
 
 // GetDashboardSummary returns comprehensive dashboard data
+// @Summary Get dashboard summary
+// @Description Retrieve comprehensive dashboard data including statistics, recent activities, and alerts
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse{data=models.DashboardResponse} "Dashboard summary retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/summary [get]
 func (dc *DashboardController) GetDashboardSummary(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	userRole := c.GetString("user_role")
@@ -159,6 +169,17 @@ func (dc *DashboardController) DismissStockAlert(c *gin.Context) {
 }
 
 // GetAnalytics returns dashboard analytics data with real growth calculations
+// @Summary Get analytics data
+// @Description Retrieve comprehensive analytics data for admin, finance, and director roles
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Analytics data retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 403 {object} models.ErrorResponse "Forbidden - insufficient privileges"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/analytics [get]
 func (dc *DashboardController) GetAnalytics(c *gin.Context) {
 	userRole := c.GetString("user_role")
 	
@@ -183,6 +204,15 @@ func (dc *DashboardController) GetAnalytics(c *gin.Context) {
 }
 
 // GetQuickStats returns quick statistics for dashboard widgets
+// @Summary Get quick statistics
+// @Description Retrieve quick statistics data for dashboard widgets
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Quick stats retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Router /dashboard/quick-stats [get]
 func (dc *DashboardController) GetQuickStats(c *gin.Context) {
 	userRole := c.GetString("user_role")
 	

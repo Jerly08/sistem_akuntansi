@@ -18,7 +18,7 @@ func SetupReportRoutes(protected *gin.RouterGroup, reportController *controllers
 		
 		// Core Financial Statements
 		reports.GET("/balance-sheet", reportController.GetBalanceSheet)
-		reports.GET("/profit-loss", reportController.GetProfitLoss)
+		// Note: Basic P&L endpoint removed - use /enhanced/profit-loss instead
 		reports.GET("/cash-flow", reportController.GetCashFlow)
 		reports.GET("/trial-balance", reportController.GetTrialBalance)
 		reports.GET("/general-ledger", reportController.GetGeneralLedger)
@@ -65,7 +65,7 @@ func SetupReportRoutes(protected *gin.RouterGroup, reportController *controllers
 		
     // Professional Reports (New)
     reports.GET("/professional/balance-sheet", reportController.GetProfessionalBalanceSheet)
-    reports.GET("/professional/profit-loss", reportController.GetProfessionalProfitLoss)
+    // Note: Professional P&L endpoint removed - use /enhanced/profit-loss instead
     reports.GET("/professional/cash-flow", reportController.GetProfessionalCashFlow)
     reports.GET("/professional/sales-summary", reportController.GetProfessionalSalesSummary)
     reports.GET("/professional/purchase-summary", reportController.GetProfessionalPurchaseSummary)

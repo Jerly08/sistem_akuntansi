@@ -132,7 +132,9 @@ class PaymentService {
         date: this.formatDateForAPI(data.date)
       };
       
-      const response = await api.post(`${this.baseUrl}/receivable`, formattedData);
+      const response = await api.post(`${this.baseUrl}/receivable`, formattedData, {
+        timeout: 30000 // 30 seconds timeout for payment operations
+      });
       return response.data;
     } catch (error: any) {
       console.error('PaymentService - Error creating receivable payment:', error);
@@ -179,7 +181,9 @@ class PaymentService {
         date: this.formatDateForAPI(data.date)
       };
       
-      const response = await api.post(`${this.baseUrl}/payable`, formattedData);
+      const response = await api.post(`${this.baseUrl}/payable`, formattedData, {
+        timeout: 30000 // 30 seconds timeout for payment operations
+      });
       return response.data;
     } catch (error: any) {
       console.error('PaymentService - Error creating payable payment:', error);

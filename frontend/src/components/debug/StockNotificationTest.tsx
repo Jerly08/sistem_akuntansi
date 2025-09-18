@@ -109,7 +109,7 @@ const StockNotificationTest: React.FC = () => {
               <AlertDescription>
                 • Stock = 0 → OUT_OF_STOCK notification<br/>
                 • Stock ≤ Min Stock → LOW_STOCK notification<br/>
-                • Stock > Min Stock → No notification
+                • Stock &gt; Min Stock → No notification
               </AlertDescription>
             </Box>
           </Alert>

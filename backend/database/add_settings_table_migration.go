@@ -48,11 +48,6 @@ func AddSettingsTable(db *gorm.DB) error {
 			QuoteNextNumber:    1,
 			PurchasePrefix:     "PO",
 			PurchaseNextNumber: 1,
-			EmailNotifications: true,
-			SMTPHost:           "",
-			SMTPPort:           587,
-			SMTPUsername:       "",
-			SMTPFrom:           "",
 			UpdatedBy:          1, // System user
 		}
 		

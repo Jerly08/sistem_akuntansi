@@ -163,7 +163,7 @@ func (c *CashBankController) UpdateAccount(ctx *gin.Context) {
 // @Produce json
 // @Security Bearer
 // @Param id path int true "Account ID"
-// @Success 200 {object} gin.H
+// @Success 200 {object} models.APIResponse
 // @Router /api/cashbank/accounts/{id} [delete]
 func (c *CashBankController) DeleteAccount(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
@@ -411,7 +411,7 @@ func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} gin.H{"revenue"=[]models.Account,"equity"=[]models.Account}
+// @Success 200 {object} models.APIResponse
 // @Router /api/cashbank/deposit-source-accounts [get]
 func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
 	// Get Revenue accounts
@@ -467,7 +467,7 @@ func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} gin.H{"data"=[]models.CashBank}
+// @Success 200 {object} models.APIResponse
 // @Router /api/cashbank/payment-accounts [get]
 func (c *CashBankController) GetPaymentAccounts(ctx *gin.Context) {
 	accounts, err := c.cashBankService.GetPaymentAccounts()

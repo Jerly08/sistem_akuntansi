@@ -83,11 +83,13 @@ import {
 import purchaseService, { Purchase, PurchaseFilterParams } from '@/services/purchaseService';
 import SubmitApprovalButton from '@/components/purchase/SubmitApprovalButton';
 import { ApprovalPanel } from '@/components/approval/ApprovalPanel';
+import PurchasePaymentForm from '@/components/purchase/PurchasePaymentForm';
 import contactService from '@/services/contactService';
 import productService, { Product } from '@/services/productService';
 import accountService from '@/services/accountService';
 import { Account as GLAccount, AccountCatalogItem } from '@/types/account';
 import approvalService from '@/services/approvalService';
+import { assetService } from '@/services/assetService';
 import { normalizeRole } from '@/utils/roles';
 import { useColorModeValue } from '@chakra-ui/react';
 import SearchableSelect from '@/components/common/SearchableSelect';
@@ -249,6 +251,57 @@ const columns = [
     }) as (row: Purchase) => React.ReactNode
   },
   { 
+    header: 'Paid', 
+    accessor: ((row: Purchase) => {
+      const paidAmount = row.paid_amount || 0;
+      return (
+        <Text 
+          color={paidAmount > 0 ? "green.600" : "gray.500"}
+          fontWeight={paidAmount > 0 ? "semibold" : "normal"}
+        >
+          {formatCurrency(paidAmount)}
+        </Text>
+      );
+    }) as (row: Purchase) => React.ReactNode
+  },
+  { 
+    header: 'Outstanding', 
+    accessor: ((row: Purchase) => {
+      const outstandingAmount = row.outstanding_amount || 0;
+      return (
+        <Text 
+          color={outstandingAmount > 0 ? "orange.600" : "gray.500"}
+          fontWeight={outstandingAmount > 0 ? "semibold" : "normal"}
+        >
+          {formatCurrency(outstandingAmount)}
+        </Text>
+      );
+    }) as (row: Purchase) => React.ReactNode
+  },
+  { 
+    header: 'Payment', 
+    accessor: ((row: Purchase) => {
+      const paymentMethod = row.payment_method || 'CASH';
+      const canReceivePayment = purchaseService.canReceivePayment(row);
+      return (
+        <VStack spacing={1} align="start">
+          <Badge 
+            colorScheme={paymentMethod === 'CREDIT' ? 'blue' : 'gray'} 
+            variant="subtle"
+            fontSize="xs"
+          >
+            {paymentMethod}
+          </Badge>
+          {canReceivePayment && (
+            <Badge colorScheme="green" variant="outline" fontSize="xs">
+              Can Pay
+            </Badge>
+          )}
+        </VStack>
+      );
+    }) as (row: Purchase) => React.ReactNode
+  },
+  { 
     header: 'Status', 
     accessor: ((row: Purchase) => (
       <Badge colorScheme={getStatusColor(row.status)} variant="subtle">
@@ -343,6 +396,8 @@ const PurchasesPage: React.FC = () => {
     needingApproval: 0,
     totalValue: 0,
     totalApprovedAmount: 0,
+    totalPaid: 0,         // New: Total paid amount
+    totalOutstanding: 0,  // New: Total outstanding amount
   });
 
   // View and Edit Modal states
@@ -353,12 +408,17 @@ const PurchasesPage: React.FC = () => {
   // Receipt Modal states
   const { isOpen: isReceiptOpen, onOpen: onReceiptOpen, onClose: onReceiptClose } = useDisclosure();
   
+  // Payment Modal states
+  const { isOpen: isPaymentOpen, onOpen: onPaymentOpen, onClose: onPaymentClose } = useDisclosure();
+  
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+  const [selectedPurchaseForPayment, setSelectedPurchaseForPayment] = useState<Purchase | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [expenseAccounts, setExpenseAccounts] = useState<GLAccount[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [creditAccounts, setCreditAccounts] = useState<GLAccount[]>([]);  // New state for liability accounts
+  const [cashBanks, setCashBanks] = useState<any[]>([]);  // For payment form
   const [loadingExpenseAccounts, setLoadingExpenseAccounts] = useState(false);
   const [defaultExpenseAccountId, setDefaultExpenseAccountId] = useState<number | null>(null);
   const [canListExpenseAccounts, setCanListExpenseAccounts] = useState(true);
@@ -430,6 +490,12 @@ const PurchasesPage: React.FC = () => {
       quantity_received: number;
       condition: string;
       notes: string;
+      // NEW: Auto Asset Creation Fields
+      create_asset?: boolean;
+      asset_category?: string;
+      asset_useful_life?: number;
+      asset_salvage_percentage?: number;
+      serial_number?: string;
     }>
   });
   const [savingReceipt, setSavingReceipt] = useState(false);
@@ -751,9 +817,19 @@ const PurchasesPage: React.FC = () => {
         return approvalStatus === 'REJECTED' || status === 'CANCELLED';
       }).length;
       
-      // Calculate total value from current page data
+      // Calculate total value, paid amount, and outstanding amount from current page data
       const totalValue = purchaseData.reduce((sum, p) => {
         const amount = p?.total_amount || 0;
+        return sum + (typeof amount === 'number' ? amount : parseFloat(amount) || 0);
+      }, 0);
+      
+      const totalPaid = purchaseData.reduce((sum, p) => {
+        const amount = p?.paid_amount || 0;
+        return sum + (typeof amount === 'number' ? amount : parseFloat(amount) || 0);
+      }, 0);
+      
+      const totalOutstanding = purchaseData.reduce((sum, p) => {
+        const amount = p?.outstanding_amount || 0;
         return sum + (typeof amount === 'number' ? amount : parseFloat(amount) || 0);
       }, 0);
       
@@ -775,6 +851,8 @@ const PurchasesPage: React.FC = () => {
         needingApproval: pendingApproval, // Same as pending for now
         totalValue: totalValue, // Add total value to stats
         totalApprovedAmount: totalApprovedAmount, // Add approved amount from summary
+        totalPaid: totalPaid, // Add total paid amount
+        totalOutstanding: totalOutstanding, // Add total outstanding amount
       });
       
       setError(null);
@@ -798,6 +876,8 @@ const PurchasesPage: React.FC = () => {
         needingApproval: 0,
         totalValue: 0,
         totalApprovedAmount: 0,
+        totalPaid: 0,
+        totalOutstanding: 0,
       });
       
       const errorMessage = err.response?.data?.message || err.message || 'Failed to fetch purchases';
@@ -919,6 +999,77 @@ const PurchasesPage: React.FC = () => {
     }
   };
 
+  // Handle record payment for approved credit purchases
+  const handleRecordPayment = async (purchase: Purchase) => {
+    try {
+      // Validate that purchase can receive payment
+      if (!purchaseService.canReceivePayment(purchase)) {
+        toast({
+          title: 'Cannot Record Payment',
+          description: 'Only approved credit purchases with outstanding amount can receive payments',
+          status: 'warning',
+          duration: 4000,
+          isClosable: true,
+        });
+        return;
+      }
+
+      // Fetch cash banks for payment form
+      if (cashBanks.length === 0) {
+        await fetchCashBanksForPayment();
+      }
+
+      setSelectedPurchaseForPayment(purchase);
+      onPaymentOpen();
+    } catch (err: any) {
+      toast({
+        title: 'Error',
+        description: 'Failed to prepare payment form',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // Handle payment success
+  const handlePaymentSuccess = async (result: any) => {
+    toast({
+      title: 'Payment Recorded Successfully! 🎉',
+      description: `Payment ${result.payment?.code || 'N/A'} has been recorded via Payment Management`,
+      status: 'success',
+      duration: 5000,
+      isClosable: true,
+    });
+    
+    // Refresh purchases to show updated amounts
+    await fetchPurchases();
+  };
+
+  // Fetch cash banks for payment form
+  const fetchCashBanksForPayment = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch('http://localhost:8080/api/v1/cashbank/payment-accounts', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch cash banks');
+      }
+
+      const data = await response.json();
+      setCashBanks(data.data || []);
+    } catch (err: any) {
+      console.error('Error fetching cash banks for payment:', err);
+      // Don't show error toast here as it's called from handleRecordPayment
+    }
+  };
+
   // Handle create receipt for approved purchases
   const handleCreateReceipt = async (purchase: Purchase) => {
     try {
@@ -1008,11 +1159,29 @@ const PurchasesPage: React.FC = () => {
 
       const receiptData = await response.json();
       
+      // NEW: Auto create assets for items marked as assets
+      const assetsToCreate = receiptFormData.receipt_items.filter(item => item.create_asset);
+      
+      console.log('🔍 Debug - Receipt Items:', receiptFormData.receipt_items);
+      console.log('🔍 Debug - Assets to Create:', assetsToCreate);
+      
+      if (assetsToCreate.length > 0) {
+        console.log('🚀 Creating assets from receipt...');
+        await createAssetsFromReceipt(selectedPurchase, assetsToCreate, receiptData);
+      } else {
+        console.log('⏭️ No assets to create (no items marked as assets)');
+      }
+      
+      const assetCount = assetsToCreate.length;
+      const successMessage = assetCount > 0 
+        ? `Receipt ${receiptData.receipt_number} created successfully! Purchase status updated to COMPLETED. ${assetCount} asset(s) will be created automatically.`
+        : `Receipt ${receiptData.receipt_number} created successfully. Purchase status updated to COMPLETED.`;
+      
       toast({
-        title: 'Success',
-        description: `Receipt ${receiptData.receipt_number} created successfully. Purchase status updated to COMPLETED.`,
+        title: 'Receipt Created Successfully! 🎉',
+        description: successMessage,
         status: 'success',
-        duration: 5000,
+        duration: assetCount > 0 ? 7000 : 5000,
         isClosable: true,
       });
 
@@ -1465,6 +1634,165 @@ const PurchasesPage: React.FC = () => {
     }
   };
 
+  // Helper function to get valid account IDs
+  const getValidAccountIds = async () => {
+    try {
+      console.log('🔍 Fetching valid account IDs for asset creation...');
+      
+      // Try to get available accounts
+      const [fixedAssetRes, liabilityRes, depreciationRes] = await Promise.all([
+        assetService.getFixedAssetAccounts().catch(() => ({ data: [] })),
+        assetService.getLiabilityAccounts().catch(() => ({ data: [] })),
+        assetService.getDepreciationExpenseAccounts().catch(() => ({ data: [] }))
+      ]);
+      
+      const fixedAssets = fixedAssetRes.data || [];
+      const liabilities = liabilityRes.data || [];
+      const depreciation = depreciationRes.data || [];
+      
+      console.log('📋 Available accounts:', { fixedAssets: fixedAssets.length, liabilities: liabilities.length, depreciation: depreciation.length });
+      
+      return {
+        assetAccountId: fixedAssets.length > 0 ? fixedAssets[0].id : undefined,
+        liabilityAccountId: liabilities.length > 0 ? liabilities[0].id : undefined,
+        depreciationAccountId: depreciation.length > 0 ? depreciation[0].id : undefined
+      };
+    } catch (err) {
+      console.warn('⚠️ Could not fetch account IDs, using undefined (backend will use defaults)');
+      return {
+        assetAccountId: undefined,
+        liabilityAccountId: undefined,
+        depreciationAccountId: undefined
+      };
+    }
+  };
+
+  // NEW: Create assets from receipt items
+  const createAssetsFromReceipt = async (purchase: Purchase, assetItems: any[], receiptData: any) => {
+    try {
+      console.log('📝 Starting asset creation process...', { purchase: purchase.code, assetItemsCount: assetItems.length });
+      const assetsCreated = [];
+      const errors = [];
+      
+      // Get valid account IDs first
+      const accountIds = await getValidAccountIds();
+      
+      for (const receiptItem of assetItems) {
+        console.log('🔧 Processing asset item:', receiptItem);
+        
+        // Find the corresponding purchase item
+        const purchaseItem = purchase.purchase_items?.find(p => p.id === receiptItem.purchase_item_id);
+        
+        if (!purchaseItem) {
+          console.error('❌ Purchase item not found for receipt item:', receiptItem.purchase_item_id);
+          continue;
+        }
+        
+        console.log('✅ Found purchase item:', purchaseItem);
+        
+        // Calculate asset values
+        const purchasePrice = purchaseItem.unit_price * receiptItem.quantity_received;
+        const salvageValue = purchasePrice * (receiptItem.asset_salvage_percentage || 10) / 100;
+        
+        // Create minimal asset data - let backend handle complex logic
+        const assetData = {
+          // Core Asset Info
+          name: `${purchaseItem.product?.name || 'Asset'} (${purchase.code})`,
+          category: receiptItem.asset_category || 'Equipment',
+          serial_number: receiptItem.serial_number || '',
+          condition: receiptItem.condition || 'Good',
+          status: 'ACTIVE',
+          is_active: true,
+          
+          // Financial Info
+          purchase_date: purchase.date,
+          purchase_price: purchasePrice,
+          salvage_value: salvageValue,
+          useful_life: receiptItem.asset_useful_life || 5,
+          depreciation_method: 'STRAIGHT_LINE',
+          
+          // References
+          vendor_id: purchase.vendor_id,
+          purchase_reference: purchase.code,
+          receipt_reference: receiptData.receipt_number,
+          
+          // Notes
+          notes: `Auto-created from Purchase ${purchase.code}, Receipt ${receiptData.receipt_number}. ${receiptItem.notes || ''}`,
+          
+          // MINIMAL ACCOUNTING DATA - Let backend use defaults
+          payment_method: 'CREDIT', // Simplify to avoid account ID issues
+          
+          // User
+          user_id: 1
+        };
+        
+        console.log('📋 Asset data prepared:', assetData);
+        
+        try {
+          // Use assetService to create asset
+          console.log('🚀 Calling assetService.createAsset with data:', assetData);
+          const newAsset = await assetService.createAsset(assetData);
+          console.log('✅ Asset created successfully via assetService:', newAsset);
+          assetsCreated.push(newAsset);
+        } catch (apiError: any) {
+          console.error('❌ AssetService Error:', apiError);
+          const errorResponse = apiError.response?.data;
+          let errorMessage = apiError.message || 'Unknown error';
+          
+          // Handle specific account-related errors
+          if (errorResponse?.details?.includes('foreign key constraint')) {
+            errorMessage = 'Account configuration error. Please check Chart of Accounts setup.';
+          } else if (errorResponse?.details?.includes('fk_journal_lines_account')) {
+            errorMessage = 'Invalid account IDs. Asset created without journal entries.';
+          } else if (errorResponse?.error) {
+            errorMessage = errorResponse.error;
+          }
+          
+          console.error('❌ Detailed error:', {
+            status: apiError.response?.status,
+            data: errorResponse,
+            message: errorMessage
+          });
+          
+          errors.push(`Asset for ${purchaseItem.product?.name}: ${errorMessage}`);
+        }
+      }
+      
+      console.log('📊 Asset creation summary:', { created: assetsCreated.length, errors: errors.length });
+      
+      if (assetsCreated.length > 0) {
+        toast({
+          title: 'Assets Created Successfully! 🎉',
+          description: `${assetsCreated.length} asset(s) automatically created from this receipt.`,
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+      
+      if (errors.length > 0) {
+        console.error('⚠️ Asset creation errors:', errors);
+        toast({
+          title: 'Partial Asset Creation',
+          description: `${assetsCreated.length} assets created, ${errors.length} failed. Check console for details.`,
+          status: 'warning',
+          duration: 7000,
+          isClosable: true,
+        });
+      }
+      
+    } catch (err: any) {
+      console.error('💥 Critical error in asset creation:', err);
+      toast({
+        title: 'Asset Creation Error',
+        description: 'Receipt created successfully, but assets could not be created. Please create them manually.',
+        status: 'error',
+        duration: 7000,
+        isClosable: true,
+      });
+    }
+  };
+  
   // Handle download all receipts PDF
   const handleDownloadAllReceiptsPDF = async (purchase: Purchase) => {
     try {
@@ -1859,6 +2187,26 @@ const handleCreate = async () => {
         >
           {actionProps.text}
         </Button>
+        
+        {/* Record Payment button for APPROVED CREDIT purchases with outstanding amount */}
+        {purchaseStatus === 'APPROVED' && 
+         purchaseService.canReceivePayment(purchase) &&
+         (roleNorm === 'admin' || roleNorm === 'finance' || roleNorm === 'director') && (
+          <Button
+            size="sm"
+            colorScheme="blue"
+            variant="solid"
+            leftIcon={<Icon as={FiPlus} />}
+            onClick={() => handleRecordPayment(purchase)}
+            fontWeight="semibold"
+            _hover={{
+              transform: 'translateY(-1px)',
+              boxShadow: 'md'
+            }}
+          >
+            Record Payment
+          </Button>
+        )}
         
         {/* Create Receipt button for APPROVED purchases for Inventory Manager, Admin, Director */}
         {purchaseStatus === 'APPROVED' && 
@@ -2269,7 +2617,7 @@ const handleCreate = async () => {
                     Total Approved Amount
                   </StatLabel>
                   <StatNumber 
-                    color={statColors.green}
+                    color={headingColor}
                     fontSize="lg"
                     fontWeight="bold"
                   >
@@ -2279,10 +2627,98 @@ const handleCreate = async () => {
                 <Box 
                   p={3} 
                   borderRadius="lg"
+                  bg={statBgColors.purple}
+                  color={statColors.purple}
+                >
+                  <FiAlertCircle size={20} />
+                </Box>
+              </Flex>
+            </CardBody>
+          </Card>
+          
+          <Card 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            borderRadius="lg"
+            _hover={{ 
+              boxShadow: 'md',
+              transform: 'translateY(-2px)',
+              transition: 'all 0.2s ease'
+            }}
+            transition="all 0.2s ease"
+          >
+            <CardBody p={6}>
+              <Flex align="center" justify="space-between">
+                <Stat>
+                  <StatLabel 
+                    color={textSecondary}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    mb={2}
+                  >
+                    Total Paid
+                  </StatLabel>
+                  <StatNumber 
+                    color={statColors.green}
+                    fontSize="lg"
+                    fontWeight="bold"
+                  >
+                    {formatCurrency(stats.totalPaid || 0)}
+                  </StatNumber>
+                </Stat>
+                <Box 
+                  p={3} 
+                  borderRadius="lg"
                   bg={statBgColors.green}
                   color={statColors.green}
                 >
                   <FiCheckCircle size={20} />
+                </Box>
+              </Flex>
+            </CardBody>
+          </Card>
+          
+          <Card 
+            bg={cardBg}
+            borderWidth="1px"
+            borderColor={borderColor}
+            boxShadow="sm"
+            borderRadius="lg"
+            _hover={{ 
+              boxShadow: 'md',
+              transform: 'translateY(-2px)',
+              transition: 'all 0.2s ease'
+            }}
+            transition="all 0.2s ease"
+          >
+            <CardBody p={6}>
+              <Flex align="center" justify="space-between">
+                <Stat>
+                  <StatLabel 
+                    color={textSecondary}
+                    fontSize="sm"
+                    fontWeight="medium"
+                    mb={2}
+                  >
+                    Outstanding Amount
+                  </StatLabel>
+                  <StatNumber 
+                    color={statColors.orange}
+                    fontSize="lg"
+                    fontWeight="bold"
+                  >
+                    {formatCurrency(stats.totalOutstanding || 0)}
+                  </StatNumber>
+                </Stat>
+                <Box 
+                  p={3} 
+                  borderRadius="lg"
+                  bg={statBgColors.orange}
+                  color={statColors.orange}
+                >
+                  <FiClock size={20} />
                 </Box>
               </Flex>
             </CardBody>
@@ -4588,7 +5024,7 @@ const handleCreate = async () => {
 
                   {/* Receipt Items */}
                   <FormControl>
-                    <FormLabel fontSize="sm">Receipt Items</FormLabel>
+                    <FormLabel fontSize="sm">Receipt Items & Asset Creation</FormLabel>
                     <TableContainer>
                       <Table size="sm" bg={tableBg}>
                         <Thead bg={tableHeaderBg}>
@@ -4597,6 +5033,8 @@ const handleCreate = async () => {
                             <Th fontSize="xs" isNumeric>Ordered Qty</Th>
                             <Th fontSize="xs" isNumeric>Received Qty</Th>
                             <Th fontSize="xs">Condition</Th>
+                            <Th fontSize="xs">Serial Number</Th>
+                            <Th fontSize="xs" textAlign="center">🏭 Create Asset</Th>
                             <Th fontSize="xs">Notes</Th>
                           </Tr>
                         </Thead>
@@ -4653,6 +5091,99 @@ const handleCreate = async () => {
                                     <option value="DEFECTIVE">Defective</option>
                                   </Select>
                                 </Td>
+                                {/* Serial Number */}
+                                <Td>
+                                  <Input
+                                    size="sm"
+                                    placeholder="Serial/Chassis number"
+                                    value={receiptItem.serial_number || ''}
+                                    onChange={(e) => {
+                                      const newItems = [...receiptFormData.receipt_items];
+                                      newItems[index].serial_number = e.target.value;
+                                      setReceiptFormData({
+                                        ...receiptFormData,
+                                        receipt_items: newItems
+                                      });
+                                    }}
+                                  />
+                                </Td>
+                                
+                                {/* Create Asset Checkbox & Options */}
+                                <Td>
+                                  <VStack spacing={2} align="center">
+                                    {/* Asset Creation Checkbox */}
+                                    <HStack>
+                                      <input
+                                        type="checkbox"
+                                        checked={receiptItem.create_asset || false}
+                                        onChange={(e) => {
+                                          const newItems = [...receiptFormData.receipt_items];
+                                          newItems[index].create_asset = e.target.checked;
+                                          // Set defaults when checked
+                                          if (e.target.checked) {
+                                            newItems[index].asset_category = newItems[index].asset_category || 'Equipment';
+                                            newItems[index].asset_useful_life = newItems[index].asset_useful_life || 5;
+                                            newItems[index].asset_salvage_percentage = newItems[index].asset_salvage_percentage || 10;
+                                          }
+                                          setReceiptFormData({
+                                            ...receiptFormData,
+                                            receipt_items: newItems
+                                          });
+                                        }}
+                                        style={{ transform: 'scale(1.2)' }}
+                                      />
+                                      <Text fontSize="xs" fontWeight="medium">Asset</Text>
+                                    </HStack>
+                                    
+                                    {/* Asset Options - Show when checked */}
+                                    {receiptItem.create_asset && (
+                                      <VStack spacing={1} w="full">
+                                        <Select
+                                          size="xs"
+                                          value={receiptItem.asset_category || 'Equipment'}
+                                          onChange={(e) => {
+                                            const newItems = [...receiptFormData.receipt_items];
+                                            newItems[index].asset_category = e.target.value;
+                                            setReceiptFormData({
+                                              ...receiptFormData,
+                                              receipt_items: newItems
+                                            });
+                                          }}
+                                        >
+                                          <option value="Equipment">Equipment</option>
+                                          <option value="Vehicle">Vehicle</option>
+                                          <option value="Furniture">Furniture</option>
+                                          <option value="Computer">Computer</option>
+                                          <option value="Machinery">Machinery</option>
+                                          <option value="Building">Building</option>
+                                        </Select>
+                                        
+                                        <HStack spacing={1}>
+                                          <NumberInput
+                                            size="xs"
+                                            min={1}
+                                            max={50}
+                                            value={receiptItem.asset_useful_life || 5}
+                                            onChange={(_, value) => {
+                                              const newItems = [...receiptFormData.receipt_items];
+                                              newItems[index].asset_useful_life = value || 5;
+                                              setReceiptFormData({
+                                                ...receiptFormData,
+                                                receipt_items: newItems
+                                              });
+                                            }}
+                                            maxW="50px"
+                                          >
+                                            <NumberInputField />
+                                          </NumberInput>
+                                          <Text fontSize="xs">yrs</Text>
+                                        </HStack>
+                                      </VStack>
+                                    )}
+                                  </VStack>
+                                </Td>
+                                
+                                {/* Notes */}
                                 <Td>
                                   <Input
                                     size="sm"
@@ -4676,13 +5207,44 @@ const handleCreate = async () => {
                     </TableContainer>
                   </FormControl>
 
+                  {/* Asset Creation Summary */}
+                  {receiptFormData.receipt_items.some(item => item.create_asset) && (
+                    <Alert status="success" variant="left-accent">
+                      <AlertIcon />
+                      <VStack align="start" spacing={1}>
+                        <AlertTitle fontSize="sm">🎉 Auto Asset Creation Enabled!</AlertTitle>
+                        <AlertDescription fontSize="xs">
+                          {receiptFormData.receipt_items.filter(item => item.create_asset).length} item(s) will be automatically created as assets after receipt completion.
+                          Assets will include purchase reference, vendor info, and depreciation settings.
+                        </AlertDescription>
+                        <HStack mt={2}>
+                          <Button 
+                            size="xs" 
+                            variant="outline" 
+                            colorScheme="blue"
+                            onClick={() => {
+                              const assetsToCreate = receiptFormData.receipt_items.filter(item => item.create_asset);
+                              console.log('🔍 DEBUG - Current receipt form data:', receiptFormData);
+                              console.log('🔍 DEBUG - Assets to create:', assetsToCreate);
+                              console.log('🔍 DEBUG - Selected purchase:', selectedPurchase);
+                              alert(`Debug info logged to console. Assets to create: ${assetsToCreate.length}`);
+                            }}
+                          >
+                            🔍 Debug Info
+                          </Button>
+                        </HStack>
+                      </VStack>
+                    </Alert>
+                  )}
+
                   <Alert status="info" variant="left-accent">
                     <AlertIcon />
                     <VStack align="start" spacing={1}>
                       <AlertTitle fontSize="sm">Receipt Information</AlertTitle>
                       <AlertDescription fontSize="xs">
-                        Creating this receipt will mark the purchase as COMPLETED if all items are fully received.
-                        Stock quantities were already updated when the purchase was approved.
+                        • Creating this receipt will mark the purchase as COMPLETED if all items are fully received.<br/>
+                        • Stock quantities were already updated when the purchase was approved.<br/>
+                        • Check "Create Asset" for fixed assets (vehicles, equipment, machinery) to auto-create asset records.
                       </AlertDescription>
                     </VStack>
                   </Alert>
@@ -4806,6 +5368,16 @@ const handleCreate = async () => {
             </ModalFooter>
           </ModalContent>
         </Modal>
+
+        {/* Payment Modal */}
+        <PurchasePaymentForm
+          isOpen={isPaymentOpen}
+          onClose={onPaymentClose}
+          purchase={selectedPurchaseForPayment}
+          onSuccess={handlePaymentSuccess}
+          cashBanks={cashBanks}
+        />
+        
         </VStack>
       </Box>
     </SimpleLayout>

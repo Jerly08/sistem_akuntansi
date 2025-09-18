@@ -27,6 +27,7 @@ type Sale struct {
 	DiscountPercent    float64         `json:"discount_percent" gorm:"type:decimal(5,2);default:0"`
 	DiscountAmount     float64         `json:"discount_amount" gorm:"type:decimal(15,2);default:0"`
 	TaxableAmount      float64         `json:"taxable_amount" gorm:"type:decimal(15,2);default:0"`
+	// Legacy tax fields (kept for backward compatibility)
 	Tax                float64         `json:"tax" gorm:"type:decimal(15,2);default:0"`
 	PPN                float64         `json:"ppn" gorm:"type:decimal(15,2);default:0"`
 	PPNPercent         float64         `json:"ppn_percent" gorm:"type:decimal(5,2);default:11"`
@@ -34,6 +35,23 @@ type Sale struct {
 	PPhPercent         float64         `json:"pph_percent" gorm:"type:decimal(5,2);default:0"`
 	PPhType            string          `json:"pph_type" gorm:"size:20"`
 	TotalTax           float64         `json:"total_tax" gorm:"type:decimal(15,2);default:0"`
+	
+	// Enhanced tax configuration (similar to Purchase model)
+	NetBeforeTax       float64         `json:"net_before_tax" gorm:"type:decimal(15,2);default:0"`
+	
+	// Tax additions (Penambahan) - PPN, etc
+	PPNRate            float64         `json:"ppn_rate" gorm:"type:decimal(8,2);default:0"`                    // PPN percentage
+	PPNAmount          float64         `json:"ppn_amount" gorm:"type:decimal(15,2);default:0"`                  // Calculated PPN amount
+	OtherTaxAdditions  float64         `json:"other_tax_additions" gorm:"type:decimal(15,2);default:0"`         // Other tax additions
+	TotalTaxAdditions  float64         `json:"total_tax_additions" gorm:"type:decimal(15,2);default:0"`         // Total penambahan
+	
+	// Tax deductions (Pemotongan) - PPh, etc
+	PPh21Rate          float64         `json:"pph21_rate" gorm:"type:decimal(8,2);default:0"`                   // PPh 21 percentage
+	PPh21Amount        float64         `json:"pph21_amount" gorm:"type:decimal(15,2);default:0"`                 // Calculated PPh 21 amount
+	PPh23Rate          float64         `json:"pph23_rate" gorm:"type:decimal(8,2);default:0"`                   // PPh 23 percentage
+	PPh23Amount        float64         `json:"pph23_amount" gorm:"type:decimal(15,2);default:0"`                 // Calculated PPh 23 amount
+	OtherTaxDeductions float64         `json:"other_tax_deductions" gorm:"type:decimal(15,2);default:0"`        // Other tax deductions
+	TotalTaxDeductions float64         `json:"total_tax_deductions" gorm:"type:decimal(15,2);default:0"`        // Total pemotongan
 	PaymentTerms       string          `json:"payment_terms" gorm:"size:50"`
 	PaymentMethod      string          `json:"payment_method" gorm:"size:50"`
 	ShippingMethod     string          `json:"shipping_method" gorm:"size:50"`
@@ -130,9 +148,17 @@ type SaleCreateRequest struct {
 	Currency         string              `json:"currency"`
 	ExchangeRate     *float64            `json:"exchange_rate"`
 	DiscountPercent  float64             `json:"discount_percent"`
+	// Legacy tax fields (for backward compatibility)
 	PPNPercent       *float64            `json:"ppn_percent"`
 	PPhPercent       float64             `json:"pph_percent"`
 	PPhType          string              `json:"pph_type"`
+	
+	// Enhanced tax configuration (similar to Purchase model)
+	PPNRate              float64         `json:"ppn_rate"`                    // PPN percentage
+	OtherTaxAdditions    float64         `json:"other_tax_additions"`         // Other tax additions
+	PPh21Rate            float64         `json:"pph21_rate"`                  // PPh 21 percentage
+	PPh23Rate            float64         `json:"pph23_rate"`                  // PPh 23 percentage
+	OtherTaxDeductions   float64         `json:"other_tax_deductions"`        // Other tax deductions
 	PaymentTerms     string              `json:"payment_terms"`
 	PaymentMethod    string              `json:"payment_method"`
 	ShippingMethod   string              `json:"shipping_method"`
@@ -153,9 +179,17 @@ type SaleUpdateRequest struct {
 	DueDate          *time.Time          `json:"due_date"`
 	ValidUntil       *time.Time          `json:"valid_until"`
 	DiscountPercent  *float64            `json:"discount_percent"`
+	// Legacy tax fields (for backward compatibility)
 	PPNPercent       *float64            `json:"ppn_percent"`
 	PPhPercent       *float64            `json:"pph_percent"`
 	PPhType          *string             `json:"pph_type"`
+	
+	// Enhanced tax configuration (similar to Purchase model)
+	PPNRate              *float64        `json:"ppn_rate"`                    // PPN percentage
+	OtherTaxAdditions    *float64        `json:"other_tax_additions"`         // Other tax additions
+	PPh21Rate            *float64        `json:"pph21_rate"`                  // PPh 21 percentage
+	PPh23Rate            *float64        `json:"pph23_rate"`                  // PPh 23 percentage
+	OtherTaxDeductions   *float64        `json:"other_tax_deductions"`        // Other tax deductions
 	PaymentTerms     *string             `json:"payment_terms"`
 	PaymentMethod    *string             `json:"payment_method"`
 	ShippingMethod   *string             `json:"shipping_method"`

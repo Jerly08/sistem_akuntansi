@@ -24,58 +24,7 @@ func NewUnifiedFinancialReportController(unifiedReportService *services.UnifiedF
 	}
 }
 
-// ========================= PROFIT & LOSS STATEMENT =========================
-
-// GetProfitLossStatement generates Profit & Loss Statement
-func (c *UnifiedFinancialReportController) GetProfitLossStatement(ctx *gin.Context) {
-	startDateStr := ctx.Query("start_date")
-	endDateStr := ctx.Query("end_date")
-	comparativeStr := ctx.DefaultQuery("comparative", "false")
-
-	if startDateStr == "" || endDateStr == "" {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "start_date and end_date are required",
-		})
-		return
-	}
-
-	startDate, err := time.Parse("2006-01-02", startDateStr)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid start_date format. Use YYYY-MM-DD",
-		})
-		return
-	}
-
-	endDate, err := time.Parse("2006-01-02", endDateStr)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid end_date format. Use YYYY-MM-DD",
-		})
-		return
-	}
-
-	comparative := comparativeStr == "true"
-
-	pnl, err := c.unifiedReportService.GenerateComprehensiveProfitLoss(ctx.Request.Context(), startDate, endDate, comparative)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate Profit & Loss Statement",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Profit & Loss Statement generated successfully",
-		"data":    pnl,
-	})
-}
+// Note: P&L Statement method removed - use Enhanced P&L Controller at /api/reports/enhanced/profit-loss instead
 
 // ========================= BALANCE SHEET =========================
 

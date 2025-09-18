@@ -50,7 +50,7 @@ func (c *BalanceMonitoringController) CheckBalanceSync(ctx *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} gin.H
+// @Success 200 {object} models.APIResponse
 // @Router /api/monitoring/fix-discrepancies [post]
 func (c *BalanceMonitoringController) FixBalanceDiscrepancies(ctx *gin.Context) {
 	// First, check for discrepancies
@@ -102,7 +102,7 @@ func (c *BalanceMonitoringController) FixBalanceDiscrepancies(ctx *gin.Context) 
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} gin.H
+// @Success 200 {object} models.APIResponse
 // @Router /api/monitoring/balance-health [get]
 func (c *BalanceMonitoringController) GetBalanceHealth(ctx *gin.Context) {
 	health, err := c.monitoringService.GetBalanceHealth()
@@ -176,7 +176,7 @@ func (c *BalanceMonitoringController) GetBalanceDiscrepancies(ctx *gin.Context) 
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} gin.H
+// @Success 200 {object} models.APIResponse
 // @Router /api/monitoring/sync-status [get]
 func (c *BalanceMonitoringController) GetSyncStatus(ctx *gin.Context) {
 	result, err := c.monitoringService.CheckBalanceSynchronization()

@@ -56,6 +56,18 @@ func convertRoleToLowercase(role string) string {
 	}
 }
 
+// Register creates a new user account
+// @Summary User registration
+// @Description Create a new user account (only available in development or when ALLOW_REGISTRATION=true)
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body models.RegisterRequest true "User registration data"
+// @Success 201 {object} models.LoginResponse "User created successfully"
+// @Failure 400 {object} models.ErrorResponse "Invalid request data"
+// @Failure 409 {object} models.ErrorResponse "User already exists"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /auth/register [post]
 func (ac *AuthController) Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -116,6 +128,18 @@ func (ac *AuthController) Register(c *gin.Context) {
 	})
 }
 
+// Login authenticates user with email/username and password
+// @Summary User login
+// @Description Authenticate user and return access token and refresh token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body models.LoginRequest true "Login credentials"
+// @Success 200 {object} models.LoginResponse "Successful login"
+// @Failure 400 {object} models.ErrorResponse "Invalid request format"
+// @Failure 401 {object} models.ErrorResponse "Invalid credentials or account disabled"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /auth/login [post]
 func (ac *AuthController) Login(c *gin.Context) {
 	// Support both simple and enhanced login requests
 	var simpleReq struct {
@@ -211,6 +235,17 @@ func (ac *AuthController) logAuthAttempt(identifier string, success bool, reason
 	ac.DB.Create(&authAttempt)
 }
 
+// RefreshToken generates new access token from refresh token
+// @Summary Refresh access token
+// @Description Generate a new access token using valid refresh token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body models.RefreshTokenRequest true "Refresh token"
+// @Success 200 {object} models.LoginResponse "Token refreshed successfully"
+// @Failure 400 {object} models.ErrorResponse "Invalid request format"
+// @Failure 401 {object} models.ErrorResponse "Invalid or expired refresh token"
+// @Router /auth/refresh [post]
 func (ac *AuthController) RefreshToken(c *gin.Context) {
 	var req models.RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -233,6 +268,17 @@ func (ac *AuthController) RefreshToken(c *gin.Context) {
 	})
 }
 
+// Profile gets current user profile information
+// @Summary Get user profile
+// @Description Retrieve current authenticated user's profile information
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse{data=models.UserResponse} "Profile retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized - invalid token"
+// @Failure 404 {object} models.ErrorResponse "User not found"
+// @Router /profile [get]
 func (ac *AuthController) Profile(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	
@@ -249,6 +295,15 @@ func (ac *AuthController) Profile(c *gin.Context) {
 }
 
 // ValidateToken validates if the current token is valid and active
+// @Summary Validate JWT token
+// @Description Check if the current JWT token is valid and user account is active
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse{data=models.UserResponse} "Token is valid"
+// @Failure 401 {object} models.ErrorResponse "Invalid token or account disabled"
+// @Router /auth/validate-token [get]
 func (ac *AuthController) ValidateToken(c *gin.Context) {
 	// If we reach this point, it means the JWT middleware has already validated the token
 	// and set the user context, so the token is valid

@@ -79,9 +79,16 @@ interface FormData {
   currency: string;
   exchange_rate: number;
   discount_percent: number;
+  // Legacy tax fields (for backward compatibility)
   ppn_percent: number;
   pph_percent: number;
   pph_type?: string;
+  // Enhanced tax configuration
+  ppn_rate: number;
+  other_tax_additions: number;
+  pph21_rate: number;
+  pph23_rate: number;
+  other_tax_deductions: number;
   payment_terms: string;
   payment_method?: string;
   shipping_method?: string;
@@ -179,8 +186,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
       currency: 'IDR',
       exchange_rate: 1,
       discount_percent: 0,
+      // Legacy tax fields
       ppn_percent: 11,
       pph_percent: 0,
+      // Enhanced tax configuration
+      ppn_rate: 11,
+      other_tax_additions: 0,
+      pph21_rate: 0,
+      pph23_rate: 0,
+      other_tax_deductions: 0,
       payment_terms: 'NET_30',
       shipping_cost: 0,
       items: [
@@ -203,7 +217,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
 
   const watchItems = watch('items');
   const watchDiscountPercent = watch('discount_percent');
+  // Legacy tax fields
   const watchPPNPercent = watch('ppn_percent');
+  const watchPPhPercent = watch('pph_percent');
+  // Enhanced tax configuration
+  const watchPPNRate = watch('ppn_rate');
+  const watchOtherTaxAdditions = watch('other_tax_additions');
+  const watchPPh21Rate = watch('pph21_rate');
+  const watchPPh23Rate = watch('pph23_rate');
+  const watchOtherTaxDeductions = watch('other_tax_deductions');
   const watchShippingCost = watch('shipping_cost');
   const watchPaymentTerms = watch('payment_terms');
   const watchDate = watch('date');
@@ -381,9 +403,16 @@ const SalesForm: React.FC<SalesFormProps> = ({
       currency: saleData.currency,
       exchange_rate: saleData.exchange_rate,
       discount_percent: saleData.discount_percent,
+      // Legacy tax fields
       ppn_percent: saleData.ppn_percent,
       pph_percent: saleData.pph_percent,
       pph_type: saleData.pph_type,
+      // Enhanced tax configuration
+      ppn_rate: saleData.ppn_rate || saleData.ppn_percent || 11,
+      other_tax_additions: saleData.other_tax_additions || 0,
+      pph21_rate: saleData.pph21_rate || 0,
+      pph23_rate: saleData.pph23_rate || 0,
+      other_tax_deductions: saleData.other_tax_deductions || 0,
       payment_terms: saleData.payment_terms,
       payment_method: saleData.payment_method,
       shipping_method: saleData.shipping_method,
@@ -414,8 +443,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
       currency: 'IDR',
       exchange_rate: 1,
       discount_percent: 0,
+      // Legacy tax fields
       ppn_percent: 11,
       pph_percent: 0,
+      // Enhanced tax configuration
+      ppn_rate: 11,
+      other_tax_additions: 0,
+      pph21_rate: 0,
+      pph23_rate: 0,
+      other_tax_deductions: 0,
       payment_terms: 'NET_30',
       shipping_cost: 0,
       items: [
@@ -655,9 +691,16 @@ const SalesForm: React.FC<SalesFormProps> = ({
         due_date: data.due_date ? `${data.due_date}T00:00:00Z` : undefined,
         valid_until: data.valid_until ? `${data.valid_until}T00:00:00Z` : undefined,
           discount_percent: data.discount_percent,
+          // Legacy tax fields
           ppn_percent: data.ppn_percent,
           pph_percent: data.pph_percent,
           pph_type: data.pph_type,
+          // Enhanced tax configuration
+          ppn_rate: data.ppn_rate,
+          other_tax_additions: data.other_tax_additions,
+          pph21_rate: data.pph21_rate,
+          pph23_rate: data.pph23_rate,
+          other_tax_deductions: data.other_tax_deductions,
           payment_terms: data.payment_terms,
           payment_method: data.payment_method,
           shipping_method: data.shipping_method,
@@ -694,9 +737,16 @@ const SalesForm: React.FC<SalesFormProps> = ({
           currency: data.currency,
           exchange_rate: data.exchange_rate,
           discount_percent: data.discount_percent,
+          // Legacy tax fields  
           ppn_percent: data.ppn_percent,
           pph_percent: data.pph_percent,
           pph_type: data.pph_type,
+          // Enhanced tax configuration
+          ppn_rate: data.ppn_rate,
+          other_tax_additions: data.other_tax_additions,
+          pph21_rate: data.pph21_rate,
+          pph23_rate: data.pph23_rate,
+          other_tax_deductions: data.other_tax_deductions,
           payment_terms: data.payment_terms,
           payment_method: data.payment_method,
           shipping_method: data.shipping_method,
@@ -1136,12 +1186,16 @@ const SalesForm: React.FC<SalesFormProps> = ({
 
               <Divider />
 
-              {/* Pricing & Taxes */}
-              <Box>
-                <Heading size="md" mb={4} color={subHeadingColor}>
-                  💰 Pricing & Taxes
-                </Heading>
-                <HStack w="full" spacing={4}>
+              {/* Enhanced Tax Configuration (similar to Purchase Form) */}
+              <Card>
+                <CardHeader pb={3}>
+                  <Heading size="md" color={subHeadingColor}>
+                    💰 Tax Configuration
+                  </Heading>
+                </CardHeader>
+                <CardBody pt={0}>
+                  <VStack spacing={4} align="stretch">
+                    {/* Global Discount */}
                     <FormControl>
                       <FormLabel>
                         Global Discount 
@@ -1151,7 +1205,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         </Badge>
                       </FormLabel>
                       {discountType === 'percentage' ? (
-                        <NumberInput min={0} max={100}>
+                        <NumberInput min={0} max={100} size="sm">
                           <NumberInputField
                             {...register('discount_percent', {
                               setValueAs: value => parseFloat(value) || 0
@@ -1170,9 +1224,10 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           showLabel={false}
                           bg={inputBg}
                           _focus={{ bg: inputFocusBg }}
+                          size="sm"
                         />
                       )}
-                      <FormHelperText color={textColor}>
+                      <FormHelperText fontSize="xs" color={textColor}>
                         {discountType === 'percentage' 
                           ? 'Percentage discount applied to entire order'
                           : 'Fixed amount discount applied to entire order'
@@ -1180,114 +1235,226 @@ const SalesForm: React.FC<SalesFormProps> = ({
                       </FormHelperText>
                     </FormControl>
 
-                    <FormControl>
-                      <FormLabel>PPN (%)</FormLabel>
-                      <NumberInput min={0} max={100}>
-                        <NumberInputField
-                          {...register('ppn_percent', {
-                            setValueAs: value => parseFloat(value) || 0
-                          })}
-                          bg={inputBg}
-                          _focus={{ bg: inputFocusBg }}
-                        />
-                      </NumberInput>
-                      <FormHelperText color={textColor}>
-                        Value Added Tax (default: 11%)
-                      </FormHelperText>
-                    </FormControl>
+                    <Divider />
 
-                    <FormControl>
-                      <FormLabel>Shipping Cost</FormLabel>
-                      <CurrencyInput
-                        value={watchShippingCost || 0}
-                        onChange={(value) => setValue('shipping_cost', value)}
-                        placeholder="Rp 0"
-                        min={0}
-                        showLabel={false}
-                        bg={inputBg}
-                        _focus={{ bg: inputFocusBg }}
-                      />
-                      <FormHelperText color={textColor}>
-                        Additional shipping/delivery charges
-                      </FormHelperText>
-                    </FormControl>
-                </HStack>
+                    {/* Tax Additions (Penambahan) */}
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium" color="green.600" mb={3}>
+                        ➕ Tax Additions (Penambahan)
+                      </Text>
+                      <HStack w="full" spacing={4}>
+                        <FormControl>
+                          <FormLabel fontSize="sm">PPN Rate (%)</FormLabel>
+                          <NumberInput
+                            min={0}
+                            max={100}
+                            step={0.1}
+                            size="sm"
+                          >
+                            <NumberInputField
+                              {...register('ppn_rate', {
+                                setValueAs: value => parseFloat(value) || 0
+                              })}
+                              placeholder="11"
+                            />
+                            <NumberInputStepper>
+                              <NumberIncrementStepper />
+                              <NumberDecrementStepper />
+                            </NumberInputStepper>
+                          </NumberInput>
+                          <FormHelperText fontSize="xs">Pajak Pertambahan Nilai (default 11%)</FormHelperText>
+                        </FormControl>
 
-                
-                {/* Total Calculation Alert */}
-                {calculateSubtotal() > 0 && (
-                  <Alert status="info" borderRadius="lg" mt={4} bg={alertBg} borderColor={alertBorderColor}>
-                    <AlertIcon color="blue.500" />
-                    <AlertDescription fontSize="sm">
-                      <VStack align="stretch" spacing={2} w="full">
-                        <HStack justify="space-between">
-                          <Text color={textColor}><strong>Subtotal (All Items):</strong></Text>
-                          <Text fontWeight="medium" color={textColor}>
-                            {salesService.formatCurrency(calculateSubtotal())}
-                          </Text>
-                        </HStack>
-                        
-                        {/* Show breakdown if there are non-taxable items */}
-                        {calculateNonTaxableSubtotal() > 0 && (
-                          <>
-                            <HStack justify="space-between" pl={4}>
-                              <Text color={textColor} fontSize="xs">• Taxable Items:</Text>
-                              <Text fontSize="xs" color={textColor}>
-                                {salesService.formatCurrency(calculateTaxableSubtotal())}
-                              </Text>
-                            </HStack>
-                            <HStack justify="space-between" pl={4}>
-                              <Text color={textColor} fontSize="xs">• Non-Taxable Items:</Text>
-                              <Text fontSize="xs" color={textColor}>
-                                {salesService.formatCurrency(calculateNonTaxableSubtotal())}
-                              </Text>
-                            </HStack>
-                          </>
-                        )}
-                        
-                        {watchDiscountPercent > 0 && (
-                          <HStack justify="space-between">
-                            <Text color={textColor}>
-                              Global Discount ({discountType === 'percentage' ? `${watchDiscountPercent}%` : 'Amount'}):
-                            </Text>
-                            <Text color="red.500">
-                              -{salesService.formatCurrency(getGlobalDiscountAmount())}
-                            </Text>
-                          </HStack>
-                        )}
-                        
-                        {watchShippingCost > 0 && (
-                          <HStack justify="space-between">
-                            <Text color={textColor}>Shipping Cost:</Text>
-                            <Text color={textColor}>
-                              {salesService.formatCurrency(watchShippingCost)}
-                            </Text>
-                          </HStack>
-                        )}
-                        
-                        {watchPPNPercent > 0 && calculateTaxableSubtotal() > 0 && (
-                          <HStack justify="space-between">
-                            <Text color={textColor}>PPN ({watchPPNPercent}%):</Text>
-                            <Text color={textColor}>
-                              {salesService.formatCurrency(
-                                (calculateTaxableSubtotal() - (calculateTaxableSubtotal() * (watchDiscountPercent / 100)) + watchShippingCost) * (watchPPNPercent / 100)
-                              )}
-                            </Text>
-                          </HStack>
-                        )}
-                        
-                        <Divider />
-                        <HStack justify="space-between">
-                          <Text color={textColor}><strong>Total Amount:</strong></Text>
-                          <Text fontSize="lg" fontWeight="bold" color="blue.600">
-                            {salesService.formatCurrency(calculateTotal())}
-                          </Text>
-                        </HStack>
-                      </VStack>
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </Box>
+                        <FormControl>
+                          <FormLabel fontSize="sm">Other Tax Additions (IDR)</FormLabel>
+                          <CurrencyInput
+                            value={watchOtherTaxAdditions || 0}
+                            onChange={(value) => setValue('other_tax_additions', value)}
+                            placeholder="Rp 0"
+                            min={0}
+                            showLabel={false}
+                            size="sm"
+                          />
+                          <FormHelperText fontSize="xs">Pajak tambahan lainnya (flat amount)</FormHelperText>
+                        </FormControl>
+
+                        <FormControl>
+                          <FormLabel fontSize="sm">Shipping Cost</FormLabel>
+                          <CurrencyInput
+                            value={watchShippingCost || 0}
+                            onChange={(value) => setValue('shipping_cost', value)}
+                            placeholder="Rp 0"
+                            min={0}
+                            showLabel={false}
+                            size="sm"
+                          />
+                          <FormHelperText fontSize="xs">Biaya pengiriman/delivery</FormHelperText>
+                        </FormControl>
+                      </HStack>
+                    </Box>
+
+                    <Divider />
+
+                    {/* Tax Deductions (Pemotongan) */}
+                    <Box>
+                      <Text fontSize="sm" fontWeight="medium" color="red.600" mb={3}>
+                        ➖ Tax Deductions (Pemotongan)
+                      </Text>
+                      <HStack w="full" spacing={4}>
+                        <FormControl>
+                          <FormLabel fontSize="sm">PPh 21 Rate (%)</FormLabel>
+                          <NumberInput
+                            min={0}
+                            max={100}
+                            step={0.1}
+                            size="sm"
+                          >
+                            <NumberInputField
+                              {...register('pph21_rate', {
+                                setValueAs: value => parseFloat(value) || 0
+                              })}
+                              placeholder="2"
+                            />
+                            <NumberInputStepper>
+                              <NumberIncrementStepper />
+                              <NumberDecrementStepper />
+                            </NumberInputStepper>
+                          </NumberInput>
+                          <FormHelperText fontSize="xs">PPh 21: 2% jasa konstruksi, 15% dividen/bunga</FormHelperText>
+                        </FormControl>
+
+                        <FormControl>
+                          <FormLabel fontSize="sm">PPh 23 Rate (%)</FormLabel>
+                          <NumberInput
+                            min={0}
+                            max={100}
+                            step={0.1}
+                            size="sm"
+                          >
+                            <NumberInputField
+                              {...register('pph23_rate', {
+                                setValueAs: value => parseFloat(value) || 0
+                              })}
+                              placeholder="2"
+                            />
+                            <NumberInputStepper>
+                              <NumberIncrementStepper />
+                              <NumberDecrementStepper />
+                            </NumberInputStepper>
+                          </NumberInput>
+                          <FormHelperText fontSize="xs">PPh 23: 2% jasa umum, 15% dividen/bunga/royalti</FormHelperText>
+                        </FormControl>
+
+                        <FormControl>
+                          <FormLabel fontSize="sm">Other Tax Deductions (IDR)</FormLabel>
+                          <CurrencyInput
+                            value={watchOtherTaxDeductions || 0}
+                            onChange={(value) => setValue('other_tax_deductions', value)}
+                            placeholder="Rp 0"
+                            min={0}
+                            showLabel={false}
+                            size="sm"
+                          />
+                          <FormHelperText fontSize="xs">Potongan pajak lainnya (flat amount)</FormHelperText>
+                        </FormControl>
+                      </HStack>
+                    </Box>
+
+                    {/* Tax Summary Calculation */}
+                    {calculateSubtotal() > 0 && (
+                      <Box mt={4} p={4} bg={alertBg} borderRadius="md" border="1px solid" borderColor={alertBorderColor}>
+                        <VStack spacing={2} align="stretch">
+                          <Text fontSize="sm" fontWeight="semibold" color={subHeadingColor}>Tax Summary:</Text>
+                          {(() => {
+                            const subtotal = calculateSubtotal();
+                            const discountAmount = discountType === 'percentage' 
+                              ? subtotal * (watchDiscountPercent / 100)
+                              : Math.min(watchDiscountPercent || 0, subtotal);
+                            const afterDiscount = subtotal - discountAmount;
+                            
+                            // Tax calculations using enhanced fields
+                            const ppnRate = watchPPNRate || watchPPNPercent || 11;
+                            const ppnAmount = afterDiscount * (ppnRate / 100);
+                            const otherAdditions = watchOtherTaxAdditions || 0;
+                            const totalAdditions = ppnAmount + otherAdditions;
+                            
+                            const pph21Amount = afterDiscount * (watchPPh21Rate / 100);
+                            const pph23Amount = afterDiscount * (watchPPh23Rate / 100);
+                            const otherDeductions = watchOtherTaxDeductions || 0;
+                            const totalDeductions = pph21Amount + pph23Amount + otherDeductions;
+                            
+                            const finalTotal = afterDiscount + totalAdditions - totalDeductions + watchShippingCost;
+                            
+                            return (
+                              <VStack spacing={2} fontSize="xs">
+                                <HStack justify="space-between" w="full">
+                                  <Text color={textColor}>Subtotal:</Text>
+                                  <Text color={textColor}>{salesService.formatCurrency(subtotal)}</Text>
+                                </HStack>
+                                {discountAmount > 0 && (
+                                  <HStack justify="space-between" w="full">
+                                    <Text color={textColor}>Global Discount:</Text>
+                                    <Text color="red.500">-{salesService.formatCurrency(discountAmount)}</Text>
+                                  </HStack>
+                                )}
+                                <HStack justify="space-between" w="full">
+                                  <Text color={textColor}>After Discount:</Text>
+                                  <Text color={textColor}>{salesService.formatCurrency(afterDiscount)}</Text>
+                                </HStack>
+                                
+                                <Divider />
+                                
+                                <HStack justify="space-between" w="full">
+                                  <Text color="green.600">+ PPN ({ppnRate}%):</Text>
+                                  <Text color="green.600">{salesService.formatCurrency(ppnAmount)}</Text>
+                                </HStack>
+                                {otherAdditions > 0 && (
+                                  <HStack justify="space-between" w="full">
+                                    <Text color="green.600">+ Other Additions:</Text>
+                                    <Text color="green.600">{salesService.formatCurrency(otherAdditions)}</Text>
+                                  </HStack>
+                                )}
+                                {pph21Amount > 0 && (
+                                  <HStack justify="space-between" w="full">
+                                    <Text color="red.600">- PPh21 ({watchPPh21Rate}%):</Text>
+                                    <Text color="red.600">-{salesService.formatCurrency(pph21Amount)}</Text>
+                                  </HStack>
+                                )}
+                                {pph23Amount > 0 && (
+                                  <HStack justify="space-between" w="full">
+                                    <Text color="red.600">- PPh23 ({watchPPh23Rate}%):</Text>
+                                    <Text color="red.600">-{salesService.formatCurrency(pph23Amount)}</Text>
+                                  </HStack>
+                                )}
+                                {otherDeductions > 0 && (
+                                  <HStack justify="space-between" w="full">
+                                    <Text color="red.600">- Other Deductions:</Text>
+                                    <Text color="red.600">-{salesService.formatCurrency(otherDeductions)}</Text>
+                                  </HStack>
+                                )}
+                                {watchShippingCost > 0 && (
+                                  <HStack justify="space-between" w="full">
+                                    <Text color={textColor}>+ Shipping Cost:</Text>
+                                    <Text color={textColor}>{salesService.formatCurrency(watchShippingCost)}</Text>
+                                  </HStack>
+                                )}
+                                
+                                <Divider />
+                                
+                                <HStack justify="space-between" w="full">
+                                  <Text fontWeight="bold" color={subHeadingColor}>Final Total:</Text>
+                                  <Text fontWeight="bold" color="blue.600">{salesService.formatCurrency(finalTotal)}</Text>
+                                </HStack>
+                              </VStack>
+                            );
+                          })()
+                          }
+                        </VStack>
+                      </Box>
+                    )}
+                  </VStack>
+                </CardBody>
+              </Card>
 
               <Divider />
 

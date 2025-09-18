@@ -2,8 +2,11 @@ package controllers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
 
@@ -12,11 +15,13 @@ import (
 
 type PurchaseController struct {
 	purchaseService *services.PurchaseService
+	paymentService  *services.PaymentService
 }
 
-func NewPurchaseController(purchaseService *services.PurchaseService) *PurchaseController {
+func NewPurchaseController(purchaseService *services.PurchaseService, paymentService *services.PaymentService) *PurchaseController {
 	return &PurchaseController{
 		purchaseService: purchaseService,
+		paymentService:  paymentService,
 	}
 }
 
@@ -552,8 +557,392 @@ func (pc *PurchaseController) GetPendingApprovals(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":  filteredPurchases,
-		"count": len(filteredPurchases),
+		"data": filteredPurchases,
+		"total": len(filteredPurchases),
+		"user_role": userRole,
+	})
+}
+
+// Purchase Payment Integration Operations
+
+// GetPurchaseForPayment godoc
+// @Summary Get purchase for payment
+// @Description Get purchase details formatted for payment processing
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/purchases/{id}/for-payment [get]
+func (pc *PurchaseController) GetPurchaseForPayment(c *gin.Context) {
+	purchaseID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid purchase ID"})
+		return
+	}
+
+	// Get purchase with vendor details
+	purchase, err := pc.purchaseService.GetPurchaseByID(uint(purchaseID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Purchase not found"})
+		return
+	}
+
+	// Check if purchase can receive payment
+	canReceivePayment := purchase.Status == models.PurchaseStatusApproved && 
+						 purchase.PaymentMethod == "CREDIT" && 
+						 purchase.OutstandingAmount > 0
+
+	// Format response for payment processing
+	response := gin.H{
+		"purchase_id":        purchase.ID,
+		"bill_number":        purchase.Code,
+		"vendor": gin.H{
+			"id":   purchase.Vendor.ID,
+			"name": purchase.Vendor.Name,
+			"type": "VENDOR",
+		},
+		"total_amount":       purchase.TotalAmount,
+		"paid_amount":        purchase.PaidAmount,
+		"outstanding_amount": purchase.OutstandingAmount,
+		"status":             purchase.Status,
+		"payment_method":     purchase.PaymentMethod,
+		"date":               purchase.Date.Format("2006-01-02"),
+		"can_receive_payment": canReceivePayment,
+	}
+
+	if !purchase.DueDate.IsZero() {
+		response["due_date"] = purchase.DueDate.Format("2006-01-02")
+	}
+
+	if canReceivePayment {
+		response["payment_url_suggestion"] = fmt.Sprintf("/api/purchases/%d/integrated-payment", purchase.ID)
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// CreateIntegratedPayment godoc
+// @Summary Create integrated payment for purchase
+// @Description Create payment record in both Purchase and Payment Management systems
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Param payment body models.APIResponse true "Payment details"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/purchases/{id}/integrated-payment [post]
+func (pc *PurchaseController) CreateIntegratedPayment(c *gin.Context) {
+	purchaseID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid purchase ID"})
+		return
+	}
+
+	var request struct {
+		Amount      float64 `json:"amount" binding:"required,gt=0"`
+		Date        string  `json:"date" binding:"required"`
+		Method      string  `json:"method" binding:"required"`
+		CashBankID  *uint   `json:"cash_bank_id"`
+		Reference   string  `json:"reference"`
+		Notes       string  `json:"notes"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID := c.MustGet("user_id").(uint)
+
+	// Parse date
+	paymentDate, err := time.Parse(time.RFC3339, request.Date)
+	if err != nil {
+		// Try alternative date format
+		paymentDate, err = time.Parse("2006-01-02", request.Date)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid date format. Use RFC3339 or YYYY-MM-DD"})
+			return
+		}
+	}
+
+	// Create integrated payment via service
+	result, err := pc.purchaseService.CreateIntegratedPayment(
+		uint(purchaseID),
+		request.Amount,
+		paymentDate,
+		request.Method,
+		request.CashBankID,
+		request.Reference,
+		request.Notes,
+		userID,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Failed to create payment",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, result)
+}
+
+// GetPurchasePayments godoc
+// @Summary Get purchase payments
+// @Description Get all payments for a specific purchase
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Success 200 {array} models.PurchasePayment
+// @Router /api/purchases/{id}/payments [get]
+func (pc *PurchaseController) GetPurchasePayments(c *gin.Context) {
+	purchaseID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid purchase ID"})
+		return
+	}
+
+	payments, err := pc.purchaseService.GetPurchasePayments(uint(purchaseID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, payments)
+}
+
+// CreatePurchasePayment creates a payment for a purchase via Payment Management
+func (pc *PurchaseController) CreatePurchasePayment(c *gin.Context) {
+	purchaseID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid purchase ID"})
+		return
+	}
+
+	var request struct {
+		Amount        float64 `json:"amount" binding:"required,min=0"`
+		Date          string  `json:"date" binding:"required"`
+		Method        string  `json:"method" binding:"required"`
+		CashBankID    uint    `json:"cash_bank_id" binding:"required"`
+		Reference     string  `json:"reference"`
+		Notes         string  `json:"notes"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Printf("Payment creation validation error for purchase %d: %v", purchaseID, err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request data",
+			"details": err.Error(),
+			"expected_fields": map[string]string{
+				"amount": "number (required, min=0)",
+				"date": "datetime string (required, ISO format)",
+				"method": "string (required)",
+				"cash_bank_id": "number (required)",
+				"reference": "string (optional)",
+				"notes": "string (optional)",
+			},
+		})
+		return
+	}
+
+	// Log successful request parsing
+	log.Printf("Received payment request for purchase %d: amount=%.2f, method=%s, cash_bank_id=%d, date=%s", purchaseID, request.Amount, request.Method, request.CashBankID, request.Date)
+	
+	// Parse date - support both RFC3339 and YYYY-MM-DD formats
+	paymentDate, err := time.Parse(time.RFC3339, request.Date)
+	if err != nil {
+		// Try alternative date format (YYYY-MM-DD)
+		paymentDate, err = time.Parse("2006-01-02", request.Date)
+		if err != nil {
+			log.Printf("Date parsing error for purchase %d: %v, date=%s", purchaseID, err, request.Date)
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Invalid date format",
+				"details": "Date must be in RFC3339 format (2006-01-02T15:04:05Z) or YYYY-MM-DD format",
+				"received_date": request.Date,
+			})
+			return
+		}
+		// If we parsed YYYY-MM-DD format, set to start of day
+		paymentDate = time.Date(paymentDate.Year(), paymentDate.Month(), paymentDate.Day(), 0, 0, 0, 0, time.UTC)
+	}
+	log.Printf("Parsed payment date: %v", paymentDate)
+	
+	// Get purchase details to validate and get vendor ID
+	purchase, err := pc.purchaseService.GetPurchaseByID(uint(purchaseID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Purchase not found",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Validate purchase status - only APPROVED credit purchases can receive payments
+	if purchase.Status != models.PurchaseStatusApproved {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Purchase must be approved to receive payments",
+			"purchase_status": purchase.Status,
+		})
+		return
+	}
+	
+	if purchase.PaymentMethod != models.PurchasePaymentCredit {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Only credit purchases can receive payments",
+			"payment_method": purchase.PaymentMethod,
+		})
+		return
+	}
+
+	// Validate payment amount
+	if request.Amount > purchase.OutstandingAmount {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Payment amount exceeds outstanding amount",
+			"outstanding_amount": purchase.OutstandingAmount,
+			"requested_amount": request.Amount,
+		})
+		return
+	}
+
+	// Get user ID with error handling
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		log.Printf("Error: user_id not found in context for purchase %d payment", purchaseID)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+			"details": "user_id not found in context",
+		})
+		return
+	}
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		log.Printf("Error: user_id has invalid type for purchase %d payment: %T", purchaseID, userIDInterface)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid user authentication",
+			"details": "user_id has invalid type",
+		})
+		return
+	}
+
+	// Create payment request for Payment Management service
+	paymentRequest := services.PaymentCreateRequest{
+		ContactID:   purchase.VendorID,
+		CashBankID:  request.CashBankID,
+		Date:        paymentDate, // Use the parsed paymentDate
+		Amount:      request.Amount,
+		Method:      request.Method,
+		Reference:   request.Reference,
+		Notes:       fmt.Sprintf("Payment for Purchase %s - %s", purchase.Code, request.Notes),
+		Allocations: []services.InvoiceAllocation{
+			{
+				InvoiceID: uint(purchaseID),
+				Amount:    request.Amount,
+			},
+		},
+	}
+
+	// Use Payment Management service
+	log.Printf("Calling PaymentService.CreatePayablePayment for purchase %d with amount %.2f", purchaseID, paymentRequest.Amount)
+	payment, err := pc.paymentService.CreatePayablePayment(paymentRequest, userID)
+	if err != nil {
+		log.Printf("Error in CreatePayablePayment for purchase %d: %v", purchaseID, err)
+		
+		// Check if this is an insufficient balance error
+		errorMessage := err.Error()
+		if strings.Contains(errorMessage, "insufficient balance") {
+			// Extract available balance from error message
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error": "Saldo rekening tidak mencukupi",
+				"error_type": "INSUFFICIENT_BALANCE",
+				"details": errorMessage,
+				"requested_amount": request.Amount,
+				"status": "error",
+				"message": "Saldo di rekening bank yang dipilih tidak mencukupi untuk melakukan pembayaran ini",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error": "Failed to create payment",
+				"details": err.Error(),
+				"status": "error",
+			})
+		}
+		return
+	}
+	log.Printf("✅ Payment created successfully: ID=%d, Code=%s", payment.ID, payment.Code)
+
+	// CRITICAL FIX: Update purchase payment amounts after successful payment
+	log.Printf("🔄 Updating purchase payment amounts for purchase %d...", purchaseID)
+	
+	// Calculate new paid and outstanding amounts
+	newPaidAmount := purchase.PaidAmount + request.Amount
+	newOutstandingAmount := purchase.TotalAmount - newPaidAmount
+	
+	// Determine new status
+	newStatus := purchase.Status
+	if newOutstandingAmount <= 0 {
+		newStatus = "PAID"
+		newOutstandingAmount = 0 // Ensure it doesn't go negative
+	}
+	
+	log.Printf("📊 Payment amounts: Paid %.2f → %.2f, Outstanding %.2f → %.2f, Status %s → %s", 
+		purchase.PaidAmount, newPaidAmount, purchase.OutstandingAmount, newOutstandingAmount, purchase.Status, newStatus)
+	
+	// Update purchase in database
+	err = pc.purchaseService.UpdatePurchasePaymentAmounts(uint(purchaseID), newPaidAmount, newOutstandingAmount, newStatus)
+	if err != nil {
+		log.Printf("❌ Critical error: Failed to update purchase payment amounts: %v", err)
+		// Payment was created successfully, but purchase amounts weren't updated
+		c.JSON(http.StatusCreated, gin.H{
+			"success": true,
+			"payment": payment,
+			"warning": "Payment created but purchase amounts could not be updated",
+			"error_details": err.Error(),
+			"status": "partial_success",
+			"message": "Payment recorded but purchase status may not reflect the payment. Please refresh the page.",
+		})
+		return
+	}
+	
+	log.Printf("✅ Purchase payment amounts updated successfully")
+	
+	// Return response with both payment info and updated purchase status
+	updatedPurchase, err := pc.purchaseService.GetPurchaseByID(uint(purchaseID))
+	if err != nil {
+		// If we can't get updated purchase info, still return success but with calculated values
+		log.Printf("Warning: Could not fetch updated purchase info after payment creation: %v", err)
+		c.JSON(http.StatusCreated, gin.H{
+			"success": true,
+			"payment": payment,
+			"updated_purchase": gin.H{
+				"id": uint(purchaseID),
+				"status": newStatus,
+				"paid_amount": newPaidAmount,
+				"outstanding_amount": newOutstandingAmount,
+			},
+			"message": "Payment created successfully via Payment Management",
+			"status": "success",
+		})
+		return
+	}
+	
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"payment": payment,
+		"updated_purchase": gin.H{
+			"id": updatedPurchase.ID,
+			"status": updatedPurchase.Status,
+			"paid_amount": updatedPurchase.PaidAmount,
+			"outstanding_amount": updatedPurchase.OutstandingAmount,
+		},
+		"message": "Payment created successfully via Payment Management",
+		"status": "success",
 	})
 }
 

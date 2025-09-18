@@ -69,58 +69,7 @@ func (rc *ReportController) GetProfessionalBalanceSheet(c *gin.Context) {
 	}
 }
 
-// GetProfessionalProfitLoss generates a professional Profit & Loss report
-func (rc *ReportController) GetProfessionalProfitLoss(c *gin.Context) {
-	startDate := c.Query("start_date")
-	endDate := c.Query("end_date")
-	format := c.DefaultQuery("format", "pdf")
-
-	if startDate == "" || endDate == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "start_date and end_date are required"})
-		return
-	}
-
-	start, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid start_date format. Use YYYY-MM-DD"})
-		return
-	}
-
-	end, err := time.Parse("2006-01-02", endDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid end_date format. Use YYYY-MM-DD"})
-		return
-	}
-
-	if format == "pdf" {
-		pdfData, err := rc.professionalService.GenerateProfitLossPDF(start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to generate PDF report", "error": err.Error()})
-			return
-		}
-		c.Header("Content-Type", "application/pdf")
-		c.Header("Content-Disposition", "attachment; filename=professional_profit_loss.pdf")
-		c.Data(http.StatusOK, "application/pdf", pdfData)
-	} else if format == "csv" {
-		csvData, err := rc.professionalService.GenerateProfitLossCSV(start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to generate CSV report", "error": err.Error()})
-			return
-		}
-		c.Header("Content-Type", "text/csv")
-		c.Header("Content-Disposition", "attachment; filename=professional_profit_loss.csv")
-		c.Data(http.StatusOK, "text/csv", csvData)
-	} else if format == "json" {
-		jsonData, err := rc.professionalService.GenerateProfitLossJSON(start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to generate JSON report", "error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "success", "data": jsonData})
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Unsupported format"})
-	}
-}
+// Note: GetProfessionalProfitLoss method removed - use Enhanced P&L Controller at /api/reports/enhanced/profit-loss instead
 
 // GetProfessionalCashFlow generates a professional Cash Flow Statement report
 func (rc *ReportController) GetProfessionalCashFlow(c *gin.Context) {
@@ -285,38 +234,7 @@ func (rc *ReportController) GetBalanceSheet(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "data": report})
 }
 
-// GetProfitLoss generates an enhanced profit & loss statement with proper COGS categorization
-func (rc *ReportController) GetProfitLoss(c *gin.Context) {
-	startDate := c.Query("start_date")
-	endDate := c.Query("end_date")
-	_ = c.DefaultQuery("format", "json") // Format not used in enhanced version
-
-	if startDate == "" || endDate == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "start_date and end_date are required"})
-		return
-	}
-
-	start, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid start_date format. Use YYYY-MM-DD"})
-		return
-	}
-
-	end, err := time.Parse("2006-01-02", endDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid end_date format. Use YYYY-MM-DD"})
-		return
-	}
-
-	// Use Enhanced Profit Loss Service for accurate COGS categorization
-	report, err := rc.reportService.GenerateEnhancedProfitLoss(start, end)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"status": "success", "data": report})
-}
+// Note: GetProfitLoss method removed - use Enhanced P&L Controller at /api/reports/enhanced/profit-loss instead
 
 // GetCashFlow generates a cash flow statement
 func (rc *ReportController) GetCashFlow(c *gin.Context) {

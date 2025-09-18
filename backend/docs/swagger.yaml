@@ -1,0 +1,4151 @@
+basePath: /api/v1
+definitions:
+  models.APIResponse:
+    properties:
+      data: {}
+      message:
+        example: Operation successful
+        type: string
+      status:
+        example: success
+        type: string
+    type: object
+  models.Account:
+    properties:
+      balance:
+        type: number
+      category:
+        description: CURRENT_ASSET, FIXED_ASSET, etc.
+        type: string
+      child_count:
+        description: Number of child accounts
+        type: integer
+      children:
+        items:
+          $ref: '#/definitions/models.Account'
+        type: array
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      is_header:
+        type: boolean
+      level:
+        type: integer
+      name:
+        type: string
+      parent:
+        allOf:
+        - $ref: '#/definitions/models.Account'
+        description: Relations
+      parent_id:
+        type: integer
+      total_balance:
+        description: Calculated fields (not stored in DB)
+        type: number
+      type:
+        description: ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.ApprovalAction:
+    properties:
+      action_date:
+        type: string
+      approver:
+        $ref: '#/definitions/models.User'
+      approver_id:
+        type: integer
+      comments:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      request:
+        allOf:
+        - $ref: '#/definitions/models.ApprovalRequest'
+        description: Relations
+      request_id:
+        type: integer
+      status:
+        description: PENDING, APPROVED, REJECTED, SKIPPED
+        type: string
+      step:
+        $ref: '#/definitions/models.ApprovalStep'
+      step_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.ApprovalHistory:
+    properties:
+      action:
+        description: CREATED, APPROVED, REJECTED, CANCELLED
+        type: string
+      comments:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      metadata:
+        description: Additional context data
+        type: string
+      request:
+        allOf:
+        - $ref: '#/definitions/models.ApprovalRequest'
+        description: Relations
+      request_id:
+        type: integer
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: integer
+    type: object
+  models.ApprovalRequest:
+    properties:
+      amount:
+        type: number
+      approval_history:
+        items:
+          $ref: '#/definitions/models.ApprovalHistory'
+        type: array
+      approval_steps:
+        items:
+          $ref: '#/definitions/models.ApprovalAction'
+        type: array
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      entity_id:
+        type: integer
+      entity_type:
+        description: SALE, PURCHASE
+        type: string
+      id:
+        type: integer
+      priority:
+        description: LOW, NORMAL, HIGH, URGENT
+        type: string
+      reject_reason:
+        type: string
+      request_code:
+        type: string
+      request_message:
+        type: string
+      request_title:
+        type: string
+      requester:
+        $ref: '#/definitions/models.User'
+      requester_id:
+        type: integer
+      status:
+        description: PENDING, APPROVED, REJECTED, CANCELLED
+        type: string
+      updated_at:
+        type: string
+      workflow:
+        allOf:
+        - $ref: '#/definitions/models.ApprovalWorkflow'
+        description: Relations
+      workflow_id:
+        type: integer
+    type: object
+  models.ApprovalStep:
+    properties:
+      approver_role:
+        description: finance, director, admin
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_optional:
+        type: boolean
+      is_parallel:
+        description: Allow parallel approval with other steps in same order
+        type: boolean
+      step_name:
+        type: string
+      step_order:
+        type: integer
+      time_limit:
+        description: hours
+        type: integer
+      updated_at:
+        type: string
+      workflow:
+        allOf:
+        - $ref: '#/definitions/models.ApprovalWorkflow'
+        description: Relations
+      workflow_id:
+        type: integer
+    type: object
+  models.ApprovalWorkflow:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      max_amount:
+        type: number
+      min_amount:
+        type: number
+      module:
+        description: SALES, PURCHASE, EXPENSE, etc
+        type: string
+      name:
+        type: string
+      require_director:
+        type: boolean
+      require_finance:
+        type: boolean
+      steps:
+        description: Relations
+        items:
+          $ref: '#/definitions/models.ApprovalStep'
+        type: array
+      updated_at:
+        type: string
+    type: object
+  models.CashBank:
+    properties:
+      account:
+        allOf:
+        - $ref: '#/definitions/models.Account'
+        description: Relations
+      account_id:
+        type: integer
+      account_no:
+        type: string
+      balance:
+        type: number
+      bank_name:
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      currency:
+        type: string
+      daily_limit:
+        type: number
+      description:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      is_restricted:
+        type: boolean
+      max_balance:
+        type: number
+      min_balance:
+        type: number
+      monthly_limit:
+        type: number
+      name:
+        type: string
+      transactions:
+        items:
+          $ref: '#/definitions/models.CashBankTransaction'
+        type: array
+      type:
+        description: CASH, BANK
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  models.CashBankTransaction:
+    properties:
+      amount:
+        type: number
+      balance_after:
+        type: number
+      cash_bank:
+        allOf:
+        - $ref: '#/definitions/models.CashBank'
+        description: Relations
+      cash_bank_id:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: integer
+      notes:
+        type: string
+      reference_id:
+        type: integer
+      reference_type:
+        description: PAYMENT, TRANSFER
+        type: string
+      transaction_date:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.Contact:
+    properties:
+      address:
+        description: Simple address field
+        type: string
+      addresses:
+        description: Relations
+        items:
+          $ref: '#/definitions/models.ContactAddress'
+        type: array
+      category:
+        description: RETAIL, WHOLESALE, etc.
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      credit_limit:
+        type: number
+      default_expense_account_id:
+        description: Default Expense Account for purchases from this vendor
+        type: integer
+      email:
+        type: string
+      external_id:
+        description: Employee ID, Vendor ID, Customer ID
+        type: string
+      fax:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      mobile:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      payment_terms:
+        description: Days
+        type: integer
+      phone:
+        type: string
+      pic_name:
+        description: Additional fields
+        type: string
+      tax_number:
+        type: string
+      type:
+        description: CUSTOMER, VENDOR, EMPLOYEE
+        type: string
+      updated_at:
+        type: string
+      website:
+        type: string
+    type: object
+  models.ContactAddress:
+    properties:
+      address1:
+        type: string
+      address2:
+        type: string
+      city:
+        type: string
+      contact_id:
+        type: integer
+      country:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_default:
+        type: boolean
+      postal_code:
+        type: string
+      state:
+        type: string
+      type:
+        description: BILLING, SHIPPING, MAILING
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.DashboardResponse:
+    properties:
+      low_stock_count:
+        example: 5
+        type: integer
+      pending_approvals:
+        example: 3
+        type: integer
+      total_payments:
+        example: 95000000
+        type: number
+      total_purchases:
+        example: 80000000
+        type: number
+      total_sales:
+        example: 125000000
+        type: number
+    type: object
+  models.ErrorResponse:
+    properties:
+      error:
+        example: detailed error message
+        type: string
+      message:
+        example: Something went wrong
+        type: string
+      status:
+        example: error
+        type: string
+    type: object
+  models.IpWhitelist:
+    properties:
+      added_by:
+        type: integer
+      added_by_user:
+        allOf:
+        - $ref: '#/definitions/models.User'
+        description: Relations
+      created_at:
+        type: string
+      description:
+        type: string
+      environment:
+        description: production, development, staging
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: integer
+      ip_address:
+        type: string
+      ip_range:
+        description: CIDR notation if range
+        type: string
+      is_active:
+        type: boolean
+      updated_at:
+        type: string
+    type: object
+  models.Journal:
+    properties:
+      code:
+        type: string
+      created_at:
+        type: string
+      date:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_adjusting:
+        type: boolean
+      period:
+        description: YYYY-MM format
+        type: string
+      reference_id:
+        type: integer
+      reference_type:
+        description: MANUAL, SALE, PURCHASE, PAYMENT, etc.
+        type: string
+      status:
+        description: PENDING, POSTED, CANCELLED
+        type: string
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+      updated_at:
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/models.User'
+        description: Relations
+      user_id:
+        type: integer
+    type: object
+  models.JournalEntry:
+    properties:
+      account:
+        $ref: '#/definitions/models.Account'
+      account_id:
+        description: Primary account ID for simple entries
+        type: integer
+      code:
+        description: JE-YYYY-MM-XXXX
+        type: string
+      created_at:
+        type: string
+      creator:
+        $ref: '#/definitions/models.User'
+      description:
+        type: string
+      entry_date:
+        description: Journal entry date
+        type: string
+      id:
+        type: integer
+      is_auto_generated:
+        description: Auto vs Manual entry
+        type: boolean
+      is_balanced:
+        description: 'Auto-calculated: debit = credit'
+        type: boolean
+      journal:
+        allOf:
+        - $ref: '#/definitions/models.Journal'
+        description: Relations
+      journal_id:
+        description: Reference to parent journal (optional)
+        type: integer
+      journal_lines:
+        items:
+          $ref: '#/definitions/models.JournalLine'
+        type: array
+      notes:
+        type: string
+      posted_by:
+        description: User who posted the entry
+        type: integer
+      poster:
+        $ref: '#/definitions/models.User'
+      posting_date:
+        description: When posted to GL
+        type: string
+      reference:
+        description: Reference to source transaction
+        type: string
+      reference_id:
+        description: ID of source transaction
+        type: integer
+      reference_type:
+        description: SALE, PURCHASE, PAYMENT, MANUAL, etc.
+        type: string
+      reversal_entry:
+        $ref: '#/definitions/models.JournalEntry'
+      reversal_id:
+        description: Points to reversing entry
+        type: integer
+      reversed_entry:
+        $ref: '#/definitions/models.JournalEntry'
+      reversed_id:
+        description: Points to original entry being reversed
+        type: integer
+      status:
+        description: DRAFT, POSTED, REVERSED
+        type: string
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+      updated_at:
+        type: string
+      user_id:
+        description: User who created the entry
+        type: integer
+    type: object
+  models.JournalEntryCreateRequest:
+    properties:
+      account_id:
+        type: integer
+      description:
+        type: string
+      entry_date:
+        type: string
+      is_auto_generated:
+        type: boolean
+      notes:
+        type: string
+      reference:
+        type: string
+      reference_id:
+        type: integer
+      reference_type:
+        type: string
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+      user_id:
+        type: integer
+    required:
+    - description
+    - entry_date
+    - user_id
+    type: object
+  models.JournalEntrySummary:
+    properties:
+      balanced_entries:
+        type: integer
+      status_counts:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+      total_entries:
+        type: integer
+      type_counts:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+    type: object
+  models.JournalEntryUpdateRequest:
+    properties:
+      description:
+        type: string
+      entry_date:
+        type: string
+      journal_lines:
+        items:
+          $ref: '#/definitions/models.JournalLineCreateRequest'
+        type: array
+      notes:
+        type: string
+      reference:
+        type: string
+    type: object
+  models.JournalLine:
+    properties:
+      account:
+        $ref: '#/definitions/models.Account'
+      account_id:
+        type: integer
+      created_at:
+        type: string
+      credit_amount:
+        type: number
+      debit_amount:
+        type: number
+      description:
+        type: string
+      id:
+        type: integer
+      journal_entry_id:
+        type: integer
+      line_number:
+        description: Order of lines in entry
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.JournalLineCreateRequest:
+    properties:
+      account_id:
+        type: integer
+      credit_amount:
+        type: number
+      debit_amount:
+        type: number
+      description:
+        type: string
+    required:
+    - account_id
+    type: object
+  models.LoginData:
+    properties:
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+    type: object
+  models.LoginRequest:
+    properties:
+      password:
+        example: password123
+        type: string
+      username:
+        example: admin
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  models.LoginResponse:
+    properties:
+      data:
+        $ref: '#/definitions/models.LoginData'
+      status:
+        example: success
+        type: string
+    type: object
+  models.Payment:
+    properties:
+      amount:
+        type: number
+      code:
+        type: string
+      contact:
+        allOf:
+        - $ref: '#/definitions/models.Contact'
+        description: Relations
+      contact_id:
+        type: integer
+      created_at:
+        type: string
+      date:
+        type: string
+      id:
+        type: integer
+      method:
+        description: CASH, BANK
+        type: string
+      notes:
+        type: string
+      reference:
+        type: string
+      status:
+        description: PENDING, COMPLETED, FAILED
+        type: string
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: integer
+    type: object
+  models.Product:
+    properties:
+      barcode:
+        type: string
+      brand:
+        type: string
+      category:
+        allOf:
+        - $ref: '#/definitions/models.ProductCategory'
+        description: Relations
+      category_id:
+        type: integer
+      code:
+        type: string
+      cost_price:
+        type: number
+      created_at:
+        type: string
+      default_expense_account_id:
+        description: Default Expense Account for Purchase Items
+        type: integer
+      description:
+        type: string
+      dimensions:
+        type: string
+      id:
+        type: integer
+      image_path:
+        type: string
+      is_active:
+        type: boolean
+      is_service:
+        type: boolean
+      max_stock:
+        type: integer
+      min_stock:
+        type: integer
+      model:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      pricing_tier:
+        type: string
+      purchase_price:
+        type: number
+      reorder_level:
+        type: integer
+      sale_price:
+        type: number
+      sku:
+        type: string
+      stock:
+        type: integer
+      taxable:
+        type: boolean
+      unit:
+        description: pcs, kg, liter, etc
+        type: string
+      updated_at:
+        type: string
+      variants:
+        items:
+          $ref: '#/definitions/models.ProductVariant'
+        type: array
+      warehouse_location:
+        $ref: '#/definitions/models.WarehouseLocation'
+      warehouse_location_id:
+        type: integer
+      weight:
+        type: number
+    type: object
+  models.ProductCategory:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/models.ProductCategory'
+        type: array
+      code:
+        type: string
+      created_at:
+        type: string
+      default_expense_account_id:
+        description: Default Expense Account for products in this category
+        type: integer
+      description:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        type: string
+      parent:
+        allOf:
+        - $ref: '#/definitions/models.ProductCategory'
+        description: Relations
+      parent_id:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.ProductVariant:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        type: string
+      price:
+        type: number
+      product:
+        allOf:
+        - $ref: '#/definitions/models.Product'
+        description: Relations
+      product_id:
+        type: integer
+      sku:
+        type: string
+      stock:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.Purchase:
+    properties:
+      approval_amount_basis:
+        type: string
+      approval_base_amount:
+        type: number
+      approval_request:
+        $ref: '#/definitions/models.ApprovalRequest'
+      approval_request_id:
+        type: integer
+      approval_status:
+        type: string
+      approved_at:
+        type: string
+      approved_by:
+        type: integer
+      approver:
+        $ref: '#/definitions/models.User'
+      bank_account:
+        $ref: '#/definitions/models.CashBank'
+      bank_account_id:
+        description: For cash/transfer purchases
+        type: integer
+      code:
+        type: string
+      created_at:
+        type: string
+      credit_account:
+        $ref: '#/definitions/models.Account'
+      credit_account_id:
+        description: For credit purchases - liability account
+        type: integer
+      date:
+        type: string
+      discount:
+        description: order-level discount percent
+        type: number
+      due_date:
+        type: string
+      id:
+        type: integer
+      item_discount_amount:
+        type: number
+      matching_status:
+        type: string
+      net_before_tax:
+        type: number
+      notes:
+        type: string
+      order_discount_amount:
+        type: number
+      other_tax_additions:
+        description: Other tax additions
+        type: number
+      other_tax_deductions:
+        description: Other tax deductions
+        type: number
+      outstanding_amount:
+        type: number
+      paid_amount:
+        description: Payment tracking fields
+        type: number
+      payment_method:
+        description: Bank/Payment method fields
+        type: string
+      payment_reference:
+        description: Check number, transfer reference, etc.
+        type: string
+      pph21_amount:
+        description: Calculated PPh 21 amount
+        type: number
+      pph21_rate:
+        description: Tax deductions (Pemotongan) - PPh, etc
+        type: number
+      pph23_amount:
+        description: Calculated PPh 23 amount
+        type: number
+      pph23_rate:
+        description: PPh 23 percentage
+        type: number
+      ppn_amount:
+        description: Calculated PPN amount
+        type: number
+      ppn_rate:
+        description: Tax additions (Penambahan) - PPN, etc
+        type: number
+      purchase_items:
+        items:
+          $ref: '#/definitions/models.PurchaseItem'
+        type: array
+      requires_approval:
+        description: Approval fields
+        type: boolean
+      status:
+        description: DRAFT, PENDING_APPROVAL, APPROVED, COMPLETED, CANCELLED
+        type: string
+      subtotal_before_discount:
+        description: Monetary breakdown
+        type: number
+      tax_amount:
+        description: Legacy tax field (kept for backward compatibility)
+        type: number
+      total_amount:
+        description: kept for compatibility (grand total)
+        type: number
+      total_tax_additions:
+        description: Total penambahan
+        type: number
+      total_tax_deductions:
+        description: Total pemotongan
+        type: number
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: integer
+      vendor:
+        allOf:
+        - $ref: '#/definitions/models.Contact'
+        description: Relations
+      vendor_id:
+        type: integer
+    type: object
+  models.PurchaseItem:
+    properties:
+      created_at:
+        type: string
+      discount:
+        type: number
+      expense_account:
+        $ref: '#/definitions/models.Account'
+      expense_account_id:
+        type: integer
+      id:
+        type: integer
+      product:
+        $ref: '#/definitions/models.Product'
+      product_id:
+        type: integer
+      purchase:
+        allOf:
+        - $ref: '#/definitions/models.Purchase'
+        description: Relations
+      purchase_id:
+        type: integer
+      quantity:
+        type: integer
+      tax:
+        type: number
+      total_price:
+        type: number
+      unit_price:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  models.PurchasePayment:
+    properties:
+      amount:
+        type: number
+      cash_bank:
+        $ref: '#/definitions/models.CashBank'
+      cash_bank_id:
+        type: integer
+      created_at:
+        type: string
+      date:
+        type: string
+      id:
+        type: integer
+      method:
+        type: string
+      notes:
+        type: string
+      payment:
+        $ref: '#/definitions/models.Payment'
+      payment_id:
+        description: Cross-reference to payments table
+        type: integer
+      payment_number:
+        type: string
+      purchase:
+        allOf:
+        - $ref: '#/definitions/models.Purchase'
+        description: Relations
+      purchase_id:
+        type: integer
+      reference:
+        type: string
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: integer
+    type: object
+  models.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    required:
+    - refresh_token
+    type: object
+  models.RegisterRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      first_name:
+        example: John
+        type: string
+      last_name:
+        example: Doe
+        type: string
+      password:
+        example: password123
+        minLength: 6
+        type: string
+      role:
+        example: employee
+        type: string
+      username:
+        example: john_doe
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  models.Sale:
+    properties:
+      billing_address:
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      currency:
+        type: string
+      customer:
+        allOf:
+        - $ref: '#/definitions/models.Contact'
+        description: Relations
+      customer_id:
+        type: integer
+      date:
+        type: string
+      discount_amount:
+        type: number
+      discount_percent:
+        type: number
+      due_date:
+        type: string
+      exchange_rate:
+        type: number
+      id:
+        type: integer
+      internal_notes:
+        type: string
+      invoice_number:
+        type: string
+      net_before_tax:
+        description: Enhanced tax configuration (similar to Purchase model)
+        type: number
+      notes:
+        type: string
+      other_tax_additions:
+        description: Other tax additions
+        type: number
+      other_tax_deductions:
+        description: Other tax deductions
+        type: number
+      outstanding_amount:
+        type: number
+      paid_amount:
+        type: number
+      payment_method:
+        type: string
+      payment_terms:
+        type: string
+      pph:
+        type: number
+      pph_percent:
+        type: number
+      pph_type:
+        type: string
+      pph21_amount:
+        description: Calculated PPh 21 amount
+        type: number
+      pph21_rate:
+        description: Tax deductions (Pemotongan) - PPh, etc
+        type: number
+      pph23_amount:
+        description: Calculated PPh 23 amount
+        type: number
+      pph23_rate:
+        description: PPh 23 percentage
+        type: number
+      ppn:
+        type: number
+      ppn_amount:
+        description: Calculated PPN amount
+        type: number
+      ppn_percent:
+        type: number
+      ppn_rate:
+        description: Tax additions (Penambahan) - PPN, etc
+        type: number
+      quotation_number:
+        type: string
+      reference:
+        type: string
+      sale_items:
+        items:
+          $ref: '#/definitions/models.SaleItem'
+        type: array
+      sale_payments:
+        items:
+          $ref: '#/definitions/models.SalePayment'
+        type: array
+      sale_returns:
+        items:
+          $ref: '#/definitions/models.SaleReturn'
+        type: array
+      sales_person:
+        $ref: '#/definitions/models.Contact'
+      sales_person_id:
+        type: integer
+      shipping_address:
+        type: string
+      shipping_cost:
+        type: number
+      shipping_method:
+        type: string
+      shipping_taxable:
+        type: boolean
+      status:
+        description: DRAFT, PENDING, CONFIRMED, CANCELLED
+        type: string
+      sub_total:
+        description: Read-only alias for frontend consistency
+        type: number
+      subtotal:
+        type: number
+      tax:
+        description: Legacy tax fields (kept for backward compatibility)
+        type: number
+      taxable_amount:
+        type: number
+      total_amount:
+        type: number
+      total_tax:
+        type: number
+      total_tax_additions:
+        description: Total penambahan
+        type: number
+      total_tax_deductions:
+        description: Total pemotongan
+        type: number
+      type:
+        description: QUOTATION, ORDER, INVOICE
+        type: string
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: integer
+      valid_until:
+        type: string
+    type: object
+  models.SaleItem:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      discount:
+        description: 'Read-only: Legacy field'
+        type: number
+      discount_amount:
+        type: number
+      discount_percent:
+        type: number
+      final_amount:
+        type: number
+      id:
+        type: integer
+      line_total:
+        type: number
+      pph_amount:
+        type: number
+      ppn_amount:
+        type: number
+      product:
+        $ref: '#/definitions/models.Product'
+      product_id:
+        type: integer
+      quantity:
+        type: integer
+      revenue_account:
+        $ref: '#/definitions/models.Account'
+      revenue_account_id:
+        type: integer
+      sale_id:
+        type: integer
+      tax:
+        description: 'Read-only: Legacy field'
+        type: number
+      tax_account:
+        $ref: '#/definitions/models.Account'
+      tax_account_id:
+        type: integer
+      taxable:
+        type: boolean
+      total_price:
+        description: Computed fields - these are calculated and should not be set
+          directly
+        type: number
+      total_tax:
+        type: number
+      unit_price:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  models.SalePayment:
+    properties:
+      account:
+        $ref: '#/definitions/models.Account'
+      account_id:
+        type: integer
+      amount:
+        type: number
+      cash_bank:
+        $ref: '#/definitions/models.CashBank'
+      cash_bank_id:
+        type: integer
+      created_at:
+        type: string
+      date:
+        type: string
+      id:
+        type: integer
+      method:
+        type: string
+      notes:
+        type: string
+      payment_id:
+        description: Cross-reference to Payment Management
+        type: integer
+      payment_number:
+        type: string
+      reference:
+        type: string
+      sale:
+        allOf:
+        - $ref: '#/definitions/models.Sale'
+        description: Relations
+      sale_id:
+        type: integer
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: integer
+    type: object
+  models.SaleReturn:
+    properties:
+      approver:
+        $ref: '#/definitions/models.User'
+      approver_id:
+        type: integer
+      created_at:
+        type: string
+      credit_note_number:
+        type: string
+      date:
+        type: string
+      id:
+        type: integer
+      notes:
+        type: string
+      reason:
+        type: string
+      return_items:
+        items:
+          $ref: '#/definitions/models.SaleReturnItem'
+        type: array
+      return_number:
+        type: string
+      sale:
+        allOf:
+        - $ref: '#/definitions/models.Sale'
+        description: Relations
+      sale_id:
+        type: integer
+      status:
+        type: string
+      total_amount:
+        type: number
+      type:
+        type: string
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: integer
+    type: object
+  models.SaleReturnItem:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      quantity:
+        type: integer
+      reason:
+        type: string
+      sale_item:
+        $ref: '#/definitions/models.SaleItem'
+      sale_item_id:
+        type: integer
+      sale_return:
+        allOf:
+        - $ref: '#/definitions/models.SaleReturn'
+        description: Relations
+      sale_return_id:
+        type: integer
+      total_amount:
+        type: number
+      unit_price:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  models.SecurityIncident:
+    properties:
+      client_ip:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      incident_type:
+        description: IP_WHITELIST_VIOLATION, SUSPICIOUS_REQUEST, etc.
+        type: string
+      notes:
+        type: string
+      request_headers:
+        type: string
+      request_method:
+        type: string
+      request_path:
+        type: string
+      resolved:
+        type: boolean
+      resolved_at:
+        type: string
+      resolved_by:
+        type: integer
+      resolved_by_user:
+        $ref: '#/definitions/models.User'
+      session_id:
+        type: string
+      severity:
+        description: low, medium, high, critical
+        type: string
+      updated_at:
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/models.User'
+        description: Relations
+      user_agent:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  models.SystemAlert:
+    properties:
+      acknowledged:
+        type: boolean
+      acknowledged_at:
+        type: string
+      acknowledged_by:
+        type: integer
+      acknowledged_by_user:
+        allOf:
+        - $ref: '#/definitions/models.User'
+        description: Relations
+      alert_type:
+        description: RATE_LIMIT, SUSPICIOUS_ACTIVITY, etc.
+        type: string
+      count:
+        type: integer
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      first_seen:
+        type: string
+      id:
+        type: integer
+      last_seen:
+        type: string
+      level:
+        description: info, warning, error, critical
+        type: string
+      message:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.User:
+    properties:
+      address:
+        type: string
+      created_at:
+        type: string
+      department:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      hire_date:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      last_login_at:
+        type: string
+      last_name:
+        type: string
+      phone:
+        type: string
+      position:
+        type: string
+      role:
+        description: admin, director, finance, employee, inventory_manager
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  models.UserResponse:
+    properties:
+      created_at:
+        example: "2024-01-15T09:30:00Z"
+        type: string
+      email:
+        example: john@example.com
+        type: string
+      full_name:
+        example: John Doe
+        type: string
+      id:
+        example: 1
+        type: integer
+      is_active:
+        example: true
+        type: boolean
+      role:
+        example: admin
+        type: string
+      updated_at:
+        example: "2024-01-15T09:30:00Z"
+        type: string
+      username:
+        example: john_doe
+        type: string
+    type: object
+  models.WarehouseLocation:
+    properties:
+      address:
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      name:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  services.AccountBalance:
+    properties:
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      account_type:
+        type: string
+      balance:
+        type: number
+      currency:
+        type: string
+    type: object
+  services.BalanceDiscrepancy:
+    properties:
+      cash_bank_balance:
+        type: number
+      cash_bank_code:
+        type: string
+      cash_bank_id:
+        type: integer
+      cash_bank_name:
+        type: string
+      detected_at:
+        type: string
+      difference:
+        type: number
+      gl_account_id:
+        type: integer
+      gl_balance:
+        type: number
+      gl_code:
+        type: string
+      gl_name:
+        type: string
+    type: object
+  services.BalanceMonitoringResult:
+    properties:
+      check_time:
+        type: string
+      discrepancies:
+        items:
+          $ref: '#/definitions/services.BalanceDiscrepancy'
+        type: array
+      status:
+        description: '"OK", "WARNING", "ERROR"'
+        type: string
+      synchronized_accounts:
+        type: integer
+      total_accounts_checked:
+        type: integer
+      unsynchronized_accounts:
+        type: integer
+    type: object
+  services.BalanceSummary:
+    properties:
+      by_account:
+        items:
+          $ref: '#/definitions/services.AccountBalance'
+        type: array
+      by_currency:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      total_balance:
+        type: number
+      total_bank:
+        type: number
+      total_cash:
+        type: number
+    type: object
+  services.BankReconciliation:
+    properties:
+      cashBankID:
+        type: integer
+      createdAt:
+        type: string
+      difference:
+        type: number
+      id:
+        type: integer
+      reconcileDate:
+        type: string
+      statementBalance:
+        type: number
+      status:
+        type: string
+      systemBalance:
+        type: number
+      updatedAt:
+        type: string
+      userID:
+        type: integer
+    type: object
+  services.BillAllocation:
+    properties:
+      amount:
+        type: number
+      bill_id:
+        type: integer
+    type: object
+  services.CashBankCreateRequest:
+    properties:
+      account_id:
+        type: integer
+      account_no:
+        type: string
+      bank_name:
+        type: string
+      currency:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      opening_balance:
+        type: number
+      opening_date:
+        type: string
+      type:
+        enum:
+        - CASH
+        - BANK
+        type: string
+    required:
+    - name
+    - type
+    type: object
+  services.CashBankTransfer:
+    properties:
+      amount:
+        type: number
+      convertedAmount:
+        type: number
+      createdAt:
+        type: string
+      date:
+        type: string
+      exchangeRate:
+        type: number
+      fromAccountID:
+        type: integer
+      id:
+        type: integer
+      notes:
+        type: string
+      reference:
+        type: string
+      status:
+        type: string
+      toAccountID:
+        type: integer
+      transferNumber:
+        type: string
+      updatedAt:
+        type: string
+      userID:
+        type: integer
+    type: object
+  services.CashBankUpdateRequest:
+    properties:
+      account_no:
+        type: string
+      bank_name:
+        type: string
+      description:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+    type: object
+  services.DepositRequest:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        minimum: 0
+        type: number
+      date:
+        type: string
+      notes:
+        type: string
+      reference:
+        type: string
+      source_account_id:
+        description: 'Optional: Revenue account for deposit source'
+        type: integer
+    required:
+    - account_id
+    - amount
+    - date
+    type: object
+  services.DrilldownMetadata:
+    properties:
+      filter_criteria:
+        type: string
+      generated_at:
+        type: string
+      line_item_name:
+        type: string
+      report_type:
+        type: string
+    type: object
+  services.InvoiceAllocation:
+    properties:
+      amount:
+        type: number
+      invoice_id:
+        type: integer
+    type: object
+  services.JournalDrilldownRequest:
+    properties:
+      account_codes:
+        description: Specific account codes to filter
+        items:
+          type: string
+        type: array
+      account_ids:
+        description: Specific account IDs to filter
+        items:
+          type: integer
+        type: array
+      end_date:
+        description: Date range end
+        type: string
+      limit:
+        type: integer
+      line_item_name:
+        description: Name of the line item clicked
+        type: string
+      max_amount:
+        description: Maximum amount filter
+        type: number
+      min_amount:
+        description: Minimum amount filter
+        type: number
+      page:
+        type: integer
+      report_type:
+        description: BALANCE_SHEET, PROFIT_LOSS, CASH_FLOW
+        type: string
+      start_date:
+        description: Date range start
+        type: string
+      transaction_types:
+        description: SALE, PURCHASE, PAYMENT, etc.
+        items:
+          type: string
+        type: array
+    type: object
+  services.JournalDrilldownResponse:
+    properties:
+      journal_entries:
+        items:
+          $ref: '#/definitions/models.JournalEntry'
+        type: array
+      metadata:
+        $ref: '#/definitions/services.DrilldownMetadata'
+      summary:
+        $ref: '#/definitions/services.JournalEntrySummary'
+      total:
+        type: integer
+    type: object
+  services.JournalEntrySummary:
+    properties:
+      accounts_involved:
+        items:
+          type: string
+        type: array
+      date_range_end:
+        type: string
+      date_range_start:
+        type: string
+      entry_count:
+        type: integer
+      net_amount:
+        type: number
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+    type: object
+  services.PaymentCreateRequest:
+    properties:
+      allocations:
+        items:
+          $ref: '#/definitions/services.InvoiceAllocation'
+        type: array
+      amount:
+        minimum: 0
+        type: number
+      bill_allocations:
+        items:
+          $ref: '#/definitions/services.BillAllocation'
+        type: array
+      cash_bank_id:
+        type: integer
+      contact_id:
+        type: integer
+      date:
+        type: string
+      method:
+        type: string
+      notes:
+        type: string
+      reference:
+        type: string
+    required:
+    - amount
+    - contact_id
+    - date
+    - method
+    type: object
+  services.ReconciliationItemRequest:
+    properties:
+      is_cleared:
+        type: boolean
+      notes:
+        type: string
+      transaction_id:
+        type: integer
+    type: object
+  services.ReconciliationRequest:
+    properties:
+      date:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/services.ReconciliationItemRequest'
+        type: array
+      statement_balance:
+        type: number
+    required:
+    - date
+    - statement_balance
+    type: object
+  services.TransactionResult:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/models.CashBankTransaction'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  services.TransferRequest:
+    properties:
+      amount:
+        minimum: 0
+        type: number
+      date:
+        type: string
+      exchange_rate:
+        type: number
+      from_account_id:
+        type: integer
+      notes:
+        type: string
+      reference:
+        type: string
+      to_account_id:
+        type: integer
+    required:
+    - amount
+    - date
+    - from_account_id
+    - to_account_id
+    type: object
+  services.WithdrawalRequest:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        minimum: 0
+        type: number
+      date:
+        type: string
+      notes:
+        type: string
+      reference:
+        type: string
+      target_account_id:
+        description: 'Optional: Expense account for withdrawal target'
+        type: integer
+    required:
+    - account_id
+    - amount
+    - date
+    type: object
+  utils.ErrorResponse:
+    properties:
+      code:
+        $ref: '#/definitions/utils.ErrorType'
+      details:
+        additionalProperties:
+          type: string
+        type: object
+      error:
+        type: string
+      trace_id:
+        type: string
+    type: object
+  utils.ErrorType:
+    enum:
+    - VALIDATION_ERROR
+    - NOT_FOUND
+    - UNAUTHORIZED
+    - FORBIDDEN
+    - CONFLICT
+    - INTERNAL_ERROR
+    - BAD_REQUEST
+    - TIMEOUT
+    - RATE_LIMIT
+    - DATABASE_ERROR
+    - EXTERNAL_SERVICE_ERROR
+    type: string
+    x-enum-varnames:
+    - ErrorTypeValidation
+    - ErrorTypeNotFound
+    - ErrorTypeUnauthorized
+    - ErrorTypeForbidden
+    - ErrorTypeConflict
+    - ErrorTypeInternal
+    - ErrorTypeBadRequest
+    - ErrorTypeTimeout
+    - ErrorTypeRateLimit
+    - ErrorTypeDatabase
+    - ErrorTypeExternal
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: API untuk aplikasi sistem akuntansi yang komprehensif dengan fitur
+    lengkap manajemen keuangan, inventory, sales, purchases, dan reporting.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Sistema Akuntansi API
+  version: "1.0"
+paths:
+  /accounts/{account_id}/journal-entries:
+    get:
+      description: Get journal entries that affect a specific account (General Ledger
+        view)
+      parameters:
+      - description: Account ID
+        in: path
+        name: account_id
+        required: true
+        type: integer
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              data:
+                items:
+                  $ref: '#/definitions/models.JournalEntry'
+                type: array
+              total:
+                format: int64
+                type: integer
+            type: object
+      summary: Get account journal entries
+      tags:
+      - journal-entries
+  /api/admin/check-cashbank-gl-links:
+    get:
+      consumes:
+      - application/json
+      description: Check which cash/bank accounts are missing GL account connections
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Check cash bank GL account links status
+      tags:
+      - Admin
+  /api/admin/fix-cashbank-gl-links:
+    post:
+      consumes:
+      - application/json
+      description: Create GL accounts and link them to cash/bank accounts that are
+        missing GL account connections
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Fix cash bank GL account links
+      tags:
+      - Admin
+  /api/cashbank/accounts:
+    get:
+      consumes:
+      - application/json
+      description: Get all cash and bank accounts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.CashBank'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get cash and bank accounts
+      tags:
+      - CashBank
+    post:
+      consumes:
+      - application/json
+      description: Create new cash or bank account
+      parameters:
+      - description: Account data
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/services.CashBankCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.CashBank'
+      security:
+      - Bearer: []
+      summary: Create cash/bank account
+      tags:
+      - CashBank
+  /api/cashbank/accounts/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete cash or bank account (soft delete)
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete cash/bank account
+      tags:
+      - CashBank
+    get:
+      consumes:
+      - application/json
+      description: Get single cash/bank account details
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CashBank'
+      security:
+      - Bearer: []
+      summary: Get account by ID
+      tags:
+      - CashBank
+    put:
+      consumes:
+      - application/json
+      description: Update cash or bank account details
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Account update data
+        in: body
+        name: account
+        required: true
+        schema:
+          $ref: '#/definitions/services.CashBankUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CashBank'
+      security:
+      - Bearer: []
+      summary: Update cash/bank account
+      tags:
+      - CashBank
+  /api/cashbank/accounts/{id}/reconcile:
+    post:
+      consumes:
+      - application/json
+      description: Reconcile bank account with statement
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Reconciliation data
+        in: body
+        name: reconciliation
+        required: true
+        schema:
+          $ref: '#/definitions/services.ReconciliationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/services.BankReconciliation'
+      security:
+      - Bearer: []
+      summary: Reconcile bank account
+      tags:
+      - CashBank
+  /api/cashbank/accounts/{id}/transactions:
+    get:
+      consumes:
+      - application/json
+      description: Get transactions for a specific account
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.TransactionResult'
+      security:
+      - Bearer: []
+      summary: Get account transactions
+      tags:
+      - CashBank
+  /api/cashbank/balance-summary:
+    get:
+      consumes:
+      - application/json
+      description: Get summary of all account balances
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.BalanceSummary'
+      security:
+      - Bearer: []
+      summary: Get balance summary
+      tags:
+      - CashBank
+  /api/cashbank/deposit:
+    post:
+      consumes:
+      - application/json
+      description: Add money to cash/bank account
+      parameters:
+      - description: Deposit data
+        in: body
+        name: deposit
+        required: true
+        schema:
+          $ref: '#/definitions/services.DepositRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.CashBankTransaction'
+      security:
+      - Bearer: []
+      summary: Process deposit
+      tags:
+      - CashBank
+  /api/cashbank/deposit-source-accounts:
+    get:
+      consumes:
+      - application/json
+      description: Get active revenue and equity accounts for deposit source selection
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get accounts for deposit source (Revenue + Equity)
+      tags:
+      - CashBank
+  /api/cashbank/payment-accounts:
+    get:
+      consumes:
+      - application/json
+      description: Get active cash and bank accounts for payment processing
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get payment accounts
+      tags:
+      - CashBank
+  /api/cashbank/revenue-accounts:
+    get:
+      consumes:
+      - application/json
+      description: Get active revenue accounts that can be used for deposit source
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Account'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get revenue accounts for deposits
+      tags:
+      - CashBank
+  /api/cashbank/transfer:
+    post:
+      consumes:
+      - application/json
+      description: Transfer money between cash/bank accounts
+      parameters:
+      - description: Transfer data
+        in: body
+        name: transfer
+        required: true
+        schema:
+          $ref: '#/definitions/services.TransferRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/services.CashBankTransfer'
+      security:
+      - Bearer: []
+      summary: Process transfer between accounts
+      tags:
+      - CashBank
+  /api/cashbank/withdrawal:
+    post:
+      consumes:
+      - application/json
+      description: Withdraw money from cash/bank account
+      parameters:
+      - description: Withdrawal data
+        in: body
+        name: withdrawal
+        required: true
+        schema:
+          $ref: '#/definitions/services.WithdrawalRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.CashBankTransaction'
+      security:
+      - Bearer: []
+      summary: Process withdrawal
+      tags:
+      - CashBank
+  /api/monitoring/balance-health:
+    get:
+      consumes:
+      - application/json
+      description: Get comprehensive balance health metrics and synchronization status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get balance health metrics
+      tags:
+      - Balance Monitoring
+  /api/monitoring/balance-sync:
+    get:
+      consumes:
+      - application/json
+      description: Check synchronization between cash/bank accounts and GL accounts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.BalanceMonitoringResult'
+      security:
+      - Bearer: []
+      summary: Check balance synchronization
+      tags:
+      - Balance Monitoring
+  /api/monitoring/discrepancies:
+    get:
+      consumes:
+      - application/json
+      description: Get list of current balance discrepancies between cash/bank and
+        GL accounts
+      parameters:
+      - default: 50
+        description: Limit number of results
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/services.BalanceDiscrepancy'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get current balance discrepancies
+      tags:
+      - Balance Monitoring
+  /api/monitoring/fix-discrepancies:
+    post:
+      consumes:
+      - application/json
+      description: Automatically fix balance discrepancies by updating GL account
+        balances
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Fix balance discrepancies
+      tags:
+      - Balance Monitoring
+  /api/monitoring/sync-status:
+    get:
+      consumes:
+      - application/json
+      description: Get a quick summary of balance synchronization status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get synchronization status summary
+      tags:
+      - Balance Monitoring
+  /api/payments:
+    get:
+      consumes:
+      - application/json
+      description: Get paginated list of payments with filters
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by contact ID
+        in: query
+        name: contact_id
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by payment method
+        in: query
+        name: method
+        type: string
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get payments list
+      tags:
+      - Payments
+  /api/payments/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete payment and reverse if needed (Admin Only)
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Deletion reason
+        in: body
+        name: reason
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Delete payment
+      tags:
+      - Payments
+    get:
+      consumes:
+      - application/json
+      description: Get single payment details
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Payment'
+      security:
+      - Bearer: []
+      summary: Get payment by ID
+      tags:
+      - Payments
+  /api/payments/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel payment and reverse journal entries
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Cancellation reason
+        in: body
+        name: reason
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Cancel payment
+      tags:
+      - Payments
+  /api/payments/{id}/pdf:
+    get:
+      consumes:
+      - application/json
+      description: Export single payment details in PDF format
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - Bearer: []
+      summary: Export payment detail as PDF
+      tags:
+      - Payments
+  /api/payments/analytics:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed payment analytics for dashboard
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get payment analytics
+      tags:
+      - Payments
+  /api/payments/debug/recent:
+    get:
+      consumes:
+      - application/json
+      description: Get recent payments to verify Sales-Payment integration
+      parameters:
+      - description: 'Hours back to check (default: 24)'
+        in: query
+        name: hours
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get recent payments for debugging integration
+      tags:
+      - Payments
+  /api/payments/export/excel:
+    get:
+      consumes:
+      - application/json
+      description: Export payments report in Excel format with filters
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by payment method
+        in: query
+        name: method
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - Bearer: []
+      summary: Export payment report as Excel
+      tags:
+      - Payments
+  /api/payments/payable:
+    post:
+      consumes:
+      - application/json
+      description: Create payment to vendor (payable)
+      parameters:
+      - description: Payment data
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.PaymentCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Payment'
+      security:
+      - Bearer: []
+      summary: Create payable payment
+      tags:
+      - Payments
+  /api/payments/receivable:
+    post:
+      consumes:
+      - application/json
+      description: Create payment from customer (receivable)
+      parameters:
+      - description: Payment data
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.PaymentCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Payment'
+      security:
+      - Bearer: []
+      summary: Create receivable payment
+      tags:
+      - Payments
+  /api/payments/report/pdf:
+    get:
+      consumes:
+      - application/json
+      description: Export payments report in PDF format with filters
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by payment method
+        in: query
+        name: method
+        type: string
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - Bearer: []
+      summary: Export payment report as PDF
+      tags:
+      - Payments
+  /api/payments/summary:
+    get:
+      consumes:
+      - application/json
+      description: Get payment summary statistics
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get payment summary
+      tags:
+      - Payments
+  /api/payments/unpaid-bills/{vendor_id}:
+    get:
+      consumes:
+      - application/json
+      description: Get list of unpaid bills for a vendor
+      parameters:
+      - description: Vendor ID
+        in: path
+        name: vendor_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Purchase'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get unpaid bills
+      tags:
+      - Payments
+  /api/payments/unpaid-invoices/{customer_id}:
+    get:
+      consumes:
+      - application/json
+      description: Get list of unpaid invoices for a customer
+      parameters:
+      - description: Customer ID
+        in: path
+        name: customer_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Sale'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get unpaid invoices
+      tags:
+      - Payments
+  /api/purchases/{id}/for-payment:
+    get:
+      consumes:
+      - application/json
+      description: Get purchase details formatted for payment processing
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get purchase for payment
+      tags:
+      - Purchases
+  /api/purchases/{id}/integrated-payment:
+    post:
+      consumes:
+      - application/json
+      description: Create payment record in both Purchase and Payment Management systems
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Payment details
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/models.APIResponse'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Create integrated payment for purchase
+      tags:
+      - Purchases
+  /api/purchases/{id}/payments:
+    get:
+      consumes:
+      - application/json
+      description: Get all payments for a specific purchase
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.PurchasePayment'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get purchase payments
+      tags:
+      - Purchases
+  /api/reports/enhanced/financial-metrics:
+    get:
+      consumes:
+      - application/json
+      description: Get key profitability and performance metrics from P&L data
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Financial metrics
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get Key Financial Metrics
+      tags:
+      - Enhanced Reports
+  /api/reports/enhanced/profit-loss:
+    get:
+      consumes:
+      - application/json
+      description: Generate a comprehensive P&L statement with proper accounting categorization
+        and financial metrics
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format (json, pdf)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Enhanced P&L data
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Generate Enhanced Profit & Loss Statement
+      tags:
+      - Enhanced Reports
+  /api/reports/enhanced/profit-loss-comparison:
+    get:
+      consumes:
+      - application/json
+      description: Compare P&L metrics between current period and previous period
+      parameters:
+      - description: Current period start date (YYYY-MM-DD)
+        in: query
+        name: current_start
+        required: true
+        type: string
+      - description: Current period end date (YYYY-MM-DD)
+        in: query
+        name: current_end
+        required: true
+        type: string
+      - description: Previous period start date (YYYY-MM-DD)
+        in: query
+        name: previous_start
+        required: true
+        type: string
+      - description: Previous period end date (YYYY-MM-DD)
+        in: query
+        name: previous_end
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: P&L comparison data
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Compare P&L Between Periods
+      tags:
+      - Enhanced Reports
+  /api/v1/admin/security/alerts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve system security alerts with pagination and filters
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by alert level
+        in: query
+        name: level
+        type: string
+      - description: Filter by acknowledgment status
+        in: query
+        name: acknowledged
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get system alerts
+      tags:
+      - Security
+  /api/v1/admin/security/alerts/{id}/acknowledge:
+    put:
+      consumes:
+      - application/json
+      description: Mark a system alert as acknowledged
+      parameters:
+      - description: Alert ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SystemAlert'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Acknowledge system alert
+      tags:
+      - Security
+  /api/v1/admin/security/cleanup:
+    post:
+      consumes:
+      - application/json
+      description: Trigger cleanup of old security logs and incidents
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cleanup old security logs
+      tags:
+      - Security
+  /api/v1/admin/security/config:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve security configuration settings
+      parameters:
+      - description: Filter by environment
+        in: query
+        name: environment
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get security configuration
+      tags:
+      - Security
+  /api/v1/admin/security/incidents:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve security incidents with pagination and filters
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by severity (low, medium, high, critical)
+        in: query
+        name: severity
+        type: string
+      - description: Filter by incident type
+        in: query
+        name: incident_type
+        type: string
+      - description: Filter by resolution status
+        in: query
+        name: resolved
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get security incidents
+      tags:
+      - Security
+  /api/v1/admin/security/incidents/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed information about a specific security incident
+      parameters:
+      - description: Incident ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SecurityIncident'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get security incident details
+      tags:
+      - Security
+  /api/v1/admin/security/incidents/{id}/resolve:
+    put:
+      consumes:
+      - application/json
+      description: Mark a security incident as resolved with notes
+      parameters:
+      - description: Incident ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Resolution notes
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SecurityIncident'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Resolve security incident
+      tags:
+      - Security
+  /api/v1/admin/security/ip-whitelist:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve IP whitelist entries with pagination
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by environment
+        in: query
+        name: environment
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get IP whitelist
+      tags:
+      - Security
+    post:
+      consumes:
+      - application/json
+      description: Add a new IP address or range to the whitelist
+      parameters:
+      - description: IP whitelist entry
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.IpWhitelist'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.IpWhitelist'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add IP to whitelist
+      tags:
+      - Security
+  /api/v1/admin/security/metrics:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve security metrics for a specific date range
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get security metrics
+      tags:
+      - Security
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return access token and refresh token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successful login
+          schema:
+            $ref: '#/definitions/models.LoginResponse'
+        "400":
+          description: Invalid request format
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Invalid credentials or account disabled
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: User login
+      tags:
+      - Authentication
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Generate a new access token using valid refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token refreshed successfully
+          schema:
+            $ref: '#/definitions/models.LoginResponse'
+        "400":
+          description: Invalid request format
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account (only available in development or when
+        ALLOW_REGISTRATION=true)
+      parameters:
+      - description: User registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User created successfully
+          schema:
+            $ref: '#/definitions/models.LoginResponse'
+        "400":
+          description: Invalid request data
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "409":
+          description: User already exists
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: User registration
+      tags:
+      - Authentication
+  /auth/validate-token:
+    get:
+      consumes:
+      - application/json
+      description: Check if the current JWT token is valid and user account is active
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token is valid
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserResponse'
+              type: object
+        "401":
+          description: Invalid token or account disabled
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Validate JWT token
+      tags:
+      - Authentication
+  /dashboard/analytics:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve comprehensive analytics data for admin, finance, and director
+        roles
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Analytics data retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient privileges
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get analytics data
+      tags:
+      - Dashboard
+  /dashboard/quick-stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve quick statistics data for dashboard widgets
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Quick stats retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get quick statistics
+      tags:
+      - Dashboard
+  /dashboard/summary:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve comprehensive dashboard data including statistics, recent
+        activities, and alerts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Dashboard summary retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.DashboardResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get dashboard summary
+      tags:
+      - Dashboard
+  /journal-drilldown:
+    post:
+      consumes:
+      - application/json
+      description: Get detailed journal entries for a specific line item from financial
+        reports
+      parameters:
+      - description: Drill-down request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.JournalDrilldownRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.JournalDrilldownResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Journal Entry Drill-down
+      tags:
+      - journal-drilldown
+  /journal-drilldown/accounts:
+    get:
+      description: Get all accounts that have journal entries in a specific date range
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              data:
+                items:
+                  $ref: '#/definitions/models.Account'
+                type: array
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get Active Accounts for Period
+      tags:
+      - journal-drilldown
+  /journal-drilldown/entries:
+    get:
+      description: Get journal entries using URL parameters for drill-down
+      parameters:
+      - description: Comma-separated account codes
+        in: query
+        name: account_codes
+        type: string
+      - description: Comma-separated account IDs
+        in: query
+        name: account_ids
+        type: string
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - description: Report type (BALANCE_SHEET, PROFIT_LOSS, CASH_FLOW)
+        in: query
+        name: report_type
+        type: string
+      - description: Name of the line item
+        in: query
+        name: line_item_name
+        type: string
+      - description: Minimum amount filter
+        in: query
+        name: min_amount
+        type: number
+      - description: Maximum amount filter
+        in: query
+        name: max_amount
+        type: number
+      - description: Comma-separated transaction types
+        in: query
+        name: transaction_types
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.JournalDrilldownResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Journal Entry Drill-down (GET)
+      tags:
+      - journal-drilldown
+  /journal-drilldown/entries/{id}:
+    get:
+      description: Get detailed information for a specific journal entry including
+        all lines
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.JournalEntry'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get Journal Entry Detail
+      tags:
+      - journal-drilldown
+  /journal-entries:
+    get:
+      description: Get paginated list of journal entries with optional filtering
+      parameters:
+      - description: Filter by status (DRAFT, POSTED, REVERSED)
+        in: query
+        name: status
+        type: string
+      - description: Filter by reference type
+        in: query
+        name: reference_type
+        type: string
+      - description: Filter by account ID
+        in: query
+        name: account_id
+        type: string
+      - description: Filter by start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: Filter by end date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Search in description, reference, or code
+        in: query
+        name: search
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              data:
+                items:
+                  $ref: '#/definitions/models.JournalEntry'
+                type: array
+              total:
+                format: int64
+                type: integer
+            type: object
+      summary: List journal entries
+      tags:
+      - journal-entries
+    post:
+      consumes:
+      - application/json
+      description: Create a new journal entry with balanced debit and credit lines
+      parameters:
+      - description: Journal entry data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.JournalEntryCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.JournalEntry'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Create journal entry
+      tags:
+      - journal-entries
+  /journal-entries/{id}:
+    delete:
+      description: Delete a journal entry (only draft entries can be deleted)
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              message:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Delete journal entry
+      tags:
+      - journal-entries
+    get:
+      description: Get journal entry details by ID
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.JournalEntry'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get journal entry
+      tags:
+      - journal-entries
+    put:
+      consumes:
+      - application/json
+      description: Update journal entry details (only draft entries can be updated)
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated journal entry data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.JournalEntryUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.JournalEntry'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Update journal entry
+      tags:
+      - journal-entries
+  /journal-entries/{id}/post:
+    post:
+      description: Post a journal entry to update account balances (changes status
+        to POSTED)
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              message:
+                type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Post journal entry
+      tags:
+      - journal-entries
+  /journal-entries/{id}/reverse:
+    post:
+      consumes:
+      - application/json
+      description: Create a reversing journal entry to undo the effects of a posted
+        entry
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Reversal reason
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            reason:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.JournalEntry'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Reverse journal entry
+      tags:
+      - journal-entries
+  /journal-entries/auto-generate/purchase:
+    post:
+      consumes:
+      - application/json
+      description: Automatically generate journal entry from a purchase transaction
+      parameters:
+      - description: Purchase ID
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            purchase_id:
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.JournalEntry'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Auto-generate from purchase
+      tags:
+      - journal-entries
+  /journal-entries/auto-generate/sale:
+    post:
+      consumes:
+      - application/json
+      description: Automatically generate journal entry from a sale transaction
+      parameters:
+      - description: Sale ID
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            sale_id:
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.JournalEntry'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Auto-generate from sale
+      tags:
+      - journal-entries
+  /journal-entries/summary:
+    get:
+      description: Get summary statistics for journal entries
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.JournalEntrySummary'
+      summary: Get journal entry summary
+      tags:
+      - journal-entries
+  /profile:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve current authenticated user's profile information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Profile retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserResponse'
+              type: object
+        "401":
+          description: Unauthorized - invalid token
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - Authentication
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -1,0 +1,100 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"time"
+)
+
+func main() {
+	// Test Enhanced P&L Journal endpoint
+	baseURL := "http://localhost:8080/api/v1/reports/enhanced/journal/pl-line"
+	
+	// Test parameters
+	params := url.Values{}
+	params.Add("start_date", "2025-09-01")
+	params.Add("end_date", "2025-09-17")
+	params.Add("line_item", "total_revenue")
+	params.Add("page", "1")
+	params.Add("limit", "10")
+	
+	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+	fmt.Printf("Testing URL: %s\n", fullURL)
+	
+	// Create request
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		fmt.Printf("Error creating request: %v\n", err)
+		return
+	}
+	
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	// Note: In production, add Authorization header with valid JWT token
+	
+	// Send request
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Error making request: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error reading response: %v\n", err)
+		return
+	}
+	
+	fmt.Printf("Status Code: %d\n", resp.StatusCode)
+	fmt.Printf("Response Headers: %v\n", resp.Header)
+	
+	// Try to parse JSON response
+	var jsonResponse map[string]interface{}
+	if err := json.Unmarshal(body, &jsonResponse); err == nil {
+		// Pretty print JSON
+		prettyJSON, _ := json.MarshalIndent(jsonResponse, "", "  ")
+		fmt.Printf("Response Body (formatted):\n%s\n", string(prettyJSON))
+	} else {
+		// Raw response if not valid JSON
+		fmt.Printf("Response Body (raw): %s\n", string(body))
+	}
+	
+	// Test different line items
+	testLineItems := []string{"total_revenue", "gross_profit", "operating_expenses", "net_income"}
+	
+	fmt.Println("\n=== Testing different line items ===")
+	for _, lineItem := range testLineItems {
+		params.Set("line_item", lineItem)
+		testURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
+		fmt.Printf("\nTesting line item: %s\n", lineItem)
+		fmt.Printf("URL: %s\n", testURL)
+		
+		req, _ := http.NewRequest("GET", testURL, nil)
+		req.Header.Set("Content-Type", "application/json")
+		
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			continue
+		}
+		
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		
+		var response map[string]interface{}
+		if json.Unmarshal(body, &response) == nil {
+			if data, ok := response["data"].(map[string]interface{}); ok {
+				if total, ok := data["total"].(float64); ok {
+					fmt.Printf("Status: %d, Total entries: %.0f\n", resp.StatusCode, total)
+				}
+			}
+		}
+	}
+}

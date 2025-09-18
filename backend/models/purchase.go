@@ -94,6 +94,30 @@ type PurchaseItem struct {
 	ExpenseAccount Account  `json:"expense_account" gorm:"foreignKey:ExpenseAccountID"`
 }
 
+// PurchasePayment represents payments made for purchases (cross-reference with payments table)
+type PurchasePayment struct {
+	ID            uint           `json:"id" gorm:"primaryKey"`
+	PurchaseID    uint           `json:"purchase_id" gorm:"not null;index"`
+	PaymentNumber string         `json:"payment_number" gorm:"size:50"`
+	Date          time.Time      `json:"date"`
+	Amount        float64        `json:"amount" gorm:"type:decimal(15,2);default:0"`
+	Method        string         `json:"method" gorm:"size:20"`
+	Reference     string         `json:"reference" gorm:"size:100"`
+	Notes         string         `json:"notes" gorm:"type:text"`
+	CashBankID    *uint          `json:"cash_bank_id" gorm:"index"`
+	UserID        uint           `json:"user_id" gorm:"not null;index"`
+	PaymentID     *uint          `json:"payment_id" gorm:"index"` // Cross-reference to payments table
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
+
+	// Relations
+	Purchase Purchase `json:"purchase" gorm:"foreignKey:PurchaseID"`
+	CashBank *CashBank `json:"cash_bank,omitempty" gorm:"foreignKey:CashBankID"`
+	User     User      `json:"user" gorm:"foreignKey:UserID"`
+	Payment  *Payment  `json:"payment,omitempty" gorm:"foreignKey:PaymentID"`
+}
+
 // Purchase Status Constants
 const (
 	PurchaseStatusDraft              = "DRAFT"
@@ -101,6 +125,7 @@ const (
 	PurchaseStatusPendingApproval    = "PENDING_APPROVAL"
 	PurchaseStatusApproved           = "APPROVED"
 	PurchaseStatusCompleted          = "COMPLETED"
+	PurchaseStatusPaid               = "PAID"
 	PurchaseStatusCancelled          = "CANCELLED"
 )
 

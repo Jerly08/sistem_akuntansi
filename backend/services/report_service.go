@@ -753,9 +753,11 @@ func (rs *ReportService) GenerateGeneralLedger(startDate, endDate time.Time, acc
 
 		rs.DB.Table("journal_entries je").
 			Joins("JOIN journals j ON je.journal_id = j.id").
+			// Note: checking journal status 'POSTED' rather than journal entry status
 			Where("je.account_id = ? AND j.date BETWEEN ? AND ? AND j.status = ?", 
-				account.ID, startDate, endDate, models.JournalStatusPosted).
-			Select("j.date, j.id as journal_id, j.description, je.debit_amount, je.credit_amount, j.reference").
+				account.ID, startDate, endDate, "POSTED").
+			// j.reference column does not exist; use journal code as reference
+			Select("j.date, j.id as journal_id, j.description, je.debit_amount, je.credit_amount, j.code AS reference").
 			Order("j.date ASC, j.id ASC").
 			Scan(&journalEntries)
 

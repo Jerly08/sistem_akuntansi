@@ -3,71 +3,44 @@ package main
 import (
 	"fmt"
 	"log"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
+	"app-sistem-akuntansi/config"
 	"app-sistem-akuntansi/models"
-	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func main() {
-	// Database connection
-	dsn := "host=localhost user=postgres password=postgres dbname=sistem_akuntansi port=5432 sslmode=disable TimeZone=Asia/Jakarta"
+	log.Println("=== CHECKING USERS IN DATABASE ===")
 	
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
-	})
+	// Connect to database
+	db, err := config.ConnectDatabase()
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatal("Failed to connect to database:", err)
 	}
+	log.Println("Database connected successfully")
 
-	fmt.Println("Connected to database successfully")
-	
-	// Check existing users
+	// Get all users
 	var users []models.User
-	result := db.Find(&users)
-	if result.Error != nil {
-		log.Fatalf("Error querying users: %v", result.Error)
+	if err := db.Find(&users).Error; err != nil {
+		log.Fatal("Failed to fetch users:", err)
 	}
 
-	fmt.Printf("Found %d users:\n", len(users))
+	fmt.Printf("\n📋 Found %d users:\n", len(users))
 	for _, user := range users {
-		fmt.Printf("ID: %d, Email: %s, Role: %s, Active: %v\n", 
-			user.ID, user.Email, user.Role, user.IsActive)
+		fmt.Printf("ID: %d, Username: %s, Email: %s, Role: %s, Active: %t\n", 
+			user.ID, user.Username, user.Email, user.Role, user.IsActive)
 	}
 
-	// If no admin user exists, create one
+	// Check for specific admin user
 	var adminUser models.User
-	err = db.Where("email = ? AND role = ?", "admin@example.com", "admin").First(&adminUser).Error
-	if err == gorm.ErrRecordNotFound {
-		fmt.Println("Creating admin user...")
-		
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
-		if err != nil {
-			log.Fatalf("Failed to hash password: %v", err)
+	err = db.Where("username = ? OR email = ?", "admin", "admin@admin.com").First(&adminUser).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			fmt.Println("\n❌ No admin user found with username 'admin' or email 'admin@admin.com'")
+		} else {
+			fmt.Printf("\n❌ Error checking for admin user: %v\n", err)
 		}
-		
-		newAdmin := models.User{
-			Username:  "admin",
-			Email:     "admin@example.com",
-			Password:  string(hashedPassword),
-			FirstName: "Admin",
-			LastName:  "User",
-			Role:      "admin",
-			IsActive:  true,
-		}
-		
-		err = db.Create(&newAdmin).Error
-		if err != nil {
-			log.Fatalf("Failed to create admin user: %v", err)
-		}
-		
-		fmt.Println("Admin user created successfully!")
-	} else if err != nil {
-		log.Fatalf("Error checking admin user: %v", err)
 	} else {
-		fmt.Println("Admin user already exists")
+		fmt.Printf("\n✅ Found admin user: ID=%d, Username=%s, Email=%s, Role=%s, Active=%t\n", 
+			adminUser.ID, adminUser.Username, adminUser.Email, adminUser.Role, adminUser.IsActive)
 	}
-
-	fmt.Println("User check completed")
 }

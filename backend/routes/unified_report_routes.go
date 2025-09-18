@@ -14,13 +14,13 @@ func RegisterUnifiedReportRoutes(router *gin.Engine, controller *controllers.Uni
 	reportsGroup.Use(middleware.RoleRequired("finance", "admin", "director"))
 
 	// Direct report endpoints (matching frontend service expectations)
-	reportsGroup.GET("/balance-sheet", controller.GenerateReport)
-	reportsGroup.GET("/profit-loss", controller.GenerateReport)
-	reportsGroup.GET("/cash-flow", controller.GenerateReport) 
-	reportsGroup.GET("/trial-balance", controller.GenerateReport)
-	reportsGroup.GET("/general-ledger", controller.GenerateReport)
-	reportsGroup.GET("/sales-summary", controller.GenerateReport)
-	reportsGroup.GET("/vendor-analysis", controller.GenerateReport)
+	// reportsGroup.GET("/balance-sheet", controller.GenerateReport) // Commented to avoid conflict with SetupReportRoutes
+	// reportsGroup.GET("/profit-loss", controller.GenerateReport)  // Commented to avoid conflict with SetupReportRoutes
+	// reportsGroup.GET("/cash-flow", controller.GenerateReport) // Commented to avoid conflict with SetupReportRoutes
+	// reportsGroup.GET("/trial-balance", controller.GenerateReport) // Commented to avoid conflict with SetupReportRoutes
+	// reportsGroup.GET("/general-ledger", controller.GenerateReport) // Commented to avoid conflict with SetupReportRoutes
+	// reportsGroup.GET("/sales-summary", controller.GenerateReport) // Commented to avoid conflict with SetupReportRoutes
+	// reportsGroup.GET("/vendor-analysis", controller.GenerateReport) // Commented to avoid conflict with SetupReportRoutes
 	
 	// Also register unified-reports endpoints for frontend compatibility
 	unifiedGroup := router.Group("/api/v1/unified-reports")
@@ -28,7 +28,7 @@ func RegisterUnifiedReportRoutes(router *gin.Engine, controller *controllers.Uni
 	unifiedGroup.Use(middleware.RoleRequired("finance", "admin", "director"))
 	
 	unifiedGroup.GET("/balance-sheet", controller.GenerateReport)
-	unifiedGroup.GET("/profit-loss", controller.GenerateReport)
+	// Note: Basic P&L endpoint removed - use /enhanced/profit-loss instead
 	unifiedGroup.GET("/cash-flow", controller.GenerateReport)
 	unifiedGroup.GET("/trial-balance", controller.GenerateReport)
 	unifiedGroup.GET("/general-ledger", controller.GenerateReport)
@@ -68,10 +68,7 @@ func RegisterLegacyReportCompatibility(router *gin.Engine, controller *controlle
 		controller.GenerateReport(c)
 	})
 	
-	legacyGroup.GET("/profit-loss", func(c *gin.Context) {
-		c.Set("report_type", "profit-loss") 
-		controller.GenerateReport(c)
-	})
+	// Note: Legacy P&L endpoint removed - use /enhanced/profit-loss instead
 	
 	legacyGroup.GET("/cash-flow", func(c *gin.Context) {
 		c.Set("report_type", "cash-flow")

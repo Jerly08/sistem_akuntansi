@@ -137,10 +137,17 @@ func (s *SalesService) CreateSale(request models.SaleCreateRequest, userID uint)
 		ValidUntil:      request.ValidUntil,
 		Currency:        s.getDefaultCurrency(request.Currency),
 		ExchangeRate:    s.getExchangeRate(request.Currency, s.dereferenceFloat64(request.ExchangeRate)),
-		DiscountPercent: request.DiscountPercent,
-		PPNPercent:      s.getDefaultPPNPercent(s.dereferenceFloat64(request.PPNPercent)),
-		PPhPercent:      request.PPhPercent,
-		PPhType:         request.PPhType,
+	DiscountPercent: request.DiscountPercent,
+	// Legacy tax fields for backward compatibility
+	PPNPercent:      s.getDefaultPPNPercent(s.dereferenceFloat64(request.PPNPercent)),
+	PPhPercent:      request.PPhPercent,
+	PPhType:         request.PPhType,
+	// Enhanced tax configuration
+	PPNRate:              request.PPNRate,
+	OtherTaxAdditions:    request.OtherTaxAdditions,
+	PPh21Rate:            request.PPh21Rate,
+	PPh23Rate:            request.PPh23Rate,
+	OtherTaxDeductions:   request.OtherTaxDeductions,
 		PaymentTerms:    request.PaymentTerms,
 		PaymentMethod:   request.PaymentMethod,
 		ShippingMethod:  request.ShippingMethod,
@@ -163,8 +170,8 @@ func (s *SalesService) CreateSale(request models.SaleCreateRequest, userID uint)
 		sale.InvoiceNumber = s.generateInvoiceNumber()
 	}
 
-	// Calculate totals and create sale items
-	err = s.calculateSaleItemsFromRequest(sale, request.Items)
+	// Calculate totals and create sale items using enhanced tax calculation
+	err = s.calculateSaleTotalsEnhanced(sale, request.Items)
 	if err != nil {
 		return nil, err
 	}
@@ -255,6 +262,22 @@ func (s *SalesService) UpdateSale(id uint, request models.SaleUpdateRequest, use
 	if request.PPhType != nil {
 		sale.PPhType = *request.PPhType
 	}
+	// Update enhanced tax configuration fields
+	if request.PPNRate != nil {
+		sale.PPNRate = *request.PPNRate
+	}
+	if request.OtherTaxAdditions != nil {
+		sale.OtherTaxAdditions = *request.OtherTaxAdditions
+	}
+	if request.PPh21Rate != nil {
+		sale.PPh21Rate = *request.PPh21Rate
+	}
+	if request.PPh23Rate != nil {
+		sale.PPh23Rate = *request.PPh23Rate
+	}
+	if request.OtherTaxDeductions != nil {
+		sale.OtherTaxDeductions = *request.OtherTaxDeductions
+	}
 	if request.PaymentTerms != nil {
 		sale.PaymentTerms = *request.PaymentTerms
 	}
@@ -294,8 +317,8 @@ func (s *SalesService) UpdateSale(id uint, request models.SaleUpdateRequest, use
 		}
 	}
 
-	// Recalculate totals
-	err = s.recalculateSaleTotals(sale)
+	// Recalculate totals using enhanced tax calculation
+	err = s.recalculateSaleTotalsEnhanced(sale)
 	if err != nil {
 		return nil, err
 	}

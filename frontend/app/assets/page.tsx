@@ -96,9 +96,7 @@ const AssetsPage = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryIndex, setEditingCategoryIndex] = useState<number | null>(null);
   
-  // Account management states
-  const [bankAccounts, setBankAccounts] = useState<any[]>([]);
-  const [liabilityAccounts, setLiabilityAccounts] = useState<any[]>([]);
+  // Account management states (only for optional fixed asset and depreciation accounts)
   const [fixedAssetAccounts, setFixedAssetAccounts] = useState<any[]>([]);
   const [depreciationAccounts, setDepreciationAccounts] = useState<any[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
@@ -118,10 +116,7 @@ const AssetsPage = () => {
     location: '',
     coordinates: '',
     serialNumber: '',
-    condition: 'Good',
-    paymentMethod: 'CREDIT',
-    paymentAccountId: undefined,
-    creditAccountId: undefined
+    condition: 'Good'
   });
 
   // Fetch assets from API
@@ -160,19 +155,15 @@ const AssetsPage = () => {
     }
   };
 
-  // Fetch accounts for dropdowns
+  // Fetch accounts for dropdowns (only optional accounts for manual asset entry)
   const fetchAccounts = async () => {
     try {
       setIsLoadingAccounts(true);
-      const [bankAccountsRes, liabilityAccountsRes, fixedAssetAccountsRes, depreciationAccountsRes] = await Promise.all([
-        assetService.getBankAccounts(),
-        assetService.getLiabilityAccounts(),
+      const [fixedAssetAccountsRes, depreciationAccountsRes] = await Promise.all([
         assetService.getFixedAssetAccounts(),
         assetService.getDepreciationExpenseAccounts()
       ]);
       
-      setBankAccounts(bankAccountsRes.data || []);
-      setLiabilityAccounts(liabilityAccountsRes.data || []);
       setFixedAssetAccounts(fixedAssetAccountsRes.data || []);
       setDepreciationAccounts(depreciationAccountsRes.data || []);
     } catch (error: any) {
@@ -329,10 +320,7 @@ const AssetsPage = () => {
       location: '',
       coordinates: '',
       serialNumber: '',
-      condition: 'Good',
-      paymentMethod: 'CREDIT',
-      paymentAccountId: undefined,
-      creditAccountId: undefined
+      condition: 'Good'
     });
   };
 
@@ -374,8 +362,7 @@ const AssetsPage = () => {
       serialNumber: asset.serial_number || '',
       condition: asset.condition || 'Good',
       assetAccountId: asset.asset_account_id,
-      depreciationAccountId: asset.depreciation_account_id,
-      paymentMethod: 'CREDIT', // Default for edit mode
+      depreciationAccountId: asset.depreciation_account_id
     });
     setIsModalOpen(true);
   };
@@ -908,6 +895,20 @@ const AssetsPage = () => {
               <ModalCloseButton />
               
               <ModalBody pb={6}>
+                {/* Information Banner */}
+                <Alert status="info" borderRadius="md" bg="blue.50" border="1px solid" borderColor="blue.200">
+                  <AlertIcon color="blue.500" />
+                  <Box>
+                    <AlertTitle color="blue.700" fontSize="sm" fontWeight="bold">
+                      📝 Manual Asset Entry
+                    </AlertTitle>
+                    <AlertDescription color="blue.600" fontSize="xs" mt={1}>
+                      This form is for recording existing assets only (no financial transactions). 
+                      For new asset purchases, use the Purchases module to create purchase orders.
+                    </AlertDescription>
+                  </Box>
+                </Alert>
+                
                 <VStack spacing={6}>
                   {/* Basic Information Section */}
                   <Box w="full">
@@ -1140,120 +1141,6 @@ const AssetsPage = () => {
                             <option value="SOLD">🔴 Sold</option>
                           </Select>
                         </FormControl>
-                      </HStack>
-                      
-                      <HStack w="full" spacing={4}>
-                        <FormControl>
-                          <FormLabel fontSize="sm" fontWeight="medium">Payment Method</FormLabel>
-                          <Select
-                            value={formData.paymentMethod || 'CREDIT'}
-                            onChange={(e) => handleInputChange('paymentMethod', e.target.value as 'CASH' | 'BANK' | 'CREDIT')}
-                            size="md"
-                          >
-                            <option value="CASH">💰 Cash Payment</option>
-                            <option value="BANK">🏦 Bank Transfer</option>
-                            <option value="CREDIT">📋 Credit Purchase</option>
-                          </Select>
-                          <Text fontSize="xs" color="gray.500" mt={1}>
-                            💡 Select how this asset was paid for (affects journal entries)
-                          </Text>
-                        </FormControl>
-                        
-                        {/* Conditional Account Selection */}
-                        {(formData.paymentMethod === 'CASH' || formData.paymentMethod === 'BANK') && (
-                          <FormControl>
-                            <FormLabel fontSize="sm" fontWeight="medium">
-                              {formData.paymentMethod === 'CASH' ? '💰 Select Cash Account' : '🏦 Select Bank Account'}
-                            </FormLabel>
-                            <Select
-                              value={formData.paymentAccountId || ''}
-                              onChange={(e) => handleInputChange('paymentAccountId', e.target.value ? parseInt(e.target.value) : undefined)}
-                              placeholder={`Choose ${formData.paymentMethod === 'CASH' ? 'cash' : 'bank'} account`}
-                              size="md"
-                              isDisabled={isLoadingAccounts}
-                            >
-                              {bankAccounts
-                                .filter(account => 
-                                  formData.paymentMethod === 'CASH' 
-                                    ? account.type === 'CASH'
-                                    : account.type === 'BANK'
-                                )
-                                .map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.code} - {account.display_name || account.name} 
-                                  {account.balance_formatted && ` (${account.balance_formatted})`}
-                                </option>
-                              ))}
-                            </Select>
-                            <Text fontSize="xs" color="gray.500" mt={1}>
-                              💡 Select from integrated Cash & Bank accounts (linked to COA)
-                            </Text>
-                            {/* Enhanced feedback for better UX */}
-                            {(() => {
-                              const filteredAccounts = bankAccounts.filter(account => 
-                                formData.paymentMethod === 'CASH' 
-                                  ? account.type === 'CASH'
-                                  : account.type === 'BANK'
-                              );
-                              
-                              if (filteredAccounts.length === 0 && !isLoadingAccounts) {
-                                return (
-                                  <VStack spacing={2} mt={1} align="start">
-                                    <Text fontSize="xs" color="orange.500">
-                                      ⚠️ No {formData.paymentMethod === 'CASH' ? 'cash' : 'bank'} accounts found.
-                                    </Text>
-                                    {formData.paymentMethod === 'CASH' && bankAccounts.some(acc => acc.type === 'BANK') && (
-                                      <Text fontSize="xs" color="blue.500">
-                                        💡 Suggestion: Switch to "Bank Transfer" method - {bankAccounts.filter(acc => acc.type === 'BANK').length} bank accounts available.
-                                      </Text>
-                                    )}
-                                    {formData.paymentMethod === 'BANK' && bankAccounts.some(acc => acc.type === 'CASH') && (
-                                      <Text fontSize="xs" color="blue.500">
-                                        💡 Suggestion: Switch to "Cash Payment" method - {bankAccounts.filter(acc => acc.type === 'CASH').length} cash accounts available.
-                                      </Text>
-                                    )}
-                                    <Text fontSize="xs" color="gray.500">
-                                      Or create new {formData.paymentMethod === 'CASH' ? 'cash' : 'bank'} account in Cash & Bank module.
-                                    </Text>
-                                  </VStack>
-                                );
-                              }
-                              
-                              // Show count info when accounts are available
-                              if (filteredAccounts.length > 0) {
-                                return (
-                                  <Text fontSize="xs" color="green.500" mt={1}>
-                                    ✅ {filteredAccounts.length} {formData.paymentMethod === 'CASH' ? 'cash' : 'bank'} account{filteredAccounts.length > 1 ? 's' : ''} available
-                                  </Text>
-                                );
-                              }
-                              
-                              return null;
-                            })()}
-                          </FormControl>
-                        )}
-                        
-                        {formData.paymentMethod === 'CREDIT' && (
-                          <FormControl>
-                            <FormLabel fontSize="sm" fontWeight="medium">📋 Select Liability Account</FormLabel>
-                            <Select
-                              value={formData.creditAccountId || ''}
-                              onChange={(e) => handleInputChange('creditAccountId', e.target.value ? parseInt(e.target.value) : undefined)}
-                              placeholder="Choose liability account"
-                              size="md"
-                              isDisabled={isLoadingAccounts}
-                            >
-                              {liabilityAccounts.map((account) => (
-                                <option key={account.id} value={account.id}>
-                                  {account.code} - {account.name} ({formatCurrency(account.balance)})
-                                </option>
-                              ))}
-                            </Select>
-                            <Text fontSize="xs" color="gray.500" mt={1}>
-                              💡 Select the liability account for credit purchase (e.g., Hutang Bank, Hutang Supplier)
-                            </Text>
-                          </FormControl>
-                        )}
                       </HStack>
                       
                       {/* Asset and Depreciation Account Selection */}

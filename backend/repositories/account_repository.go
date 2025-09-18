@@ -645,9 +645,10 @@ func (r *AccountRepo) UpdateBalance(ctx context.Context, accountID uint, debitAm
 		balanceChange = creditAmount - debitAmount
 	}
 
-	// Atomically update the balance
-	err := r.DB.WithContext(ctx).Model(&models.Account{}).Where("id = ?", accountID).
-		Update("balance", gorm.Expr("balance + ?", balanceChange)).Error
+	// Atomically update the balance using optimized raw SQL
+	err := r.DB.WithContext(ctx).Exec(
+		"UPDATE accounts SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL", 
+		balanceChange, accountID).Error
 		
 	if err != nil {
 		return utils.NewDatabaseError("update account balance", err)

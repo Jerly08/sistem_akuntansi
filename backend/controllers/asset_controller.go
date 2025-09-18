@@ -160,8 +160,9 @@ func (ac *AssetController) CreateAsset(c *gin.Context) {
 		paymentMethod = "CREDIT" // Default to credit purchase
 	}
 
-	// Use CreateAssetWithJournal to automatically generate journal entries
-	err := ac.assetService.CreateAssetWithJournal(asset, req.UserID, paymentMethod, req.PaymentAccountID, req.CreditAccountID)
+	// QUICK FIX: Use CreateAsset without journal entries to avoid account ID issues
+	// TODO: Later implement proper journal entry creation with dynamic account lookup
+	err := ac.assetService.CreateAsset(asset)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Failed to create asset",

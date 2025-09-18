@@ -52,27 +52,61 @@ const (
 	PaymentTypeRefund     = "REFUND"     // Refund payment
 )
 
-// CreateReceivablePayment creates payment for sales/receivables
+// CreateReceivablePayment creates payment for sales/receivables (Fixed version)
 func (s *PaymentService) CreateReceivablePayment(request PaymentCreateRequest, userID uint) (*models.Payment, error) {
-	// Start transaction
-	tx := s.db.Begin()
+	// Use the fixed version with better logging and error handling
+	return s.CreateReceivablePaymentFixed(request, userID)
+}
+
+// CreateReceivablePaymentFixed - Fixed version with better error handling and timeout
+func (s *PaymentService) CreateReceivablePaymentFixed(request PaymentCreateRequest, userID uint) (*models.Payment, error) {
+	startTime := time.Now()
+	log.Printf("🚀 Starting CreateReceivablePayment: ContactID=%d, Amount=%.2f, Allocations=%d", 
+		request.ContactID, request.Amount, len(request.Allocations))
+	
+	// Start transaction with extended timeout for complex operations
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	
+	tx := s.db.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %v", tx.Error)
+	}
+	
+	// Robust transaction handling with automatic rollback
+	var committed bool
 	defer func() {
 		if r := recover(); r != nil {
+			log.Printf("❌ PANIC in CreateReceivablePayment: %v", r)
+			if !committed {
+				tx.Rollback()
+			}
+			panic(r)
+		} else if !committed {
+			// Auto-rollback if not committed
 			tx.Rollback()
 		}
 	}()
 	
-	// Validate customer
+	// Step 1: Validate customer
+	log.Printf("📝 Step 1: Validating customer...")
+	stepStart := time.Now()
 	_, err := s.contactRepo.GetByID(request.ContactID)
 	if err != nil {
-		tx.Rollback()
-		return nil, errors.New("customer not found")
+		log.Printf("❌ Customer validation failed: %v (%.2fms)", err, float64(time.Since(stepStart).Nanoseconds())/1000000)
+		return nil, fmt.Errorf("customer not found: %v", err)
 	}
+	log.Printf("✅ Customer validated (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
-	// Generate payment code
+	// Step 2: Generate payment code
+	log.Printf("📝 Step 2: Generating payment code...")
+	stepStart = time.Now()
 	code := s.generatePaymentCode("RCV")
+	log.Printf("✅ Payment code generated: %s (%.2fms)", code, float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
-	// Create payment record
+	// Step 3: Create payment record
+	log.Printf("📝 Step 3: Creating payment record...")
+	stepStart = time.Now()
 	payment := &models.Payment{
 		Code:      code,
 		ContactID: request.ContactID,
@@ -86,34 +120,46 @@ func (s *PaymentService) CreateReceivablePayment(request PaymentCreateRequest, u
 	}
 	
 	if err := tx.Create(payment).Error; err != nil {
-		tx.Rollback()
-		return nil, err
+		log.Printf("❌ Failed to create payment: %v (%.2fms)", err, float64(time.Since(stepStart).Nanoseconds())/1000000)
+		return nil, fmt.Errorf("failed to create payment: %v", err)
 	}
+	log.Printf("✅ Payment record created: ID=%d (%.2fms)", payment.ID, float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
-	// Process allocations to invoices
+	// Step 4: Process allocations
+	log.Printf("📝 Step 4: Processing %d allocations...", len(request.Allocations))
+	stepStart = time.Now()
 	remainingAmount := request.Amount
-	for _, allocation := range request.Allocations {
+	
+	for i, allocation := range request.Allocations {
 		if remainingAmount <= 0 {
+			log.Printf("⚠️ No remaining amount, skipping allocation %d", i+1)
 			break
 		}
 		
+		log.Printf("📝 Processing allocation %d: InvoiceID=%d, Amount=%.2f", i+1, allocation.InvoiceID, allocation.Amount)
+		
+		// Get sale
 		sale, err := s.salesRepo.FindByID(allocation.InvoiceID)
 		if err != nil {
-			tx.Rollback()
-			return nil, fmt.Errorf("invoice %d not found", allocation.InvoiceID)
+			log.Printf("❌ Invoice %d not found: %v", allocation.InvoiceID, err)
+			return nil, fmt.Errorf("invoice %d not found: %v", allocation.InvoiceID, err)
 		}
 		
+		// Validate ownership
 		if sale.CustomerID != request.ContactID {
-			tx.Rollback()
-			return nil, errors.New("invoice does not belong to this customer")
+			log.Printf("❌ Invoice ownership mismatch: Sale.CustomerID=%d, Request.ContactID=%d", sale.CustomerID, request.ContactID)
+			return nil, fmt.Errorf("invoice does not belong to this customer")
 		}
 		
+		// Calculate allocated amount
 		allocatedAmount := allocation.Amount
 		if allocatedAmount > remainingAmount {
 			allocatedAmount = remainingAmount
+			log.Printf("⚠️ Adjusting amount to remaining: %.2f -> %.2f", allocation.Amount, allocatedAmount)
 		}
 		if allocatedAmount > sale.OutstandingAmount {
 			allocatedAmount = sale.OutstandingAmount
+			log.Printf("⚠️ Adjusting amount to outstanding: %.2f -> %.2f", allocatedAmount, sale.OutstandingAmount)
 		}
 		
 		// Create payment allocation
@@ -124,28 +170,36 @@ func (s *PaymentService) CreateReceivablePayment(request PaymentCreateRequest, u
 		}
 		
 		if err := tx.Create(paymentAllocation).Error; err != nil {
-			tx.Rollback()
-			return nil, err
+			log.Printf("❌ Failed to create payment allocation: %v", err)
+			return nil, fmt.Errorf("failed to create payment allocation: %v", err)
 		}
+		log.Printf("✅ Payment allocation created: %.2f", allocatedAmount)
 		
-		// Update invoice (sales) status and amounts
+		// Update sale amounts
+		log.Printf("📝 Updating sale amounts: PaidAmount %.2f -> %.2f, Outstanding %.2f -> %.2f", 
+			sale.PaidAmount, sale.PaidAmount + allocatedAmount,
+			sale.OutstandingAmount, sale.OutstandingAmount - allocatedAmount)
+			
 		sale.PaidAmount += allocatedAmount
 		sale.OutstandingAmount -= allocatedAmount
 		
-		// Update status based on payment completion
+		// Update status
 		if sale.OutstandingAmount <= 0 {
 			sale.Status = models.SaleStatusPaid
+			log.Printf("✅ Sale status updated to PAID")
 		} else if sale.PaidAmount > 0 && sale.Status == models.SaleStatusInvoiced {
-			// Partial payment - keep as invoiced but track partial payment
 			sale.Status = models.SaleStatusInvoiced
+			log.Printf("✅ Sale status remains INVOICED (partial payment)")
 		}
 		
+		// Save sale changes
 		if err := tx.Save(sale).Error; err != nil {
-			tx.Rollback()
-			return nil, err
+			log.Printf("❌ Failed to save sale: %v", err)
+			return nil, fmt.Errorf("failed to update sale: %v", err)
 		}
+		log.Printf("✅ Sale updated successfully")
 		
-		// Create a corresponding SalePayment record for cross-reference
+		// Create SalePayment cross-reference
 		salePayment := &models.SalePayment{
 			SaleID:        sale.ID,
 			PaymentNumber: fmt.Sprintf("PAY-%s", payment.Code),
@@ -156,83 +210,118 @@ func (s *PaymentService) CreateReceivablePayment(request PaymentCreateRequest, u
 			Notes:         fmt.Sprintf("Created from Payment Management - %s", payment.Notes),
 			CashBankID:    &request.CashBankID,
 			UserID:        userID,
-			PaymentID:     &payment.ID, // Cross-reference to main payment
+			PaymentID:     &payment.ID,
 		}
 		
 		if err := tx.Create(salePayment).Error; err != nil {
-			// Log the error but don't fail the main transaction for backward compatibility
-			log.Printf("Warning: Failed to create sale payment cross-reference for payment %d, sale %d: %v", payment.ID, sale.ID, err)
-			// This is non-critical for Payment Management functionality
+			log.Printf("❌ CRITICAL: Failed to create sale payment cross-reference for payment %d, sale %d: %v", payment.ID, sale.ID, err)
+			// This is critical - if this fails, return error for auto-rollback
+			return nil, fmt.Errorf("failed to create sale payment record: %v", err)
 		} else {
-			log.Printf("Successfully created sale payment cross-reference: payment_id=%d, sale_id=%d, amount=%.2f", payment.ID, sale.ID, allocatedAmount)
+			log.Printf("✅ Sale payment cross-reference created: payment_id=%d, sale_id=%d, amount=%.2f", payment.ID, sale.ID, allocatedAmount)
 		}
 		
 		remainingAmount -= allocatedAmount
+		log.Printf("✅ Allocation %d complete. Remaining: %.2f", i+1, remainingAmount)
 	}
+	log.Printf("✅ All allocations processed (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
-	// Update cash/bank account
+	// Step 5: Update cash/bank balance
+	log.Printf("📝 Step 5: Updating cash/bank balance...")
+	stepStart = time.Now()
 	if request.CashBankID > 0 {
-		err = s.updateCashBankBalance(tx, request.CashBankID, request.Amount, "IN", payment.ID, userID)
+		err = s.updateCashBankBalanceWithLogging(tx, request.CashBankID, request.Amount, "IN", payment.ID, userID)
 		if err != nil {
-			tx.Rollback()
-			return nil, err
+			log.Printf("❌ Failed to update cash/bank balance: %v (%.2fms)", err, float64(time.Since(stepStart).Nanoseconds())/1000000)
+			return nil, fmt.Errorf("failed to update cash/bank balance: %v", err)
 		}
 	}
+	log.Printf("✅ Cash/bank balance updated (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
-	// Create journal entries
-	err = s.createReceivablePaymentJournal(tx, payment, request.CashBankID, userID)
+	// Step 6: Create journal entries
+	log.Printf("📝 Step 6: Creating journal entries...")
+	stepStart = time.Now()
+	err = s.createReceivablePaymentJournalWithLogging(tx, payment, request.CashBankID, userID)
 	if err != nil {
-		tx.Rollback()
-		return nil, err
+		log.Printf("❌ Failed to create journal entries: %v (%.2fms)", err, float64(time.Since(stepStart).Nanoseconds())/1000000)
+		return nil, fmt.Errorf("failed to create journal entries: %v", err)
 	}
+	log.Printf("✅ Journal entries created (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
+	// Step 7: Update payment status
+	log.Printf("📝 Step 7: Updating payment status to COMPLETED...")
+	stepStart = time.Now()
 	payment.Status = models.PaymentStatusCompleted
 	if err := tx.Save(payment).Error; err != nil {
-		tx.Rollback()
-		return nil, err
+		log.Printf("❌ Failed to save payment status: %v (%.2fms)", err, float64(time.Since(stepStart).Nanoseconds())/1000000)
+		return nil, fmt.Errorf("failed to update payment status: %v", err)
 	}
-
-	// Log successful payment creation
-	log.Printf("Successfully created payment: ID=%d, Code=%s, ContactID=%d, Amount=%.2f", payment.ID, payment.Code, payment.ContactID, payment.Amount)
-
+	log.Printf("✅ Payment status updated (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
+	
+	// Step 8: Commit transaction
+	log.Printf("📋 Step 8: Committing transaction...")
+	stepStart = time.Now()
 	commitErr := tx.Commit().Error
 	if commitErr != nil {
-		log.Printf("Error committing payment transaction: %v", commitErr)
-		return nil, commitErr
+		log.Printf("❌ CRITICAL: Failed to commit transaction: %v (%.2fms)", commitErr, float64(time.Since(stepStart).Nanoseconds())/1000000)
+		return nil, fmt.Errorf("transaction commit failed: %v", commitErr)
 	}
-
-	log.Printf("Payment transaction committed successfully for payment %d", payment.ID)
+	committed = true // Mark as committed to prevent auto-rollback
+	log.Printf("✅ Transaction committed successfully (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
+	
+	totalTime := time.Since(startTime)
+	log.Printf("🎉 CreateReceivablePayment COMPLETED: ID=%d, Code=%s, ContactID=%d, Amount=%.2f, TotalTime=%.2fms", 
+		payment.ID, payment.Code, payment.ContactID, payment.Amount, float64(totalTime.Nanoseconds())/1000000)
+	
 	return payment, nil
 }
 
 // CreatePayablePayment creates payment for purchases/payables
 func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, userID uint) (*models.Payment, error) {
-	// Start transaction
-	tx := s.db.Begin()
+	start := time.Now()
+	log.Printf("Starting CreatePayablePayment: ContactID=%d, Amount=%.2f", request.ContactID, request.Amount)
 	
-	// Validate vendor
-	_, err := s.contactRepo.GetByID(request.ContactID)
-	if err != nil {
+	// Start transaction with timeout
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in CreatePayablePayment: %v", r)
+			tx.Rollback()
+		}
+	}()
+	
+	// Validate vendor with optimized query
+	var contact models.Contact
+	if err := tx.Select("id, name, type").First(&contact, request.ContactID).Error; err != nil {
 		tx.Rollback()
+		log.Printf("Vendor validation failed: %v", err)
 		return nil, errors.New("vendor not found")
 	}
+	log.Printf("Vendor validated: %s (ID: %d)", contact.Name, contact.ID)
 	
 	// Check cash/bank balance
+	log.Printf("Checking balance for CashBankID: %d", request.CashBankID)
+	balanceCheckStart := time.Now()
 	if request.CashBankID > 0 {
 		cashBank, err := s.cashBankRepo.FindByID(request.CashBankID)
 		if err != nil {
 			tx.Rollback()
+			log.Printf("Cash/bank account not found: %v", err)
 			return nil, errors.New("cash/bank account not found")
 		}
 		
 		if cashBank.Balance < request.Amount {
 			tx.Rollback()
+			log.Printf("Insufficient balance: Available=%.2f, Required=%.2f", cashBank.Balance, request.Amount)
 			return nil, fmt.Errorf("insufficient balance. Available: %.2f", cashBank.Balance)
 		}
+		log.Printf("Balance check passed: %.2f available (%.2fms)", cashBank.Balance, float64(time.Since(balanceCheckStart).Nanoseconds())/1000000)
 	}
 	
 	// Generate payment code
+	codeGenStart := time.Now()
 	code := s.generatePaymentCode("PAY")
+	log.Printf("Payment code generated: %s (%.2fms)", code, float64(time.Since(codeGenStart).Nanoseconds())/1000000)
 	
 	// Create payment record
 	payment := &models.Payment{
@@ -296,6 +385,9 @@ func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, user
 		remainingAmount -= allocatedAmount
 	}
 	
+	// Declare err variable for use in this scope
+	var err error
+	
 	// Update cash/bank account
 	if request.CashBankID > 0 {
 		err = s.updateCashBankBalance(tx, request.CashBankID, -request.Amount, "OUT", payment.ID, userID)
@@ -315,10 +407,21 @@ func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, user
 	payment.Status = models.PaymentStatusCompleted
 	if err := tx.Save(payment).Error; err != nil {
 		tx.Rollback()
+		log.Printf("Failed to save payment status: %v", err)
 		return nil, err
 	}
 	
-	return payment, tx.Commit().Error
+	log.Printf("Payment creation completed, committing transaction...")
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("Failed to commit payment transaction: %v", err)
+		return nil, err
+	}
+	
+	totalTime := time.Since(start)
+	log.Printf("✅ CreatePayablePayment completed successfully: ID=%d, Code=%s, Amount=%.2f, TotalTime=%.2fms", 
+		payment.ID, payment.Code, payment.Amount, float64(totalTime.Nanoseconds())/1000000)
+	
+	return payment, nil
 }
 
 // updateCashBankBalance updates cash/bank balance and creates transaction record
@@ -457,31 +560,33 @@ func (s *PaymentService) createReceivablePaymentJournal(tx *gorm.DB, payment *mo
 
 // createPayablePaymentJournal creates journal entries for payable payment
 func (s *PaymentService) createPayablePaymentJournal(tx *gorm.DB, payment *models.Payment, cashBankID uint, userID uint) error {
-	// Get accounts
+	// Get accounts with optimized queries
 	var cashBankAccountID uint
 	if cashBankID > 0 {
 		var cashBank models.CashBank
-		if err := tx.First(&cashBank, cashBankID).Error; err != nil {
-			return err
+		if err := tx.Select("account_id").First(&cashBank, cashBankID).Error; err != nil {
+			return fmt.Errorf("cash/bank account not found: %v", err)
 		}
 		cashBankAccountID = cashBank.AccountID
 	} else {
-		// TODO: Implement GetAccountByCode in AccountRepository
-		// cashAccount, err := s.accountRepo.GetAccountByCode("1100")
-		// if err != nil {
-		//	return err
-		// }
-		// cashBankAccountID = cashAccount.ID
-		cashBankAccountID = 1 // Default cash account ID - should be from config or db
+		// Get default cash account (Kas - 1101)
+		var kasAccount models.Account
+		if err := tx.Select("id").Where("code = ?", "1101").First(&kasAccount).Error; err != nil {
+			return fmt.Errorf("default cash account (1101) not found: %v", err)
+		}
+		cashBankAccountID = kasAccount.ID
 	}
 
-	// TODO: Implement GetAccountByCode in AccountRepository
-	// apAccount, err := s.accountRepo.GetAccountByCode("2100") // Accounts Payable
-	// if err != nil {
-	//	return err
-	// }
-	// Use default AP account ID for now
-	apAccountID := uint(3) // Default AP account ID - should be from config or db
+	// Get Accounts Payable account (Hutang Usaha - 2101) with optimized query
+	var apAccount models.Account
+	if err := tx.Select("id").Where("code = ?", "2101").First(&apAccount).Error; err != nil {
+		log.Printf("Warning: Hutang Usaha account (2101) not found, trying fallback")
+		// Fallback: try to find by name pattern
+		if err := tx.Select("id").Where("LOWER(name) LIKE ?", "%hutang%usaha%").First(&apAccount).Error; err != nil {
+			return fmt.Errorf("accounts payable account not found: %v", err)
+		}
+	}
+	apAccountID := apAccount.ID
 
 	// Create journal entry
 	journalEntry := &models.JournalEntry{
@@ -523,13 +628,18 @@ func (s *PaymentService) createPayablePaymentJournal(tx *gorm.DB, payment *model
 		return err
 	}
 
-	// Update account balances based on journal lines
-	for _, line := range journalLines {
-		if err := s.accountRepo.UpdateBalance(context.Background(), line.AccountID, line.DebitAmount, line.CreditAmount); err != nil {
-			log.Printf("Warning: Failed to update balance for account %d: %v", line.AccountID, err)
-			// Don't fail the entire transaction for balance updates
+	// Update account balances based on journal lines (async to improve performance)
+	go func() {
+		log.Printf("Starting async balance updates for %d journal lines", len(journalLines))
+		for i, line := range journalLines {
+			if err := s.accountRepo.UpdateBalance(context.Background(), line.AccountID, line.DebitAmount, line.CreditAmount); err != nil {
+				log.Printf("Warning: Failed to update balance for account %d (line %d): %v", line.AccountID, i, err)
+			} else {
+				log.Printf("Balance updated for account %d: Debit=%.2f, Credit=%.2f", line.AccountID, line.DebitAmount, line.CreditAmount)
+			}
 		}
-	}
+		log.Printf("Async balance updates completed")
+	}()
 
 	return nil
 }
@@ -1325,4 +1435,165 @@ func (s *PaymentService) ExportPaymentDetailPDF(paymentID uint) ([]byte, string,
 
 	filename := fmt.Sprintf("Payment_%s.pdf", payment.Code)
 	return pdfData, filename, nil
+}
+
+// updateCashBankBalanceWithLogging - Version with detailed logging
+func (s *PaymentService) updateCashBankBalanceWithLogging(tx *gorm.DB, cashBankID uint, amount float64, direction string, referenceID uint, userID uint) error {
+	log.Printf("💰 Updating Cash/Bank Balance: ID=%d, Amount=%.2f, Direction=%s", cashBankID, amount, direction)
+	
+	var cashBank models.CashBank
+	if err := tx.First(&cashBank, cashBankID).Error; err != nil {
+		return fmt.Errorf("cash/bank account not found: %v", err)
+	}
+	
+	log.Printf("💰 Current balance: %.2f -> %.2f", cashBank.Balance, cashBank.Balance + amount)
+	
+	// Update balance
+	newBalance := cashBank.Balance + amount
+	
+	// Safety check - only prevent negative balance for outgoing payments (withdrawals)
+	// For incoming payments (receivables), allow negative balance to become positive
+	if newBalance < 0 && amount < 0 {
+		// Only block if this is a withdrawal/payment OUT that would make balance negative
+		return fmt.Errorf("insufficient balance for withdrawal. Current: %.2f, Required: %.2f, Shortfall: %.2f", 
+			cashBank.Balance, -amount, -newBalance)
+	}
+	
+	cashBank.Balance = newBalance
+	
+	if err := tx.Save(&cashBank).Error; err != nil {
+		return fmt.Errorf("failed to save cash/bank balance: %v", err)
+	}
+	
+	log.Printf("✅ Balance updated successfully: %.2f", cashBank.Balance)
+	
+	// Create transaction record
+	transaction := &models.CashBankTransaction{
+		CashBankID:      cashBankID,
+		ReferenceType:   "PAYMENT",
+		ReferenceID:     referenceID,
+		Amount:          amount,
+		BalanceAfter:    cashBank.Balance,
+		TransactionDate: time.Now(),
+		Notes:           fmt.Sprintf("Payment %s", direction),
+	}
+	
+	if err := tx.Create(transaction).Error; err != nil {
+		return fmt.Errorf("failed to create cash/bank transaction: %v", err)
+	}
+	
+	log.Printf("✅ Cash/bank transaction recorded")
+	return nil
+}
+
+// createReceivablePaymentJournalWithLogging - Version with detailed logging
+func (s *PaymentService) createReceivablePaymentJournalWithLogging(tx *gorm.DB, payment *models.Payment, cashBankID uint, userID uint) error {
+	log.Printf("📋 Creating journal entries for payment %d", payment.ID)
+	
+	// Get accounts
+	var cashBankAccountID uint
+	if cashBankID > 0 {
+		var cashBank models.CashBank
+		if err := tx.First(&cashBank, cashBankID).Error; err != nil {
+			return fmt.Errorf("cash/bank account not found: %v", err)
+		}
+		cashBankAccountID = cashBank.AccountID
+		log.Printf("📋 Using Cash/Bank Account ID: %d", cashBankAccountID)
+	} else {
+		var kasAccount models.Account
+		if err := tx.Where("code = ?", "1101").First(&kasAccount).Error; err != nil {
+			return fmt.Errorf("default cash account (1101) not found: %v", err)
+		}
+		cashBankAccountID = kasAccount.ID
+		log.Printf("📋 Using default Cash Account ID: %d", cashBankAccountID)
+	}
+	
+	// Get AR account
+	var arAccount models.Account
+	if err := tx.Where("code = ?", "1201").First(&arAccount).Error; err != nil {
+		log.Printf("⚠️ AR account (1201) not found, trying fallback")
+		if err := tx.Where("LOWER(name) LIKE ?", "%piutang%usaha%").First(&arAccount).Error; err != nil {
+			return fmt.Errorf("accounts receivable account not found: %v", err)
+		}
+	}
+	log.Printf("📋 Using AR Account ID: %d (Code: %s)", arAccount.ID, arAccount.Code)
+	
+	// Create journal entry
+	journalEntry := &models.JournalEntry{
+		EntryDate:       payment.Date,
+		Description:     fmt.Sprintf("Customer Payment %s", payment.Code),
+		ReferenceType:   models.JournalRefPayment,
+		ReferenceID:     &payment.ID,
+		Reference:       payment.Code,
+		UserID:          userID,
+		Status:          models.JournalStatusPosted,
+		TotalDebit:      payment.Amount,
+		TotalCredit:     payment.Amount,
+		IsAutoGenerated: true,
+	}
+	
+	// Journal lines
+	journalLines := []models.JournalLine{
+		{
+			AccountID:    cashBankAccountID,
+			Description:  fmt.Sprintf("Payment received - %s", payment.Code),
+			DebitAmount:  payment.Amount,
+			CreditAmount: 0,
+		},
+		{
+			AccountID:    arAccount.ID,
+			Description:  fmt.Sprintf("AR reduction - %s", payment.Code),
+			DebitAmount:  0,
+			CreditAmount: payment.Amount,
+		},
+	}
+	
+	journalEntry.JournalLines = journalLines
+	
+	if err := tx.Create(journalEntry).Error; err != nil {
+		return fmt.Errorf("failed to create journal entry: %v", err)
+	}
+	
+	log.Printf("✅ Journal entry created: ID=%d", journalEntry.ID)
+	
+	// Update account balances using batch operation with extended context
+	log.Printf("📋 Updating account balances for %d accounts...", len(journalLines))
+	balanceStart := time.Now()
+	
+	// Create separate context with extended timeout for balance updates
+	balanceCtx, cancelBalance := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancelBalance()
+	
+	// Batch update account balances using raw SQL for better performance
+	for _, line := range journalLines {
+		// Use optimized raw update within the existing transaction
+		var balanceChange float64
+		if line.DebitAmount > 0 {
+			balanceChange = line.DebitAmount
+		} else {
+			balanceChange = -line.CreditAmount
+		}
+		
+		// Direct SQL update with shorter timeout
+		result := tx.WithContext(balanceCtx).Exec(
+			`UPDATE accounts SET 
+				balance = CASE 
+					WHEN type IN ('ASSET', 'EXPENSE') THEN balance + ?
+					ELSE balance - ?
+				END,
+				updated_at = CURRENT_TIMESTAMP
+			 WHERE id = ? AND deleted_at IS NULL`,
+			balanceChange, balanceChange, line.AccountID)
+			
+		if result.Error != nil {
+			log.Printf("⚠️ Warning: Failed to update balance for account %d: %v", line.AccountID, result.Error)
+			// Continue with other updates instead of failing
+		} else {
+			log.Printf("✅ Updated balance for account %d (%.2f)", line.AccountID, balanceChange)
+		}
+	}
+	
+	log.Printf("✅ Account balances updated (%.2fms)", float64(time.Since(balanceStart).Nanoseconds())/1000000)
+	
+	return nil
 }

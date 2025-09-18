@@ -71,7 +71,6 @@ const getMenuGroups = (t) => [
     title: t('navigation.reports'),
     items: [
       { name: t('navigation.reports'), icon: FiBarChart, href: '/reports', module: null, permission: null, roles: ['ADMIN', 'FINANCE', 'DIRECTOR'] },
-      { name: 'Enhanced Reports 📊', icon: FiTrendingUp, href: '/enhanced-reports', module: null, permission: null, roles: ['ADMIN', 'FINANCE', 'DIRECTOR'] },
     ]
   },
   {

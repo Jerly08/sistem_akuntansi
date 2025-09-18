@@ -136,6 +136,15 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
       setLoading(true);
       setError(null);
 
+      // Show progress toast for long operations
+      toast({
+        title: 'Processing Transaction',
+        description: 'Please wait while we process your transaction. This may take up to 60 seconds.',
+        status: 'info',
+        duration: 5000,
+        isClosable: true,
+      });
+
       // Basic validation
       if (!account) {
         throw new Error('No account selected');
@@ -199,12 +208,22 @@ const DepositWithdrawalForm: React.FC<DepositWithdrawalFormProps> = ({
       onClose();
     } catch (err: any) {
       console.error(`Error processing ${mode}:`, err);
-      setError(err.response?.data?.details || err.message || `Failed to process ${mode}`);
+      
+      let errorMessage = err.response?.data?.details || err.message || `Failed to process ${mode}`;
+      let errorTitle = 'Transaction Failed';
+      
+      // Handle timeout errors specifically
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout') || err.message?.includes('exceeded')) {
+        errorTitle = 'Transaction Timeout';
+        errorMessage = `The ${mode} operation timed out. This might happen due to high server load. Please wait a moment and check your account balance before retrying.`;
+      }
+      
+      setError(errorMessage);
       toast({
-        title: 'Transaction Failed',
-        description: err.response?.data?.details || err.message || `Failed to process ${mode}`,
+        title: errorTitle,
+        description: errorMessage,
         status: 'error',
-        duration: 5000,
+        duration: 8000, // Longer duration for timeout errors
         isClosable: true,
       });
     } finally {

@@ -575,5 +575,277 @@ func (s *SalesService) createSaleReversalJournalEntries(sale *models.Sale, userI
 		}
 	}
 	
+return nil
+}
+
+// Enhanced tax calculation for sales similar to purchase module
+
+// calculateSaleTotalsEnhanced calculates all sale totals with enhanced tax configuration
+func (s *SalesService) calculateSaleTotalsEnhanced(sale *models.Sale, items []models.SaleItemRequest) error {
+	subtotalBeforeDiscount := 0.0
+	itemDiscountAmount := 0.0
+	
+	sale.SaleItems = []models.SaleItem{}
+	
+	for _, itemReq := range items {
+		// Validate product exists
+		product, err := s.productRepo.FindByID(itemReq.ProductID)
+		if err != nil {
+			return err
+		}
+		
+		// Set default revenue account if not provided
+		revenueAccountID := itemReq.RevenueAccountID
+		if revenueAccountID == 0 {
+			defaultAccount, err := s.getDefaultSalesRevenueAccount()
+			if err != nil {
+				return err
+			}
+			revenueAccountID = defaultAccount.ID
+		}
+		
+		// Handle description - use from request or fallback to product name
+		description := itemReq.Description
+		if description == "" {
+			description = product.Name
+		}
+		
+		// Handle discount percent - use new field or map from legacy field
+		discountPercent := itemReq.DiscountPercent
+		if discountPercent == 0 && itemReq.Discount > 0 {
+			lineSubtotal := float64(itemReq.Quantity) * itemReq.UnitPrice
+			if lineSubtotal > 0 {
+				discountPercent = (itemReq.Discount / lineSubtotal) * 100
+				if discountPercent > 100 {
+					discountPercent = 100
+				}
+			}
+		}
+		
+		// Create sale item
+		item := models.SaleItem{
+			ProductID:        itemReq.ProductID,
+			Description:      description,
+			Quantity:         itemReq.Quantity,
+			UnitPrice:        itemReq.UnitPrice,
+			DiscountPercent:  discountPercent,
+			Taxable:          itemReq.Taxable,
+			RevenueAccountID: revenueAccountID,
+			// Legacy fields for backward compatibility
+			Discount:         itemReq.Discount,
+			Tax:              itemReq.Tax,
+		}
+		
+		// Calculate line totals
+		lineSubtotal := float64(item.Quantity) * item.UnitPrice
+		discountAmount := item.Discount
+		if discountAmount == 0 && item.DiscountPercent > 0 {
+			discountAmount = lineSubtotal * (item.DiscountPercent / 100)
+		}
+		item.DiscountAmount = discountAmount
+		item.LineTotal = lineSubtotal - discountAmount
+		
+		subtotalBeforeDiscount += lineSubtotal
+		itemDiscountAmount += discountAmount
+		
+		sale.SaleItems = append(sale.SaleItems, item)
+	}
+	
+	// Calculate order-level discount
+	orderDiscountAmount := 0.0
+	if sale.DiscountPercent > 0 {
+		orderDiscountAmount = (subtotalBeforeDiscount - itemDiscountAmount) * sale.DiscountPercent / 100
+	}
+	
+	// Set basic calculated fields
+	sale.Subtotal = subtotalBeforeDiscount
+	sale.DiscountAmount = itemDiscountAmount + orderDiscountAmount
+	sale.NetBeforeTax = subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount
+	
+	// Calculate taxable amount including shipping if it's taxable
+	taxableAmount := sale.NetBeforeTax
+	if sale.ShippingTaxable {
+		taxableAmount += sale.ShippingCost
+	}
+	sale.TaxableAmount = taxableAmount
+	
+	// Calculate tax additions (Penambahan) similar to purchase module
+	// 1. PPN calculation - use enhanced rate if available, otherwise legacy rate
+	ppnRate := sale.PPNRate
+	if ppnRate == 0 {
+		ppnRate = sale.PPNPercent
+	}
+	if ppnRate > 0 {
+		sale.PPNAmount = taxableAmount * ppnRate / 100
+	} else {
+		// Default PPN 11% if not specified
+		sale.PPNAmount = taxableAmount * 0.11
+		ppnRate = 11.0
+	}
+	
+	// Update both new and legacy PPN fields
+	sale.PPNRate = ppnRate
+	sale.PPN = sale.PPNAmount
+	
+	// 2. Other tax additions
+	sale.TotalTaxAdditions = sale.PPNAmount + sale.OtherTaxAdditions
+	
+	// Calculate tax deductions (Pemotongan) similar to purchase module  
+	// 1. PPh 21 calculation
+	if sale.PPh21Rate > 0 {
+		sale.PPh21Amount = taxableAmount * sale.PPh21Rate / 100
+	}
+	
+	// 2. PPh 23 calculation
+	if sale.PPh23Rate > 0 {
+		sale.PPh23Amount = taxableAmount * sale.PPh23Rate / 100
+	}
+	
+	// 3. Legacy PPh calculation for backward compatibility
+	legacyPPhAmount := 0.0
+	if sale.PPhPercent > 0 {
+		legacyPPhAmount = taxableAmount * sale.PPhPercent / 100
+	}
+	sale.PPh = legacyPPhAmount
+	
+	// 4. Total tax deductions
+	sale.TotalTaxDeductions = sale.PPh21Amount + sale.PPh23Amount + legacyPPhAmount + sale.OtherTaxDeductions
+	
+	// Calculate final totals similar to purchase module
+	// Total = Net Before Tax + Tax Additions - Tax Deductions + Shipping
+	sale.TotalTax = sale.TotalTaxAdditions - sale.TotalTaxDeductions
+	sale.TotalAmount = sale.NetBeforeTax + sale.TotalTax + sale.ShippingCost
+	
+	// Set outstanding amount
+	sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
+	
+	// Update legacy fields for backward compatibility
+	sale.Tax = sale.TotalTax
+	sale.SubTotal = sale.Subtotal
+	
+	// Update individual sale item tax calculations if needed
+	s.updateSaleItemTaxes(sale)
+	
+	return nil
+}
+
+// updateSaleItemTaxes updates individual sale item tax calculations
+func (s *SalesService) updateSaleItemTaxes(sale *models.Sale) {
+	for i := range sale.SaleItems {
+		item := &sale.SaleItems[i]
+		
+		// Calculate taxes only if item is taxable
+		if item.Taxable {
+			// Use sale-level tax rates for item calculations
+			ppnRate := sale.PPNRate
+			if ppnRate == 0 {
+				ppnRate = sale.PPNPercent
+			}
+			
+			item.PPNAmount = item.LineTotal * (ppnRate / 100)
+			
+			// For PPh, use the combined rate from different PPh types
+			totalPPhRate := sale.PPhPercent + sale.PPh21Rate + sale.PPh23Rate
+			item.PPhAmount = item.LineTotal * (totalPPhRate / 100)
+			
+			item.TotalTax = item.PPNAmount - item.PPhAmount
+		} else {
+			item.PPNAmount = 0
+			item.PPhAmount = 0
+			item.TotalTax = 0
+		}
+		
+		item.FinalAmount = item.LineTotal + item.TotalTax
+		item.TotalPrice = item.LineTotal // For frontend compatibility
+		
+		// Update legacy fields
+		item.Discount = item.DiscountAmount
+		item.Tax = item.TotalTax
+	}
+}
+
+// recalculateSaleTotalsEnhanced recalculates sale totals with enhanced tax logic
+func (s *SalesService) recalculateSaleTotalsEnhanced(sale *models.Sale) error {
+	subtotalBeforeDiscount := 0.0
+	itemDiscountAmount := 0.0
+	
+	for i := range sale.SaleItems {
+		item := &sale.SaleItems[i]
+		
+		lineSubtotal := float64(item.Quantity) * item.UnitPrice
+		discountAmount := item.Discount
+		if discountAmount == 0 && item.DiscountPercent > 0 {
+			discountAmount = lineSubtotal * (item.DiscountPercent / 100)
+		}
+		item.DiscountAmount = discountAmount
+		item.LineTotal = lineSubtotal - discountAmount
+		
+		subtotalBeforeDiscount += lineSubtotal
+		itemDiscountAmount += discountAmount
+	}
+	
+	// Calculate order-level discount
+	orderDiscountAmount := 0.0
+	if sale.DiscountPercent > 0 {
+		orderDiscountAmount = (subtotalBeforeDiscount - itemDiscountAmount) * sale.DiscountPercent / 100
+	}
+	
+	// Set basic calculated fields
+	sale.Subtotal = subtotalBeforeDiscount
+	sale.DiscountAmount = itemDiscountAmount + orderDiscountAmount
+	sale.NetBeforeTax = subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount
+	
+	// Calculate taxable amount including shipping if it's taxable
+	taxableAmount := sale.NetBeforeTax
+	if sale.ShippingTaxable {
+		taxableAmount += sale.ShippingCost
+	}
+	sale.TaxableAmount = taxableAmount
+	
+	// Recalculate tax additions
+	ppnRate := sale.PPNRate
+	if ppnRate == 0 {
+		ppnRate = sale.PPNPercent
+	}
+	if ppnRate > 0 {
+		sale.PPNAmount = taxableAmount * ppnRate / 100
+	} else {
+		sale.PPNAmount = taxableAmount * 0.11
+		ppnRate = 11.0
+	}
+	
+	sale.PPNRate = ppnRate
+	sale.PPN = sale.PPNAmount
+	sale.TotalTaxAdditions = sale.PPNAmount + sale.OtherTaxAdditions
+	
+	// Recalculate tax deductions
+	if sale.PPh21Rate > 0 {
+		sale.PPh21Amount = taxableAmount * sale.PPh21Rate / 100
+	}
+	
+	if sale.PPh23Rate > 0 {
+		sale.PPh23Amount = taxableAmount * sale.PPh23Rate / 100
+	}
+	
+	legacyPPhAmount := 0.0
+	if sale.PPhPercent > 0 {
+		legacyPPhAmount = taxableAmount * sale.PPhPercent / 100
+	}
+	sale.PPh = legacyPPhAmount
+	
+	sale.TotalTaxDeductions = sale.PPh21Amount + sale.PPh23Amount + legacyPPhAmount + sale.OtherTaxDeductions
+	
+	// Calculate final totals
+	sale.TotalTax = sale.TotalTaxAdditions - sale.TotalTaxDeductions
+	sale.TotalAmount = sale.NetBeforeTax + sale.TotalTax + sale.ShippingCost
+	sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
+	
+	// Update legacy fields
+	sale.Tax = sale.TotalTax
+	sale.SubTotal = sale.Subtotal
+	
+	// Update individual sale item tax calculations
+	s.updateSaleItemTaxes(sale)
+	
 	return nil
 }

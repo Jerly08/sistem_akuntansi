@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"app-sistem-akuntansi/config"
@@ -251,13 +252,35 @@ func cleanupProductUnitConstraints(db *gorm.DB) {
 func ConnectDB() *gorm.DB {
 	cfg := config.LoadConfig()
 	
-	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	// Configure GORM with optimizations
+	gormConfig := &gorm.Config{
+		// Disable foreign key constraint check for better performance during migrations
+		DisableForeignKeyConstraintWhenMigrating: true,
+		// Skip default transaction for better performance
+		SkipDefaultTransaction: true,
+		// Prepare statement for better performance
+		PrepareStmt: true,
+	}
+	
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), gormConfig)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-
+	
+	// Configure connection pool for optimal performance
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Fatal("Failed to get underlying sql.DB:", err)
+	}
+	
+	// Connection pool settings
+	sqlDB.SetMaxIdleConns(10)                              // Maximum idle connections
+	sqlDB.SetMaxOpenConns(100)                             // Maximum open connections
+	sqlDB.SetConnMaxLifetime(time.Hour)                    // Connection max lifetime (1 hour)
+	sqlDB.SetConnMaxIdleTime(30 * time.Minute)             // Connection max idle time (30 minutes)
+	
 	DB = db
-	log.Println("Database connected successfully")
+	log.Println("Database connected successfully with optimized connection pool")
 	return db
 }
 
@@ -435,6 +458,9 @@ func AutoMigrate(db *gorm.DB) {
 
 	// Create indexes for better performance
 	createIndexes(db)
+	
+	// Run payment performance optimization migration
+	RunPaymentPerformanceOptimization(db)
 }
 
 func createIndexes(db *gorm.DB) {
@@ -2150,4 +2176,127 @@ func validateFinalSyncStatus(db *gorm.DB) {
 	}
 	
 	log.Println("=== Balance Synchronization Validation Complete ===")
+}
+
+// RunPaymentPerformanceOptimization applies the payment performance optimization migration
+func RunPaymentPerformanceOptimization(db *gorm.DB) {
+	log.Println("Starting Payment Performance Optimization Migration...")
+	
+	// Check if migration has already been applied by checking for one of the key indexes
+	var indexExists bool
+	db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_indexes 
+			WHERE tablename = 'payments' 
+			AND indexname = 'idx_payments_contact_id'
+		)
+	`).Scan(&indexExists)
+	
+	if indexExists {
+		log.Println("Payment performance optimization already applied, skipping")
+		return
+	}
+	
+	// Payments table indexes
+	log.Println("Creating payment table indexes...")
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_contact_id ON payments(contact_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_date ON payments(date)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_method ON payments(method)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_code ON payments(code)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_created_at ON payments(created_at)`)
+	
+	// Payment allocations indexes
+	log.Println("Creating payment allocation indexes...")
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payment_allocations_payment_id ON payment_allocations(payment_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payment_allocations_invoice_id ON payment_allocations(invoice_id) WHERE invoice_id IS NOT NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payment_allocations_bill_id ON payment_allocations(bill_id) WHERE bill_id IS NOT NULL`)
+	
+	// Cash bank transactions indexes
+	log.Println("Creating cash bank transaction indexes...")
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_cashbank_transactions_cashbank_id ON cash_bank_transactions(cash_bank_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_cashbank_transactions_reference ON cash_bank_transactions(reference_type, reference_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_cashbank_transactions_date ON cash_bank_transactions(transaction_date)`)
+	
+	// Journal entries indexes for payment operations
+	log.Println("Creating journal entry indexes...")
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_reference ON journal_entries(reference_type, reference_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries(entry_date)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_status ON journal_entries(status)`)
+	
+	// Journal lines indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_journal_entry_id ON journal_lines(journal_entry_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_account_id ON journal_lines(account_id)`)
+	
+	// Accounts table indexes for faster lookups
+	log.Println("Creating account lookup indexes...")
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounts_code ON accounts(code)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounts_name_lower ON accounts(LOWER(name))`)
+	
+	// Cash bank table indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_cash_bank_account_id ON cash_banks(account_id)`)
+	
+	// Purchase table indexes for payment integration
+	log.Println("Creating purchase integration indexes...")
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_vendor_id ON purchases(vendor_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_status ON purchases(status)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_payment_method ON purchases(payment_method)`)
+	
+	// Sales table indexes for payment integration
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_outstanding_amount ON sales(outstanding_amount) WHERE outstanding_amount > 0`)
+	
+	// Payment code sequence table indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payment_code_sequence_prefix ON payment_code_sequences(prefix, year, month)`)
+	
+	// Composite indexes for common query patterns
+	log.Println("Creating composite indexes...")
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_contact_status_date ON payments(contact_id, status, date)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_date_method ON payments(date, method)`)
+	
+	// Add partial indexes for active/pending records only
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_active ON payments(id) WHERE status IN ('PENDING', 'COMPLETED')`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_payable ON purchases(id) WHERE status = 'APPROVED' AND payment_method = 'CREDIT' AND outstanding_amount > 0`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_receivable ON sales(id) WHERE status = 'INVOICED' AND outstanding_amount > 0`)
+	
+	// Optimize sequence table for better payment code generation
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payment_code_seq_unique ON payment_code_sequences(prefix, year, month) WHERE sequence_number > 0`)
+	
+	// Add statistics update for PostgreSQL optimization
+	log.Println("Updating table statistics for optimization...")
+	db.Exec(`ANALYZE payments`)
+	db.Exec(`ANALYZE payment_allocations`)
+	db.Exec(`ANALYZE cash_bank_transactions`)
+	db.Exec(`ANALYZE journal_entries`)
+	db.Exec(`ANALYZE journal_lines`)
+	db.Exec(`ANALYZE accounts`)
+	db.Exec(`ANALYZE cash_banks`)
+	db.Exec(`ANALYZE purchases`)
+	db.Exec(`ANALYZE sales`)
+	
+	// Create performance monitoring view
+	log.Println("Creating performance monitoring view...")
+	db.Exec(`
+		CREATE OR REPLACE VIEW payment_performance_stats AS
+		SELECT 
+			'payments' as table_name,
+			COUNT(*) as total_records,
+			COUNT(CASE WHEN status = 'COMPLETED' THEN 1 END) as completed_count,
+			COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_count,
+			AVG(amount) as avg_amount,
+			MAX(created_at) as last_payment
+		FROM payments
+		UNION ALL
+		SELECT 
+			'journal_entries' as table_name,
+			COUNT(*) as total_records,
+			COUNT(CASE WHEN status = 'POSTED' THEN 1 END) as posted_count,
+			COUNT(CASE WHEN reference_type = 'PAYMENT' THEN 1 END) as payment_journals,
+			AVG(total_debit) as avg_amount,
+			MAX(created_at) as last_entry
+		FROM journal_entries
+	`)
+	
+	log.Println("✅ Payment Performance Optimization Migration completed successfully")
 }

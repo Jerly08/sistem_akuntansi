@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import SimpleLayout from '@/components/layout/SimpleLayout';
-import SettingsEditModal from '@/components/settings/SettingsEditModal';
 import api from '@/services/api';
 import {
   Box,
@@ -17,8 +16,6 @@ import {
   CardHeader,
   SimpleGrid,
   Icon,
-  Badge,
-  Button,
   Alert,
   AlertIcon,
   AlertTitle,
@@ -27,9 +24,21 @@ import {
   useColorModeValue,
   Divider,
   Select,
-  useToast
+  Input,
+  Textarea,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
+  FormControl,
+  FormLabel,
+  FormErrorMessage,
+  useToast,
+  Button,
+  ButtonGroup
 } from '@chakra-ui/react';
-import { FiHome, FiDollarSign, FiCalendar, FiSettings, FiEdit, FiGlobe } from 'react-icons/fi';
+import { FiHome, FiSettings, FiGlobe, FiCalendar, FiDollarSign, FiSave, FiX } from 'react-icons/fi';
 
 interface SystemSettings {
   id?: number;
@@ -66,9 +75,11 @@ const SettingsPage: React.FC = () => {
   const { t, language, setLanguage } = useTranslation();
   const toast = useToast();
   const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [formData, setFormData] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   
   // Move useColorModeValue to top level to fix hooks order
   const blueColor = useColorModeValue('blue.500', 'blue.300');
@@ -81,6 +92,8 @@ const SettingsPage: React.FC = () => {
       const response = await api.get('/settings');
       if (response.data.success) {
         setSettings(response.data.data);
+        setFormData(response.data.data);
+        setHasChanges(false);
         // Sync language from settings
         if (response.data.data.language && response.data.data.language !== language) {
           setLanguage(response.data.data.language);
@@ -116,13 +129,71 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const handleSettingsUpdate = (updatedSettings: SystemSettings) => {
-    setSettings(updatedSettings);
-    // If language was changed, update it in the UI
-    if (updatedSettings.language && updatedSettings.language !== language) {
-      setLanguage(updatedSettings.language);
+  const handleFormChange = (field: keyof SystemSettings, value: any) => {
+    setFormData(prev => {
+      if (!prev) {
+        // If formData is null, create new object with current value
+        return {
+          ...settings,
+          [field]: value
+        } as SystemSettings;
+      }
+      return {
+        ...prev,
+        [field]: value
+      };
+    });
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    if (!formData || !hasChanges) return;
+    
+    setSaving(true);
+    try {
+      const response = await api.put('/settings', formData);
+      if (response.data.success) {
+        setSettings(response.data.data);
+        setFormData(response.data.data);
+        setHasChanges(false);
+        
+        // Update language if changed
+        if (response.data.data.language !== language) {
+          setLanguage(response.data.data.language);
+        }
+        
+        toast({
+          title: t('settings.updateSuccess') || 'Settings updated successfully',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: t('settings.updateError') || 'Failed to update settings',
+        description: error.response?.data?.details || error.message,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setSaving(false);
     }
   };
+
+  const handleCancel = () => {
+    setFormData(settings);
+    setHasChanges(false);
+  };
+
+
+  // Add safety check for formData initialization
+  useEffect(() => {
+    if (settings && !formData) {
+      setFormData(settings);
+    }
+  }, [settings, formData]);
 
   // Loading state - moved after all hooks
   if (loading) {
@@ -136,19 +207,46 @@ const SettingsPage: React.FC = () => {
     );
   }
 
+  // Don't render form until settings are loaded
+  if (!settings) {
+    return (
+      <SimpleLayout allowedRoles={['admin']}>
+        <Box>
+          <Text>No settings data available</Text>
+        </Box>
+      </SimpleLayout>
+    );
+  }
+
   return (
 <SimpleLayout allowedRoles={['admin']}>
       <Box>
         <VStack spacing={6} alignItems="start">
           <HStack justify="space-between" width="full">
             <Heading as="h1" size="xl">{t('settings.title')}</Heading>
-            <Button
-              colorScheme="blue"
-              leftIcon={<FiEdit />}
-              onClick={() => setIsEditModalOpen(true)}
-            >
-              {t('settings.editSettings')}
-            </Button>
+            {hasChanges && (
+              <ButtonGroup>
+                <Button
+                  colorScheme="green"
+                  leftIcon={<FiSave />}
+                  onClick={handleSave}
+                  isLoading={saving}
+                  loadingText="Saving..."
+                  size="sm"
+                >
+                  Save Changes
+                </Button>
+                <Button
+                  variant="outline"
+                  leftIcon={<FiX />}
+                  onClick={handleCancel}
+                  isDisabled={saving}
+                  size="sm"
+                >
+                  Cancel
+                </Button>
+              </ButtonGroup>
+            )}
           </HStack>
           
           {error && (
@@ -159,7 +257,7 @@ const SettingsPage: React.FC = () => {
             </Alert>
           )}
           
-          <SimpleGrid columns={[1, 1, 2]} spacing={6} width="full">
+          <SimpleGrid columns={[1, 1, 2, 3]} spacing={6} width="full">
             {/* Company Information Card */}
             <Card border="1px" borderColor="gray.200" boxShadow="md">
               <CardHeader>
@@ -170,34 +268,82 @@ const SettingsPage: React.FC = () => {
               </CardHeader>
               <CardBody>
                 <VStack spacing={4} alignItems="start">
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.companyName')}</Text>
-                    <Text fontSize="md">{settings?.company_name}</Text>
-                  </Box>
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.companyName')}
+                    </FormLabel>
+                    <Input
+                      value={formData?.company_name || settings?.company_name || ''}
+                      onChange={(e) => handleFormChange('company_name', e.target.value)}
+                      placeholder="Enter company name"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
                   <Divider />
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.address')}</Text>
-                    <Text fontSize="md">{settings?.company_address}</Text>
-                  </Box>
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.address')}
+                    </FormLabel>
+                    <Textarea
+                      value={formData?.company_address || settings?.company_address || ''}
+                      onChange={(e) => handleFormChange('company_address', e.target.value)}
+                      placeholder="Enter company address"
+                      rows={3}
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
                   <Divider />
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.phone')}</Text>
-                    <Text fontSize="md">{settings?.company_phone}</Text>
-                  </Box>
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.phone')}
+                    </FormLabel>
+                    <Input
+                      value={formData?.company_phone || settings?.company_phone || ''}
+                      onChange={(e) => handleFormChange('company_phone', e.target.value)}
+                      placeholder="Enter phone number"
+                      type="tel"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
                   <Divider />
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.email')}</Text>
-                    <Text fontSize="md">{settings?.company_email}</Text>
-                  </Box>
-                  {settings?.tax_number && (
-                    <>
-                      <Divider />
-                      <Box>
-                        <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.taxNumber')}</Text>
-                        <Text fontSize="md">{settings?.tax_number}</Text>
-                      </Box>
-                    </>
-                  )}
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.email')}
+                    </FormLabel>
+                    <Input
+                      value={formData?.company_email || settings?.company_email || ''}
+                      onChange={(e) => handleFormChange('company_email', e.target.value)}
+                      placeholder="Enter email address"
+                      type="email"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
+                  <Divider />
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.taxNumber')}
+                    </FormLabel>
+                    <Input
+                      value={formData?.tax_number || settings?.tax_number || ''}
+                      onChange={(e) => handleFormChange('tax_number', e.target.value)}
+                      placeholder="Enter tax number (optional)"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
                 </VStack>
               </CardBody>
             </Card>
@@ -212,48 +358,207 @@ const SettingsPage: React.FC = () => {
               </CardHeader>
               <CardBody>
                 <VStack spacing={4} alignItems="start">
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.currency')}</Text>
-                    <Text fontSize="md">{settings?.currency}</Text>
-                  </Box>
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.dateFormat')}
+                    </FormLabel>
+                    <Select
+                      value={formData?.date_format || settings?.date_format || 'YYYY-MM-DD'}
+                      onChange={(e) => handleFormChange('date_format', e.target.value)}
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    >
+                      <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                      <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                      <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                      <option value="DD-MM-YYYY">DD-MM-YYYY</option>
+                    </Select>
+                  </FormControl>
                   <Divider />
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.dateFormat')}</Text>
-                    <Text fontSize="md">{settings?.date_format}</Text>
-                  </Box>
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.fiscalYearStart')}
+                    </FormLabel>
+                    <Input
+                      type="date"
+                      value={formData?.fiscal_year_start || settings?.fiscal_year_start || ''}
+                      onChange={(e) => handleFormChange('fiscal_year_start', e.target.value)}
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
                   <Divider />
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.fiscalYearStart')}</Text>
-                    <HStack>
-                      <Icon as={FiCalendar} boxSize={4} color="gray.500" />
-                      <Text fontSize="md">{settings?.fiscal_year_start}</Text>
-                    </HStack>
-                  </Box>
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.defaultTaxRate')}
+                    </FormLabel>
+                    <NumberInput
+                      value={formData?.default_tax_rate ?? settings?.default_tax_rate ?? 0}
+                      onChange={(valueString) => handleFormChange('default_tax_rate', parseFloat(valueString) || 0)}
+                      min={0}
+                      max={100}
+                      precision={2}
+                    >
+                      <NumberInputField 
+                        variant="filled"
+                        _hover={{ bg: 'gray.100' }}
+                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                      />
+                      <NumberInputStepper>
+                        <NumberIncrementStepper />
+                        <NumberDecrementStepper />
+                      </NumberInputStepper>
+                    </NumberInput>
+                  </FormControl>
                   <Divider />
-                  <Box>
-                    <Text fontWeight="semibold" color="gray.600" fontSize="sm">{t('settings.defaultTaxRate')}</Text>
-                    <Text fontSize="md">{settings?.default_tax_rate}%</Text>
-                  </Box>
-                  <Divider />
-                  <Box width="full">
+                  
+                  <FormControl>
                     <HStack mb={2}>
                       <Icon as={FiGlobe} boxSize={4} color="gray.600" />
-                      <Text fontWeight="semibold" color="gray.600" fontSize="sm">
+                      <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm" mb={0}>
                         {t('settings.language')}
-                      </Text>
+                      </FormLabel>
                     </HStack>
                     <Select 
-                      value={language} 
-                      onChange={(e) => handleLanguageChange(e.target.value)}
-                      size="md"
-                      borderColor="gray.300"
-                      _hover={{ borderColor: 'gray.400' }}
-                      _focus={{ borderColor: purpleColor, boxShadow: `0 0 0 1px ${purpleColor}` }}
+                      value={formData?.language || settings?.language || language} 
+                      onChange={(e) => {
+                        handleFormChange('language', e.target.value);
+                      }}
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
                     >
                       <option value="id">{t('settings.indonesian')}</option>
                       <option value="en">{t('settings.english')}</option>
                     </Select>
-                  </Box>
+                  </FormControl>
+                </VStack>
+              </CardBody>
+            </Card>
+            
+            {/* Invoice Settings Card */}
+            <Card border="1px" borderColor="gray.200" boxShadow="md">
+              <CardHeader>
+                <HStack spacing={3}>
+                  <Icon as={FiSettings} boxSize={6} color={purpleColor} />
+                  <Heading size="md">{t('settings.invoiceSettings')}</Heading>
+                </HStack>
+              </CardHeader>
+              <CardBody>
+                <VStack spacing={4} alignItems="start">
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.invoicePrefix')}
+                    </FormLabel>
+                    <Input
+                      value={formData?.invoice_prefix || settings?.invoice_prefix || ''}
+                      onChange={(e) => handleFormChange('invoice_prefix', e.target.value)}
+                      placeholder="e.g. INV"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
+                  <Divider />
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.invoiceNextNumber')}
+                    </FormLabel>
+                    <NumberInput
+                      value={formData?.invoice_next_number ?? settings?.invoice_next_number ?? 1}
+                      onChange={(valueString) => handleFormChange('invoice_next_number', parseInt(valueString) || 1)}
+                      min={1}
+                    >
+                      <NumberInputField 
+                        variant="filled"
+                        _hover={{ bg: 'gray.100' }}
+                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                      />
+                      <NumberInputStepper>
+                        <NumberIncrementStepper />
+                        <NumberDecrementStepper />
+                      </NumberInputStepper>
+                    </NumberInput>
+                  </FormControl>
+                  <Divider />
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.quotePrefix')}
+                    </FormLabel>
+                    <Input
+                      value={formData?.quote_prefix || settings?.quote_prefix || ''}
+                      onChange={(e) => handleFormChange('quote_prefix', e.target.value)}
+                      placeholder="e.g. QUO"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
+                  <Divider />
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.quoteNextNumber')}
+                    </FormLabel>
+                    <NumberInput
+                      value={formData?.quote_next_number ?? settings?.quote_next_number ?? 1}
+                      onChange={(valueString) => handleFormChange('quote_next_number', parseInt(valueString) || 1)}
+                      min={1}
+                    >
+                      <NumberInputField 
+                        variant="filled"
+                        _hover={{ bg: 'gray.100' }}
+                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                      />
+                      <NumberInputStepper>
+                        <NumberIncrementStepper />
+                        <NumberDecrementStepper />
+                      </NumberInputStepper>
+                    </NumberInput>
+                  </FormControl>
+                  <Divider />
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.purchasePrefix')}
+                    </FormLabel>
+                    <Input
+                      value={formData?.purchase_prefix || settings?.purchase_prefix || ''}
+                      onChange={(e) => handleFormChange('purchase_prefix', e.target.value)}
+                      placeholder="e.g. PUR"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
+                  <Divider />
+                  
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.purchaseNextNumber')}
+                    </FormLabel>
+                    <NumberInput
+                      value={formData?.purchase_next_number ?? settings?.purchase_next_number ?? 1}
+                      onChange={(valueString) => handleFormChange('purchase_next_number', parseInt(valueString) || 1)}
+                      min={1}
+                    >
+                      <NumberInputField 
+                        variant="filled"
+                        _hover={{ bg: 'gray.100' }}
+                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                      />
+                      <NumberInputStepper>
+                        <NumberIncrementStepper />
+                        <NumberDecrementStepper />
+                      </NumberInputStepper>
+                    </NumberInput>
+                  </FormControl>
                 </VStack>
               </CardBody>
             </Card>
@@ -261,13 +566,6 @@ const SettingsPage: React.FC = () => {
         </VStack>
       </Box>
 
-      {/* Settings Edit Modal */}
-      <SettingsEditModal
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        settings={settings}
-        onUpdate={handleSettingsUpdate}
-      />
     </SimpleLayout>
   );
 };

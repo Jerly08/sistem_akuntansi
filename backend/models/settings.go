@@ -42,13 +42,6 @@ type Settings struct {
 	PurchasePrefix    string `json:"purchase_prefix" gorm:"default:'PO'"`
 	PurchaseNextNumber int   `json:"purchase_next_number" gorm:"default:1"`
 	
-	// Notification Settings
-	EmailNotifications bool   `json:"email_notifications" gorm:"default:true"`
-	SMTPHost          string `json:"smtp_host"`
-	SMTPPort          int    `json:"smtp_port"`
-	SMTPUsername      string `json:"smtp_username"`
-	SMTPPassword      string `json:"smtp_password" gorm:"-"` // Don't expose in JSON
-	SMTPFrom          string `json:"smtp_from"`
 	
 	// Additional Settings
 	UpdatedBy uint `json:"updated_by"` // User ID who last updated
@@ -95,12 +88,6 @@ type SettingsResponse struct {
 	PurchasePrefix     string `json:"purchase_prefix"`
 	PurchaseNextNumber int    `json:"purchase_next_number"`
 	
-	// Notification Settings
-	EmailNotifications bool   `json:"email_notifications"`
-	SMTPHost          string `json:"smtp_host"`
-	SMTPPort          int    `json:"smtp_port"`
-	SMTPUsername      string `json:"smtp_username"`
-	SMTPFrom          string `json:"smtp_from"`
 }
 
 // ToResponse converts Settings to SettingsResponse
@@ -131,10 +118,5 @@ func (s *Settings) ToResponse() SettingsResponse {
 		QuoteNextNumber:    s.QuoteNextNumber,
 		PurchasePrefix:     s.PurchasePrefix,
 		PurchaseNextNumber: s.PurchaseNextNumber,
-		EmailNotifications: s.EmailNotifications,
-		SMTPHost:           s.SMTPHost,
-		SMTPPort:           s.SMTPPort,
-		SMTPUsername:       s.SMTPUsername,
-		SMTPFrom:           s.SMTPFrom,
 	}
 }

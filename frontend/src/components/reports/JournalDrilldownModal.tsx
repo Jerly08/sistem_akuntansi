@@ -40,6 +40,11 @@ import {
   CardBody,
   useColorModeValue,
   Stack,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  MenuDivider,
 } from '@chakra-ui/react';
 import {
   FiEye,
@@ -49,6 +54,9 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiRefreshCw,
+  FiFileText,
+  FiFile,
+  FiPrinter,
 } from 'react-icons/fi';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/utils/formatters';
@@ -87,7 +95,7 @@ interface JournalLine {
 
 interface JournalDrilldownRequest {
   account_codes?: string[];
-  account_ids?: number[];
+  account_ids?: number[];  // Will be converted to uint in backend
   start_date: string;
   end_date: string;
   report_type?: string;
@@ -152,6 +160,10 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const headerBg = useColorModeValue('gray.50', 'gray.700');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+  const scrollbarTrack = useColorModeValue('#f1f1f1', '#4a5568');
+  const scrollbarThumb = useColorModeValue('#c1c1c1', '#718096');
+  const scrollbarThumbHover = useColorModeValue('#a8a8a8', '#4a5568');
 
   useEffect(() => {
     if (isOpen && token) {
@@ -166,14 +178,60 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
     setError(null);
 
     try {
+      // Validate required drilldown request
+      if (!drilldownRequest) {
+        throw new Error('No drilldown request provided');
+      }
+
+      // Convert string dates to RFC3339 format for backend
+      const convertToRFC3339 = (dateString: string): string => {
+        if (!dateString || dateString.trim() === '') {
+          console.warn('Empty date string provided, using current date');
+          return new Date().toISOString();
+        }
+        
+        // If already in ISO format, return as-is
+        if (dateString.includes('T')) {
+          return dateString;
+        }
+        
+        // Convert YYYY-MM-DD to RFC3339 format
+        const date = new Date(dateString + 'T00:00:00.000Z');
+        if (isNaN(date.getTime())) {
+          console.warn('Invalid date provided:', dateString, '- using current date');
+          return new Date().toISOString();
+        }
+        return date.toISOString();
+      };
+
+      // Ensure account_ids are valid numbers (convert to uint compatible format)
+      const validateAccountIds = (ids?: number[]): number[] | undefined => {
+        if (!ids || !Array.isArray(ids)) return undefined;
+        return ids.filter(id => Number.isInteger(id) && id >= 0);
+      };
+
       const requestPayload = {
         ...drilldownRequest,
+        start_date: convertToRFC3339(drilldownRequest.start_date),
+        end_date: convertToRFC3339(drilldownRequest.end_date),
+        account_ids: validateAccountIds(drilldownRequest.account_ids),
         page: currentPage,
         limit: itemsPerPage,
         ...filters,
       };
 
-      const response = await fetch('/api/journal-drilldown', {
+      // Remove empty/undefined filters
+      if (requestPayload.min_amount === '') delete requestPayload.min_amount;
+      if (requestPayload.max_amount === '') delete requestPayload.max_amount;
+      if (requestPayload.transaction_type === '') delete requestPayload.transaction_type;
+
+      console.log('📊 Journal Drilldown Request:', {
+        ...requestPayload,
+        // Mask sensitive data in logs if needed
+        token: '***masked***'
+      });
+
+      const response = await fetch('/api/v1/journal-drilldown', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -183,10 +241,35 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch journal entries');
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+            console.error('❌ Journal Drilldown JSON Error:', errorData);
+          } else {
+            const errorText = await response.text();
+            errorMessage = errorText || errorMessage;
+            console.error('❌ Journal Drilldown Text Error:', errorText);
+          }
+        } catch (parseError) {
+          console.error('❌ Error parsing error response:', parseError);
+        }
+        
+        throw new Error(`Failed to fetch journal entries: ${errorMessage}`);
       }
 
       const result = await response.json();
+      console.log('✅ Journal Drilldown Response:', result);
+      
+      // Validate response structure
+      if (!result || !result.data) {
+        console.warn('Invalid response structure:', result);
+        throw new Error('Invalid response format from server');
+      }
+      
       setData(result.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
@@ -214,7 +297,7 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
     if (!token) return;
 
     try {
-      const response = await fetch(`/api/journal-drilldown/entries/${entryId}`, {
+      const response = await fetch(`/api/v1/journal-drilldown/entries/${entryId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -231,35 +314,253 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
     }
   };
 
-  const handleExportData = () => {
+  const handleExportData = (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
     if (!data) return;
 
-    // Create CSV content
-    const headers = ['Date', 'Code', 'Description', 'Reference', 'Type', 'Debit', 'Credit', 'Status'];
+    switch (format) {
+      case 'csv':
+        exportAsCSV();
+        break;
+      case 'excel':
+        exportAsExcel();
+        break;
+      case 'pdf':
+        exportAsPDF();
+        break;
+    }
+  };
+
+  const exportAsCSV = () => {
+    if (!data) return;
+
+    // Create comprehensive CSV content with summary
+    const headers = ['Date', 'Code', 'Description', 'Reference', 'Type', 'Debit', 'Credit', 'Status', 'Creator', 'Balanced'];
     const csvContent = [
+      // Add summary section
+      'Journal Entry Drilldown Report',
+      `Generated: ${new Date().toLocaleString()}`,
+      `Period: ${data.metadata?.line_item_name || 'N/A'}`,
+      `Date Range: ${data.summary?.date_range_start || ''} to ${data.summary?.date_range_end || ''}`,
+      `Total Entries: ${data.summary?.entry_count || 0}`,
+      `Total Debit: ${data.summary?.total_debit || 0}`,
+      `Total Credit: ${data.summary?.total_credit || 0}`,
+      `Net Amount: ${data.summary?.net_amount || 0}`,
+      '',
       headers.join(','),
       ...data.journal_entries.map(entry => [
-        entry.entry_date,
+        new Date(entry.entry_date).toLocaleDateString(),
         entry.code,
-        `"${entry.description}"`,
+        `"${entry.description.replace(/"/g, '""')}"`, // Escape quotes
         entry.reference,
         entry.reference_type,
         entry.total_debit.toString(),
         entry.total_credit.toString(),
         entry.status,
+        entry.creator?.name || 'Unknown',
+        entry.is_balanced ? 'Yes' : 'No'
       ].join(','))
     ].join('\n');
 
     // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `journal-entries-${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `journal-drilldown-${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(url);
+  };
+
+  const exportAsExcel = () => {
+    if (!data) return;
+
+    // Create Excel-compatible TSV content
+    const headers = ['Date', 'Code', 'Description', 'Reference', 'Type', 'Debit', 'Credit', 'Status', 'Creator', 'Balanced'];
+    const tsvContent = [
+      // Summary section
+      'Journal Entry Drilldown Report\t\t\t\t\t\t\t\t\t',
+      `Generated:\t${new Date().toLocaleString()}\t\t\t\t\t\t\t\t`,
+      `Period:\t${data.metadata?.line_item_name || 'N/A'}\t\t\t\t\t\t\t\t`,
+      `Date Range:\t${data.summary?.date_range_start || ''} to ${data.summary?.date_range_end || ''}\t\t\t\t\t\t\t\t`,
+      `Total Entries:\t${data.summary?.entry_count || 0}\t\t\t\t\t\t\t\t`,
+      `Total Debit:\t${data.summary?.total_debit || 0}\t\t\t\t\t\t\t\t`,
+      `Total Credit:\t${data.summary?.total_credit || 0}\t\t\t\t\t\t\t\t`,
+      `Net Amount:\t${data.summary?.net_amount || 0}\t\t\t\t\t\t\t\t`,
+      '\t\t\t\t\t\t\t\t\t',
+      headers.join('\t'),
+      ...data.journal_entries.map(entry => [
+        new Date(entry.entry_date).toLocaleDateString(),
+        entry.code,
+        entry.description.replace(/\t/g, ' '), // Replace tabs with spaces
+        entry.reference,
+        entry.reference_type,
+        entry.total_debit,
+        entry.total_credit,
+        entry.status,
+        entry.creator?.name || 'Unknown',
+        entry.is_balanced ? 'Yes' : 'No'
+      ].join('\t'))
+    ].join('\n');
+
+    // Create and download file as Excel-compatible format
+    const blob = new Blob([tsvContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `journal-drilldown-${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportAsPDF = async () => {
+    if (!data) return;
+
+    try {
+      // Create a comprehensive HTML content for PDF generation
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Journal Entry Drilldown Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .summary { background-color: #f5f5f5; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+            .summary-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+            th { background-color: #f2f2f2; font-weight: bold; }
+            .amount { text-align: right; }
+            .status-posted { color: green; font-weight: bold; }
+            .status-draft { color: orange; }
+            .status-reversed { color: red; }
+            .balanced-yes { color: green; }
+            .balanced-no { color: red; }
+            .total-row { background-color: #e8f4fd; font-weight: bold; }
+            @media print { 
+              body { margin: 0; }
+              .header { page-break-after: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Journal Entry Drilldown Report</h1>
+            <p><strong>${data.metadata?.line_item_name || 'Journal Entries'}</strong></p>
+            <p>Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+          </div>
+          
+          <div class="summary">
+            <h3>Summary</h3>
+            <div class="summary-row">
+              <span>Date Range:</span>
+              <span>${data.summary?.date_range_start || ''} to ${data.summary?.date_range_end || ''}</span>
+            </div>
+            <div class="summary-row">
+              <span>Total Entries:</span>
+              <span>${data.summary?.entry_count || 0}</span>
+            </div>
+            <div class="summary-row">
+              <span>Total Debit:</span>
+              <span class="amount">${formatCurrency(data.summary?.total_debit || 0)}</span>
+            </div>
+            <div class="summary-row">
+              <span>Total Credit:</span>
+              <span class="amount">${formatCurrency(data.summary?.total_credit || 0)}</span>
+            </div>
+            <div class="summary-row">
+              <span>Net Amount:</span>
+              <span class="amount">${formatCurrency(data.summary?.net_amount || 0)}</span>
+            </div>
+            <div class="summary-row">
+              <span>Accounts Involved:</span>
+              <span>${data.summary?.accounts_involved?.join(', ') || 'N/A'}</span>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Code</th>
+                <th>Description</th>
+                <th>Reference</th>
+                <th>Type</th>
+                <th>Debit</th>
+                <th>Credit</th>
+                <th>Status</th>
+                <th>Creator</th>
+                <th>Balanced</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.journal_entries.map(entry => `
+                <tr>
+                  <td>${new Date(entry.entry_date).toLocaleDateString()}</td>
+                  <td>${entry.code}</td>
+                  <td>${entry.description}</td>
+                  <td>${entry.reference}</td>
+                  <td>${entry.reference_type}</td>
+                  <td class="amount">${formatCurrency(entry.total_debit)}</td>
+                  <td class="amount">${formatCurrency(entry.total_credit)}</td>
+                  <td class="status-${entry.status.toLowerCase()}">${entry.status}</td>
+                  <td>${entry.creator?.name || 'Unknown'}</td>
+                  <td class="balanced-${entry.is_balanced ? 'yes' : 'no'}">${entry.is_balanced ? 'Yes' : 'No'}</td>
+                </tr>
+              `).join('')}
+              <tr class="total-row">
+                <td colspan="5"><strong>TOTALS</strong></td>
+                <td class="amount"><strong>${formatCurrency(data.summary?.total_debit || 0)}</strong></td>
+                <td class="amount"><strong>${formatCurrency(data.summary?.total_credit || 0)}</strong></td>
+                <td colspan="3"><strong>Net: ${formatCurrency(data.summary?.net_amount || 0)}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          
+          <div style="margin-top: 30px; font-size: 10px; color: #666; text-align: center;">
+            <p>Report generated by Accounting System | ${window.location.origin}</p>
+            <p>Filter Criteria: ${data.metadata?.filter_criteria || 'Default'}</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Create a new window for printing
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        
+        // Wait for content to load, then trigger print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.print();
+            printWindow.close();
+          }, 500);
+        };
+      } else {
+        // Fallback: create a blob and download as HTML file
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `journal-drilldown-${new Date().toISOString().split('T')[0]}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
+      
+    } catch (error) {
+      console.error('PDF export failed:', error);
+      // Fallback to CSV export
+      exportAsCSV();
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -302,7 +603,26 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
-          <ModalBody>
+          <ModalBody 
+            maxHeight="70vh"
+            overflowY="auto"
+            sx={{
+              '&::-webkit-scrollbar': {
+                width: '8px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: scrollbarTrack,
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: scrollbarThumb,
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb:hover': {
+                background: scrollbarThumbHover,
+              },
+            }}
+          >
             <VStack spacing={6} align="stretch">
               {/* Entry Header Information */}
               <Card>
@@ -337,7 +657,31 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                     <Text fontSize="lg" fontWeight="bold">Journal Lines</Text>
                   </CardHeader>
                   <CardBody>
-                    <Box overflowX="auto">
+                    <Box 
+                      overflowX="auto"
+                      overflowY="auto"
+                      maxHeight="300px"
+                      sx={{
+                        '&::-webkit-scrollbar': {
+                          width: '8px',
+                          height: '8px',
+                        },
+                        '&::-webkit-scrollbar-track': {
+                          background: scrollbarTrack,
+                          borderRadius: '4px',
+                        },
+                        '&::-webkit-scrollbar-thumb': {
+                          background: scrollbarThumb,
+                          borderRadius: '4px',
+                        },
+                        '&::-webkit-scrollbar-thumb:hover': {
+                          background: scrollbarThumbHover,
+                        },
+                        '&::-webkit-scrollbar-corner': {
+                          background: scrollbarTrack,
+                        },
+                      }}
+                    >
                       <Table size="sm">
                         <Thead>
                           <Tr>
@@ -434,15 +778,28 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                 />
               </Tooltip>
               {data && (
-                <Tooltip label="Export to CSV">
-                  <IconButton
-                    aria-label="Export"
+                <Menu>
+                  <MenuButton
+                    as={IconButton}
+                    aria-label="Export options"
                     icon={<FiDownload />}
                     size="sm"
                     variant="ghost"
-                    onClick={handleExportData}
+                    colorScheme="green"
                   />
-                </Tooltip>
+                  <MenuList>
+                    <MenuItem icon={<FiFileText />} onClick={() => handleExportData('csv')}>
+                      Export as CSV
+                    </MenuItem>
+                    <MenuItem icon={<FiFile />} onClick={() => handleExportData('excel')}>
+                      Export as Excel
+                    </MenuItem>
+                    <MenuDivider />
+                    <MenuItem icon={<FiPrinter />} onClick={() => handleExportData('pdf')}>
+                      Print/PDF Report
+                    </MenuItem>
+                  </MenuList>
+                </Menu>
               )}
             </HStack>
           </HStack>
@@ -450,7 +807,26 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
 
         <ModalCloseButton />
 
-        <ModalBody>
+        <ModalBody 
+          maxHeight="70vh"
+          overflowY="auto"
+          sx={{
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: scrollbarTrack,
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: scrollbarThumb,
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb:hover': {
+              background: scrollbarThumbHover,
+            },
+          }}
+        >
           <VStack spacing={4} align="stretch">
             {/* Summary Information */}
             {data?.summary && (
@@ -570,7 +946,31 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
             {data && data.journal_entries.length > 0 && (
               <Card>
                 <CardBody p={0}>
-                  <Box overflowX="auto">
+                  <Box 
+                    overflowX="auto" 
+                    overflowY="auto"
+                    maxHeight="400px"
+                    sx={{
+                      '&::-webkit-scrollbar': {
+                        width: '8px',
+                        height: '8px',
+                      },
+                      '&::-webkit-scrollbar-track': {
+                        background: scrollbarTrack,
+                        borderRadius: '4px',
+                      },
+                      '&::-webkit-scrollbar-thumb': {
+                        background: scrollbarThumb,
+                        borderRadius: '4px',
+                      },
+                      '&::-webkit-scrollbar-thumb:hover': {
+                        background: scrollbarThumbHover,
+                      },
+                      '&::-webkit-scrollbar-corner': {
+                        background: scrollbarTrack,
+                      },
+                    }}
+                  >
                     <Table size="sm">
                       <Thead bg={headerBg}>
                         <Tr>
@@ -587,7 +987,7 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                       </Thead>
                       <Tbody>
                         {data.journal_entries.map((entry) => (
-                          <Tr key={entry.id} _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                          <Tr key={entry.id} _hover={{ bg: hoverBg }}>
                             <Td>
                               <Text fontSize="sm">
                                 {new Date(entry.entry_date).toLocaleDateString()}

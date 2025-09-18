@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '@/config/api';
+import { journalIntegrationService } from './journalIntegrationService';
 
 export interface Report {
   id: string;
@@ -31,6 +32,8 @@ export interface ReportParameters {
   include_valuation?: boolean;
   period?: 'current' | 'ytd' | 'comparative';
   format?: 'json' | 'pdf' | 'csv';
+  status?: string; // For journal entry filtering
+  reference_type?: string; // For journal entry filtering
 }
 
 class ReportService {
@@ -46,7 +49,7 @@ class ReportService {
     const searchParams = new URLSearchParams();
     
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
+      if (value !== undefined && value !== null && value !== '' && value !== 'ALL') {
         searchParams.append(key, value.toString());
       }
     });
@@ -167,8 +170,22 @@ class ReportService {
     return result.data || [];
   }
 
-// Generate Balance Sheet
+  // Generate Balance Sheet
   async generateBalanceSheet(params: ReportParameters): Promise<ReportData | Blob> {
+    // Try journal-based Balance Sheet first for JSON format
+    if (params.format === 'json') {
+      try {
+        const journalBasedBS = await journalIntegrationService.generateBalanceSheetFromJournals(params);
+        if (journalBasedBS.sections?.some((section: any) => section.items?.length > 0)) {
+          console.log('Using journal-based Balance Sheet');
+          return journalBasedBS as any;
+        }
+      } catch (journalError) {
+        console.log('Journal-based Balance Sheet failed, trying backend endpoint:', journalError);
+      }
+    }
+
+    // Fallback to backend endpoint
     const queryString = this.buildQueryString(params);
     const url = `${API_BASE_URL}/reports/balance-sheet${queryString ? '?' + queryString : ''}`;
     
@@ -179,14 +196,85 @@ class ReportService {
     return this.handleUnifiedResponse(response);
   }
 
-  // Generate Profit & Loss Statement
+  // Generate Profit & Loss Statement (Enhanced Version)
   async generateProfitLoss(params: ReportParameters): Promise<ReportData | Blob> {
     if (!params.start_date || !params.end_date) {
       throw new Error('Start date and end date are required for profit & loss statement');
     }
 
+    // Try journal-based Enhanced P&L first
+    try {
+      const { enhancedPLService } = await import('./enhancedPLService');
+      const enhancedPLData = await enhancedPLService.generateEnhancedPLFromJournals(params);
+      
+      // If we have meaningful data (revenue or expenses), use journal-based P&L
+      if (enhancedPLData.revenue.total_revenue > 0 || 
+          enhancedPLData.cost_of_goods_sold.total_cogs > 0 || 
+          enhancedPLData.operating_expenses.total_opex > 0) {
+        console.log('Using Enhanced P&L from Journal Entries');
+        return enhancedPLData as any;
+      }
+    } catch (journalError) {
+      console.log('Journal-based Enhanced P&L failed, trying backend endpoints:', journalError);
+    }
+
+    // Try enhanced endpoint (POST method with body)
+    try {
+      const response = await fetch(`${API_BASE_URL}/reports/enhanced/profit-loss`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({
+          start_date: params.start_date,
+          end_date: params.end_date,
+          format: params.format || 'json'
+        }),
+      });
+      
+      return await this.handleUnifiedResponse(response);
+    } catch (enhancedError) {
+      console.log('Enhanced endpoint failed, trying comprehensive endpoint:', enhancedError);
+      
+      // Fallback to comprehensive endpoint with GET method
+      const queryString = this.buildQueryString(params);
+      const fallbackUrl = `${API_BASE_URL}/reports/comprehensive/profit-loss${queryString ? '?' + queryString : ''}`;
+      
+      const fallbackResponse = await fetch(fallbackUrl, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      return this.handleUnifiedResponse(fallbackResponse);
+    }
+  }
+
+  // Generate Enhanced Financial Metrics
+  async generateFinancialMetrics(params: ReportParameters): Promise<any> {
+    if (!params.start_date || !params.end_date) {
+      throw new Error('Start date and end date are required for financial metrics');
+    }
+
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/profit-loss${queryString ? '?' + queryString : ''}`;
+    const url = `http://localhost:8080/api/reports/comprehensive/profit-loss${queryString ? '?' + queryString : ''}`;
+    
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
+
+    return this.handleUnifiedResponse(response);
+  }
+
+  // Generate P&L Period Comparison
+  async generateProfitLossComparison(currentPeriod: {start: string, end: string}, previousPeriod: {start: string, end: string}): Promise<any> {
+    const params = {
+      current_start: currentPeriod.start,
+      current_end: currentPeriod.end,
+      previous_start: previousPeriod.start,
+      previous_end: previousPeriod.end,
+      format: 'json'
+    };
+
+    const queryString = this.buildQueryString(params);
+    const url = `http://localhost:8080/api/reports/comprehensive/profit-loss${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -201,6 +289,20 @@ class ReportService {
       throw new Error('Start date and end date are required for cash flow statement');
     }
 
+    // Try journal-based Cash Flow first for JSON format
+    if (params.format === 'json') {
+      try {
+        const journalBasedCF = await journalIntegrationService.generateCashFlowFromJournals(params);
+        if (journalBasedCF.sections?.some((section: any) => section.items?.length > 0)) {
+          console.log('Using journal-based Cash Flow Statement');
+          return journalBasedCF as any;
+        }
+      } catch (journalError) {
+        console.log('Journal-based Cash Flow failed, trying backend endpoint:', journalError);
+      }
+    }
+
+    // Fallback to backend endpoint
     const queryString = this.buildQueryString(params);
     const url = `${API_BASE_URL}/reports/cash-flow${queryString ? '?' + queryString : ''}`;
     
@@ -213,6 +315,20 @@ class ReportService {
 
   // Generate Trial Balance
   async generateTrialBalance(params: ReportParameters): Promise<ReportData | Blob> {
+    // Try journal-based Trial Balance first for JSON format
+    if (params.format === 'json') {
+      try {
+        const journalBasedTB = await journalIntegrationService.generateTrialBalanceFromJournals(params);
+        if (journalBasedTB.sections?.[0]?.items?.length > 0) {
+          console.log('Using journal-based Trial Balance');
+          return journalBasedTB as any;
+        }
+      } catch (journalError) {
+        console.log('Journal-based Trial Balance failed, trying backend endpoint:', journalError);
+      }
+    }
+
+    // Fallback to backend endpoint
     const queryString = this.buildQueryString(params);
     const url = `${API_BASE_URL}/reports/trial-balance${queryString ? '?' + queryString : ''}`;
     
@@ -364,8 +480,53 @@ class ReportService {
     return result.data;
   }
 
+  // Generate Journal Entry Analysis
+  async generateJournalEntryAnalysis(params: ReportParameters): Promise<ReportData | Blob> {
+    if (!params.start_date || !params.end_date) {
+      throw new Error('Start date and end date are required for journal entry analysis');
+    }
+
+    // Build parameters for journal entries endpoint
+    const journalParams = {
+      start_date: params.start_date,
+      end_date: params.end_date,
+      status: params.status && params.status !== 'ALL' ? params.status : 'POSTED', // Default to POSTED if not specified
+      reference_type: params.reference_type && params.reference_type !== 'ALL' ? params.reference_type : undefined,
+      page: 1,
+      limit: 1000 // Get a large number for analysis
+    };
+
+    const queryString = this.buildQueryString(journalParams);
+    const url = `${API_BASE_URL}/journal-entries${queryString ? '?' + queryString : ''}`;
+    
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to generate journal entry analysis');
+    }
+
+    const result = await response.json();
+    
+    // Transform the journal entries data to match expected report format
+    return {
+      journal_entries: result.data || [],
+      total_entries: result.total || 0,
+      start_date: params.start_date,
+      end_date: params.end_date,
+      generated_at: new Date().toISOString()
+    };
+  }
+
   // Generic report generator
   async generateReport(reportId: string, params: ReportParameters): Promise<ReportData | Blob> {
+    // Handle journal entry analysis separately as it uses different endpoint
+    if (reportId === 'journal-entry-analysis') {
+      return this.generateJournalEntryAnalysis(params);
+    }
+    
+    
     const endpointMap: { [key: string]: string } = {
       'balance-sheet': 'balance-sheet',
       'profit-loss': 'profit-loss',

@@ -11,6 +11,8 @@ import (
 	"app-sistem-akuntansi/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 // Environment detection helper
@@ -97,8 +99,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 		journalRepo,
 		pdfService,
 	)
-	purchaseController := controllers.NewPurchaseController(purchaseService)
-	// Handlers that depend on services
+	// Handlers that depend on services (purchaseController will be initialized later)
 	purchaseApprovalHandler := handlers.NewPurchaseApprovalHandler(purchaseService, approvalService)
 	
 	// Initialize security middleware
@@ -110,6 +111,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	
 	// Initialize Journal Drilldown controller
 	journalDrilldownController := controllers.NewJournalDrilldownController(db)
+	
+	// Initialize Journal Entry controller
+	journalEntryController := controllers.NewJournalEntryController(db)
 	
 	// Initialize JWT Manager
 	jwtManager := middleware.NewJWTManager(db)
@@ -142,6 +146,36 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			
 			// Token validation endpoint (requires auth)
 			auth.GET("/validate-token", jwtManager.AuthRequired(), authController.ValidateToken)
+		}
+		
+		// 📊 Journal Entry Drilldown routes at API level (accessible by finance, admin, director)
+		// These routes are at /api/v1/journal-drilldown to match frontend expectations
+		journalDrilldownAPI := v1.Group("/journal-drilldown")
+		journalDrilldownAPI.Use(jwtManager.AuthRequired())
+		{
+			// Main drill-down endpoint for POST requests with detailed filtering
+			journalDrilldownAPI.POST("", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalDrilldown)
+			
+			// Alternative GET endpoint for simpler URL-based filtering  
+			journalDrilldownAPI.GET("/entries", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalDrilldownByParams)
+			
+			// Get detailed information for a specific journal entry
+			journalDrilldownAPI.GET("/entries/:id", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalEntryDetail)
+			
+			// Get accounts that have activity in a period (useful for filters)
+			journalDrilldownAPI.GET("/accounts", permMiddleware.CanView("reports"), journalDrilldownController.GetAccountsForPeriod)
+		}
+		
+		// 📋 Journal Entry Management routes (accessible by finance, admin, director)
+		journalEntriesAPI := v1.Group("/journal-entries")
+		journalEntriesAPI.Use(jwtManager.AuthRequired())
+		{
+			// CRUD operations for journal entries
+			journalEntriesAPI.GET("", permMiddleware.CanView("reports"), journalEntryController.GetJournalEntries)
+			journalEntriesAPI.GET("/:id", permMiddleware.CanView("reports"), journalEntryController.GetJournalEntry)
+			journalEntriesAPI.POST("", permMiddleware.CanCreate("reports"), journalEntryController.CreateJournalEntry)
+			journalEntriesAPI.PUT("/:id", permMiddleware.CanEdit("reports"), journalEntryController.UpdateJournalEntry)
+			journalEntriesAPI.DELETE("/:id", permMiddleware.CanDelete("reports"), journalEntryController.DeleteJournalEntry)
 		}
 
 		// 🔒 SECURITY: Secure debug routes (development only dengan multiple security layers)
@@ -338,6 +372,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	
 	// Initialize SalesController with PaymentService integration
 	salesController := controllers.NewSalesController(salesService, paymentService)
+	
+	// Initialize PurchaseController with PaymentService integration (moved here after paymentService is available)
+	purchaseController := controllers.NewPurchaseController(purchaseService, paymentService)
 
 			// 🔔 Notification routes (accessible by all authenticated users)
 			notifs := protected.Group("/notifications")
@@ -440,6 +477,14 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				purchases.GET("/dashboard", permMiddleware.CanView("purchases"), purchaseController.GetPurchaseDashboard)
 				purchases.GET("/vendor/:vendor_id/summary", permMiddleware.CanView("purchases"), purchaseController.GetVendorPurchaseSummary)
 				
+				// Payment management (similar to sales payment management)
+				purchases.GET("/:id/payments", middleware.RoleRequired("admin", "finance", "director", "employee"), purchaseController.GetPurchasePayments)
+				purchases.POST("/:id/payments", middleware.RoleRequired("admin", "finance", "director"), purchaseController.CreatePurchasePayment)
+				
+				// Integrated Payment Management routes  
+				purchases.GET("/:id/for-payment", middleware.RoleRequired("admin", "finance", "director"), purchaseController.GetPurchaseForPayment)
+				purchases.POST("/:id/integrated-payment", middleware.RoleRequired("admin", "finance", "director"), purchaseController.CreateIntegratedPayment)
+				
 				// Three-way matching dengan permission checks
 				purchases.GET("/:id/matching", permMiddleware.CanView("purchases"), purchaseController.GetPurchaseMatching)
 				purchases.POST("/:id/validate-matching", permMiddleware.CanApprove("purchases"), purchaseController.ValidateThreeWayMatching)
@@ -508,11 +553,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			// Initialize Financial Report service for improved reports with journal entries integration
 			financialReportService := services.NewFinancialReportService(db, accountRepo, journalRepo)
 			
-			// Initialize Enhanced Financial Report service for accurate COGS categorization (for future use)
-			enhancedReportService := services.NewEnhancedFinancialReportService(db, accountRepo, journalRepo)
-			_ = enhancedReportService // Suppress unused variable error for now
+			// Initialize Enhanced Report service
+			enhancedReportService := services.NewEnhancedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
 			
 			reportController := controllers.NewReportController(reportService, professionalService, standardizedService)
+			
+			// Initialize Enhanced Report controller
+			enhancedReportController := controllers.NewEnhancedReportController(enhancedReportService, professionalService, standardizedService)
 			
 			// Initialize Financial Report controller using already initialized financialReportService
 			financialReportController := controllers.NewFinancialReportController(financialReportService)
@@ -526,50 +573,41 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			// Setup Financial Report routes (enhanced endpoints under /reports/enhanced)
 			SetupFinancialReportRoutes(protected, financialReportController)
 			
-			// NOTE: Unified report routes are commented out to avoid duplicate registrations
-			// The main report routes already handle all necessary endpoints at /api/v1/reports/*
-			// If unified reports are needed in the future, they should use a different path
-			// like /api/v1/unified-reports to avoid conflicts
-			
-			// // Setup Unified Report Controller and Routes
-			// balanceSheetService := services.NewStandardizedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
-			// profitLossService := services.NewEnhancedProfitLossService(db, accountRepo)
-			// cashFlowService := services.NewStandardizedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
-			// 
-			// unifiedReportController := controllers.NewUnifiedReportController(
-			// 	db,
-			// 	accountRepo,
-			// 	salesRepo,
-			// 	purchaseRepo,
-			// 	contactRepo,
-			// 	productRepo,
-			// 	reportService,
-			// 	balanceSheetService,
-			// 	profitLossService,
-			// 	cashFlowService,
-			// )
-			// 
-			// // Register unified report routes
-			// RegisterUnifiedReportRoutes(r, unifiedReportController, jwtManager)
-			// RegisterUnifiedReportMiddleware(r)
+			// NOTE: Duplicate report services removed to avoid conflicts
 			
 			// Setup Unified Financial Report Routes (at /api/unified-reports - different path)
 			SetupUnifiedReportRoutes(r, db)
+			
+			// Initialize UnifiedReportController for /api/v1/reports endpoints
+			enhancedPLService := services.NewEnhancedProfitLossService(db, accountRepo)
+			balanceSheetService := standardizedService // Use standardized service for balance sheet
+			cashFlowService := standardizedService     // Use standardized service for cash flow
+			unifiedReportController := controllers.NewUnifiedReportController(
+				db, 
+				accountRepo, 
+				salesRepo, 
+				purchaseRepo, 
+				contactRepo, 
+				productRepo,
+				reportService,
+				balanceSheetService, 
+				enhancedPLService, 
+				cashFlowService,
+			)
+			
+			// Register UnifiedReportController routes for frontend compatibility
+			RegisterUnifiedReportRoutes(r, unifiedReportController, jwtManager)
+			
+			// Register Enhanced Report Routes (comprehensive endpoints under /api/reports/comprehensive)
+			RegisterEnhancedReportRoutes(r, enhancedReportController)
 
-			// 📊 Journal Entry Drilldown routes (accessible by finance, admin, director)
-			journalDrilldown := protected.Group("/journal-drilldown")
+
+			// 📊 Enhanced P&L Journal Integration routes
+			enhancedPLJournalController := controllers.NewEnhancedPLJournalController(db)
+			enhancedPLJournal := protected.Group("/reports/enhanced/journal")
 			{
-				// Main drill-down endpoint for POST requests with detailed filtering
-				journalDrilldown.POST("", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalDrilldown)
-				
-				// Alternative GET endpoint for simpler URL-based filtering
-				journalDrilldown.GET("/entries", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalDrilldownByParams)
-				
-				// Get detailed information for a specific journal entry
-				journalDrilldown.GET("/entries/:id", permMiddleware.CanView("reports"), journalDrilldownController.GetJournalEntryDetail)
-				
-				// Get accounts that have activity in a period (useful for filters)
-				journalDrilldown.GET("/accounts", permMiddleware.CanView("reports"), journalDrilldownController.GetAccountsForPeriod)
+				// Specific endpoint for Enhanced P&L Statement journal entries drill-down
+				enhancedPLJournal.GET("/pl-line", permMiddleware.CanView("reports"), enhancedPLJournalController.JournalEntriesForPLLine)
 			}
 
 			// Monitoring routes (admin only)
@@ -642,30 +680,29 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Debug routes for token validation testing
-	debug := v1.Group("/debug")
-	{
-		// Route with JWT middleware to test context
-		debugWithAuth := debug.Group("/auth")
-		debugWithAuth.Use(jwtManager.AuthRequired())
+	// Swagger documentation endpoint (accessible in development or when ENABLE_SWAGGER=true)
+	if isDevelopmentMode() || os.Getenv("ENABLE_SWAGGER") == "true" {
+		// Swagger UI endpoint
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		// Alternative endpoint
+		r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
+
+	// Debug routes for development only
+	if gin.Mode() == gin.DebugMode {
+		debug := v1.Group("/debug")
 		{
-			debugWithAuth.GET("/context", debugController.TestJWTContext)
-			
-			// This checks the role directly
-			debugWithAuth.GET("/role", debugController.TestRolePermission)
-			
-			// This uses the RoleRequired middleware
-			debugWithAuth.GET("/admin-only", middleware.RoleRequired("admin"), func(c *gin.Context) {
-				c.JSON(http.StatusOK, gin.H{"message": "You have admin role!"})
-			})
-			
-			debugWithAuth.GET("/finance-only", middleware.RoleRequired("finance"), func(c *gin.Context) {
-				c.JSON(http.StatusOK, gin.H{"message": "You have finance role!"})
-			})
-			
-			// Test permission middleware
-			debugWithAuth.GET("/test-cashbank-permission", permMiddleware.CanView("cash_bank"), debugController.TestCashBankPermission)
-			debugWithAuth.GET("/test-payments-permission", permMiddleware.CanView("payments"), debugController.TestPaymentsPermission)
+			// Minimal debug routes for development
+			debugWithAuth := debug.Group("/auth")
+			debugWithAuth.Use(jwtManager.AuthRequired())
+			{
+				debugWithAuth.GET("/context", debugController.TestJWTContext)
+				debugWithAuth.GET("/role", debugController.TestRolePermission)
+				
+				// Essential permission tests only
+				debugWithAuth.GET("/test-cashbank-permission", permMiddleware.CanView("cash_bank"), debugController.TestCashBankPermission)
+				debugWithAuth.GET("/test-payments-permission", permMiddleware.CanView("payments"), debugController.TestPaymentsPermission)
+			}
 		}
 	}
 }
