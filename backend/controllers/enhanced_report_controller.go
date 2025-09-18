@@ -11,20 +11,16 @@ import (
 // EnhancedReportController handles comprehensive financial and operational reporting endpoints
 type EnhancedReportController struct {
 	enhancedReportService *services.EnhancedReportService
-	professionalService   *services.ProfessionalReportService
-	standardizedService   *services.StandardizedReportService
 }
 
 // NewEnhancedReportController creates a new enhanced report controller
 func NewEnhancedReportController(
 	enhancedReportService *services.EnhancedReportService,
-	professionalService *services.ProfessionalReportService,
-	standardizedService *services.StandardizedReportService,
+	_ interface{}, // placeholder for removed professionalService
+	_ interface{}, // placeholder for removed standardizedService
 ) *EnhancedReportController {
 	return &EnhancedReportController{
 		enhancedReportService: enhancedReportService,
-		professionalService:   professionalService,
-		standardizedService:   standardizedService,
 	}
 }
 
@@ -68,33 +64,19 @@ func (erc *EnhancedReportController) GetComprehensiveBalanceSheet(c *gin.Context
 			"data":   balanceSheetData,
 		})
 	case "pdf":
-		// Use professional service for PDF generation
-		pdfData, err := erc.professionalService.GenerateBalanceSheetPDF(date)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate PDF report",
-				"error":   err.Error(),
-			})
-			return
-		}
-		c.Header("Content-Type", "application/pdf")
-		c.Header("Content-Disposition", "attachment; filename=comprehensive_balance_sheet.pdf")
-		c.Data(http.StatusOK, "application/pdf", pdfData)
+		// TODO: Implement PDF export in EnhancedReportService
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"status":  "error",
+			"message": "PDF export temporarily disabled during refactoring",
+		})
+		return
 	case "excel":
-		// Use professional service for Excel generation
-		excelData, err := erc.professionalService.GenerateBalanceSheetExcel(date)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate Excel report",
-				"error":   err.Error(),
-			})
-			return
-		}
-		c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-		c.Header("Content-Disposition", "attachment; filename=comprehensive_balance_sheet.xlsx")
-		c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelData)
+		// TODO: Implement Excel export in EnhancedReportService
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"status":  "error",
+			"message": "Excel export temporarily disabled during refactoring",
+		})
+		return
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -154,33 +136,19 @@ func (erc *EnhancedReportController) GetComprehensiveProfitLoss(c *gin.Context) 
 			"data":   profitLossData,
 		})
 	case "pdf":
-		// Use professional service for PDF generation
-		pdfData, err := erc.professionalService.GenerateProfitLossPDF(start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate PDF report",
-				"error":   err.Error(),
-			})
-			return
-		}
-		c.Header("Content-Type", "application/pdf")
-		c.Header("Content-Disposition", "attachment; filename=comprehensive_profit_loss.pdf")
-		c.Data(http.StatusOK, "application/pdf", pdfData)
+		// TODO: Implement PDF export in EnhancedReportService
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"status":  "error",
+			"message": "PDF export temporarily disabled during refactoring",
+		})
+		return
 	case "excel":
-		// Use professional service for Excel generation
-		excelData, err := erc.professionalService.GenerateProfitLossExcel(start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate Excel report",
-				"error":   err.Error(),
-			})
-			return
-		}
-		c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-		c.Header("Content-Disposition", "attachment; filename=comprehensive_profit_loss.xlsx")
-		c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelData)
+		// TODO: Implement Excel export in EnhancedReportService
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"status":  "error",
+			"message": "Excel export temporarily disabled during refactoring",
+		})
+		return
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -240,19 +208,12 @@ func (erc *EnhancedReportController) GetComprehensiveCashFlow(c *gin.Context) {
 			"data":   cashFlowData,
 		})
 	case "pdf":
-		// Use professional service for PDF generation
-		pdfData, err := erc.professionalService.GenerateCashFlowStatementPDF(start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate PDF report",
-				"error":   err.Error(),
-			})
-			return
-		}
-		c.Header("Content-Type", "application/pdf")
-		c.Header("Content-Disposition", "attachment; filename=comprehensive_cash_flow.pdf")
-		c.Data(http.StatusOK, "application/pdf", pdfData)
+		// TODO: Implement PDF export in EnhancedReportService
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"status":  "error",
+			"message": "PDF export temporarily disabled during refactoring",
+		})
+		return
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -329,33 +290,19 @@ func (erc *EnhancedReportController) GetComprehensiveSalesSummary(c *gin.Context
 			"data":   salesSummary,
 		})
 	case "pdf":
-		// Use professional service for PDF generation
-		pdfData, err := erc.professionalService.GenerateSalesSummaryPDF(start, end, groupBy)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate PDF report",
-				"error":   err.Error(),
-			})
-			return
-		}
-		c.Header("Content-Type", "application/pdf")
-		c.Header("Content-Disposition", "attachment; filename=comprehensive_sales_summary.pdf")
-		c.Data(http.StatusOK, "application/pdf", pdfData)
+		// TODO: Implement PDF export in EnhancedReportService
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"status":  "error",
+			"message": "PDF export temporarily disabled during refactoring",
+		})
+		return
 	case "excel":
-		// Use professional service for Excel generation
-		excelData, err := erc.professionalService.GenerateSalesSummaryExcel(start, end, groupBy)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate Excel report",
-				"error":   err.Error(),
-			})
-			return
-		}
-		c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-		c.Header("Content-Disposition", "attachment; filename=comprehensive_sales_summary.xlsx")
-		c.Data(http.StatusOK, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", excelData)
+		// TODO: Implement Excel export in EnhancedReportService
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"status":  "error",
+			"message": "Excel export temporarily disabled during refactoring",
+		})
+		return
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -432,19 +379,12 @@ func (erc *EnhancedReportController) GetComprehensivePurchaseSummary(c *gin.Cont
 			"data":   purchaseSummary,
 		})
 	case "pdf":
-		// Use professional service for PDF generation
-		pdfData, err := erc.professionalService.GeneratePurchaseSummaryPDF(start, end, groupBy)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate PDF report",
-				"error":   err.Error(),
-			})
-			return
-		}
-		c.Header("Content-Type", "application/pdf")
-		c.Header("Content-Disposition", "attachment; filename=comprehensive_purchase_summary.pdf")
-		c.Data(http.StatusOK, "application/pdf", pdfData)
+		// TODO: Implement PDF export in EnhancedReportService
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"status":  "error",
+			"message": "PDF export temporarily disabled during refactoring",
+		})
+		return
 	case "excel":
 		// Use professional service for Excel generation (would need to implement this method)
 		c.JSON(http.StatusNotImplemented, gin.H{
