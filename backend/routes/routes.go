@@ -127,6 +127,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// 🎛️ Apply global security middleware
 	r.Use(enhancedSecurity.SecurityHeaders())     // Security headers pada semua requests
 	r.Use(enhancedSecurity.RequestMonitoring())   // Monitor semua requests untuk threats
+	r.Use(middleware.APIUsageMiddleware())        // 📊 Track API usage for optimization
 	
 
 	// API v1 routes
@@ -432,6 +433,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Initialize Balance Monitoring service and controller
 	balanceMonitoringService := services.NewBalanceMonitoringService(db)
 	balanceMonitoringController := controllers.NewBalanceMonitoringController(balanceMonitoringService)
+	
+	// Initialize API Usage Monitoring controller
+	apiUsageController := controllers.NewAPIUsageController()
 			
 			// Setup Payment routes (including cash bank routes with GL fix functionality)
 			SetupPaymentRoutes(protected, paymentController, cashBankController, cashBankService, jwtManager, db)
@@ -490,13 +494,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				purchases.POST("/:id/validate-matching", permMiddleware.CanApprove("purchases"), purchaseController.ValidateThreeWayMatching)
 			}
 
-			// Expenses routes
-			expenses := protected.Group("/expenses")
-			{
-				expenses.GET("", func(c *gin.Context) {
-					c.JSON(200, gin.H{"message": "Expenses endpoint - coming soon"})
-				})
-			}
+			// Expenses routes - REMOVED: No implementation yet
 
 			// 🏢 Assets routes with enhanced permission checks dan audit logging
 			assets := protected.Group("/assets")
@@ -516,13 +514,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				assets.GET("/:id/depreciation-schedule", permMiddleware.CanView("assets"), assetController.GetDepreciationSchedule)
 				assets.GET("/:id/calculate-depreciation", permMiddleware.CanView("assets"), assetController.CalculateCurrentDepreciation)
 				
-				// Export routes
-				assets.GET("/export/pdf", permMiddleware.CanExport("assets"), func(c *gin.Context) {
-					c.JSON(200, gin.H{"message": "Assets PDF export - coming soon"})
-				})
-				assets.GET("/export/excel", permMiddleware.CanExport("assets"), func(c *gin.Context) {
-					c.JSON(200, gin.H{"message": "Assets Excel export - coming soon"})
-				})
+				// Export routes - REMOVED: Not implemented yet
 			}
 
 		// Note: CashBank routes are already set up via SetupPaymentRoutes
@@ -545,60 +537,16 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				workflows.POST("", middleware.RoleRequired("admin"), purchaseApprovalHandler.CreateApprovalWorkflow)
 			}
 
-			// Initialize Report services and controller
-			reportService := services.NewReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
-			professionalService := services.NewProfessionalReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
-			standardizedService := services.NewStandardizedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
-			
-			// Initialize Financial Report service for improved reports with journal entries integration
-			financialReportService := services.NewFinancialReportService(db, accountRepo, journalRepo)
-			
-			// Initialize Enhanced Report service
+			// ✅ CONSOLIDATED: Use only Enhanced Report Service as primary service
 			enhancedReportService := services.NewEnhancedReportService(db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo)
 			
-			reportController := controllers.NewReportController(reportService, professionalService, standardizedService)
-			
-			// Initialize Enhanced Report controller
-			enhancedReportController := controllers.NewEnhancedReportController(enhancedReportService, professionalService, standardizedService)
-			
-			// Initialize Financial Report controller using already initialized financialReportService
-			financialReportController := controllers.NewFinancialReportController(financialReportService)
+			// 🔧 SIMPLIFIED: Use only Enhanced Report Service and Controller
+			enhancedReportController := controllers.NewEnhancedReportController(enhancedReportService, nil, nil)
 			
 			// Setup Settings routes
 			SetupSettingsRoutes(protected, db)
 			
-			// Setup Report routes - Using single consolidated report controller
-			SetupReportRoutes(protected, reportController)
-			
-			// Setup Financial Report routes (enhanced endpoints under /reports/enhanced)
-			SetupFinancialReportRoutes(protected, financialReportController)
-			
-			// NOTE: Duplicate report services removed to avoid conflicts
-			
-			// Setup Unified Financial Report Routes (at /api/unified-reports - different path)
-			SetupUnifiedReportRoutes(r, db)
-			
-			// Initialize UnifiedReportController for /api/v1/reports endpoints
-			enhancedPLService := services.NewEnhancedProfitLossService(db, accountRepo)
-			balanceSheetService := standardizedService // Use standardized service for balance sheet
-			cashFlowService := standardizedService     // Use standardized service for cash flow
-			unifiedReportController := controllers.NewUnifiedReportController(
-				db, 
-				accountRepo, 
-				salesRepo, 
-				purchaseRepo, 
-				contactRepo, 
-				productRepo,
-				reportService,
-				balanceSheetService, 
-				enhancedPLService, 
-				cashFlowService,
-			)
-			
-			// Register UnifiedReportController routes for frontend compatibility
-			RegisterUnifiedReportRoutes(r, unifiedReportController, jwtManager)
-			
-			// Register Enhanced Report Routes (comprehensive endpoints under /api/reports/comprehensive)
+			// ✅ CONSOLIDATED ROUTES: Use only Enhanced Report Routes
 			RegisterEnhancedReportRoutes(r, enhancedReportController)
 
 
@@ -639,6 +587,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				monitoring.GET("/balance-health", balanceMonitoringController.GetBalanceHealth)
 				monitoring.GET("/discrepancies", balanceMonitoringController.GetBalanceDiscrepancies)
 				monitoring.GET("/sync-status", balanceMonitoringController.GetSyncStatus)
+				
+				// 📊 API Usage monitoring routes
+				monitoring.GET("/api-usage/stats", apiUsageController.GetAPIUsageStats)
+				monitoring.GET("/api-usage/top", apiUsageController.GetTopEndpoints)
+				monitoring.GET("/api-usage/unused", apiUsageController.GetUnusedEndpoints)
+				monitoring.GET("/api-usage/analytics", apiUsageController.GetUsageAnalytics)
+				monitoring.POST("/api-usage/reset", apiUsageController.ResetUsageStats)
 			}
 			
 			// 🔒 Security Dashboard routes (admin only) 
