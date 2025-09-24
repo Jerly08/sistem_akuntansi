@@ -240,9 +240,25 @@ const AccountForm: React.FC<AccountFormProps> = ({
     if (!formData.name) newErrors.name = 'Account name is required';
     if (!formData.type) newErrors.type = 'Account type is required';
     
-    // Validate code format (e.g., numeric only)
-    if (formData.code && !/^\d+$/.test(formData.code)) {
-      newErrors.code = 'Account code must contain only numbers';
+    // Validate code format: allow XXXX (main) or XXXX-XXX (child)
+    if (formData.code) {
+      const codePattern = /^\d{4}(-\d{3})?$/; // PSAK-style: 4 digits or 4 digits + dash + 3 digits
+      if (!codePattern.test(formData.code)) {
+        newErrors.code = 'Invalid account code format. Use XXXX or XXXX-XXX (e.g., 1101 or 1101-004)';
+      } else if (formData.parent_id) {
+        // If a parent is selected, ensure the code starts with the parent's code when using child format
+        const parent = parentAccounts.find(p => p.id === formData.parent_id);
+        if (parent) {
+          const isChildFormat = formData.code.includes('-');
+          if (isChildFormat && !formData.code.startsWith(`${parent.code}-`)) {
+            newErrors.code = `Child code must start with parent code: ${parent.code}-XXX`;
+          }
+          if (!isChildFormat) {
+            // Suggest using child format when a parent is selected
+            newErrors.code = `Use child format with parent prefix: ${parent.code}-XXX`;
+          }
+        }
+      }
     }
     
     setErrors(newErrors);
