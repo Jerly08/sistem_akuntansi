@@ -109,6 +109,24 @@ class AssetService {
     return response.data;
   }
 
+  // ===== Asset Categories Management =====
+  async getAssetCategories(): Promise<{ data: { id: number; code: string; name: string; description?: string; parent_id?: number; is_active: boolean }[]; message: string; count: number }> {
+    const response = await api.get('/assets/categories');
+    return response.data;
+  }
+
+  async createAssetCategory(category: { code: string; name: string; description?: string; parent_id?: number; is_active?: boolean }): Promise<{ data: any; message: string }> {
+    const payload = {
+      code: (category.code || '').toUpperCase(),
+      name: category.name,
+      description: category.description || '',
+      parent_id: category.parent_id,
+      is_active: category.is_active !== false,
+    };
+    const response = await api.post('/assets/categories', payload);
+    return response.data;
+  }
+
   // Get single asset by ID
   async getAsset(id: number): Promise<{ data: Asset; message: string }> {
     const response = await api.get(`/assets/${id}`);

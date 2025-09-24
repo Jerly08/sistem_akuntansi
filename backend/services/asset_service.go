@@ -238,8 +238,17 @@ func (s *AssetService) DeleteAsset(id uint) error {
 
 // GenerateAssetCode generates a unique asset code based on category
 func (s *AssetService) GenerateAssetCode(category string) (string, error) {
-	// Get category prefix
-	prefix := getCategoryPrefix(category)
+	// Get category prefix with the following priority:
+	// 1) If a matching AssetCategory exists in DB, use its Code as prefix
+	// 2) Fallback to static mapping for known default categories
+	prefix := s.getDynamicCategoryPrefix(category)
+	if prefix == "" {
+		prefix = getCategoryStaticPrefix(category)
+	}
+	if prefix == "" {
+		prefix = "AS" // ultimate fallback
+	}
+
 	year := time.Now().Format("2006")
 	
 	// Start from sequence 1 and find the next available number
@@ -408,7 +417,8 @@ func (s *AssetService) GetAssetsForDepreciationReport() ([]AssetDepreciationRepo
 
 // Helper functions
 
-func getCategoryPrefix(category string) string {
+// getCategoryStaticPrefix provides default prefixes for built-in categories.
+func getCategoryStaticPrefix(category string) string {
 	switch category {
 	case "Fixed Asset":
 		return "FA"
@@ -427,8 +437,25 @@ func getCategoryPrefix(category string) string {
 	case "Machinery":
 		return "MC"
 	default:
-		return "AS" // Generic Asset
+		return ""
 	}
+}
+
+// getDynamicCategoryPrefix tries to read prefix(code) from asset_categories table matching the given name.
+func (s *AssetService) getDynamicCategoryPrefix(category string) string {
+	if strings.TrimSpace(category) == "" {
+		return ""
+	}
+	var cat models.AssetCategory
+	// Case-insensitive name match; prefer active categories
+	s.db.Where("LOWER(name) = LOWER(?) AND is_active = ?", category, true).First(&cat)
+	code := strings.TrimSpace(cat.Code)
+	if code == "" {
+		return ""
+	}
+	// Sanitize: keep only letters/numbers and dash, uppercase
+	code = strings.ToUpper(code)
+	return code
 }
 
 func padLeft(str string, length int, pad string) string {

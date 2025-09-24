@@ -95,6 +95,7 @@ const AssetsPage = () => {
   const [customCategories, setCustomCategories] = useState<string[]>([...ASSET_CATEGORIES]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryIndex, setEditingCategoryIndex] = useState<number | null>(null);
+  const [newCategoryCode, setNewCategoryCode] = useState('');
   
   // Account management states (only for optional fixed asset and depreciation accounts)
   const [fixedAssetAccounts, setFixedAssetAccounts] = useState<any[]>([]);
@@ -177,8 +178,7 @@ const AssetsPage = () => {
   // Fetch categories from database
   const fetchCategories = async () => {
     try {
-      const ProductService = await import('@/services/productService').then(module => module.default);
-      const response = await ProductService.getCategories();
+      const response = await assetService.getAssetCategories();
       
       // Extract category names from response
       const categoryNames = response.data?.map((cat: any) => cat.name) || [];
@@ -731,12 +731,14 @@ const AssetsPage = () => {
   const handleOpenCategoryModal = () => {
     setIsCategoryModalOpen(true);
     setNewCategoryName('');
+    setNewCategoryCode('');
     setEditingCategoryIndex(null);
   };
 
   const handleCloseCategoryModal = () => {
     setIsCategoryModalOpen(false);
     setNewCategoryName('');
+    setNewCategoryCode('');
     setEditingCategoryIndex(null);
   };
 
@@ -745,6 +747,29 @@ const AssetsPage = () => {
       toast({
         title: 'Error',
         description: 'Category name cannot be empty',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (!newCategoryCode.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Category code/prefix cannot be empty',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const code = newCategoryCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').substring(0, 10);
+    if (code.length < 2) {
+      toast({
+        title: 'Error',
+        description: 'Category code must be at least 2 characters',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -764,24 +789,20 @@ const AssetsPage = () => {
     }
 
     try {
-      // Generate a simple code from the name
-      const code = newCategoryName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
-      
-      // Call backend API to create category
+      // Call backend API to create asset category
       const categoryData = {
-        code: code || 'CAT' + Date.now(),
+        code,
         name: newCategoryName.trim(),
         description: '',
         is_active: true
       };
       
-      await import('@/services/productService').then(async ({ default: ProductService }) => {
-        await ProductService.createCategory(categoryData);
-      });
+      await assetService.createAssetCategory(categoryData as any);
       
       // Refresh categories from database to get the latest list
       await fetchCategories();
       setNewCategoryName('');
+      setNewCategoryCode('');
       
       toast({
         title: 'Success',
@@ -1746,15 +1767,14 @@ const AssetsPage = () => {
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
                         placeholder="Enter category name"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            if (editingCategoryIndex !== null) {
-                              handleUpdateCategory();
-                            } else {
-                              handleAddCategory();
-                            }
-                          }
-                        }}
+                      />
+                    </FormControl>
+                    <FormControl w="160px">
+                      <Input
+                        value={newCategoryCode}
+                        onChange={(e) => setNewCategoryCode(e.target.value.toUpperCase())}
+                        placeholder="Code"
+                        maxLength={10}
                       />
                     </FormControl>
                     {editingCategoryIndex !== null ? (
@@ -1785,7 +1805,7 @@ const AssetsPage = () => {
                     )}
                   </HStack>
                   <Text fontSize="xs" color="gray.500" mt={2}>
-                    💡 Press Enter to {editingCategoryIndex !== null ? 'update' : 'add'} category quickly
+                    💡 Provide a short code/prefix (e.g., RE, IT, VEH). This prefix will be used for asset codes.
                   </Text>
                 </Box>
 
