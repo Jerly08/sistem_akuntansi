@@ -25,8 +25,17 @@ export interface ValidationError {
   message: string;
 }
 
-export const validateAssetForm = (data: AssetFormData): ValidationError[] => {
+// Accept optional allowedCategories to support dynamic categories loaded from DB.
+// Fallback to the default ASSET_CATEGORIES constant for backward compatibility.
+export const validateAssetForm = (
+  data: AssetFormData,
+  allowedCategories?: readonly string[]
+): ValidationError[] => {
   const errors: ValidationError[] = [];
+
+  const categories = allowedCategories && allowedCategories.length > 0
+    ? allowedCategories.map((c) => c.trim())
+    : [...ASSET_CATEGORIES];
 
   // Required field validations
   if (!data.name?.trim()) {
@@ -39,7 +48,7 @@ export const validateAssetForm = (data: AssetFormData): ValidationError[] => {
 
   if (!data.category?.trim()) {
     errors.push({ field: 'category', message: 'Category is required' });
-  } else if (!ASSET_CATEGORIES.includes(data.category as any)) {
+  } else if (!categories.includes(data.category.trim())) {
     errors.push({ field: 'category', message: 'Please select a valid category' });
   }
 

@@ -207,8 +207,8 @@ const AssetsPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate form data
-    const errors = validateAssetForm(formData);
+    // Validate form data (use dynamic categories loaded from DB)
+    const errors = validateAssetForm(formData, customCategories);
     setValidationErrors(errors);
     
     if (errors.length > 0) {
