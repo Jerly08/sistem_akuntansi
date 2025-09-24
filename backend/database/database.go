@@ -666,10 +666,16 @@ func AutoMigrate(db *gorm.DB) {
 		&models.Payment{},
 		&models.PaymentAllocation{},
 		
-		// Journals and reports
+	// Journals and reports
 		&models.Journal{},
 		&models.JournalEntry{},
 		&models.JournalLine{},
+
+		// SSOT Journal (Single Source of Truth) - ensure base tables exist even if SQL migration is skipped
+		&models.SSOTJournalEntry{},
+		&models.SSOTJournalLine{},
+		&models.SSOTJournalEventLog{},
+
 		&models.Report{},
 		&models.ReportTemplate{},
 		&models.FinancialRatio{},
