@@ -666,15 +666,13 @@ func AutoMigrate(db *gorm.DB) {
 		&models.Payment{},
 		&models.PaymentAllocation{},
 		
-	// Journals and reports
+		// Journals and reports
 		&models.Journal{},
 		&models.JournalEntry{},
 		&models.JournalLine{},
 
-		// SSOT Journal (Single Source of Truth) - ensure base tables exist even if SQL migration is skipped
-		&models.SSOTJournalEntry{},
-		&models.SSOTJournalLine{},
-		&models.SSOTJournalEventLog{},
+		// Note: SSOT Journal tables are ensured separately to avoid GORM dropping constraints on existing DBs
+		// See EnsureSSOTTables for safe creation when missing
 
 		&models.Report{},
 		&models.ReportTemplate{},
@@ -739,6 +737,9 @@ func AutoMigrate(db *gorm.DB) {
 	}
 	
 	log.Println("Core models migration completed successfully")
+
+	// Ensure SSOT tables exist without forcing constraint drops
+	EnsureSSOTTables(db)
 	
 	// Migrate approval models separately to debug any issues
 	log.Println("Starting approval models migration...")
@@ -812,6 +813,87 @@ func AutoMigrate(db *gorm.DB) {
 	
 	// Run index cleanup and optimization
 	RunIndexCleanupAndOptimization(db)
+}
+
+// EnsureSSOTTables creates minimal SSOT tables if they don't exist yet (safe and idempotent)
+func EnsureSSOTTables(db *gorm.DB) {
+	log.Println("Ensuring SSOT core tables exist (safe mode)...")
+
+	// unified_journal_ledger
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS unified_journal_ledger (
+			id BIGSERIAL PRIMARY KEY,
+			entry_number   VARCHAR(50) NOT NULL,
+			source_type    VARCHAR(50) NOT NULL,
+			source_id      BIGINT,
+			source_code    VARCHAR(100),
+			entry_date     TIMESTAMP NOT NULL,
+			description    TEXT NOT NULL,
+			reference      VARCHAR(200),
+			notes          TEXT,
+			total_debit    DECIMAL(20,2) NOT NULL DEFAULT 0,
+			total_credit   DECIMAL(20,2) NOT NULL DEFAULT 0,
+			status         VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+			is_balanced    BOOLEAN NOT NULL DEFAULT TRUE,
+			is_auto_generated BOOLEAN NOT NULL DEFAULT FALSE,
+			posted_at      TIMESTAMPTZ,
+			posted_by      BIGINT,
+			reversed_by    BIGINT,
+			reversed_from  BIGINT,
+			reversal_reason TEXT,
+			created_by     BIGINT NOT NULL,
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			deleted_at     TIMESTAMPTZ
+		);
+	`)
+
+	// Add unique index for entry_number if not exists
+	db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_unified_journal_entry_number ON unified_journal_ledger(entry_number);`)
+
+	// unified_journal_lines
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS unified_journal_lines (
+			id BIGSERIAL PRIMARY KEY,
+			journal_id   BIGINT NOT NULL REFERENCES unified_journal_ledger(id) ON DELETE CASCADE,
+			account_id   BIGINT NOT NULL,
+			line_number  INT NOT NULL,
+			description  TEXT,
+			debit_amount DECIMAL(20,2) NOT NULL DEFAULT 0,
+			credit_amount DECIMAL(20,2) NOT NULL DEFAULT 0,
+			quantity     DECIMAL(15,4),
+			unit_price   DECIMAL(15,4),
+			created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (journal_id, line_number)
+		);
+	`)
+
+	// journal_event_log (without DB-side uuid default)
+	db.Exec(`
+		CREATE TABLE IF NOT EXISTS journal_event_log (
+			id BIGSERIAL PRIMARY KEY,
+			event_uuid UUID NOT NULL,
+			journal_id BIGINT,
+			event_type VARCHAR(50) NOT NULL,
+			event_data JSONB NOT NULL,
+			event_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			user_id BIGINT,
+			user_role VARCHAR(50),
+			ip_address INET,
+			user_agent TEXT,
+			source_system VARCHAR(50) DEFAULT 'ACCOUNTING_SYSTEM',
+			correlation_id UUID,
+			metadata JSONB
+		);
+	`)
+
+	// Helpful indexes (idempotent)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_source ON unified_journal_ledger(source_type, source_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_date_status ON unified_journal_ledger(entry_date, status)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_journal ON unified_journal_lines(journal_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_account ON unified_journal_lines(account_id, journal_id)`)
+	log.Println("SSOT core tables ensured.")
 }
 
 func createIndexes(db *gorm.DB) {
