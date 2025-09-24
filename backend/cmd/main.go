@@ -72,6 +72,9 @@ func main() {
 	
 	// Seed database with initial data
 	database.SeedData(db)
+
+	// Ensure default Asset Categories exist and migrate legacy asset categories
+	database.AssetCategoryMigration(db)
 	
 	// Run startup tasks including fix account header status
 	startupService := services.NewStartupService(db)

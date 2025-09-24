@@ -92,6 +92,8 @@ const AssetsPage = () => {
   
   // Category management states
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  // Database categories (with code) and merged name list for the dropdown
+  const [dbCategories, setDbCategories] = useState<{ id: number; code: string; name: string; is_active: boolean }[]>([]);
   const [customCategories, setCustomCategories] = useState<string[]>([...ASSET_CATEGORIES]);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingCategoryIndex, setEditingCategoryIndex] = useState<number | null>(null);
@@ -179,9 +181,16 @@ const AssetsPage = () => {
   const fetchCategories = async () => {
     try {
       const response = await assetService.getAssetCategories();
+      const cats = (response.data || []).map((c: any) => ({
+        id: c.id,
+        code: c.code || '',
+        name: c.name,
+        is_active: c.is_active !== false
+      }));
+      setDbCategories(cats);
       
       // Extract category names from response
-      const categoryNames = response.data?.map((cat: any) => cat.name) || [];
+      const categoryNames = cats.map((cat: any) => cat.name) || [];
       
       // Merge with default categories (avoid duplicates)
       const allCategories = [...new Set([...ASSET_CATEGORIES, ...categoryNames])];
@@ -189,6 +198,7 @@ const AssetsPage = () => {
     } catch (error: any) {
       console.error('Error fetching categories:', error);
       // Fallback to default categories only
+      setDbCategories([]);
       setCustomCategories([...ASSET_CATEGORIES]);
     }
   };
@@ -823,9 +833,30 @@ const AssetsPage = () => {
     }
   };
 
+  // Helper to get code for a given category name (from DB or default mapping)
+  const getCodeForCategory = (name: string): string => {
+    const fromDb = dbCategories.find(c => c.name === name)?.code;
+    if (fromDb) return fromDb;
+    // Default mapping (same as backend static mapping)
+    const map: Record<string, string> = {
+      'Fixed Asset': 'FA',
+      'Real Estate': 'RE',
+      'Computer Equipment': 'CE',
+      'Vehicle': 'VH',
+      'Office Equipment': 'OE',
+      'Furniture': 'FR',
+      'IT Infrastructure': 'IT',
+      'Machinery': 'MC',
+      'Tanah': 'LAND'
+    };
+    return map[name] || '';
+  };
+
   const handleEditCategory = (index: number) => {
     setEditingCategoryIndex(index);
-    setNewCategoryName(customCategories[index]);
+    const name = customCategories[index];
+    setNewCategoryName(name);
+    setNewCategoryCode(getCodeForCategory(name));
   };
 
   const handleUpdateCategory = () => {
@@ -1837,6 +1868,9 @@ const AssetsPage = () => {
                             >
                               {category}
                             </Text>
+                            <Badge colorScheme="purple" size="sm" fontSize="xs">
+                              {getCodeForCategory(category) || '—'}
+                            </Badge>
                             <HStack spacing={2}>
                               {isDefault && (
                                 <Badge colorScheme="gray" size="sm" fontSize="xs">

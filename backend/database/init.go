@@ -115,6 +115,7 @@ func RunMigrations(db *gorm.DB) {
 			&models.Expense{},
 			
 			// Asset models
+			&models.AssetCategory{},
 			&models.Asset{},
 			
 			// Budget models
