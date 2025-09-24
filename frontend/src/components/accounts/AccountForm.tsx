@@ -246,16 +246,26 @@ const AccountForm: React.FC<AccountFormProps> = ({
       if (!codePattern.test(formData.code)) {
         newErrors.code = 'Invalid account code format. Use XXXX or XXXX-XXX (e.g., 1101 or 1101-004)';
       } else if (formData.parent_id) {
-        // If a parent is selected, ensure the code starts with the parent's code when using child format
+        // If a parent is selected, enforce different rules for header vs non-header
         const parent = parentAccounts.find(p => p.id === formData.parent_id);
         if (parent) {
           const isChildFormat = formData.code.includes('-');
-          if (isChildFormat && !formData.code.startsWith(`${parent.code}-`)) {
-            newErrors.code = `Child code must start with parent code: ${parent.code}-XXX`;
-          }
-          if (!isChildFormat) {
-            // Suggest using child format when a parent is selected
-            newErrors.code = `Use child format with parent prefix: ${parent.code}-XXX`;
+          const isHeader = !!formData.is_header;
+
+          if (isHeader) {
+            // Header under a parent may use 4-digit code (e.g., 1106 under 1100)
+            // If user chooses child format, still require correct prefix
+            if (isChildFormat && !formData.code.startsWith(`${parent.code}-`)) {
+              newErrors.code = `Child code must start with parent code: ${parent.code}-XXX`;
+            }
+            // Otherwise 4-digit is acceptable; no error
+          } else {
+            // Non-header child must use dashed child format with correct parent prefix
+            if (!isChildFormat) {
+              newErrors.code = `Use child format with parent prefix: ${parent.code}-XXX`;
+            } else if (!formData.code.startsWith(`${parent.code}-`)) {
+              newErrors.code = `Child code must start with parent code: ${parent.code}-XXX`;
+            }
           }
         }
       }
