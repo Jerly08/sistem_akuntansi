@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -89,26 +90,56 @@ func createMigrationLogsTable(db *gorm.DB) error {
 
 // getMigrationFiles gets all SQL migration files sorted by name
 func getMigrationFiles() ([]string, error) {
-	migrationDir := "./migrations"
+	migrationDir, err := findMigrationDir()
+	if err != nil {
+		return nil, err
+	}
+
 	files, err := ioutil.ReadDir(migrationDir)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var migrationFiles []string
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".sql") {
 			migrationFiles = append(migrationFiles, file.Name())
 		}
 	}
-	
+
 	// Sort files to ensure proper execution order
 	sort.Strings(migrationFiles)
-	
+
 	// Log found migration files for debugging
+	log.Printf("Using migration dir: %s", migrationDir)
 	log.Printf("Found %d migration files: %v", len(migrationFiles), migrationFiles)
-	
+
 	return migrationFiles, nil
+}
+
+// findMigrationDir tries multiple locations to locate the migrations folder
+func findMigrationDir() (string, error) {
+	candidates := []string{}
+
+	// 1) Current working directory ./migrations
+	candidates = append(candidates, filepath.Clean("./migrations"))
+
+	// 2) backend/migrations when running from repo root
+	candidates = append(candidates, filepath.Clean("backend/migrations"))
+
+	// 3) Directory next to the executable
+	exePath, err := os.Executable()
+	if err == nil {
+		exeDir := filepath.Dir(exePath)
+		candidates = append(candidates, filepath.Join(exeDir, "migrations"))
+	}
+
+	for _, dir := range candidates {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir, nil
+		}
+	}
+	return "", fmt.Errorf("migrations directory not found. Tried: %v", candidates)
 }
 
 // runMigration runs a single migration file
@@ -125,7 +156,12 @@ func runMigration(db *gorm.DB, filename string) error {
 	log.Printf("🔄 Running migration: %s", filename)
 	
 	// Read migration file
-	migrationPath := filepath.Join("./migrations", filename)
+	migrationDir, dirErr := findMigrationDir()
+	if dirErr != nil {
+		logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to locate migrations dir: %v", dirErr), 0)
+		return dirErr
+	}
+	migrationPath := filepath.Join(migrationDir, filename)
 	content, err := ioutil.ReadFile(migrationPath)
 	if err != nil {
 		logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to read file: %v", err), 0)
