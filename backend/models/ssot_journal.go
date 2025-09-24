@@ -12,7 +12,7 @@ import (
 // SSOTJournalEntry represents a unified journal entry in the SSOT system
 type SSOTJournalEntry struct {
 	ID               uint64          `json:"id" gorm:"primaryKey;column:id"`
-	EntryNumber      string          `json:"entry_number" gorm:"uniqueIndex;not null;size:50"`
+	EntryNumber      string          `json:"entry_number" gorm:"not null;size:50"`
 	
 	// Source Information
 	SourceType       string          `json:"source_type" gorm:"not null;size:50;index"`
