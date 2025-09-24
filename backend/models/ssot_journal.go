@@ -87,7 +87,7 @@ type SSOTJournalLine struct {
 // SSOTJournalEventLog represents audit trail for journal events
 type SSOTJournalEventLog struct {
 	ID              uint64          `json:"id" gorm:"primaryKey;column:id"`
-	EventUUID       string          `json:"event_uuid" gorm:"type:uuid;uniqueIndex;not null;default:uuid_generate_v4()"`
+	EventUUID       string          `json:"event_uuid" gorm:"type:uuid;uniqueIndex;not null"`
 	JournalID       *uint64         `json:"journal_id" gorm:"index"`
 	
 	// Event Details
@@ -142,6 +142,14 @@ func (SSOTJournalLine) TableName() string {
 
 func (SSOTJournalEventLog) TableName() string {
 	return "journal_event_log"
+}
+
+// Ensure UUID is set from application side to avoid DB extension dependency
+func (e *SSOTJournalEventLog) BeforeCreate(tx *gorm.DB) error {
+	if e.EventUUID == "" {
+		e.EventUUID = uuid.New().String()
+	}
+	return nil
 }
 
 func (SSOTAccountBalance) TableName() string {
