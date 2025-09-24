@@ -24,6 +24,8 @@ type AssetServiceInterface interface {
 	GetAssetsSummary() (*AssetsSummary, error)
 	GetAssetsForDepreciationReport() ([]AssetDepreciationReport, error)
 	CreateDepreciationJournalEntry(asset *models.Asset, depreciationAmount float64, userId uint, entryDate time.Time) error
+	GetAssetCategories() ([]models.AssetCategory, error)
+	CreateAssetCategory(category *models.AssetCategory) error
 }
 
 type AssetService struct {
@@ -549,6 +551,37 @@ func (s *AssetService) updateAccountBalances(tx *gorm.DB, journalEntry *models.J
 	}
 
 	return nil
+}
+
+// GetAssetCategories retrieves all asset categories
+func (s *AssetService) GetAssetCategories() ([]models.AssetCategory, error) {
+	var categories []models.AssetCategory
+	err := s.db.Where("is_active = ?", true).Order("name ASC").Find(&categories).Error
+	return categories, err
+}
+
+// CreateAssetCategory creates a new asset category
+func (s *AssetService) CreateAssetCategory(category *models.AssetCategory) error {
+	// Validate required fields
+	if category.Name == "" {
+		return errors.New("category name is required")
+	}
+	if category.Code == "" {
+		return errors.New("category code is required")
+	}
+
+	// Set default values
+	if !category.IsActive {
+		category.IsActive = true
+	}
+
+	// Check for duplicate code or name
+	var existingCategory models.AssetCategory
+	if err := s.db.Where("code = ? OR name = ?", category.Code, category.Name).First(&existingCategory).Error; err == nil {
+		return errors.New("category with this code or name already exists")
+	}
+
+	return s.db.Create(category).Error
 }
 
 // isUniqueCodeError checks if the error is due to unique constraint violation on asset code

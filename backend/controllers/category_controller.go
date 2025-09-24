@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"app-sistem-akuntansi/models"
@@ -75,11 +76,16 @@ func (cc *CategoryController) GetCategory(c *gin.Context) {
 
 // CreateCategory creates a new product category
 func (cc *CategoryController) CreateCategory(c *gin.Context) {
+	log.Printf("[DEBUG] CreateCategory called with method: %s", c.Request.Method)
+	
 	var category models.ProductCategory
 	if err := c.ShouldBindJSON(&category); err != nil {
+		log.Printf("[ERROR] Failed to bind JSON: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	
+	log.Printf("[DEBUG] Parsed category: Code=%s, Name=%s, ParentID=%v", category.Code, category.Name, category.ParentID)
 
 	// Check if category code already exists
 	var existingCategory models.ProductCategory
@@ -97,10 +103,14 @@ func (cc *CategoryController) CreateCategory(c *gin.Context) {
 		}
 	}
 
+	log.Printf("[DEBUG] Attempting to save category to database...")
 	if err := cc.DB.Create(&category).Error; err != nil {
+		log.Printf("[ERROR] Database error creating category: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create category"})
 		return
 	}
+	
+	log.Printf("[SUCCESS] Category created successfully with ID: %d", category.ID)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Category created successfully",

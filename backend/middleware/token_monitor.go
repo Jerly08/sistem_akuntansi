@@ -258,9 +258,9 @@ func (tm *TokenMonitor) aggregateStats() {
 			}
 
 			// Calculate average session duration (simplified)
-			avgDuration := int64(15) // Default 15 minutes
+			avgDuration := int64(90) // Default 90 minutes
 			if stats.refreshes > 0 {
-				avgDuration = int64(stats.refreshes * 15) // 15 minutes per refresh
+				avgDuration = int64(stats.refreshes * 90) // 90 minutes per refresh
 			}
 
 			// Check for existing stats for today

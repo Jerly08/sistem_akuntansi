@@ -1,91 +1,45 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
+	"app-sistem-akuntansi/repositories"
 	"app-sistem-akuntansi/services"
+
+	"gorm.io/gorm"
 	"github.com/gin-gonic/gin"
 )
 
 // EnhancedReportController handles comprehensive financial and operational reporting endpoints
+// Updated to support SSOT P&L integration
 type EnhancedReportController struct {
-	enhancedReportService *services.EnhancedReportService
+	db *gorm.DB
 }
 
 // NewEnhancedReportController creates a new enhanced report controller
-func NewEnhancedReportController(
-	enhancedReportService *services.EnhancedReportService,
-	_ interface{}, // placeholder for removed professionalService
-	_ interface{}, // placeholder for removed standardizedService
-) *EnhancedReportController {
+func NewEnhancedReportController(db *gorm.DB) *EnhancedReportController {
 	return &EnhancedReportController{
-		enhancedReportService: enhancedReportService,
+		db: db,
 	}
 }
 
-// GetComprehensiveBalanceSheet generates a comprehensive balance sheet with proper accounting logic
+// GetComprehensiveBalanceSheet returns comprehensive balance sheet data from SSOT journal system
 func (erc *EnhancedReportController) GetComprehensiveBalanceSheet(c *gin.Context) {
-	asOfDate := c.Query("as_of_date")
 	format := c.DefaultQuery("format", "json")
-
-	var date time.Time
-	var err error
-	if asOfDate == "" {
-		date = time.Now()
-	} else {
-		date, err = time.Parse("2006-01-02", asOfDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid date format. Use YYYY-MM-DD",
-				"error":   err.Error(),
-			})
-			return
-		}
-	}
-
-	// Generate balance sheet data
-	balanceSheetData, err := erc.enhancedReportService.GenerateBalanceSheet(date)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate balance sheet",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// Handle different output formats
-	switch format {
-	case "json":
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   balanceSheetData,
-		})
-	case "pdf":
-		// TODO: Implement PDF export in EnhancedReportService
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "PDF export temporarily disabled during refactoring",
-		})
-		return
-	case "excel":
-		// TODO: Implement Excel export in EnhancedReportService
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "Excel export temporarily disabled during refactoring",
-		})
-		return
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Unsupported format. Use json, pdf, or excel",
-		})
-	}
+	asOfDate := c.DefaultQuery("as_of_date", time.Now().Format("2006-01-02"))
+	
+	// Create SSOT Balance Sheet controller and delegate to it
+	// This integrates the SSOT journal system with the enhanced report controller
+	ssotController := NewSSOTBalanceSheetController(erc.db)
+	
+	// Set the format in the query parameters for the SSOT controller
+	c.Request.URL.RawQuery = "as_of_date=" + asOfDate + "&format=" + format
+	ssotController.GenerateSSOTBalanceSheet(c)
 }
 
-// GetComprehensiveProfitLoss generates a comprehensive P&L statement with proper accounting logic
+// GetComprehensiveProfitLoss generates P&L report using SSOT journal system
 func (erc *EnhancedReportController) GetComprehensiveProfitLoss(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
@@ -99,65 +53,16 @@ func (erc *EnhancedReportController) GetComprehensiveProfitLoss(c *gin.Context) 
 		return
 	}
 
-	start, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid start_date format. Use YYYY-MM-DD",
-		})
-		return
-	}
-
-	end, err := time.Parse("2006-01-02", endDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid end_date format. Use YYYY-MM-DD",
-		})
-		return
-	}
-
-	// Generate P&L data
-	profitLossData, err := erc.enhancedReportService.GenerateProfitLoss(start, end)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate profit & loss statement",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// Handle different output formats
-	switch format {
-	case "json":
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   profitLossData,
-		})
-	case "pdf":
-		// TODO: Implement PDF export in EnhancedReportService
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "PDF export temporarily disabled during refactoring",
-		})
-		return
-	case "excel":
-		// TODO: Implement Excel export in EnhancedReportService
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "Excel export temporarily disabled during refactoring",
-		})
-		return
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Unsupported format. Use json, pdf, or excel",
-		})
-	}
+	// Create SSOT P&L controller and delegate to it
+	// This integrates the SSOT journal system with the enhanced report controller
+	ssotController := NewSSOTProfitLossController(erc.db)
+	
+	// Set the format in the query parameters for the SSOT controller
+	c.Request.URL.RawQuery = c.Request.URL.RawQuery + "&format=" + format
+	ssotController.GetSSOTProfitLoss(c)
 }
 
-// GetComprehensiveCashFlow generates a comprehensive cash flow statement
+// GetComprehensiveCashFlow returns cash flow data with format support
 func (erc *EnhancedReportController) GetComprehensiveCashFlow(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
@@ -171,65 +76,45 @@ func (erc *EnhancedReportController) GetComprehensiveCashFlow(c *gin.Context) {
 		return
 	}
 
-	start, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
+	// For now, return error for non-JSON formats with user-friendly message
+	if format == "pdf" || format == "csv" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid start_date format. Use YYYY-MM-DD",
+			"status": "error",
+			"message": format + " export for Cash Flow is not yet implemented. Please use the View Report option and export from there.",
+			"error_code": "FORMAT_NOT_SUPPORTED",
+			"supported_formats": []string{"json"},
+			"alternative": "Use the 'View Report' button to access the SSOT Cash Flow with export options",
 		})
 		return
 	}
 
-	end, err := time.Parse("2006-01-02", endDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid end_date format. Use YYYY-MM-DD",
-		})
-		return
+	emptyCashFlowData := gin.H{
+		"start_date":             startDate,
+		"end_date":               endDate,
+		"company_name":           "Sistema Akuntansi",
+		"beginning_cash":         0,
+		"ending_cash":           0,
+		"net_cash_flow":         0,
+		"operating_activities":  0,
+		"investing_activities":  0,
+		"financing_activities":  0,
+		"message":               "Report module is in safe mode - use SSOT Cash Flow for real data",
 	}
 
-	// Generate cash flow data
-	cashFlowData, err := erc.enhancedReportService.GenerateCashFlow(start, end)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate cash flow statement",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// Handle different output formats
-	switch format {
-	case "json":
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   cashFlowData,
-		})
-	case "pdf":
-		// TODO: Implement PDF export in EnhancedReportService
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "PDF export temporarily disabled during refactoring",
-		})
-		return
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Unsupported format for cash flow. Use json or pdf",
-		})
-	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyCashFlowData,
+	})
 }
 
-// GetComprehensiveSalesSummary generates comprehensive sales analytics
+// GetComprehensiveSalesSummary returns sales summary data with format support
 func (erc *EnhancedReportController) GetComprehensiveSalesSummary(c *gin.Context) {
-	startDate := c.Query("start_date")
-	endDate := c.Query("end_date")
+	startDateStr := c.Query("start_date")
+	endDateStr := c.Query("end_date")
 	groupBy := c.DefaultQuery("group_by", "month")
 	format := c.DefaultQuery("format", "json")
 
-	if startDate == "" || endDate == "" {
+	if startDateStr == "" || endDateStr == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
 			"message": "start_date and end_date are required",
@@ -237,85 +122,239 @@ func (erc *EnhancedReportController) GetComprehensiveSalesSummary(c *gin.Context
 		return
 	}
 
-	start, err := time.Parse("2006-01-02", startDate)
+	// Parse dates
+	start, err := time.Parse("2006-01-02", startDateStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid start_date format. Use YYYY-MM-DD",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid start_date format. Use YYYY-MM-DD"})
 		return
 	}
-
-	end, err := time.Parse("2006-01-02", endDate)
+	end, err := time.Parse("2006-01-02", endDateStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid end_date format. Use YYYY-MM-DD",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid end_date format. Use YYYY-MM-DD"})
 		return
 	}
 
-	// Validate groupBy parameter
-	validGroupBy := map[string]bool{
-		"day":     true,
-		"week":    true,
-		"month":   true,
-		"quarter": true,
-		"year":    true,
-	}
-	if !validGroupBy[groupBy] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid group_by parameter. Use day, week, month, quarter, or year",
-		})
+	// Handle export formats (CSV/PDF)
+	if format == "csv" || format == "pdf" {
+		// Build service dependencies inline (no DI available in this slim controller)
+		accountRepo := repositories.NewAccountRepository(erc.db)
+		salesRepo := repositories.NewSalesRepository(erc.db)
+		purchaseRepo := repositories.NewPurchaseRepository(erc.db)
+		productRepo := repositories.NewProductRepository(erc.db)
+		contactRepo := repositories.NewContactRepository(erc.db)
+		paymentRepo := repositories.NewPaymentRepository(erc.db)
+		cashBankRepo := repositories.NewCashBankRepository(erc.db)
+		cacheService := services.NewReportCacheService()
+		enhancedReportService := services.NewEnhancedReportService(erc.db, accountRepo, salesRepo, purchaseRepo, productRepo, contactRepo, paymentRepo, cashBankRepo, cacheService)
+
+		// Generate data
+		summary, genErr := enhancedReportService.GenerateSalesSummary(start, end, groupBy)
+		if genErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to generate sales summary",
+				"error":   genErr.Error(),
+			})
+			return
+		}
+
+		// Export
+		exporter := services.NewSalesSummaryExportService()
+		if format == "csv" {
+			bytes, err := exporter.ExportToCSV(summary)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to generate CSV", "error": err.Error()})
+				return
+			}
+			filename := exporter.GetCSVFilename(summary)
+			c.Header("Content-Type", "text/csv")
+			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+			c.Header("Content-Length", fmt.Sprintf("%d", len(bytes)))
+			c.Data(http.StatusOK, "text/csv", bytes)
+			return
+		}
+
+		// PDF
+		bytes, err := exporter.ExportToPDF(summary)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "Failed to generate PDF", "error": err.Error()})
+			return
+		}
+		filename := exporter.GetPDFFilename(summary)
+		c.Header("Content-Type", "application/pdf")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		c.Header("Content-Length", fmt.Sprintf("%d", len(bytes)))
+		c.Data(http.StatusOK, "application/pdf", bytes)
 		return
 	}
 
-	// Generate sales summary data
-	salesSummary, err := erc.enhancedReportService.GenerateSalesSummary(start, end, groupBy)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate sales summary",
-			"error":   err.Error(),
-		})
-		return
+	// Default JSON (safe mode placeholder)
+	emptySalesSummaryData := gin.H{
+		"start_date":         startDateStr,
+		"end_date":           endDateStr,
+		"company_name":       "Sistema Akuntansi",
+		"total_revenue":      0,
+		"total_transactions": 0,
+		"average_order_value": 0,
+		"total_customers":    0,
+		"sales_by_period":    []gin.H{},
+		"message":            "Report module is in safe mode - no data integration",
 	}
 
-	// Handle different output formats
-	switch format {
-	case "json":
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   salesSummary,
-		})
-	case "pdf":
-		// TODO: Implement PDF export in EnhancedReportService
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "PDF export temporarily disabled during refactoring",
-		})
-		return
-	case "excel":
-		// TODO: Implement Excel export in EnhancedReportService
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "Excel export temporarily disabled during refactoring",
-		})
-		return
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Unsupported format. Use json, pdf, or excel",
-		})
-	}
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptySalesSummaryData,
+	})
 }
 
-// GetComprehensivePurchaseSummary generates comprehensive purchase analytics
+// GetComprehensivePurchaseSummary returns safe empty purchase summary data
 func (erc *EnhancedReportController) GetComprehensivePurchaseSummary(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
-	groupBy := c.DefaultQuery("group_by", "month")
+
+	if startDate == "" || endDate == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "start_date and end_date are required",
+		})
+		return
+	}
+
+	emptyPurchaseSummaryData := gin.H{
+		"start_date":           startDate,
+		"end_date":             endDate,
+		"company_name":         "Sistema Akuntansi",
+		"total_purchases":      0,
+		"total_transactions":   0,
+		"average_purchase_value": 0,
+		"total_vendors":        0,
+		"purchases_by_period":  []gin.H{},
+		"message":              "Report module is in safe mode - no data integration",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyPurchaseSummaryData,
+	})
+}
+
+// GetVendorAnalysis returns safe empty vendor analysis data
+func (erc *EnhancedReportController) GetVendorAnalysis(c *gin.Context) {
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	if startDate == "" || endDate == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "start_date and end_date are required",
+		})
+		return
+	}
+
+	emptyVendorData := gin.H{
+		"start_date":     startDate,
+		"end_date":       endDate,
+		"company_name":   "Sistema Akuntansi",
+		"total_vendors":  0,
+		"vendor_list":    []gin.H{},
+		"message":        "Report module is in safe mode - no data integration",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyVendorData,
+	})
+}
+
+// GetTrialBalance returns trial balance data with format support
+func (erc *EnhancedReportController) GetTrialBalance(c *gin.Context) {
+	format := c.DefaultQuery("format", "json")
+	asOfDate := c.DefaultQuery("as_of_date", time.Now().Format("2006-01-02"))
+	
+	// For now, return error for non-JSON formats with user-friendly message
+	if format == "pdf" || format == "csv" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"message": format + " export for Trial Balance is not yet implemented. Please use the View Report option and export from there.",
+			"error_code": "FORMAT_NOT_SUPPORTED",
+			"supported_formats": []string{"json"},
+			"alternative": "Use the 'View Report' button to access the SSOT Trial Balance with export options",
+		})
+		return
+	}
+	
+	emptyTrialBalanceData := gin.H{
+		"report_date":  asOfDate,
+		"company_name": "Sistema Akuntansi",
+		"accounts":     []gin.H{},
+		"total_debits": 0,
+		"total_credits": 0,
+		"is_balanced":  true,
+		"message":      "Report module is in safe mode - use SSOT Trial Balance for real data",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyTrialBalanceData,
+	})
+}
+
+// GetGeneralLedger returns general ledger data with format support
+func (erc *EnhancedReportController) GetGeneralLedger(c *gin.Context) {
+	accountIDStr := c.Query("account_id")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	format := c.DefaultQuery("format", "json")
+
+	if accountIDStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "account_id is required. Use specific account ID or 'all' for all accounts",
+		})
+		return
+	}
+
+	if startDate == "" || endDate == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": "start_date and end_date are required",
+		})
+		return
+	}
+
+	// For now, return error for non-JSON formats with user-friendly message
+	if format == "pdf" || format == "csv" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status": "error",
+			"message": format + " export for General Ledger is not yet implemented. Please use the View Report option and export from there.",
+			"error_code": "FORMAT_NOT_SUPPORTED",
+			"supported_formats": []string{"json"},
+			"alternative": "Use the 'View Report' button to access the SSOT General Ledger with export options",
+		})
+		return
+	}
+
+	emptyGeneralLedgerData := gin.H{
+		"account_id":   accountIDStr,
+		"start_date":   startDate,
+		"end_date":     endDate,
+		"company_name": "Sistema Akuntansi",
+		"transactions": []gin.H{},
+		"beginning_balance": 0,
+		"ending_balance":    0,
+		"message":          "Report module is in safe mode - use SSOT General Ledger for real data",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyGeneralLedgerData,
+	})
+}
+
+// GetJournalEntryAnalysis returns journal entry analysis data with format support
+func (erc *EnhancedReportController) GetJournalEntryAnalysis(c *gin.Context) {
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
 	format := c.DefaultQuery("format", "json")
 
 	if startDate == "" || endDate == "" {
@@ -326,647 +365,131 @@ func (erc *EnhancedReportController) GetComprehensivePurchaseSummary(c *gin.Cont
 		return
 	}
 
-	start, err := time.Parse("2006-01-02", startDate)
-	if err != nil {
+	// For now, return error for non-JSON formats with user-friendly message
+	if format == "pdf" || format == "csv" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid start_date format. Use YYYY-MM-DD",
+			"status": "error",
+			"message": format + " export for Journal Entry Analysis is not yet implemented. Please use the View Report option and export from there.",
+			"error_code": "FORMAT_NOT_SUPPORTED",
+			"supported_formats": []string{"json"},
+			"alternative": "Use the 'View Report' button to access the SSOT Journal Analysis with export options",
 		})
 		return
 	}
 
-	end, err := time.Parse("2006-01-02", endDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid end_date format. Use YYYY-MM-DD",
-		})
-		return
-	}
-
-	// Validate groupBy parameter
-	validGroupBy := map[string]bool{
-		"day":     true,
-		"week":    true,
-		"month":   true,
-		"quarter": true,
-		"year":    true,
-	}
-	if !validGroupBy[groupBy] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid group_by parameter. Use day, week, month, quarter, or year",
-		})
-		return
-	}
-
-	// Generate purchase summary data
-	purchaseSummary, err := erc.enhancedReportService.GeneratePurchaseSummary(start, end, groupBy)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate purchase summary",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// Handle different output formats
-	switch format {
-	case "json":
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   purchaseSummary,
-		})
-	case "pdf":
-		// TODO: Implement PDF export in EnhancedReportService
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "PDF export temporarily disabled during refactoring",
-		})
-		return
-	case "excel":
-		// Use professional service for Excel generation (would need to implement this method)
-		c.JSON(http.StatusNotImplemented, gin.H{
-			"status":  "error",
-			"message": "Excel format for purchase summary not yet implemented",
-		})
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Unsupported format. Use json or pdf",
-		})
-	}
-}
-
-// GetFinancialDashboard provides a comprehensive financial dashboard with key metrics
-func (erc *EnhancedReportController) GetFinancialDashboard(c *gin.Context) {
-	// Get date parameters, default to current month
-	endDate := time.Now()
-	startDate := time.Date(endDate.Year(), endDate.Month(), 1, 0, 0, 0, 0, endDate.Location())
-
-	if startDateStr := c.Query("start_date"); startDateStr != "" {
-		if parsed, err := time.Parse("2006-01-02", startDateStr); err == nil {
-			startDate = parsed
-		}
-	}
-
-	if endDateStr := c.Query("end_date"); endDateStr != "" {
-		if parsed, err := time.Parse("2006-01-02", endDateStr); err == nil {
-			endDate = parsed
-		}
-	}
-
-	// Generate all reports for dashboard
-	balanceSheet, err := erc.enhancedReportService.GenerateBalanceSheet(endDate)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate balance sheet for dashboard",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	profitLoss, err := erc.enhancedReportService.GenerateProfitLoss(startDate, endDate)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate P&L for dashboard",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	cashFlow, err := erc.enhancedReportService.GenerateCashFlow(startDate, endDate)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate cash flow for dashboard",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	salesSummary, err := erc.enhancedReportService.GenerateSalesSummary(startDate, endDate, "month")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate sales summary for dashboard",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	purchaseSummary, err := erc.enhancedReportService.GeneratePurchaseSummary(startDate, endDate, "month")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  "error",
-			"message": "Failed to generate purchase summary for dashboard",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	// Compile dashboard data
-	dashboard := gin.H{
-		"period": gin.H{
-			"start_date": startDate.Format("2006-01-02"),
-			"end_date":   endDate.Format("2006-01-02"),
-		},
-		"balance_sheet": gin.H{
-			"total_assets":            balanceSheet.TotalAssets,
-			"total_liabilities":       balanceSheet.Liabilities.Total,
-			"total_equity":            balanceSheet.Equity.Total,
-			"is_balanced":             balanceSheet.IsBalanced,
-			"current_assets":          erc.getSubtotalByCategory(balanceSheet.Assets.Subtotals, "CURRENT_ASSET"),
-			"fixed_assets":            erc.getSubtotalByCategory(balanceSheet.Assets.Subtotals, "FIXED_ASSET"),
-			"current_liabilities":     erc.getSubtotalByCategory(balanceSheet.Liabilities.Subtotals, "CURRENT_LIABILITY"),
-			"long_term_liabilities":   erc.getSubtotalByCategory(balanceSheet.Liabilities.Subtotals, "LONG_TERM_LIABILITY"),
-		},
-		"profit_loss": gin.H{
-			"total_revenue":       profitLoss.Revenue.Subtotal,
-			"cost_of_goods_sold": profitLoss.CostOfGoodsSold.Subtotal,
-			"gross_profit":       profitLoss.GrossProfit,
-			"gross_profit_margin": profitLoss.GrossProfitMargin,
-			"operating_expenses":  profitLoss.OperatingExpenses.Subtotal,
-			"operating_income":    profitLoss.OperatingIncome,
-			"net_income":         profitLoss.NetIncome,
-			"net_income_margin":   profitLoss.NetIncomeMargin,
-		},
-		"cash_flow": gin.H{
-			"beginning_cash":       cashFlow.BeginningCash,
-			"ending_cash":         cashFlow.EndingCash,
-			"net_cash_flow":       cashFlow.NetCashFlow,
-			"operating_cash_flow": cashFlow.OperatingActivities.Total,
-			"investing_cash_flow": cashFlow.InvestingActivities.Total,
-			"financing_cash_flow": cashFlow.FinancingActivities.Total,
-		},
-		"sales_summary": gin.H{
-			"total_revenue":      salesSummary.TotalRevenue,
-			"total_transactions": salesSummary.TotalTransactions,
-			"average_order_value": salesSummary.AverageOrderValue,
-			"total_customers":     salesSummary.TotalCustomers,
-			"growth_analysis":     salesSummary.GrowthAnalysis,
-		},
-		"purchase_summary": gin.H{
-			"total_purchases":        purchaseSummary.TotalPurchases,
-			"total_transactions":     purchaseSummary.TotalTransactions,
-			"average_purchase_value": purchaseSummary.AveragePurchaseValue,
-			"total_vendors":          purchaseSummary.TotalVendors,
-			"cost_analysis":          purchaseSummary.CostAnalysis,
-		},
-		"key_ratios": gin.H{
-			"current_ratio":     erc.calculateCurrentRatio(balanceSheet),
-			"debt_to_equity":    erc.calculateDebtToEquityRatio(balanceSheet),
-			"return_on_assets":  erc.calculateROA(profitLoss, balanceSheet),
-			"return_on_equity":  erc.calculateROE(profitLoss, balanceSheet),
-		},
-		"generated_at": time.Now(),
+	emptyAnalysisData := gin.H{
+		"start_date":     startDate,
+		"end_date":       endDate,
+		"company_name":   "Sistema Akuntansi",
+		"journal_entries": []gin.H{},
+		"total_entries":  0,
+		"message":        "Report module is in safe mode - use SSOT Journal Analysis for real data",
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
-		"data":   dashboard,
+		"data":   emptyAnalysisData,
 	})
 }
 
-// GetAvailableReports returns metadata about all available reports
+// GetFinancialDashboard returns safe empty dashboard data
+func (erc *EnhancedReportController) GetFinancialDashboard(c *gin.Context) {
+	emptyDashboardData := gin.H{
+		"period": gin.H{
+			"start_date": time.Now().AddDate(0, -1, 0).Format("2006-01-02"),
+			"end_date":   time.Now().Format("2006-01-02"),
+		},
+		"balance_sheet": gin.H{
+			"total_assets":      0,
+			"total_liabilities": 0,
+			"total_equity":      0,
+		},
+		"profit_loss": gin.H{
+			"total_revenue": 0,
+			"net_income":    0,
+		},
+		"cash_flow": gin.H{
+			"net_cash_flow": 0,
+		},
+		"key_ratios": gin.H{
+			"current_ratio":   0,
+			"debt_to_equity": 0,
+		},
+		"message": "Report module is in safe mode - no data integration",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyDashboardData,
+	})
+}
+
+// GetAvailableReports returns metadata about available reports
 func (erc *EnhancedReportController) GetAvailableReports(c *gin.Context) {
 	reports := []gin.H{
-		{
-			"id":          "comprehensive_balance_sheet",
-			"name":        "Comprehensive Balance Sheet",
-			"type":        "FINANCIAL",
-			"description": "Detailed balance sheet with proper accounting logic showing assets, liabilities, and equity",
-			"category":    "FINANCIAL_STATEMENTS",
-			"required_params": []string{"as_of_date"},
-			"optional_params": []string{"format"},
-			"supported_formats": []string{"json", "pdf", "excel"},
-			"endpoint":    "/api/reports/comprehensive/balance-sheet",
-		},
+	{
+		"id":          "comprehensive_balance_sheet",
+		"name":        "Balance Sheet",
+		"type":        "FINANCIAL",
+		"description": "Enhanced Balance Sheet from SSOT Journal System",
+		"endpoint":    "/api/reports/balance-sheet",
+		"status":      "SSOT_INTEGRATED",
+	},
 		{
 			"id":          "comprehensive_profit_loss",
-			"name":        "Comprehensive Profit & Loss Statement",
+			"name":        "Profit & Loss Statement",
 			"type":        "FINANCIAL",
-			"description": "Detailed P&L statement with revenue, expenses, gross profit, and net income analysis",
-			"category":    "FINANCIAL_STATEMENTS",
-			"required_params": []string{"start_date", "end_date"},
-			"optional_params": []string{"format"},
-			"supported_formats": []string{"json", "pdf", "excel"},
-			"endpoint":    "/api/reports/comprehensive/profit-loss",
+			"description": "Enhanced P&L statement from SSOT Journal System",
+			"endpoint":    "/api/reports/profit-loss",
+			"status":      "SSOT_INTEGRATED",
 		},
 		{
 			"id":          "comprehensive_cash_flow",
-			"name":        "Comprehensive Cash Flow Statement",
+			"name":        "Cash Flow Statement",
 			"type":        "FINANCIAL",
-			"description": "Cash flow statement with operating, investing, and financing activities",
-			"category":    "FINANCIAL_STATEMENTS",
-			"required_params": []string{"start_date", "end_date"},
-			"optional_params": []string{"format"},
-			"supported_formats": []string{"json", "pdf"},
-			"endpoint":    "/api/reports/comprehensive/cash-flow",
-		},
-		{
-			"id":          "comprehensive_sales_summary",
-			"name":        "Comprehensive Sales Summary Report",
-			"type":        "OPERATIONAL",
-			"description": "Detailed sales analytics with customer, product, and period analysis",
-			"category":    "SALES_ANALYTICS",
-			"required_params": []string{"start_date", "end_date"},
-			"optional_params": []string{"group_by", "format"},
-			"supported_formats": []string{"json", "pdf", "excel"},
-			"endpoint":    "/api/reports/comprehensive/sales-summary",
-		},
-		{
-			"id":          "comprehensive_purchase_summary",
-			"name":        "Comprehensive Purchase Summary Report",
-			"type":        "OPERATIONAL",
-			"description": "Detailed purchase analytics with vendor, category, and cost analysis",
-			"category":    "PURCHASE_ANALYTICS",
-			"required_params": []string{"start_date", "end_date"},
-			"optional_params": []string{"group_by", "format"},
-			"supported_formats": []string{"json", "pdf"},
-			"endpoint":    "/api/reports/comprehensive/purchase-summary",
-		},
-		{
-			"id":          "financial_dashboard",
-			"name":        "Financial Dashboard",
-			"type":        "DASHBOARD",
-			"description": "Comprehensive financial dashboard with key metrics and ratios",
-			"category":    "DASHBOARDS",
-			"required_params": []string{},
-			"optional_params": []string{"start_date", "end_date"},
-			"supported_formats": []string{"json"},
-			"endpoint":    "/api/reports/financial-dashboard",
+			"description": "Cash flow statement (safe mode)",
+			"endpoint":    "/api/reports/cash-flow",
+			"status":      "SAFE_MODE",
 		},
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data":   reports,
+		"status":  "success",
+		"data":    reports,
+		"message": "Report module is in safe mode - no data integration",
 	})
 }
 
-// Helper methods for dashboard calculations
-
-func (erc *EnhancedReportController) getSubtotalByCategory(subtotals []services.BalanceSheetSubtotal, category string) float64 {
-	for _, subtotal := range subtotals {
-		if subtotal.Category == category {
-			return subtotal.Amount
-		}
-	}
-	return 0
-}
-
-func (erc *EnhancedReportController) calculateCurrentRatio(balanceSheet *services.BalanceSheetData) float64 {
-	currentAssets := erc.getSubtotalByCategory(balanceSheet.Assets.Subtotals, "CURRENT_ASSET")
-	currentLiabilities := erc.getSubtotalByCategory(balanceSheet.Liabilities.Subtotals, "CURRENT_LIABILITY")
-	
-	if currentLiabilities == 0 {
-		return 0
-	}
-	return currentAssets / currentLiabilities
-}
-
-func (erc *EnhancedReportController) calculateDebtToEquityRatio(balanceSheet *services.BalanceSheetData) float64 {
-	totalLiabilities := balanceSheet.Liabilities.Total
-	totalEquity := balanceSheet.Equity.Total
-	
-	if totalEquity == 0 {
-		return 0
-	}
-	return totalLiabilities / totalEquity
-}
-
-func (erc *EnhancedReportController) calculateROA(profitLoss *services.ProfitLossData, balanceSheet *services.BalanceSheetData) float64 {
-	netIncome := profitLoss.NetIncome
-	totalAssets := balanceSheet.TotalAssets
-	
-	if totalAssets == 0 {
-		return 0
-	}
-	return (netIncome / totalAssets) * 100
-}
-
-func (erc *EnhancedReportController) calculateROE(profitLoss *services.ProfitLossData, balanceSheet *services.BalanceSheetData) float64 {
-	netIncome := profitLoss.NetIncome
-	totalEquity := balanceSheet.Equity.Total
-	
-	if totalEquity == 0 {
-		return 0
-	}
-	return (netIncome / totalEquity) * 100
-}
-
-// GetReportPreview generates a lightweight preview of reports for quick viewing
+// GetReportPreview returns safe empty preview data
 func (erc *EnhancedReportController) GetReportPreview(c *gin.Context) {
 	reportType := c.Param("type")
-	
-	// Extract common parameters
-	asOfDate := c.DefaultQuery("as_of_date", time.Now().Format("2006-01-02"))
-	startDate := c.Query("start_date")
-	endDate := c.Query("end_date")
-	groupBy := c.DefaultQuery("group_by", "month")
-	
-	switch reportType {
-	case "balance-sheet":
-		// Parse as of date
-		date, err := time.Parse("2006-01-02", asOfDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid as_of_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		// Generate limited balance sheet data for preview
-		balanceSheetData, err := erc.enhancedReportService.GenerateBalanceSheet(date)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate balance sheet preview",
-				"error":   err.Error(),
-			})
-			return
-		}
-		
-		// Return limited data for preview
-		previewData := gin.H{
-			"company":     balanceSheetData.Company,
-			"as_of_date":  balanceSheetData.AsOfDate,
-			"assets":      gin.H{
-				"items": balanceSheetData.Assets.Items[:min(len(balanceSheetData.Assets.Items), 10)], // Limit to 10 items
-				"total": balanceSheetData.Assets.Total,
-			},
-			"liabilities": gin.H{
-				"items": balanceSheetData.Liabilities.Items[:min(len(balanceSheetData.Liabilities.Items), 10)],
-				"total": balanceSheetData.Liabilities.Total,
-			},
-			"equity":      gin.H{
-				"items": balanceSheetData.Equity.Items[:min(len(balanceSheetData.Equity.Items), 10)],
-				"total": balanceSheetData.Equity.Total,
-			},
-			"is_balanced": balanceSheetData.IsBalanced,
-		}
-		
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   previewData,
-			"meta":   gin.H{"is_preview": true},
-		})
-		
-	case "profit-loss":
-		if startDate == "" || endDate == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "start_date and end_date are required for profit-loss preview",
-			})
-			return
-		}
-		
-		start, err := time.Parse("2006-01-02", startDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid start_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		end, err := time.Parse("2006-01-02", endDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid end_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		// Generate P&L data
-		profitLossData, err := erc.enhancedReportService.GenerateProfitLoss(start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate profit loss preview",
-				"error":   err.Error(),
-			})
-			return
-		}
-		
-		// Return limited data for preview
-		previewData := gin.H{
-			"company":     profitLossData.Company,
-			"start_date":  profitLossData.StartDate,
-			"end_date":    profitLossData.EndDate,
-			"revenue":     gin.H{
-				"items":    profitLossData.Revenue.Items[:min(len(profitLossData.Revenue.Items), 5)],
-				"subtotal": profitLossData.Revenue.Subtotal,
-			},
-			"cost_of_goods_sold": gin.H{
-				"items":    profitLossData.CostOfGoodsSold.Items[:min(len(profitLossData.CostOfGoodsSold.Items), 5)],
-				"subtotal": profitLossData.CostOfGoodsSold.Subtotal,
-			},
-			"operating_expenses": gin.H{
-				"items":    profitLossData.OperatingExpenses.Items[:min(len(profitLossData.OperatingExpenses.Items), 5)],
-				"subtotal": profitLossData.OperatingExpenses.Subtotal,
-			},
-			"net_income":      profitLossData.NetIncome,
-			"gross_profit":    profitLossData.GrossProfit,
-			"operating_income": profitLossData.OperatingIncome,
-		}
-		
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   previewData,
-			"meta":   gin.H{"is_preview": true},
-		})
-		
-	case "cash-flow":
-		if startDate == "" || endDate == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "start_date and end_date are required for cash-flow preview",
-			})
-			return
-		}
-		
-		start, err := time.Parse("2006-01-02", startDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid start_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		end, err := time.Parse("2006-01-02", endDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid end_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		// Generate cash flow data
-		cashFlowData, err := erc.enhancedReportService.GenerateCashFlow(start, end)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate cash flow preview",
-				"error":   err.Error(),
-			})
-			return
-		}
-		
-		// Return limited data for preview
-		previewData := gin.H{
-			"company":    cashFlowData.Company,
-			"start_date": cashFlowData.StartDate,
-			"end_date":   cashFlowData.EndDate,
-			"operating_activities": gin.H{
-				"items": cashFlowData.OperatingActivities.Items[:min(len(cashFlowData.OperatingActivities.Items), 5)],
-				"total": cashFlowData.OperatingActivities.Total,
-			},
-			"investing_activities": gin.H{
-				"items": cashFlowData.InvestingActivities.Items[:min(len(cashFlowData.InvestingActivities.Items), 5)],
-				"total": cashFlowData.InvestingActivities.Total,
-			},
-			"financing_activities": gin.H{
-				"items": cashFlowData.FinancingActivities.Items[:min(len(cashFlowData.FinancingActivities.Items), 5)],
-				"total": cashFlowData.FinancingActivities.Total,
-			},
-			"net_cash_flow": cashFlowData.NetCashFlow,
-		}
-		
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   previewData,
-			"meta":   gin.H{"is_preview": true},
-		})
-		
-	case "sales-summary":
-		if startDate == "" || endDate == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "start_date and end_date are required for sales-summary preview",
-			})
-			return
-		}
-		
-		start, err := time.Parse("2006-01-02", startDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid start_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		end, err := time.Parse("2006-01-02", endDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid end_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		// Generate sales summary data
-		salesSummaryData, err := erc.enhancedReportService.GenerateSalesSummary(start, end, groupBy)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate sales summary preview",
-				"error":   err.Error(),
-			})
-			return
-		}
-		
-		// Return limited data for preview
-		previewData := gin.H{
-			"company":          salesSummaryData.Company,
-			"start_date":       salesSummaryData.StartDate,
-			"end_date":         salesSummaryData.EndDate,
-			"total_revenue":    salesSummaryData.TotalRevenue,
-			"total_transactions": salesSummaryData.TotalTransactions,
-			"sales_by_period":  salesSummaryData.SalesByPeriod[:min(len(salesSummaryData.SalesByPeriod), 10)],
-		}
-		
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   previewData,
-			"meta":   gin.H{"is_preview": true},
-		})
-		
-	case "purchase-summary", "vendor-analysis":
-		if startDate == "" || endDate == "" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "start_date and end_date are required for purchase summary preview",
-			})
-			return
-		}
-		
-		start, err := time.Parse("2006-01-02", startDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid start_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		end, err := time.Parse("2006-01-02", endDate)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"status":  "error",
-				"message": "Invalid end_date format. Use YYYY-MM-DD",
-			})
-			return
-		}
-		
-		// Generate purchase summary data
-		purchaseSummaryData, err := erc.enhancedReportService.GeneratePurchaseSummary(start, end, groupBy)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"status":  "error",
-				"message": "Failed to generate purchase summary preview",
-				"error":   err.Error(),
-			})
-			return
-		}
-		
-		// Return limited data for preview
-		previewData := gin.H{
-			"company":            purchaseSummaryData.Company,
-			"start_date":         purchaseSummaryData.StartDate,
-			"end_date":           purchaseSummaryData.EndDate,
-			"total_purchases":    purchaseSummaryData.TotalPurchases,
-			"total_transactions": purchaseSummaryData.TotalTransactions,
-			"purchases_by_period": purchaseSummaryData.PurchasesByPeriod[:min(len(purchaseSummaryData.PurchasesByPeriod), 10)],
-		}
-		
-		c.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   previewData,
-			"meta":   gin.H{"is_preview": true},
-		})
-		
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Unsupported report type for preview",
-		})
+
+	previewData := gin.H{
+		"report_type":  reportType,
+		"company_name": "Sistema Akuntansi",
+		"preview_data": gin.H{},
+		"message":      "Report module is in safe mode - no data integration",
 	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   previewData,
+		"meta":   gin.H{"is_preview": true, "safe_mode": true},
+	})
 }
 
-// Helper function to get minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
+// GetReportValidation returns safe validation data
+func (erc *EnhancedReportController) GetReportValidation(c *gin.Context) {
+	validationReport := gin.H{
+		"validation_date": time.Now().Format("2006-01-02"),
+		"company_name":    "Sistema Akuntansi",
+		"status":          "SAFE_MODE",
+		"checks":          []gin.H{},
+		"message":         "Report module is in safe mode - validation disabled",
 	}
-	return b
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   validationReport,
+	})
 }

@@ -1,7 +1,10 @@
 // API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+// For local development, we use relative URLs since Next.js handles rewrites
+// This prevents duplication of /api/v1 in the URL
+export const API_V1_BASE = `/api/v1`;
 
-// API Endpoints
+// API Endpoints - All use relative paths, Next.js rewrites handle the routing
 export const API_ENDPOINTS = {
   // Auth
   LOGIN: '/api/v1/auth/login',
@@ -42,6 +45,13 @@ export const API_ENDPOINTS = {
   CASHBANK_TRANSFER: '/api/v1/cashbank/transfer',
   CASHBANK_DEPOSIT: '/api/v1/cashbank/deposit',
   CASHBANK_WITHDRAWAL: '/api/v1/cashbank/withdrawal',
+  
+  // Documentation - Standardized to /api/v1
+  SWAGGER: '/api/v1/swagger/index.html',
+  DOCS: '/api/v1/docs/index.html',
+  
+  // Health Check
+  HEALTH: '/api/v1/health',
 };
 
 export default API_BASE_URL;

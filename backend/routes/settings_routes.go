@@ -25,5 +25,10 @@ func SetupSettingsRoutes(protected *gin.RouterGroup, db *gorm.DB) {
 		// Specific settings endpoints
 		settings.PUT("/company", settingsController.UpdateCompanyInfo)
 		settings.PUT("/system", settingsController.UpdateSystemConfig)
+		
+		// Additional endpoints
+		settings.POST("/reset", settingsController.ResetToDefaults)
+		settings.GET("/validation-rules", settingsController.GetValidationRules)
+		settings.GET("/history", settingsController.GetSettingsHistory)
 	}
 }

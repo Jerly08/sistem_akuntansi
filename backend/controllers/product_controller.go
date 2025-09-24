@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 	"app-sistem-akuntansi/models"
@@ -241,7 +242,17 @@ func (pc *ProductController) UpdateProduct(c *gin.Context) {
 		}
 	}
 
-	if err := pc.DB.Model(&product).Updates(updateData).Error; err != nil {
+	// FIXED: Use Select() with Updates() to ensure zero values are updated
+	// This fixes the issue where stock=0 or prices=0 would not be updated
+	// Only update specific fields to avoid foreign key constraint issues
+	updateFields := []string{
+		"code", "name", "description", "category_id", "warehouse_location_id",
+		"brand", "model", "unit", "purchase_price", "cost_price", "sale_price",
+		"pricing_tier", "stock", "min_stock", "max_stock", "reorder_level",
+		"barcode", "sku", "weight", "dimensions", "is_active", "is_service",
+		"taxable", "image_path", "notes", "default_expense_account_id",
+	}
+	if err := pc.DB.Model(&product).Select(updateFields).Updates(updateData).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product"})
 		return
 	}
@@ -329,6 +340,13 @@ func (pc *ProductController) UploadProductImage(c *gin.Context) {
 		return
 	}
 
+	// Validate file size (max 5MB)
+	maxSize := int64(5 * 1024 * 1024) // 5MB
+	if file.Size > maxSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File size too large. Maximum 5MB allowed"})
+		return
+	}
+
 	// Create uploads directory if it doesn't exist
 	uploadPath := "./uploads/products/"
 	if err := os.MkdirAll(uploadPath, 0755); err != nil {
@@ -340,6 +358,9 @@ func (pc *ProductController) UploadProductImage(c *gin.Context) {
 	filename := fmt.Sprintf("%d_%d_%s", productID, time.Now().Unix(), file.Filename)
 	filePath := uploadPath + filename
 
+	// Store old image path for cleanup if needed
+	oldImagePath := product.ImagePath
+
 	// Save the file
 	if err := c.SaveUploadedFile(file, filePath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
@@ -349,8 +370,22 @@ func (pc *ProductController) UploadProductImage(c *gin.Context) {
 	// Update product with image path
 	relativeImagePath := "/uploads/products/" + filename
 	if err := pc.DB.Model(&product).Update("image_path", relativeImagePath).Error; err != nil {
+		// Database update failed, cleanup the uploaded file
+		if removeErr := os.Remove(filePath); removeErr != nil {
+			log.Printf("Failed to cleanup uploaded file after DB error: %v", removeErr)
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update product image path"})
 		return
+	}
+
+	// Success: cleanup old image file if it exists
+	if oldImagePath != "" {
+		oldFilePath := "./uploads/products/" + filepath.Base(oldImagePath)
+		if _, err := os.Stat(oldFilePath); err == nil {
+			if removeErr := os.Remove(oldFilePath); removeErr != nil {
+				log.Printf("Failed to cleanup old image file: %v", removeErr)
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

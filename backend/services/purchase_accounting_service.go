@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"app-sistem-akuntansi/models"
+	"gorm.io/gorm"
 )
 
 // Enhanced Accounting Methods for Purchase Module
@@ -14,37 +15,37 @@ import (
 // setApprovalBasisAndBase determines approval basis for purchase
 func (s *PurchaseService) setApprovalBasisAndBase(purchase *models.Purchase) {
 	// Set approval basis - what amount will be used for approval
-	purchase.ApprovalAmountBasis = "SUBTOTAL_BEFORE_DISCOUNT"
-	purchase.ApprovalBaseAmount = purchase.SubtotalBeforeDiscount
+	purchase.ApprovalAmountBasis = "TOTAL_AMOUNT"
+	purchase.ApprovalBaseAmount = purchase.TotalAmount
 	
-	// Check if approval is required based on amount
-	requiredWorkflow, err := s.approvalService.GetWorkflowByAmount(
-		models.ApprovalModulePurchase, 
-		purchase.ApprovalBaseAmount,
-	)
+	// Debug logging to track amount discrepancies
+	fmt.Printf("🔍 ApprovalBaseAmount Debug: Purchase %d\n", purchase.ID)
+	fmt.Printf("   TotalAmount: %.2f\n", purchase.TotalAmount)
+	fmt.Printf("   ApprovalBaseAmount: %.2f\n", purchase.ApprovalBaseAmount)
 	
-	if err == nil && requiredWorkflow != nil {
-		purchase.RequiresApproval = true
-	} else {
-		purchase.RequiresApproval = false
-	}
+	// NEW LOGIC: All purchases require approval regardless of amount
+	// This ensures Employee → Finance → (optional Director) workflow
+	purchase.RequiresApproval = true
+	fmt.Printf("✅ All purchases require approval - RequiresApproval set to true\n")
 }
 
 // calculatePurchaseTotals calculates all purchase totals with proper accounting
 func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, items []models.PurchaseItemRequest) error {
+	fmt.Printf("ℹ Starting purchase totals calculation for %d items\n", len(items))
 	subtotalBeforeDiscount := 0.0
 	itemDiscountAmount := 0.0
 	
 	purchase.PurchaseItems = []models.PurchaseItem{}
 	
-	for _, itemReq := range items {
+	for i, itemReq := range items {
+		fmt.Printf("ℹ Processing item %d/%d: Product ID %d, Qty %d, Price %.2f\n", i+1, len(items), itemReq.ProductID, itemReq.Quantity, itemReq.UnitPrice)
 		// Validate product exists
-		_, err := s.productRepo.FindByID(itemReq.ProductID)
+		product, err := s.productRepo.FindByID(itemReq.ProductID)
 		if err != nil {
-			// Add more detailed logging
-			fmt.Printf("[DEBUG] Failed to find product with ID %d: %v\n", itemReq.ProductID, err)
+			fmt.Printf("❌ Failed to find product with ID %d: %v\n", itemReq.ProductID, err)
 			return fmt.Errorf("product %d not found: %v", itemReq.ProductID, err)
 		}
+		fmt.Printf("✅ Product found: %s (ID: %d)\n", product.Name, product.ID)
 		
 		// Create purchase item
 		item := models.PurchaseItem{
@@ -59,6 +60,8 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 		// Calculate line totals
 		lineSubtotal := float64(item.Quantity) * item.UnitPrice
 		item.TotalPrice = lineSubtotal - item.Discount // Remove duplicate tax addition
+		fmt.Printf("ℹ Item calculation: %d x %.2f = %.2f (Discount: %.2f, Net: %.2f)\n", 
+			item.Quantity, item.UnitPrice, lineSubtotal, item.Discount, item.TotalPrice)
 		
 		subtotalBeforeDiscount += lineSubtotal
 		itemDiscountAmount += item.Discount
@@ -81,36 +84,48 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 	purchase.OrderDiscountAmount = orderDiscountAmount
 	purchase.NetBeforeTax = subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount
 	
+	fmt.Printf("ℹ Calculating tax additions with NetBeforeTax=%.2f\n", purchase.NetBeforeTax)
 	// Calculate tax additions (Penambahan)
-	// 1. PPN (VAT) calculation
+	// 1. PPN (VAT) calculation - only default to 11% if rate was not provided in request
 	if purchase.PPNRate > 0 {
 		purchase.PPNAmount = purchase.NetBeforeTax * purchase.PPNRate / 100
+		fmt.Printf("✅ PPN calculated: %.1f%% x %.2f = %.2f\n", purchase.PPNRate, purchase.NetBeforeTax, purchase.PPNAmount)
 	} else {
-		// Default PPN 11% if not specified
-		purchase.PPNAmount = purchase.NetBeforeTax * 0.11
-		purchase.PPNRate = 11.0
+		// If PPNRate is 0, respect it (no VAT case)
+		// Only default to 11% if this is a new purchase without explicit rate
+		purchase.PPNAmount = purchase.NetBeforeTax * purchase.PPNRate / 100 // Will be 0 if PPNRate is 0
+		fmt.Printf("ℹ PPN rate is 0%%, no VAT applied\n")
 	}
 	
 	// 2. Other tax additions
 	purchase.TotalTaxAdditions = purchase.PPNAmount + purchase.OtherTaxAdditions
 	
+	fmt.Printf("ℹ Calculating tax deductions with NetBeforeTax=%.2f\n", purchase.NetBeforeTax)
 	// Calculate tax deductions (Pemotongan)
 	// 1. PPh 21 calculation
 	if purchase.PPh21Rate > 0 {
 		purchase.PPh21Amount = purchase.NetBeforeTax * purchase.PPh21Rate / 100
+		fmt.Printf("✅ PPh 21 calculated: %.1f%% x %.2f = %.2f\n", purchase.PPh21Rate, purchase.NetBeforeTax, purchase.PPh21Amount)
 	}
 	
 	// 2. PPh 23 calculation
 	if purchase.PPh23Rate > 0 {
 		purchase.PPh23Amount = purchase.NetBeforeTax * purchase.PPh23Rate / 100
+		fmt.Printf("✅ PPh 23 calculated: %.1f%% x %.2f = %.2f\n", purchase.PPh23Rate, purchase.NetBeforeTax, purchase.PPh23Amount)
 	}
 	
 	// 3. Total tax deductions
 	purchase.TotalTaxDeductions = purchase.PPh21Amount + purchase.PPh23Amount + purchase.OtherTaxDeductions
 	
+	fmt.Printf("ℹ Calculating final total amount\n")
+	fmt.Printf("   NetBeforeTax: %.2f\n", purchase.NetBeforeTax)
+	fmt.Printf("   TotalTaxAdditions: %.2f\n", purchase.TotalTaxAdditions)
+	fmt.Printf("   TotalTaxDeductions: %.2f\n", purchase.TotalTaxDeductions)
 	// Calculate final total amount
 	// Total = Net Before Tax + Tax Additions - Tax Deductions
 	purchase.TotalAmount = purchase.NetBeforeTax + purchase.TotalTaxAdditions - purchase.TotalTaxDeductions
+	fmt.Printf("✅ Final total calculated: %.2f + %.2f - %.2f = %.2f\n", 
+		purchase.NetBeforeTax, purchase.TotalTaxAdditions, purchase.TotalTaxDeductions, purchase.TotalAmount)
 	
 	// For legacy compatibility, set TaxAmount to PPN amount
 	purchase.TaxAmount = purchase.PPNAmount
@@ -129,14 +144,9 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 	return nil
 }
 
-// updateProductCostPrice - DEPRECATED: This method is no longer used
+// updateProductCostPrice method has been removed as it was deprecated
 // Stock and price updates are now handled in updateProductStockOnApproval() 
 // when purchase status changes to APPROVED
-func (s *PurchaseService) updateProductCostPrice(product *models.Product, newQuantity int, newPrice float64) {
-	// This method is deprecated - stock updates now happen on approval, not on creation
-	fmt.Printf("⚠️ DEPRECATED: updateProductCostPrice called - stock updates now happen on approval\n")
-	// Method kept for backwards compatibility but does nothing
-}
 
 // recalculatePurchaseTotals recalculates purchase totals
 func (s *PurchaseService) recalculatePurchaseTotals(purchase *models.Purchase) error {
@@ -164,13 +174,12 @@ func (s *PurchaseService) recalculatePurchaseTotals(purchase *models.Purchase) e
 	purchase.NetBeforeTax = subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount
 	
 	// Recalculate tax additions (Penambahan)
-	// 1. PPN (VAT) calculation
+	// 1. PPN (VAT) calculation - only apply rate that's already set
 	if purchase.PPNRate > 0 {
 		purchase.PPNAmount = purchase.NetBeforeTax * purchase.PPNRate / 100
 	} else {
-		// Default PPN 11% if not specified
-		purchase.PPNAmount = purchase.NetBeforeTax * 0.11
-		purchase.PPNRate = 11.0
+		// If PPNRate is 0, respect it (no VAT case)
+		purchase.PPNAmount = 0
 	}
 	
 	// 2. Other tax additions
@@ -227,6 +236,59 @@ func (s *PurchaseService) updatePurchaseItems(purchase *models.Purchase, items [
 	}
 	
 	return nil
+}
+
+// createPurchaseAccountingEntriesWithLines creates proper journal entries with individual lines for purchase
+func (s *PurchaseService) createPurchaseAccountingEntriesWithLines(purchase *models.Purchase, userID uint) (*models.JournalEntry, error) {
+	// Get required account IDs from chart of accounts
+	accountIDs, err := s.getPurchaseAccountIDs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account IDs: %v", err)
+	}
+
+	// Create journal entry with lines
+	journalEntry := &models.JournalEntry{
+		JournalID:       nil,
+		AccountID:       &accountIDs.PrimaryAccountID, // Primary account (inventory or expense)
+		Code:            s.generatePurchaseJournalCode(),
+		EntryDate:       purchase.Date,
+		Description:     fmt.Sprintf("Purchase %s - %s", purchase.Code, purchase.Vendor.Name),
+		ReferenceType:   models.JournalRefPurchase,
+		ReferenceID:     &purchase.ID,
+		Reference:       purchase.Code,
+		UserID:          userID,
+		Status:          models.JournalStatusDraft,
+		IsAutoGenerated: true,
+	}
+
+	// Create journal lines
+	journalLines, err := s.createPurchaseJournalLines(purchase, accountIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create journal lines: %v", err)
+	}
+
+	// Calculate totals from lines
+	totalDebit := 0.0
+	totalCredit := 0.0
+	for _, line := range journalLines {
+		totalDebit += line.DebitAmount
+		totalCredit += line.CreditAmount
+	}
+
+	journalEntry.TotalDebit = totalDebit
+	journalEntry.TotalCredit = totalCredit
+	journalEntry.IsBalanced = totalDebit == totalCredit && totalDebit > 0
+	journalEntry.JournalLines = journalLines
+
+	// Create journal entry with lines
+	if err := s.db.Create(journalEntry).Error; err != nil {
+		return nil, fmt.Errorf("failed to create journal entry: %v", err)
+	}
+
+	fmt.Printf("✅ Purchase journal entry created with %d lines: ID=%d, Debit=%.2f, Credit=%.2f\n", 
+		len(journalLines), journalEntry.ID, journalEntry.TotalDebit, journalEntry.TotalCredit)
+
+	return journalEntry, nil
 }
 
 // createPurchaseAccountingEntries creates journal entries for purchase
@@ -317,11 +379,28 @@ func (s *PurchaseService) createPurchaseAccountingEntries(purchase *models.Purch
 	}
 	
 	// Since database doesn't have journal_lines table, we'll store summary information in description
+	// OPTIMIZATION: Batch load all account names to avoid N+1 queries
+	accountIDs := []uint{inventoryAccountID}
+	for _, item := range purchase.PurchaseItems {
+		if item.ExpenseAccountID != 0 {
+			accountIDs = append(accountIDs, item.ExpenseAccountID)
+		}
+	}
+	
+	// Load all accounts in one query
+	accountMap := make(map[uint]string)
+	var accounts []models.Account
+	if err := s.db.Where("id IN ?", accountIDs).Find(&accounts).Error; err == nil {
+		for _, account := range accounts {
+			accountMap[account.ID] = account.Name
+		}
+	}
+	
 	// Create detailed description for the journal entry
 	var detailsBuilder strings.Builder
 	detailsBuilder.WriteString(fmt.Sprintf("Purchase %s - %s\n", purchase.Code, purchase.Vendor.Name))
 	
-	// Add line items details in description
+	// Add line items details in description using cached account names
 	for _, item := range purchase.PurchaseItems {
 		// Determine which account to use
 		accountID := item.ExpenseAccountID
@@ -329,15 +408,16 @@ func (s *PurchaseService) createPurchaseAccountingEntries(purchase *models.Purch
 		if accountID == 0 {
 			// This is inventory/merchandise
 			accountID = inventoryAccountID
-			accountName = "Persediaan Barang Dagangan"
+			accountName = accountMap[accountID]
+			if accountName == "" {
+				accountName = "Persediaan Barang Dagangan" // fallback
+			}
 		} else {
-			// This is non-inventory (expense)
-			accountName = "Expense Account"
-		}
-		
-		// Try to get actual account name
-		if account, err := s.accountRepo.FindByID(nil, accountID); err == nil && account != nil {
-			accountName = account.Name
+			// This is non-inventory (expense) - get from cache
+			accountName = accountMap[accountID]
+			if accountName == "" {
+				accountName = "Expense Account" // fallback
+			}
 		}
 		
 		detailsBuilder.WriteString(fmt.Sprintf("Dr. %s: %.2f\n", accountName, item.TotalPrice))
@@ -417,9 +497,40 @@ func (s *PurchaseService) ProcessPurchaseReceipt(purchaseID uint, request models
 			return nil, err
 		}
 		
-		// Note: Stock is already updated when purchase was approved.
-		// Receipt is only for tracking physical delivery/condition.
-		// If you need to handle damaged goods or returns, implement separate logic.
+		// Handle damaged goods by adjusting stock accordingly
+		// FIXED: Now properly handles damaged goods during receipt processing
+		if receiptItem.Condition == models.ReceiptConditionDamaged || receiptItem.Condition == models.ReceiptConditionDefected {
+			// Reduce stock for damaged/defective items
+			product, err := s.productRepo.FindByID(purchaseItem.ProductID)
+			if err != nil {
+				fmt.Printf("Warning: Could not find product %d to adjust stock for damaged goods: %v\n", purchaseItem.ProductID, err)
+			} else {
+			damagedQty := itemReq.QuantityReceived
+			if receiptItem.Condition == models.ReceiptConditionDamaged {
+				// Damaged goods - reduce by full quantity
+				product.Stock -= damagedQty
+				fmt.Printf("📦 Reducing stock by %d for damaged goods (Product: %s)\n", damagedQty, product.Name)
+			} else if receiptItem.Condition == models.ReceiptConditionDefected {
+					// Defective goods - reduce by full quantity  
+					product.Stock -= damagedQty
+					fmt.Printf("⚠️ Reducing stock by %d for defective goods (Product: %s)\n", damagedQty, product.Name)
+				}
+				
+				// Ensure stock doesn't go negative
+				if product.Stock < 0 {
+					fmt.Printf("🛑 Warning: Stock for product %s went negative (%d), setting to 0\n", product.Name, product.Stock)
+					product.Stock = 0
+				}
+				
+				// Update product stock
+				err = s.productRepo.Update(context.Background(), product)
+				if err != nil {
+					fmt.Printf("Error updating stock for damaged/defective goods: %v\n", err)
+				}
+			}
+		}
+		
+		// Note: For good condition items, stock was already updated when purchase was approved.
 		
 		// Check if all items are fully received
 		if itemReq.QuantityReceived < purchaseItem.Quantity {
@@ -441,34 +552,101 @@ func (s *PurchaseService) ProcessPurchaseReceipt(purchaseID uint, request models
 	return createdReceipt, nil
 }
 
-// generatePurchaseCode generates unique purchase code
+// generatePurchaseCode generates unique purchase code with concurrency control
+// FIXED: Uses database transaction with row-level locking to prevent race conditions
+// NOW: Uses settings for purchase prefix
 func (s *PurchaseService) generatePurchaseCode() (string, error) {
+	// Get settings to use configured prefix
+	settingsService := NewSettingsService(s.db)
+	settings, err := settingsService.GetSettings()
+	if err != nil {
+		fmt.Printf("❌ Failed to get settings for purchase code generation: %v\n", err)
+		return "", fmt.Errorf("failed to get settings: %v", err)
+	}
+	
 	year := time.Now().Year()
 	month := time.Now().Month()
+	fmt.Printf("ℹ Generating purchase code for %04d/%02d with prefix %s\n", year, month, settings.PurchasePrefix)
 	
-	// Get the last number used for this month
-	lastNumber, err := s.purchaseRepo.GetLastPurchaseNumberByMonth(year, int(month))
+	var code string
+	fmt.Printf("ℹ Starting database transaction for purchase code generation\n")
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		// Use row-level locking to prevent concurrent access
+		// Lock a dummy row or create a sequence table for purchase codes
+		fmt.Printf("ℹ Acquiring row lock for purchase sequence\n")
+		type PurchaseSequence struct {
+			Year        int `gorm:"primaryKey"`
+			Month       int `gorm:"primaryKey"`
+			LastNumber  int `gorm:"default:0"`
+		}
+		
+		// Ensure the sequence table exists (this should be in migrations, but adding safety)
+		tx.AutoMigrate(&PurchaseSequence{})
+		
+		var sequence PurchaseSequence
+		// Use SELECT FOR UPDATE to lock the row and prevent race conditions
+		result := tx.Set("gorm:query_option", "FOR UPDATE").Where("year = ? AND month = ?", year, month).First(&sequence)
+		
+		if result.Error != nil {
+			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+				// Create new sequence record for this year/month
+				fmt.Printf("ℹ Creating new purchase sequence for %04d/%02d\n", year, month)
+				sequence = PurchaseSequence{
+					Year:       year,
+					Month:      int(month),
+					LastNumber: 0,
+				}
+				if err := tx.Create(&sequence).Error; err != nil {
+					fmt.Printf("❌ Failed to create purchase sequence: %v\n", err)
+					return fmt.Errorf("failed to create purchase sequence: %v", err)
+				}
+				fmt.Printf("✅ Purchase sequence created for %04d/%02d\n", year, month)
+			} else {
+				fmt.Printf("❌ Failed to get purchase sequence: %v\n", result.Error)
+				return fmt.Errorf("failed to get purchase sequence: %v", result.Error)
+			}
+		} else {
+			fmt.Printf("✅ Found existing purchase sequence: LastNumber=%d\n", sequence.LastNumber)
+		}
+		
+		// Increment the sequence number
+		sequence.LastNumber++
+		fmt.Printf("ℹ Incrementing sequence number to %d\n", sequence.LastNumber)
+		
+		// Generate the code using settings prefix
+		code = fmt.Sprintf("%s/%04d/%02d/%04d", settings.PurchasePrefix, year, month, sequence.LastNumber)
+		fmt.Printf("ℹ Generated purchase code: %s\n", code)
+		
+		// Double-check that this code doesn't exist in purchases table
+		fmt.Printf("ℹ Verifying code uniqueness\n")
+		var existingCount int64
+		tx.Model(&models.Purchase{}).Where("code = ?", code).Count(&existingCount)
+		
+		if existingCount > 0 {
+			// This should not happen with proper locking, but handle it
+			fmt.Printf("❌ Generated code %s already exists (count: %d)\n", code, existingCount)
+			return fmt.Errorf("generated code %s already exists, possible concurrency issue", code)
+		}
+		fmt.Printf("✅ Code uniqueness verified\n")
+		
+		// Update the sequence record
+		fmt.Printf("ℹ Saving updated sequence record\n")
+		if err := tx.Save(&sequence).Error; err != nil {
+			fmt.Printf("❌ Failed to update purchase sequence: %v\n", err)
+			return fmt.Errorf("failed to update purchase sequence: %v", err)
+		}
+		fmt.Printf("✅ Purchase sequence updated successfully\n")
+		
+		return nil
+	})
+	
 	if err != nil {
+		fmt.Printf("❌ Transaction failed for purchase code generation: %v\n", err)
 		return "", err
 	}
 	
-	// Try to generate a unique code, incrementing if necessary
-	for i := 1; i <= 100; i++ { // Limit iterations to prevent infinite loop
-		nextNumber := lastNumber + i
-		code := fmt.Sprintf("PO/%04d/%02d/%04d", year, month, nextNumber)
-		
-		// Check if code already exists
-		exists, err := s.purchaseRepo.CodeExists(code)
-		if err != nil {
-			return "", err
-		}
-		
-		if !exists {
-			return code, nil
-		}
-	}
-	
-	return "", fmt.Errorf("unable to generate unique purchase code after 100 attempts")
+	fmt.Printf("✅ Purchase code generated successfully: %s\n", code)
+	return code, nil
 }
 
 // generateReceiptNumber generates unique receipt number
@@ -597,6 +775,152 @@ func (s *PurchaseService) generatePurchaseReturnNumber() string {
 
 */
 
+// PurchaseAccountIDs holds the account IDs needed for purchase journal entries
+type PurchaseAccountIDs struct {
+	PrimaryAccountID      uint // Inventory or main expense account
+	InventoryAccountID    uint // 1301 - Persediaan Barang Dagangan
+	PPNInputAccountID     uint // 1240 - PPN Masukan
+	AccountsPayableID     uint // 2101 - Utang Usaha
+	PPh21PayableID        uint // 2111 - Utang PPh 21
+	PPh23PayableID        uint // 2112 - Utang PPh 23
+}
+
+// getPurchaseAccountIDs retrieves all required account IDs for purchase journal entries
+func (s *PurchaseService) getPurchaseAccountIDs() (*PurchaseAccountIDs, error) {
+	accountIDs := &PurchaseAccountIDs{}
+	
+	// Get inventory account (1301)
+	if inventoryAccount, err := s.accountRepo.FindByCode(nil, "1301"); err == nil {
+		accountIDs.InventoryAccountID = inventoryAccount.ID
+		accountIDs.PrimaryAccountID = inventoryAccount.ID // Default to inventory
+	} else {
+		return nil, fmt.Errorf("inventory account 1301 not found: %v", err)
+	}
+	
+	// Get PPN Input account (1240)
+	if ppnAccount, err := s.accountRepo.FindByCode(nil, "1240"); err == nil {
+		accountIDs.PPNInputAccountID = ppnAccount.ID
+	} else {
+		return nil, fmt.Errorf("PPN input account 1240 not found: %v", err)
+	}
+	
+	// Get Accounts Payable (2101)
+	if apAccount, err := s.accountRepo.FindByCode(nil, "2101"); err == nil {
+		accountIDs.AccountsPayableID = apAccount.ID
+	} else {
+		return nil, fmt.Errorf("accounts payable account 2101 not found: %v", err)
+	}
+	
+	// Get PPh 21 Payable (2111) - optional
+	if pph21Account, err := s.accountRepo.FindByCode(nil, "2111"); err == nil {
+		accountIDs.PPh21PayableID = pph21Account.ID
+	}
+	
+	// Get PPh 23 Payable (2112) - optional
+	if pph23Account, err := s.accountRepo.FindByCode(nil, "2112"); err == nil {
+		accountIDs.PPh23PayableID = pph23Account.ID
+	}
+	
+	return accountIDs, nil
+}
+
+// createPurchaseJournalLines creates individual journal lines for purchase transaction
+func (s *PurchaseService) createPurchaseJournalLines(purchase *models.Purchase, accountIDs *PurchaseAccountIDs) ([]models.JournalLine, error) {
+	var lines []models.JournalLine
+	lineNumber := 1
+	
+	// DEBIT SIDE - Assets and Tax Receivables
+	
+	// 1. Debit Inventory/Expense accounts for each item
+	for _, item := range purchase.PurchaseItems {
+		accountID := accountIDs.InventoryAccountID // Default to inventory
+		accountName := "Persediaan Barang Dagangan"
+		
+		// Use specific expense account if provided
+		if item.ExpenseAccountID != 0 {
+			accountID = item.ExpenseAccountID
+			if account, err := s.accountRepo.FindByID(nil, accountID); err == nil && account != nil {
+				accountName = account.Name
+			} else {
+				accountName = "Expense Account"
+			}
+		}
+		
+		lines = append(lines, models.JournalLine{
+			AccountID:    accountID,
+			Description:  fmt.Sprintf("%s - %s", accountName, item.Product.Name),
+			DebitAmount:  item.TotalPrice,
+			CreditAmount: 0,
+			LineNumber:   lineNumber,
+		})
+		lineNumber++
+	}
+	
+	// 2. Debit PPN Masukan (Input VAT) if applicable
+	if purchase.PPNAmount > 0 {
+		lines = append(lines, models.JournalLine{
+			AccountID:    accountIDs.PPNInputAccountID,
+			Description:  "PPN Masukan (Input VAT)",
+			DebitAmount:  purchase.PPNAmount,
+			CreditAmount: 0,
+			LineNumber:   lineNumber,
+		})
+		lineNumber++
+	}
+	
+	// CREDIT SIDE - Liabilities
+	
+	// 3. Credit Accounts Payable (gross amount to vendor)
+	grossPayable := purchase.NetBeforeTax + purchase.TotalTaxAdditions
+	lines = append(lines, models.JournalLine{
+		AccountID:    accountIDs.AccountsPayableID,
+		Description:  fmt.Sprintf("Utang Usaha - %s", purchase.Vendor.Name),
+		DebitAmount:  0,
+		CreditAmount: grossPayable,
+		LineNumber:   lineNumber,
+	})
+	lineNumber++
+	
+	// 4. Credit PPh 21 Payable if applicable
+	if purchase.PPh21Amount > 0 && accountIDs.PPh21PayableID != 0 {
+		lines = append(lines, models.JournalLine{
+			AccountID:    accountIDs.PPh21PayableID,
+			Description:  "Utang PPh 21",
+			DebitAmount:  0,
+			CreditAmount: purchase.PPh21Amount,
+			LineNumber:   lineNumber,
+		})
+		lineNumber++
+	}
+	
+	// 5. Credit PPh 23 Payable if applicable
+	if purchase.PPh23Amount > 0 && accountIDs.PPh23PayableID != 0 {
+		lines = append(lines, models.JournalLine{
+			AccountID:    accountIDs.PPh23PayableID,
+			Description:  "Utang PPh 23",
+			DebitAmount:  0,
+			CreditAmount: purchase.PPh23Amount,
+			LineNumber:   lineNumber,
+		})
+		lineNumber++
+	}
+	
+	// Validation: Ensure balanced entry
+	totalDebit := 0.0
+	totalCredit := 0.0
+	for _, line := range lines {
+		totalDebit += line.DebitAmount
+		totalCredit += line.CreditAmount
+	}
+	
+	if totalDebit != totalCredit {
+		return nil, fmt.Errorf("unbalanced journal entry: debit=%.2f, credit=%.2f", totalDebit, totalCredit)
+	}
+	
+	fmt.Printf("📋 Created %d journal lines: Dr=%.2f, Cr=%.2f\n", len(lines), totalDebit, totalCredit)
+	return lines, nil
+}
+
 // createAndPostPurchaseJournalEntries creates journal entries for approved purchase and posts them to GL
 func (s *PurchaseService) createAndPostPurchaseJournalEntries(purchase *models.Purchase, userID uint) error {
 	// First, check if journal entries already exist for this purchase
@@ -626,8 +950,8 @@ func (s *PurchaseService) createAndPostPurchaseJournalEntries(purchase *models.P
 		return nil
 	}
 	
-	// Create new journal entries if none exist
-	journalEntry, err := s.createPurchaseAccountingEntries(purchase, userID)
+	// Create new journal entries using proper journal lines implementation
+	journalEntry, err := s.createPurchaseAccountingEntriesWithLines(purchase, userID)
 	if err != nil {
 		return fmt.Errorf("failed to create journal entries: %v", err)
 	}

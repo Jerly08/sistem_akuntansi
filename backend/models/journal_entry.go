@@ -1,8 +1,10 @@
 package models
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 	"gorm.io/gorm"
 )
@@ -117,18 +119,184 @@ type JournalEntryUpdateRequest struct {
 
 // Validation methods
 func (je *JournalEntry) ValidateBalance() bool {
-	var totalDebit, totalCredit float64
-	
-	for _, line := range je.JournalLines {
-		totalDebit += line.DebitAmount
-		totalCredit += line.CreditAmount
+	// If we have journal lines, calculate from lines
+	if len(je.JournalLines) > 0 {
+		var totalDebit, totalCredit float64
+		
+		for _, line := range je.JournalLines {
+			totalDebit += line.DebitAmount
+			totalCredit += line.CreditAmount
+		}
+		
+		je.TotalDebit = totalDebit
+		je.TotalCredit = totalCredit
+	} else {
+		// For simplified entries without lines, validate the totals directly
+		// Ensure totals are properly set and not zero
+		if je.TotalDebit == 0 && je.TotalCredit == 0 {
+			je.IsBalanced = false
+			return false
+		}
 	}
 	
-	je.TotalDebit = totalDebit
-	je.TotalCredit = totalCredit
-	je.IsBalanced = (totalDebit == totalCredit) && (totalDebit > 0)
+	// Balance validation: debit must equal credit and both must be positive
+	je.IsBalanced = (je.TotalDebit == je.TotalCredit) && (je.TotalDebit > 0)
 	
 	return je.IsBalanced
+}
+
+// ValidateAmounts validates that amounts are not negative and not excessively large
+func (je *JournalEntry) ValidateAmounts() error {
+	const maxAmount = 999999999999.99 // Maximum for decimal(15,2)
+	
+	if je.TotalDebit < 0 || je.TotalCredit < 0 {
+		return fmt.Errorf("journal entry amounts cannot be negative")
+	}
+	
+	if je.TotalDebit > maxAmount || je.TotalCredit > maxAmount {
+		return fmt.Errorf("journal entry amounts exceed maximum allowed value")
+	}
+	
+	return nil
+}
+
+// ValidateComplete performs comprehensive validation
+func (je *JournalEntry) ValidateComplete() error {
+	// 1. Validate amounts
+	if err := je.ValidateAmounts(); err != nil {
+		return err
+	}
+	
+	// 2. Validate balance
+	if !je.ValidateBalance() {
+		return fmt.Errorf("journal entry is not balanced: debit=%.2f, credit=%.2f", je.TotalDebit, je.TotalCredit)
+	}
+	
+	// 3. Validate required fields
+	if strings.TrimSpace(je.Description) == "" {
+		return fmt.Errorf("journal entry description is required")
+	}
+	
+	if je.UserID == 0 {
+		return fmt.Errorf("journal entry user ID is required")
+	}
+	
+	// 4. Validate entry date
+	if je.EntryDate.IsZero() {
+		return fmt.Errorf("journal entry date is required")
+	}
+	
+	// 5. Future date validation (allow max 7 days in future)
+	if je.EntryDate.After(time.Now().AddDate(0, 0, 7)) {
+		return fmt.Errorf("journal entry date cannot be more than 7 days in the future")
+	}
+	
+	return nil
+}
+
+// ValidateBusinessRules performs comprehensive business rule validation
+func (je *JournalEntry) ValidateBusinessRules(tx *gorm.DB) error {
+	// 1. Balance validation
+	if !je.ValidateBalance() {
+		return errors.New("journal entry is not balanced")
+	}
+	
+	// 2. Amount validation
+	if je.TotalDebit < 0 || je.TotalCredit < 0 {
+		return errors.New("journal amounts cannot be negative")
+	}
+	
+	if je.TotalDebit == 0 && je.TotalCredit == 0 {
+		return errors.New("journal entry cannot have zero amounts")
+	}
+	
+	// 3. Date validation
+	if je.EntryDate.IsZero() {
+		return errors.New("entry date is required")
+	}
+	
+	// Future date validation (allow max 7 days in future)
+	if je.EntryDate.After(time.Now().AddDate(0, 0, 7)) {
+		return errors.New("entry date cannot be more than 7 days in the future")
+	}
+	
+	// 4. Account validation
+	if err := je.validateAccountCompatibility(tx); err != nil {
+		return err
+	}
+	
+	// 5. Period validation
+	if err := je.validatePeriodOpen(tx); err != nil {
+		return err
+	}
+	
+	// 6. Required fields validation
+	if strings.TrimSpace(je.Description) == "" {
+		return errors.New("description is required")
+	}
+	
+	if je.UserID == 0 {
+		return errors.New("user ID is required")
+	}
+	
+	return nil
+}
+
+// validateAccountCompatibility validates account-related business rules
+func (je *JournalEntry) validateAccountCompatibility(tx *gorm.DB) error {
+	for _, line := range je.JournalLines {
+		var account Account
+		if err := tx.First(&account, line.AccountID).Error; err != nil {
+			return fmt.Errorf("account %d not found", line.AccountID)
+		}
+		
+		// Check if account is active
+		if !account.IsActive {
+			return fmt.Errorf("account %s (%s) is inactive", account.Name, account.Code)
+		}
+		
+		// Check if account is header account
+		if account.IsHeader {
+			return fmt.Errorf("cannot post to header account %s (%s)", account.Name, account.Code)
+		}
+		
+		// Validate line amounts
+		if line.DebitAmount < 0 || line.CreditAmount < 0 {
+			return fmt.Errorf("line amounts cannot be negative for account %s", account.Name)
+		}
+		
+		if line.DebitAmount > 0 && line.CreditAmount > 0 {
+			return fmt.Errorf("line cannot have both debit and credit amounts for account %s", account.Name)
+		}
+		
+		if line.DebitAmount == 0 && line.CreditAmount == 0 {
+			return fmt.Errorf("line must have either debit or credit amount for account %s", account.Name)
+		}
+	}
+	
+	return nil
+}
+
+// validatePeriodOpen checks if accounting period is open for posting
+func (je *JournalEntry) validatePeriodOpen(tx *gorm.DB) error {
+	// Check if accounting period is closed
+	year := je.EntryDate.Year()
+	month := je.EntryDate.Month()
+	
+	var periodStatus AccountingPeriod
+	err := tx.Where("year = ? AND month = ?", year, int(month)).First(&periodStatus).Error
+	
+	if err == nil && periodStatus.IsClosed {
+		return fmt.Errorf("cannot post to closed accounting period: %04d-%02d", year, month)
+	}
+	
+	// Check if period is too old (e.g., more than 2 years ago)
+	twoYearsAgo := time.Now().AddDate(-2, 0, 0)
+	if je.EntryDate.Before(twoYearsAgo) {
+		return errors.New("cannot post entries more than 2 years old without special approval")
+	}
+	
+	return nil
 }
 
 // GORM Hooks
@@ -187,9 +355,10 @@ func (je *JournalEntry) BeforeCreate(tx *gorm.DB) error {
 }
 
 func (je *JournalEntry) BeforeSave(tx *gorm.DB) error {
-	// Note: ValidateBalance() has been disabled because we're not using journal lines anymore
-	// The totals are now set directly when creating the journal entry
-	// je.ValidateBalance()
+	// Always validate balance before saving
+	if !je.ValidateBalance() {
+		return fmt.Errorf("journal entry is not balanced: debit=%.2f, credit=%.2f", je.TotalDebit, je.TotalCredit)
+	}
 	return nil
 }
 

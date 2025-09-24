@@ -79,6 +79,29 @@ noted.txt
 *.noted.txt
 
 # Upload files
+/backend/uploads/
+/backend/uploads/**
 
+# Backend temporary and build artifacts
+/backend/temp_binary
+/backend/temp_build
+/backend/test_build
+/backend/test_fixed_build
+/backend/temp*/
+/backend/test*/
+/backend/bin/
+/backend/logs/
+/backend/**/*.bak
+/backend/**/*.backup
+/backend/**/*.log
+/backend/**/*.tmp
+
+# Backend generated reports and metrics (non-source)
+/backend/ssot_metrics_*.json
+/backend/purchase_report_*.json
+
+# Swagger backups
+/backend/docs/swagger_backup_*.yaml
+/backend/docs/swagger_backup_*.yml
 
 /backup

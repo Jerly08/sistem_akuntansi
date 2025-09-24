@@ -100,7 +100,7 @@ const UsersPage: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
+        const res = await fetch(`/api/v1/users`, {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
           },
@@ -198,7 +198,7 @@ const UsersPage: React.FC = () => {
     }
     
     try {
-      const response = await fetch(`http://localhost:8080/api/v1/users/${userId}`, {
+      const response = await fetch(`/api/v1/users/${userId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -210,7 +210,7 @@ const UsersPage: React.FC = () => {
       }
       
       // Refresh users list
-      const res = await fetch('http://localhost:8080/api/v1/users', {
+      const res = await fetch('/api/v1/users', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -305,8 +305,8 @@ const UsersPage: React.FC = () => {
       }
       
       const url = isEditMode 
-        ? `http://localhost:8080/api/v1/users/${selectedUser?.id}`
-        : 'http://localhost:8080/api/v1/users';
+        ? `/api/v1/users/${selectedUser?.id}`
+        : '/api/v1/users';
         
       const response = await fetch(url, {
         method: isEditMode ? 'PUT' : 'POST',
@@ -325,7 +325,7 @@ const UsersPage: React.FC = () => {
       const newUser = await response.json();
       
       // Refresh the users list
-      const res = await fetch('http://localhost:8080/api/v1/users', {
+      const res = await fetch('/api/v1/users', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },

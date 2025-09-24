@@ -2,7 +2,6 @@ package database
 
 import (
 	"log"
-	"time"
 	"app-sistem-akuntansi/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -51,7 +50,9 @@ func SeedData(db *gorm.DB) {
 	// Seed default approval workflows for PURCHASE module
 	seedApprovalWorkflows(db)
 
-	// Sample sales and purchases seeding removed to prevent errors
+	// REMOVED: Sample sales and purchases seeding to use only real data
+	// No dummy data will be generated for sales, purchases, or transactions
+	// Dashboard will display only actual business data
 
 	log.Println("Database seeding completed successfully")
 }
@@ -618,7 +619,9 @@ func seedApprovalWorkflows(db *gorm.DB) {
 	db.Create(&stepC2)
 }
 
-// seedSampleSales creates sample sales data for dashboard analytics
+// REMOVED: seedSampleSales creates sample sales data for dashboard analytics
+// This function is disabled to prevent dummy data generation
+/*
 func seedSampleSales(db *gorm.DB) {
 	// Check if specific sample sales already exist
 	var sampleSalesExists int64
@@ -727,8 +730,11 @@ func seedSampleSales(db *gorm.DB) {
 		db.Create(&saleItem)
 	}
 }
+*/
 
-// seedSamplePurchases creates sample purchases data for dashboard analytics
+// REMOVED: seedSamplePurchases creates sample purchases data for dashboard analytics
+// This function is disabled to prevent dummy data generation
+/*
 func seedSamplePurchases(db *gorm.DB) {
 	// Check if specific sample purchases already exist
 	var samplePurchasesExists int64
@@ -829,3 +835,4 @@ func seedSamplePurchases(db *gorm.DB) {
 		db.Create(&purchaseItem)
 	}
 }
+*/

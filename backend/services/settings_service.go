@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
+	"encoding/json"
+	"reflect"
 	"app-sistem-akuntansi/models"
 	"gorm.io/gorm"
 )
@@ -60,6 +63,9 @@ func (s *SettingsService) UpdateSettings(updates map[string]interface{}, userID 
 		}
 	}
 	
+	// Capture old values for audit logging
+	oldValues := s.captureCurrentValues(&settings, updates)
+	
 	// Add the user who is updating
 	updates["updated_by"] = userID
 	
@@ -73,6 +79,9 @@ func (s *SettingsService) UpdateSettings(updates map[string]interface{}, userID 
 		log.Printf("Error updating settings: %v", err)
 		return err
 	}
+	
+	// Log changes to history
+	go s.logSettingsChanges(settings.ID, oldValues, updates, userID, "UPDATE")
 	
 	return nil
 }
@@ -107,6 +116,58 @@ func (s *SettingsService) validateSettings(updates map[string]interface{}) error
 		}
 	}
 	
+	// Validate date format
+	if dateFormat, ok := updates["date_format"].(string); ok {
+		validFormats := []string{"DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"}
+		isValid := false
+		for _, format := range validFormats {
+			if dateFormat == format {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			return errors.New("invalid date format")
+		}
+	}
+	
+	// Validate currency
+	if currency, ok := updates["currency"].(string); ok {
+		validCurrencies := []string{"IDR", "USD", "EUR", "SGD", "MYR"}
+		isValid := false
+		for _, curr := range validCurrencies {
+			if currency == curr {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			return errors.New("invalid currency code")
+		}
+	}
+	
+	// Validate prefixes (non-empty and alphanumeric)
+	prefixes := []string{"invoice_prefix", "quote_prefix", "purchase_prefix"}
+	for _, prefix := range prefixes {
+		if value, ok := updates[prefix].(string); ok {
+			if value == "" {
+				return fmt.Errorf("%s cannot be empty", prefix)
+			}
+			if len(value) > 10 {
+				return fmt.Errorf("%s cannot be longer than 10 characters", prefix)
+			}
+		}
+	}
+	
+	// Validate next numbers (must be positive)
+	nextNumbers := []string{"invoice_next_number", "quote_next_number", "purchase_next_number"}
+	for _, nextNum := range nextNumbers {
+		if value, ok := updates[nextNum].(int); ok {
+			if value < 1 {
+				return fmt.Errorf("%s must be at least 1", nextNum)
+			}
+		}
+	}
 	
 	return nil
 }
@@ -268,4 +329,196 @@ func formatInvoiceNumber(prefix string, number int) string {
 func formatNumberWithPadding(number int, padding int) string {
 	format := "%0" + string(rune(padding+'0')) + "d"
 	return fmt.Sprintf(format, number)
+}
+
+// ResetToDefaults resets all settings to default values
+func (s *SettingsService) ResetToDefaults(userID uint) error {
+	var settings models.Settings
+	
+	// Get existing settings or create if not exists
+	err := s.db.First(&settings).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			settings = s.createDefaultSettings()
+			if err := s.db.Create(&settings).Error; err != nil {
+				log.Printf("Error creating default settings: %v", err)
+				return err
+			}
+			return nil
+		}
+		log.Printf("Error fetching settings: %v", err)
+		return err
+	}
+	
+	// Reset to default values
+	defaultSettings := s.createDefaultSettings()
+	
+	// Keep the ID and preserve existing next numbers to avoid conflicts
+	defaultSettings.ID = settings.ID
+	defaultSettings.CreatedAt = settings.CreatedAt
+	defaultSettings.InvoiceNextNumber = settings.InvoiceNextNumber
+	defaultSettings.QuoteNextNumber = settings.QuoteNextNumber
+	defaultSettings.PurchaseNextNumber = settings.PurchaseNextNumber
+	defaultSettings.UpdatedBy = userID
+	
+	// Save the reset settings
+	if err := s.db.Save(&defaultSettings).Error; err != nil {
+		log.Printf("Error resetting settings to defaults: %v", err)
+		return err
+	}
+	
+	log.Printf("Settings reset to defaults by user %d", userID)
+	return nil
+}
+
+// GetValidationRules returns validation rules for settings
+func (s *SettingsService) GetValidationRules() map[string]interface{} {
+	return map[string]interface{}{
+		"date_formats":     []string{"DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD", "DD-MM-YYYY"},
+		"currencies":       []string{"IDR", "USD", "EUR", "SGD", "MYR"},
+		"languages":        []string{"id", "en"},
+		"tax_rate_range":   map[string]float64{"min": 0, "max": 100},
+		"decimal_places_range": map[string]int{"min": 0, "max": 4},
+		"prefix_max_length": 10,
+		"min_next_number":  1,
+	}
+}
+
+type SettingsHistoryResult struct {
+	Data       []models.SettingsHistoryResponse `json:"data"`
+	Total      int64                            `json:"total"`
+	Page       int                              `json:"page"`
+	Limit      int                              `json:"limit"`
+	TotalPages int                              `json:"total_pages"`
+}
+
+// GetSettingsHistory retrieves paginated settings history
+func (s *SettingsService) GetSettingsHistory(filter models.SettingsHistoryFilter) (*SettingsHistoryResult, error) {
+	var history []models.SettingsHistory
+	var total int64
+
+	query := s.db.Model(&models.SettingsHistory{}).Preload("User")
+
+	// Apply filters
+	if filter.Field != "" {
+		query = query.Where("field = ?", filter.Field)
+	}
+	if filter.Action != "" {
+		query = query.Where("action = ?", filter.Action)
+	}
+	if filter.ChangedBy != "" {
+		query = query.Where("changed_by = ?", filter.ChangedBy)
+	}
+	if filter.StartDate != "" {
+		query = query.Where("created_at >= ?", filter.StartDate)
+	}
+	if filter.EndDate != "" {
+		query = query.Where("created_at <= ?", filter.EndDate)
+	}
+
+	// Count total records
+	if err := query.Count(&total).Error; err != nil {
+		return nil, fmt.Errorf("failed to count settings history: %v", err)
+	}
+
+	// Apply pagination
+	offset := (filter.Page - 1) * filter.Limit
+	if err := query.Offset(offset).Limit(filter.Limit).Order("created_at DESC").Find(&history).Error; err != nil {
+		return nil, fmt.Errorf("failed to retrieve settings history: %v", err)
+	}
+
+	totalPages := int(math.Ceil(float64(total) / float64(filter.Limit)))
+
+	// Convert to response format
+	responses := make([]models.SettingsHistoryResponse, len(history))
+	for i, h := range history {
+		responses[i] = h.ToResponse()
+	}
+
+	return &SettingsHistoryResult{
+		Data:       responses,
+		Total:      total,
+		Page:       filter.Page,
+		Limit:      filter.Limit,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// Helper methods for audit logging
+
+// captureCurrentValues captures current values of fields that will be updated
+func (s *SettingsService) captureCurrentValues(settings *models.Settings, updates map[string]interface{}) map[string]interface{} {
+	oldValues := make(map[string]interface{})
+	
+	v := reflect.ValueOf(*settings)
+	t := reflect.TypeOf(*settings)
+	
+	for key := range updates {
+		// Skip meta fields
+		if key == "updated_by" || key == "updated_at" {
+			continue
+		}
+		
+		// Find field in struct
+		for i := 0; i < v.NumField(); i++ {
+			field := t.Field(i)
+			jsonTag := field.Tag.Get("json")
+			
+			// Parse json tag to get field name
+			fieldName := jsonTag
+			if commaIdx := len(jsonTag); commaIdx > 0 {
+				if idx := len(jsonTag); idx > 0 {
+					for j, char := range jsonTag {
+						if char == ',' {
+							fieldName = jsonTag[:j]
+							break
+						}
+					}
+				}
+			}
+			
+			if fieldName == key {
+				oldValues[key] = v.Field(i).Interface()
+				break
+			}
+		}
+	}
+	
+	return oldValues
+}
+
+// logSettingsChanges logs changes to settings_history table
+func (s *SettingsService) logSettingsChanges(settingsID uint, oldValues, newValues map[string]interface{}, userID uint, action string) {
+	for field, newValue := range newValues {
+		// Skip meta fields
+		if field == "updated_by" || field == "updated_at" {
+			continue
+		}
+		
+		oldValue := oldValues[field]
+		
+		// Skip if values are the same
+		if reflect.DeepEqual(oldValue, newValue) {
+			continue
+		}
+		
+		// Convert values to JSON strings
+		oldValueJSON, _ := json.Marshal(oldValue)
+		newValueJSON, _ := json.Marshal(newValue)
+		
+		// Create history record
+		history := models.SettingsHistory{
+			SettingsID: settingsID,
+			Field:      field,
+			OldValue:   string(oldValueJSON),
+			NewValue:   string(newValueJSON),
+			Action:     action,
+			ChangedBy:  userID,
+		}
+		
+		// Save history record
+		if err := s.db.Create(&history).Error; err != nil {
+			log.Printf("Error logging settings change for field %s: %v", field, err)
+		}
+	}
 }

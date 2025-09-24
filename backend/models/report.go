@@ -57,7 +57,7 @@ type FinancialRatio struct {
 	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
-type AccountBalance struct {
+type AccountPeriodBalance struct {
 	ID        uint           `json:"id" gorm:"primaryKey"`
 	AccountID uint           `json:"account_id" gorm:"not null;index"`
 	Period    string         `json:"period" gorm:"not null;size:7"` // YYYY-MM format

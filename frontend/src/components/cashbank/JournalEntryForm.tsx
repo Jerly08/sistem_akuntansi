@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   VStack,
@@ -31,12 +31,15 @@ import {
   Tooltip,
   Switch,
   FormErrorMessage,
+  useToast,
+  Spinner,
 } from '@chakra-ui/react';
-import { FiPlus, FiTrash2, FiInfo } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiInfo, FiActivity, FiCheckCircle } from 'react-icons/fi';
 import { ManualJournalEntry } from '@/services/cashbankService';
 import { Account } from '@/types/account';
 import { accountService } from '@/services/accountService';
 import { useAuth } from '@/contexts/AuthContext';
+import { BalanceWebSocketClient } from '@/services/balanceWebSocketService';
 
 interface JournalEntryFormProps {
   journalEntries: ManualJournalEntry[];
@@ -60,14 +63,51 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
   errors = {}
 }) => {
   const { token } = useAuth();
+  const toast = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isConnectedToBalanceService, setIsConnectedToBalanceService] = useState(false);
+  const balanceClientRef = useRef<BalanceWebSocketClient | null>(null);
 
   useEffect(() => {
     if (isEnabled && token) {
       loadAccounts();
+      initializeBalanceConnection();
     }
+    
+    return () => {
+      if (balanceClientRef.current) {
+        balanceClientRef.current.disconnect();
+      }
+    };
   }, [isEnabled, token]);
+  
+  const initializeBalanceConnection = async () => {
+    if (!token || !isEnabled) return;
+    
+    try {
+      balanceClientRef.current = new BalanceWebSocketClient();
+      await balanceClientRef.current.connect(token);
+      
+      balanceClientRef.current.onBalanceUpdate((data) => {
+        // Show toast notification when balance updates occur
+        toast({
+          title: 'Balance Updated',
+          description: `Account ${data.account_code}: ${data.balance.toLocaleString('id-ID')}`,
+          status: 'info',
+          duration: 3000,
+          isClosable: true,
+          position: 'bottom-right',
+          size: 'sm'
+        });
+      });
+      
+      setIsConnectedToBalanceService(true);
+    } catch (error) {
+      console.warn('Failed to connect to balance service:', error);
+      setIsConnectedToBalanceService(false);
+    }
+  };
 
   const loadAccounts = async () => {
     try {
@@ -78,6 +118,20 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
       setAccounts(filteredAccounts);
     } catch (error) {
       console.error('Error loading accounts:', error);
+      
+      // Enhanced error handling with user-friendly messages
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
+      toast({
+        title: 'Failed to Load Accounts',
+        description: `Unable to load account list: ${errorMessage}`,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      
+      // Set empty accounts array on error
+      setAccounts([]);
     } finally {
       setLoading(false);
     }
@@ -146,6 +200,35 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
           >
             {isEnabled ? 'MANUAL MODE' : 'AUTOMATIC MODE'}
           </Badge>
+          
+          {/* Real-time Connection Status */}
+          {isEnabled && (
+            <Tooltip 
+              label={isConnectedToBalanceService ? 'Connected to real-time balance updates' : 'Real-time balance updates unavailable'} 
+              fontSize="xs"
+            >
+              <Badge
+                colorScheme={isConnectedToBalanceService ? 'green' : 'yellow'}
+                variant="subtle"
+                fontSize="xs"
+                display="flex"
+                alignItems="center"
+                gap={1}
+              >
+                {isConnectedToBalanceService ? (
+                  <>
+                    <FiActivity size={10} />
+                    LIVE
+                  </>
+                ) : (
+                  <>
+                    <FiInfo size={10} />
+                    OFFLINE
+                  </>
+                )}
+              </Badge>
+            </Tooltip>
+          )}
         </HStack>
         
         {isEnabled && (

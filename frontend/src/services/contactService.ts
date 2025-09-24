@@ -4,9 +4,10 @@ import {
   ApiResponse,
   ApiError
 } from '@/types/contact';
+import { API_V1_BASE } from '@/config/api';
 
-// Base API URL - should be moved to environment variables
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+// Use centralized API configuration with consistent /api/v1 prefix
+const API_BASE_URL = API_V1_BASE;
 
 class ContactService {
 

@@ -69,7 +69,7 @@ func (jm *JWTManager) GenerateTokenPair(user models.User, deviceInfo, ipAddress 
 	}
 
 	// Generate access token
-	accessTokenExpiry := time.Now().Add(15 * time.Minute) // Short-lived
+	accessTokenExpiry := time.Now().Add(90 * time.Minute) // 90 minutes
 	accessClaims := &EnhancedClaims{
 		UserID:      user.ID,
 		Username:    user.Username,
@@ -140,7 +140,7 @@ func (jm *JWTManager) GenerateTokenPair(user models.User, deviceInfo, ipAddress 
 		AccessToken:  accessTokenString,
 		RefreshToken: refreshTokenString,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(15 * 60), // 15 minutes in seconds
+		ExpiresIn:    int64(90 * 60), // 90 minutes in seconds
 		ExpiresAt:    accessTokenExpiry,
 		User:         user,
 	}, nil
@@ -162,7 +162,7 @@ func (jm *JWTManager) GenerateTokenPair(user models.User, deviceInfo, ipAddress 
 					userID, username, sessionID, 
 					"", "", // IP and UserAgent will be empty here, should be passed from controller
 					success, failureReason,
-					time.Now().Add(15*time.Minute), // New token expiry
+					time.Now().Add(90*time.Minute), // New token expiry
 					refreshCount,
 				)
 			}
@@ -210,7 +210,7 @@ func (jm *JWTManager) GenerateTokenPair(user models.User, deviceInfo, ipAddress 
 		return nil, err
 	}
 
-	accessTokenExpiry := time.Now().Add(15 * time.Minute)
+	accessTokenExpiry := time.Now().Add(90 * time.Minute)
 	accessClaims := &EnhancedClaims{
 		UserID:      user.ID,
 		Username:    user.Username,
@@ -241,7 +241,7 @@ func (jm *JWTManager) GenerateTokenPair(user models.User, deviceInfo, ipAddress 
 		AccessToken:  accessTokenString,
 		RefreshToken: refreshTokenString, // Keep the same refresh token
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(15 * 60),
+		ExpiresIn:    int64(90 * 60),
 		ExpiresAt:    accessTokenExpiry,
 		User:         user,
 	}, nil

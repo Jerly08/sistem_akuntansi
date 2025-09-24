@@ -22,6 +22,7 @@ type AssetController struct {
 type AssetCreateRequest struct {
 	Code               string    `json:"code"`
 	Name               string    `json:"name" binding:"required"`
+	CategoryID         *uint     `json:"category_id"`
 	Category           string    `json:"category" binding:"required"`
 	Status             string    `json:"status"`
 	PurchaseDate       time.Time `json:"purchase_date" binding:"required"`
@@ -45,6 +46,7 @@ type AssetCreateRequest struct {
 
 type AssetUpdateRequest struct {
 	Name               string    `json:"name" binding:"required"`
+	CategoryID         *uint     `json:"category_id"`
 	Category           string    `json:"category" binding:"required"`
 	Status             string    `json:"status"`
 	PurchaseDate       time.Time `json:"purchase_date" binding:"required"`
@@ -128,6 +130,7 @@ func (ac *AssetController) CreateAsset(c *gin.Context) {
 	asset := &models.Asset{
 		Code:                  req.Code,
 		Name:                  req.Name,
+		CategoryID:            req.CategoryID,
 		Category:              req.Category,
 		Status:                req.Status,
 		PurchaseDate:          req.PurchaseDate,
@@ -207,6 +210,7 @@ func (ac *AssetController) UpdateAsset(c *gin.Context) {
 
 	// Update fields
 	existingAsset.Name = req.Name
+	existingAsset.CategoryID = req.CategoryID
 	existingAsset.Category = req.Category
 	existingAsset.Status = req.Status
 	existingAsset.PurchaseDate = req.PurchaseDate
@@ -465,6 +469,69 @@ func (ac *AssetController) UploadAssetImage(c *gin.Context) {
 		"filename": filename,
 		"path": relativeImagePath,
 		"asset": asset,
+	})
+}
+
+// GetAssetCategories retrieves all asset categories
+func (ac *AssetController) GetAssetCategories(c *gin.Context) {
+	categories, err := ac.assetService.GetAssetCategories()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve asset categories",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Asset categories retrieved successfully",
+		"data":    categories,
+		"count":   len(categories),
+	})
+}
+
+// CreateAssetCategory creates a new asset category
+func (ac *AssetController) CreateAssetCategory(c *gin.Context) {
+	var req struct {
+		Code        string `json:"code" binding:"required"`
+		Name        string `json:"name" binding:"required"`
+		Description string `json:"description"`
+		ParentID    *uint  `json:"parent_id"`
+		IsActive    bool   `json:"is_active"`
+	}
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request data",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	category := &models.AssetCategory{
+		Code:        req.Code,
+		Name:        req.Name,
+		Description: req.Description,
+		ParentID:    req.ParentID,
+		IsActive:    req.IsActive,
+	}
+	
+	// Set default IsActive to true if not specified
+	if !req.IsActive {
+		category.IsActive = true
+	}
+
+	if err := ac.assetService.CreateAssetCategory(category); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to create asset category",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Asset category created successfully",
+		"data":    category,
 	})
 }
 

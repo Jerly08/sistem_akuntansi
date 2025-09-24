@@ -129,30 +129,32 @@ func (r *CashBankRepository) CreateTransaction(tx *models.CashBankTransaction) e
 	return r.db.Create(tx).Error
 }
 
-// GetBalanceSummary gets summary of all account balances
+// GetBalanceSummary gets summary of all account balances directly from cash_banks table
+// This fixes the issue where COA (accounts table) was not synchronized with cash_banks balance
+// IMPORTANT: Now respects soft delete (deleted_at IS NULL) to match FindAll() behavior
 func (r *CashBankRepository) GetBalanceSummary() (*BalanceSummary, error) {
 	var cashTotal, bankTotal float64
 	
-	// Sum cash accounts
-	r.db.Model(&models.CashBank{}).
-		Where("type = ? AND is_active = ?", models.CashBankTypeCash, true).
+	// Get balance directly from cash_banks table for CASH accounts (exclude soft deleted)
+	r.db.Table("cash_banks").
+		Where("type = ? AND is_active = ? AND deleted_at IS NULL", models.CashBankTypeCash, true).
 		Select("COALESCE(SUM(balance), 0)").
 		Scan(&cashTotal)
 	
-	// Sum bank accounts
-	r.db.Model(&models.CashBank{}).
-		Where("type = ? AND is_active = ?", models.CashBankTypeBank, true).
+	// Get balance directly from cash_banks table for BANK accounts (exclude soft deleted)
+	r.db.Table("cash_banks").
+		Where("type = ? AND is_active = ? AND deleted_at IS NULL", models.CashBankTypeBank, true).
 		Select("COALESCE(SUM(balance), 0)").
 		Scan(&bankTotal)
 	
-	// Get by currency
+	// Get by currency from cash_banks table (exclude soft deleted)
 	var currencySums []struct {
 		Currency string
 		Total    float64
 	}
 	
-	r.db.Model(&models.CashBank{}).
-		Where("is_active = ?", true).
+	r.db.Table("cash_banks").
+		Where("is_active = ? AND deleted_at IS NULL", true).
 		Select("currency, SUM(balance) as total").
 		Group("currency").
 		Scan(&currencySums)

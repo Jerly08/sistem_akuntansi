@@ -1,6 +1,6 @@
 import api from './api';
 
-// Types
+// Types - Updated to match backend Go struct
 export interface Payment {
   id: number;
   code: string;
@@ -554,6 +554,291 @@ class PaymentService {
   calculateAllocationTotal(allocations: PaymentAllocation[]): number {
     return allocations.reduce((total, allocation) => total + allocation.amount, 0);
   }
+
+  // ============ SSOT Journal Integration Methods ============
+
+  // Create payment with automatic journal entry creation
+  async createPaymentWithJournal(data: PaymentWithJournalRequest): Promise<PaymentWithJournalResponse> {
+    try {
+      const formattedData = {
+        ...data,
+        date: this.formatDateForAPI(data.date),
+        auto_create_journal: data.auto_create_journal ?? true
+      };
+      
+      const response = await api.post('/payments/enhanced-with-journal', formattedData, {
+        timeout: 30000 // 30 seconds timeout for journal operations
+      });
+      return response.data.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error creating payment with journal:', error);
+      
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      } else if (error.response?.data?.details) {
+        throw new Error(error.response.data.details);
+      }
+      
+      throw error;
+    }
+  }
+
+  // Preview journal entry that would be created for a payment
+  async previewPaymentJournal(data: PaymentWithJournalRequest): Promise<PaymentJournalResult> {
+    try {
+      const formattedData = {
+        ...data,
+        date: this.formatDateForAPI(data.date)
+      };
+      
+      const response = await api.post('/payments/preview-journal', formattedData);
+      return response.data.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error previewing payment journal:', error);
+      throw new Error(error.response?.data?.error || 'Failed to preview payment journal');
+    }
+  }
+
+  // Get payment with journal entry details
+  async getPaymentWithJournal(paymentId: number): Promise<PaymentWithJournalResponse> {
+    try {
+      const response = await api.get(`/payments/${paymentId}/with-journal`);
+      return response.data.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error getting payment with journal:', error);
+      throw new Error(error.response?.data?.error || 'Failed to get payment with journal details');
+    }
+  }
+
+  // Reverse payment and its journal entry
+  async reversePayment(paymentId: number, reason: string): Promise<PaymentWithJournalResponse> {
+    try {
+      const response = await api.post(`/payments/${paymentId}/reverse`, { reason });
+      return response.data.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error reversing payment:', error);
+      throw new Error(error.response?.data?.error || 'Failed to reverse payment');
+    }
+  }
+
+  // Get account balance updates from payment
+  async getAccountBalanceUpdates(paymentId: number): Promise<AccountBalanceUpdate[]> {
+    try {
+      const response = await api.get(`/payments/${paymentId}/account-updates`);
+      return response.data.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error getting account updates:', error);
+      throw new Error(error.response?.data?.error || 'Failed to get account balance updates');
+    }
+  }
+
+  // Get real-time account balances from SSOT
+  async getRealTimeAccountBalances(): Promise<SSOTAccountBalance[]> {
+    try {
+      const response = await api.get('/payments/account-balances/real-time');
+      return response.data.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error getting real-time balances:', error);
+      throw new Error(error.response?.data?.error || 'Failed to get real-time account balances');
+    }
+  }
+
+  // Refresh account balances materialized view
+  async refreshAccountBalances(): Promise<void> {
+    try {
+      await api.post('/payments/account-balances/refresh');
+    } catch (error: any) {
+      console.error('PaymentService - Error refreshing account balances:', error);
+      throw new Error(error.response?.data?.error || 'Failed to refresh account balances');
+    }
+  }
+
+  // Get journal entries for a payment
+  async getPaymentJournalEntries(paymentId: number): Promise<JournalEntry[]> {
+    try {
+      const response = await api.get(`/payments/journal-entries?payment_id=${paymentId}`);
+      return response.data.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error getting payment journal entries:', error);
+      throw new Error(error.response?.data?.error || 'Failed to get payment journal entries');
+    }
+  }
+
+  // Get payment-journal integration metrics
+  async getIntegrationMetrics(): Promise<PaymentIntegrationMetrics> {
+    try {
+      const response = await api.get('/payments/integration-metrics');
+      return response.data.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error getting integration metrics:', error);
+      throw new Error(error.response?.data?.error || 'Failed to get integration metrics');
+    }
+  }
+}
+
+// ============ SSOT Journal Integration Types ============
+
+export interface PaymentWithJournalRequest {
+  contact_id: number;
+  cash_bank_id: number;
+  date: string;
+  amount: number;
+  method: string;
+  reference?: string;
+  notes?: string;
+  auto_create_journal?: boolean;
+  preview_journal?: boolean;
+  target_invoice_id?: number;
+  target_bill_id?: number;
+}
+
+export interface PaymentWithJournalResponse {
+  payment: Payment;
+  journal_result?: PaymentJournalResult;
+  contact: {
+    id: number;
+    name: string;
+    type: 'CUSTOMER' | 'VENDOR';
+  };
+  cash_bank?: {
+    id: number;
+    name: string;
+    account_code: string;
+  };
+  allocations?: PaymentAllocation[];
+  summary: PaymentProcessingSummary;
+  success: boolean;
+  message: string;
+  warnings?: string[];
+}
+
+export interface PaymentJournalResult {
+  journal_entry: JournalEntry;
+  account_updates: AccountBalanceUpdate[];
+  success: boolean;
+  message: string;
+}
+
+export interface JournalEntry {
+  id: number;
+  entry_number: string;
+  status: string;
+  total_debit: number;
+  total_credit: number;
+  is_balanced: boolean;
+  lines: JournalLine[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JournalLine {
+  id: number;
+  line_number: number;
+  account_id: number;
+  description: string;
+  debit_amount: number;
+  credit_amount: number;
+}
+
+export interface AccountBalanceUpdate {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  old_balance: number;
+  new_balance: number;
+  change: number;
+  change_type: 'INCREASE' | 'DECREASE';
+}
+
+export interface SSOTAccountBalance {
+  account_id: number;
+  account_code: string;
+  account_name: string;
+  account_type: string;
+  account_category: string;
+  normal_balance: string;
+  total_debits: number;
+  total_credits: number;
+  transaction_count: number;
+  current_balance: number;
+  last_transaction_date?: string;
+  last_updated: string;
+  is_active: boolean;
+  is_header: boolean;
+}
+
+export interface PaymentProcessingSummary {
+  total_amount: number;
+  processing_time: string;
+  journal_entry_created: boolean;
+  account_balances_updated: boolean;
+  allocations_created: number;
+  transaction_id: string;
+}
+
+export interface PaymentJournalMetrics {
+  journal_coverage_rate: number;
+  journal_success_rate: number;
+  balance_accuracy_score: string;
+  total_payments: number;
+  payments_with_journal: number;
+  payments_without_journal: number;
+  last_refresh_time: string;
+}
+
+export interface PaymentIntegrationMetrics {
+  total_payments: number;
+  payments_with_journal: number;
+  total_amount: number;
+  success_rate: number;
+}
+
+// Updated types to match backend
+export interface PaymentWithJournalInfo {
+  payment: Payment;
+  journal_info?: {
+    journal_entry_id: number;
+    journal_entry_number: string;
+    status: string;
+    total_debit?: number;
+    total_credit?: number;
+  };
+}
+
+export interface JournalPreviewRequest {
+  payment_type: 'RECEIVE' | 'SEND';
+  amount: number;
+  currency: string;
+  payment_method: string;
+  description: string;
+  customer_id?: string;
+  vendor_id?: string;
+  invoice_id?: string;
+  journal_options: {
+    auto_post: boolean;
+    generate_reference: boolean;
+    validate_balance: boolean;
+    update_account_balances: boolean;
+  };
+}
+
+export interface CreatePaymentWithJournalRequest {
+  payment_type: 'RECEIVE' | 'SEND';
+  amount: number;
+  currency: string;
+  payment_method: string;
+  description: string;
+  reference_id?: string;
+  customer_id?: string;
+  vendor_id?: string;
+  invoice_id?: string;
+  metadata?: Record<string, any>;
+  journal_options: {
+    auto_post: boolean;
+    generate_reference: boolean;
+    validate_balance: boolean;
+    update_account_balances: boolean;
+  };
 }
 
 export default new PaymentService();

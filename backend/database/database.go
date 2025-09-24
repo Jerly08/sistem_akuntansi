@@ -170,6 +170,101 @@ func cleanupConstraints(db *gorm.DB) {
 }
 
 // cleanupProductUnitConstraints removes problematic constraints on product_units table
+func FixPaymentDateNullValues(db *gorm.DB) {
+	log.Println("Checking and fixing payment_date null values...")
+
+	// Check if sale_payments table exists
+	var salePaymentsExists bool
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'sale_payments'
+	)`).Scan(&salePaymentsExists)
+
+	if salePaymentsExists {
+		// Check if payment_date column already exists
+		var paymentDateExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'sale_payments' AND column_name = 'payment_date'
+		)`).Scan(&paymentDateExists)
+
+		if !paymentDateExists {
+			// Add payment_date column as nullable first
+			log.Println("Adding payment_date column as nullable...")
+			err := db.Exec(`ALTER TABLE sale_payments ADD COLUMN payment_date TIMESTAMPTZ`).Error
+			if err != nil {
+				log.Printf("Warning: Failed to add payment_date column: %v", err)
+				return
+			}
+			log.Println("✅ Added payment_date column successfully")
+		}
+
+		// Update NULL payment_date values with created_at or a default date
+		log.Println("Updating NULL payment_date values in sale_payments table...")
+		result := db.Exec(`
+			UPDATE sale_payments 
+			SET payment_date = COALESCE(created_at, NOW()) 
+			WHERE payment_date IS NULL
+		`)
+		if result.Error != nil {
+			log.Printf("Warning: Failed to update NULL payment_date values: %v", result.Error)
+		} else {
+			log.Printf("✅ Updated %d NULL payment_date values in sale_payments table", result.RowsAffected)
+		}
+
+		// Now make the column NOT NULL
+		log.Println("Making payment_date column NOT NULL...")
+		err := db.Exec(`ALTER TABLE sale_payments ALTER COLUMN payment_date SET NOT NULL`).Error
+		if err != nil {
+			log.Printf("Warning: Failed to set payment_date as NOT NULL: %v", err)
+		} else {
+			log.Println("✅ Set payment_date column as NOT NULL successfully")
+		}
+
+		// Handle payment_method column
+		var paymentMethodExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'sale_payments' AND column_name = 'payment_method'
+		)`).Scan(&paymentMethodExists)
+
+		if !paymentMethodExists {
+			// Add payment_method column as nullable first
+			log.Println("Adding payment_method column as nullable...")
+			err := db.Exec(`ALTER TABLE sale_payments ADD COLUMN payment_method VARCHAR(50)`).Error
+			if err != nil {
+				log.Printf("Warning: Failed to add payment_method column: %v", err)
+				return
+			}
+			log.Println("✅ Added payment_method column successfully")
+		}
+
+		// Update NULL payment_method values with a default value
+		log.Println("Updating NULL payment_method values in sale_payments table...")
+		result2 := db.Exec(`
+			UPDATE sale_payments 
+			SET payment_method = 'CASH' 
+			WHERE payment_method IS NULL OR payment_method = ''
+		`)
+		if result2.Error != nil {
+			log.Printf("Warning: Failed to update NULL payment_method values: %v", result2.Error)
+		} else {
+			log.Printf("✅ Updated %d NULL payment_method values in sale_payments table", result2.RowsAffected)
+		}
+
+		// Now make the payment_method column NOT NULL
+		log.Println("Making payment_method column NOT NULL...")
+		err2 := db.Exec(`ALTER TABLE sale_payments ALTER COLUMN payment_method SET NOT NULL`).Error
+		if err2 != nil {
+			log.Printf("Warning: Failed to set payment_method as NOT NULL: %v", err2)
+		} else {
+			log.Println("✅ Set payment_method column as NOT NULL successfully")
+		}
+	}
+
+	log.Println("Payment date null values fix completed")
+}
+
 func cleanupProductUnitConstraints(db *gorm.DB) {
 	log.Println("Cleaning up ProductUnit constraints...")
 	
@@ -249,6 +344,218 @@ func cleanupProductUnitConstraints(db *gorm.DB) {
 	log.Println("ProductUnit constraint cleanup completed")
 }
 
+func cleanupJournalEntriesConstraints(db *gorm.DB) {
+	log.Println("Cleaning up JournalEntries constraints...")
+	
+	// Check if journal_entries table exists
+	var tableExists bool
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'journal_entries'
+	)`).Scan(&tableExists)
+	
+	if !tableExists {
+		log.Println("Journal entries table does not exist yet, skipping constraint cleanup")
+		return
+	}
+	
+	// Check for problematic constraints
+	var constraintNames []string
+	db.Raw(`
+		SELECT constraint_name 
+		FROM information_schema.table_constraints 
+		WHERE table_name = 'journal_entries' 
+		AND constraint_type = 'UNIQUE'
+		AND constraint_name LIKE '%code%'
+	`).Scan(&constraintNames)
+	
+	if len(constraintNames) > 0 {
+		log.Printf("Found %d code-related constraints on journal_entries", len(constraintNames))
+		for _, constraint := range constraintNames {
+			log.Printf("Attempting to drop constraint: %s", constraint)
+			err := db.Exec(fmt.Sprintf("ALTER TABLE journal_entries DROP CONSTRAINT IF EXISTS %s", constraint)).Error
+			if err != nil {
+				log.Printf("Warning: Failed to drop constraint %s: %v", constraint, err)
+			} else {
+				log.Printf("✅ Dropped constraint %s successfully", constraint)
+			}
+		}
+	} else {
+		log.Println("No problematic code-related constraints found on journal_entries")
+	}
+	
+	// Also check for any indexes that might be causing issues
+	var codeIndexes []string
+	db.Raw(`
+		SELECT indexname 
+		FROM pg_indexes 
+		WHERE tablename = 'journal_entries' 
+		AND indexname LIKE '%code%'
+	`).Scan(&codeIndexes)
+	
+	if len(codeIndexes) > 0 {
+		log.Printf("Found %d code-related indexes on journal_entries", len(codeIndexes))
+		for _, index := range codeIndexes {
+			log.Printf("Code-related index found: %s (will be managed by GORM)", index)
+		}
+	}
+	
+	log.Println("JournalEntries constraint cleanup completed")
+}
+
+func cleanupAllConstraintConflicts(db *gorm.DB) {
+	log.Println("🔧 Running comprehensive constraint cleanup...")
+	
+	// List of tables and their problematic constraints
+	tablesToClean := map[string][]string{
+		"journal_entries": {"uni_journal_entries_code"},
+		"product_units":   {"uni_product_units_code"},
+		"accounts":        {"uni_accounts_code", "idx_accounts_code_unique"},
+		"products":        {"uni_products_code"},
+		"contacts":        {"uni_contacts_code"},
+		"sales":           {"uni_sales_code"},
+		"purchases":       {"uni_purchases_code"},
+	}
+	
+	for tableName, constraints := range tablesToClean {
+		// Check if table exists
+		var tableExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.tables 
+			WHERE table_name = ?
+		)`, tableName).Scan(&tableExists)
+		
+		if !tableExists {
+			log.Printf("Table %s does not exist, skipping", tableName)
+			continue
+		}
+		
+		log.Printf("Cleaning constraints for table: %s", tableName)
+		
+		// Drop specific constraints
+		for _, constraint := range constraints {
+			var constraintExists bool
+			db.Raw(`
+				SELECT EXISTS (
+					SELECT 1 FROM information_schema.table_constraints 
+					WHERE table_name = ? AND constraint_name = ?
+				)
+			`, tableName, constraint).Scan(&constraintExists)
+			
+			if constraintExists {
+				log.Printf("Dropping constraint %s from %s...", constraint, tableName)
+				err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s", tableName, constraint)).Error
+				if err != nil {
+					log.Printf("Warning: Failed to drop %s: %v", constraint, err)
+				} else {
+					log.Printf("✅ Dropped %s successfully", constraint)
+				}
+			}
+		}
+		
+		// Also drop any other code-related unique constraints
+		var otherConstraints []string
+		db.Raw(`
+			SELECT constraint_name 
+			FROM information_schema.table_constraints 
+			WHERE table_name = ? 
+			AND constraint_type = 'UNIQUE'
+			AND constraint_name LIKE '%code%'
+			AND constraint_name NOT LIKE 'idx_%'
+		`, tableName).Scan(&otherConstraints)
+		
+		for _, constraint := range otherConstraints {
+			log.Printf("Dropping additional constraint %s from %s...", constraint, tableName)
+			err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s", tableName, constraint)).Error
+			if err != nil {
+				log.Printf("Warning: Failed to drop %s: %v", constraint, err)
+			} else {
+				log.Printf("✅ Dropped %s successfully", constraint)
+			}
+		}
+	}
+	
+	log.Println("✅ Comprehensive constraint cleanup completed")
+}
+
+func dropAllProblematicConstraints(db *gorm.DB) {
+	log.Println("🚀 Running aggressive constraint cleanup for all database objects...")
+	
+	// List of all possible problematic constraints across the entire database
+	problematicConstraints := []string{
+		"uni_journal_entries_code",
+		"uni_product_units_code", 
+		"uni_accounts_code",
+		"uni_products_code",
+		"uni_contacts_code",
+		"uni_sales_code",
+		"uni_purchases_code",
+		"products_code_key",
+		"contacts_code_key",
+		"sales_code_key",
+		"purchases_code_key",
+		"journal_entries_code_key",
+	}
+	
+	// Drop constraints across all tables in database
+	for _, constraint := range problematicConstraints {
+		// Try to find which table this constraint belongs to
+		var tableName string
+		db.Raw(`
+			SELECT table_name 
+			FROM information_schema.table_constraints 
+			WHERE constraint_name = ?
+			LIMIT 1
+		`, constraint).Scan(&tableName)
+		
+		if tableName != "" {
+			log.Printf("Found constraint %s on table %s, dropping...", constraint, tableName)
+			err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s CASCADE", tableName, constraint)).Error
+			if err != nil {
+				log.Printf("Warning: Failed to drop %s: %v", constraint, err)
+			} else {
+				log.Printf("✅ Dropped constraint %s successfully", constraint)
+			}
+		} else {
+			// Try dropping from common table names
+			tableGuesses := []string{"journal_entries", "products", "contacts", "sales", "purchases", "product_units", "accounts"}
+			for _, table := range tableGuesses {
+				err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s CASCADE", table, constraint)).Error
+				if err == nil {
+					log.Printf("✅ Dropped constraint %s from %s", constraint, table)
+					break
+				}
+			}
+		}
+	}
+	
+	// Also try to drop any constraint that contains "code" from any table
+	var allCodeConstraints []struct {
+		TableName      string `gorm:"column:table_name"`
+		ConstraintName string `gorm:"column:constraint_name"`
+	}
+	
+	db.Raw(`
+		SELECT table_name, constraint_name 
+		FROM information_schema.table_constraints 
+		WHERE constraint_type = 'UNIQUE'
+		AND constraint_name LIKE '%code%'
+		AND table_schema = 'public'
+	`).Scan(&allCodeConstraints)
+	
+	for _, constraint := range allCodeConstraints {
+		log.Printf("Dropping code-related constraint %s from %s...", constraint.ConstraintName, constraint.TableName)
+		err := db.Exec(fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s CASCADE", constraint.TableName, constraint.ConstraintName)).Error
+		if err != nil {
+			log.Printf("Warning: Failed to drop %s: %v", constraint.ConstraintName, err)
+		} else {
+			log.Printf("✅ Dropped %s successfully", constraint.ConstraintName)
+		}
+	}
+	
+	log.Println("✅ Aggressive constraint cleanup completed")
+}
+
 func ConnectDB() *gorm.DB {
 	cfg := config.LoadConfig()
 	
@@ -286,12 +593,27 @@ func ConnectDB() *gorm.DB {
 
 func AutoMigrate(db *gorm.DB) {
 	log.Println("Starting database migration...")
-	
-	// First, clean up any problematic constraints
+
+	// Run pre-migration fixes to handle conflicts
+	PreMigrationFixes(db)
+
+	// Fix payment_date null values before migration
+	FixPaymentDateNullValues(db)
+
+	// Clean up problematic constraints first
 	cleanupConstraints(db)
 	
 	// Clean up ProductUnit constraints before migration
 	cleanupProductUnitConstraints(db)
+	
+	// Clean up Journal Entries constraints before migration
+	cleanupJournalEntriesConstraints(db)
+	
+	// Run comprehensive constraint cleanup to prevent conflicts
+	cleanupAllConstraintConflicts(db)
+	
+	// Run aggressive cleanup of all problematic constraints
+	dropAllProblematicConstraints(db)
 	
 	// Migrate models in order to respect foreign key constraints
 	err := db.AutoMigrate(
@@ -335,6 +657,7 @@ func AutoMigrate(db *gorm.DB) {
 		&models.Expense{},
 		
 		// Assets
+		&models.AssetCategory{},
 		&models.Asset{},
 		
 		// Cash & Bank
@@ -350,7 +673,7 @@ func AutoMigrate(db *gorm.DB) {
 		&models.Report{},
 		&models.ReportTemplate{},
 		&models.FinancialRatio{},
-		&models.AccountBalance{},
+			&models.AccountPeriodBalance{},
 		
 		// Budgets
 		&models.Budget{},
@@ -391,6 +714,9 @@ func AutoMigrate(db *gorm.DB) {
 		
 		// Settings model
 		&models.Settings{},
+		
+		// Accounting Period model for period management
+		&models.AccountingPeriod{},
 		
 		// Security models
 		&models.SecurityIncident{},
@@ -461,6 +787,25 @@ func AutoMigrate(db *gorm.DB) {
 	
 	// Run payment performance optimization migration
 	RunPaymentPerformanceOptimization(db)
+	
+	// Reset and fix product image issues
+	ResetProductImageMigration(db)
+	ProductImageFixMigration(db)
+
+	// Fix asset category issues and create default categories
+	AssetCategoryMigration(db)
+
+	// Run database enhancements migration
+	RunDatabaseEnhancements(db)
+	
+	// Fix missing columns and constraint issues
+	RunMissingColumnsFix(db)
+	
+	// Fix remaining issues after main fixes
+	FixRemainingIssuesMigration(db)
+	
+	// Run index cleanup and optimization
+	RunIndexCleanupAndOptimization(db)
 }
 
 func createIndexes(db *gorm.DB) {
@@ -508,6 +853,49 @@ func createIndexes(db *gorm.DB) {
 	if db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'approval_history'`).Scan(&count); count > 0 {
 		db.Exec(`CREATE INDEX IF NOT EXISTS idx_approval_history_request ON approval_history(request_id, created_at)`)
 	}
+	
+	// Enhanced accounting indexes
+	log.Println("Creating enhanced accounting indexes...")
+	
+	// Account hierarchy and balance indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounts_hierarchy ON accounts(parent_id, code) WHERE parent_id IS NOT NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounts_active_balance ON accounts(balance, is_active) WHERE deleted_at IS NULL`)
+	
+	// Journal entries and lines performance indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_posted ON journal_entries(entry_date, status) WHERE status = 'POSTED'`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_account_balance ON journal_lines(account_id, debit_amount, credit_amount)`)
+	
+	// Sales and Purchase analysis indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_status_amount ON sales(status, total_amount) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_status_amount ON purchases(status, total_amount) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_items_product_qty ON sale_items(product_id, quantity)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchase_items_product_qty ON purchase_items(product_id, quantity)`)
+	
+	// Payment and cash flow indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_status_date ON payments(status, date) WHERE status IN ('COMPLETED', 'PENDING')`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_cash_bank_balance ON cash_banks(balance, currency) WHERE is_active = true`)
+	
+	// Product and inventory management indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_products_active_stock ON products(stock, is_active) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_product_type ON inventories(product_id, transaction_type)`)
+	
+	// Contact and customer management indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_contacts_type_active ON contacts(type, is_active) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_contact_addresses_default ON contact_addresses(contact_id, is_default)`)
+	
+	// Accounting Period indexes
+	if db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'accounting_periods'`).Scan(&count); count > 0 {
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounting_periods_date_range ON accounting_periods(start_date, end_date)`)
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounting_periods_status ON accounting_periods(is_open, is_closed)`)
+	}
+	
+	// Audit and security indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_important ON audit_logs(table_name, action, created_at) WHERE action IN ('DELETE', 'UPDATE')`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_incidents_severity ON security_incidents(severity, created_at)`)
+	
+	// Report generation indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_account_balances_period_account ON account_balances(period, account_id) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_financial_ratios_date ON financial_ratios(calculation_date)`)
 	
 	log.Println("Database indexes created successfully")
 }
@@ -2299,4 +2687,308 @@ func RunPaymentPerformanceOptimization(db *gorm.DB) {
 	`)
 	
 	log.Println("✅ Payment Performance Optimization Migration completed successfully")
+}
+
+// RunDatabaseEnhancements applies comprehensive database enhancements for the accounting system
+func RunDatabaseEnhancements(db *gorm.DB) {
+	migrationID := "database_enhancements_v2024.1"
+	
+	// Check if this migration has already been applied
+	var existing models.MigrationRecord
+	err := db.Where("migration_id = ?", migrationID).First(&existing).Error
+	if err == nil {
+		log.Printf("Database enhancements migration '%s' already applied at %v, skipping...", migrationID, existing.AppliedAt)
+		return
+	}
+	
+	log.Println("🚀 Starting comprehensive database enhancements migration...")
+	
+	// Step 1: Create enhanced indexes for journal entries and related tables
+	createJournalEntryIndexes(db)
+	
+	// Step 2: Create performance indexes for accounting queries
+	createAccountingPerformanceIndexes(db)
+	
+	// Step 3: Create validation constraints
+	createValidationConstraints(db)
+	
+	// Step 4: Initialize default accounting periods
+	initializeDefaultAccountingPeriods(db)
+	
+	// Step 5: Create audit trail enhancements
+	createAuditTrailEnhancements(db)
+	
+	// Step 6: Optimize existing data
+	optimizeExistingAccountingData(db)
+	
+	// Record this migration as completed
+	migrationRecord := models.MigrationRecord{
+		MigrationID: migrationID,
+		Description: "Comprehensive database enhancements for accounting system - indexes, constraints, audit trail, and performance optimizations",
+		Version:     "2024.1",
+		AppliedAt:   time.Now(),
+	}
+	
+	if err := db.Create(&migrationRecord).Error; err != nil {
+		log.Printf("Warning: Failed to record migration completion: %v", err)
+	} else {
+		log.Println("✅ Database enhancements migration recorded successfully")
+	}
+	
+	log.Println("✅ Comprehensive database enhancements migration completed successfully")
+}
+
+// createJournalEntryIndexes creates indexes for journal entries and lines for better performance
+func createJournalEntryIndexes(db *gorm.DB) {
+	log.Println("Creating journal entry indexes...")
+	
+	// Journal entries indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_entry_date ON journal_entries(entry_date)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_reference_type_id ON journal_entries(reference_type, reference_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_status_date ON journal_entries(status, entry_date)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_user_id_date ON journal_entries(user_id, entry_date)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_journal_id ON journal_entries(journal_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_period ON journal_entries(entry_date) WHERE status = 'POSTED'`)
+	
+	// Journal lines indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_entry_account ON journal_lines(journal_entry_id, account_id)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_account_debit ON journal_lines(account_id, debit_amount) WHERE debit_amount > 0`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_account_credit ON journal_lines(account_id, credit_amount) WHERE credit_amount > 0`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_amounts ON journal_lines(debit_amount, credit_amount)`)
+	
+	// Composite indexes for complex queries
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_entries_complete ON journal_entries(entry_date, status, reference_type) WHERE status = 'POSTED'`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_journal_lines_balance ON journal_lines(account_id, debit_amount, credit_amount)`)
+	
+	log.Println("✅ Journal entry indexes created successfully")
+}
+
+// createAccountingPerformanceIndexes creates indexes for better accounting query performance
+func createAccountingPerformanceIndexes(db *gorm.DB) {
+	log.Println("Creating accounting performance indexes...")
+	
+	// Account balance calculation indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounts_type_balance ON accounts(type, balance) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounts_category_balance ON accounts(category, balance) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounts_parent_children ON accounts(parent_id) WHERE parent_id IS NOT NULL`)
+	
+	// Transaction reporting indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_transactions_date_account_amount ON transactions(transaction_date, account_id, amount)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_transactions_period_reporting ON transactions(transaction_date, account_id) WHERE deleted_at IS NULL`)
+	
+	// Sales and purchases reporting indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_reporting ON sales(date, status, total_amount) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_reporting ON purchases(date, status, total_amount) WHERE deleted_at IS NULL`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_customer_period ON sales(customer_id, date, total_amount) WHERE status IN ('INVOICED', 'PAID')`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_vendor_period ON purchases(vendor_id, date, total_amount) WHERE status = 'APPROVED'`)
+	
+	// Cash flow indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_cash_bank_transactions_flow ON cash_bank_transactions(transaction_date, transaction_type, amount)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_payments_cash_flow ON payments(date, method, amount) WHERE status = 'COMPLETED'`)
+	
+	// Aging analysis indexes
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_sales_aging ON sales(due_date, outstanding_amount) WHERE outstanding_amount > 0`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_purchases_aging ON purchases(due_date, outstanding_amount) WHERE outstanding_amount > 0`)
+	
+	log.Println("✅ Accounting performance indexes created successfully")
+}
+
+// createValidationConstraints creates database constraints for data integrity
+func createValidationConstraints(db *gorm.DB) {
+	log.Println("Creating validation constraints...")
+	
+	// Journal entry validation constraints
+	db.Exec(`
+		ALTER TABLE journal_entries 
+		DROP CONSTRAINT IF EXISTS chk_journal_entries_balanced,
+		ADD CONSTRAINT chk_journal_entries_balanced 
+		CHECK (ABS(total_debit - total_credit) < 0.01)
+	`)
+	
+	// Account balance constraints
+	db.Exec(`
+		ALTER TABLE accounts
+		DROP CONSTRAINT IF EXISTS chk_accounts_type_valid,
+		ADD CONSTRAINT chk_accounts_type_valid 
+		CHECK (type IN ('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'))
+	`)
+	
+	// Amount validation constraints
+	db.Exec(`
+		ALTER TABLE journal_lines
+		DROP CONSTRAINT IF EXISTS chk_journal_lines_amount_positive,
+		ADD CONSTRAINT chk_journal_lines_amount_positive 
+		CHECK (debit_amount >= 0 AND credit_amount >= 0 AND (debit_amount > 0 OR credit_amount > 0))
+	`)
+	
+	// Date validation constraints
+	db.Exec(`
+		ALTER TABLE journal_entries
+		DROP CONSTRAINT IF EXISTS chk_journal_entries_date_valid,
+		ADD CONSTRAINT chk_journal_entries_date_valid 
+		CHECK (entry_date >= '2000-01-01' AND entry_date <= CURRENT_DATE + INTERVAL '1 year')
+	`)
+	
+	// Status validation constraints
+	db.Exec(`
+		ALTER TABLE journal_entries
+		DROP CONSTRAINT IF EXISTS chk_journal_entries_status_valid,
+		ADD CONSTRAINT chk_journal_entries_status_valid 
+		CHECK (status IN ('DRAFT', 'POSTED', 'REVERSED'))
+	`)
+	
+	log.Println("✅ Validation constraints created successfully")
+}
+
+// initializeDefaultAccountingPeriods creates default accounting periods for the current and next year
+func initializeDefaultAccountingPeriods(db *gorm.DB) {
+	log.Println("Initializing default accounting periods...")
+	
+	// Check if accounting periods table exists
+	var tableExists bool
+	db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'accounting_periods')`).Scan(&tableExists)
+	
+	if !tableExists {
+		log.Println("Accounting periods table does not exist yet, skipping period initialization")
+		return
+	}
+	
+	// Check if we already have periods defined
+	var existingCount int64
+	db.Model(&models.AccountingPeriod{}).Count(&existingCount)
+	
+	if existingCount > 0 {
+		log.Printf("Found %d existing accounting periods, skipping initialization", existingCount)
+		return
+	}
+	
+	currentYear := time.Now().Year()
+	
+	// Create periods for current year
+	for month := 1; month <= 12; month++ {
+		startDate := time.Date(currentYear, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		endDate := startDate.AddDate(0, 1, -1) // Last day of the month
+		
+		period := models.AccountingPeriod{
+			Year:        currentYear,
+			Month:       month,
+			PeriodName:  fmt.Sprintf("%04d-%02d", currentYear, month),
+			StartDate:   startDate,
+			EndDate:     endDate,
+			IsClosed:    false,
+			IsLocked:    false,
+		}
+		
+		if err := db.Create(&period).Error; err != nil {
+			log.Printf("Warning: Failed to create period %s: %v", period.PeriodName, err)
+		} else {
+			log.Printf("Created accounting period: %s", period.PeriodName)
+		}
+	}
+	
+	// Create periods for next year
+	nextYear := currentYear + 1
+	for month := 1; month <= 12; month++ {
+		startDate := time.Date(nextYear, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		endDate := startDate.AddDate(0, 1, -1)
+		
+		period := models.AccountingPeriod{
+			Year:        nextYear,
+			Month:       month,
+			PeriodName:  fmt.Sprintf("%04d-%02d", nextYear, month),
+			StartDate:   startDate,
+			EndDate:     endDate,
+			IsClosed:    false,
+			IsLocked:    false,
+		}
+		
+		if err := db.Create(&period).Error; err != nil {
+			log.Printf("Warning: Failed to create period %s: %v", period.PeriodName, err)
+		} else {
+			log.Printf("Created accounting period: %s", period.PeriodName)
+		}
+	}
+	
+	log.Println("✅ Default accounting periods initialized successfully")
+}
+
+// createAuditTrailEnhancements creates enhanced audit trail functionality
+func createAuditTrailEnhancements(db *gorm.DB) {
+	log.Println("Creating audit trail enhancements...")
+	
+	// Audit log indexes for better query performance
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_table_record_action ON audit_logs(table_name, record_id, action)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_timestamp ON audit_logs(user_id, created_at)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp_action ON audit_logs(created_at, action)`)
+	db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_critical ON audit_logs(created_at) WHERE action IN ('DELETE', 'UPDATE') AND table_name IN ('journal_entries', 'accounts', 'transactions')`)
+	
+	// Create audit summary view
+	db.Exec(`
+		CREATE OR REPLACE VIEW audit_trail_summary AS
+		SELECT 
+			DATE(created_at) as audit_date,
+			table_name,
+			action,
+			user_id,
+			COUNT(*) as action_count,
+			MIN(created_at) as first_action,
+			MAX(created_at) as last_action
+		FROM audit_logs
+		WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+		GROUP BY DATE(created_at), table_name, action, user_id
+		ORDER BY audit_date DESC, action_count DESC
+	`)
+	
+	// Create critical changes view
+	db.Exec(`
+		CREATE OR REPLACE VIEW critical_audit_changes AS
+		SELECT 
+			al.*,
+			u.username,
+			u.full_name
+		FROM audit_logs al
+		LEFT JOIN users u ON al.user_id = u.id
+		WHERE al.action IN ('DELETE', 'UPDATE')
+			AND al.table_name IN ('journal_entries', 'accounts', 'transactions', 'sales', 'purchases')
+			AND al.created_at >= CURRENT_DATE - INTERVAL '7 days'
+		ORDER BY al.created_at DESC
+	`)
+	
+	log.Println("✅ Audit trail enhancements created successfully")
+}
+
+// optimizeExistingAccountingData performs data optimization and cleanup
+func optimizeExistingAccountingData(db *gorm.DB) {
+	log.Println("Optimizing existing accounting data...")
+	
+	// Update statistics for all accounting-related tables
+	log.Println("Updating table statistics...")
+	db.Exec(`ANALYZE accounts`)
+	db.Exec(`ANALYZE journal_entries`)
+	db.Exec(`ANALYZE journal_lines`)
+	db.Exec(`ANALYZE transactions`)
+	db.Exec(`ANALYZE sales`)
+	db.Exec(`ANALYZE purchases`)
+	db.Exec(`ANALYZE cash_bank_transactions`)
+	db.Exec(`ANALYZE audit_logs`)
+	
+	// Clean up orphaned records
+	log.Println("Cleaning up orphaned journal lines...")
+	result := db.Exec(`
+		DELETE FROM journal_lines 
+		WHERE journal_entry_id NOT IN (
+			SELECT id FROM journal_entries
+		)
+	`)
+	if result.Error != nil {
+		log.Printf("Warning: Failed to clean up orphaned journal lines: %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("Cleaned up %d orphaned journal lines", result.RowsAffected)
+	}
+	
+	// Vacuum analyze for PostgreSQL (if applicable)
+	log.Println("Performing database maintenance...")
+	db.Exec(`VACUUM ANALYZE`)
+	
+	log.Println("✅ Existing accounting data optimized successfully")
 }

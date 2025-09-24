@@ -10,12 +10,23 @@ import (
 	"gorm.io/gorm"
 )
 
+// PostApprovalCallback interface for handling post-approval business logic
+type PostApprovalCallback interface {
+	OnPurchaseApproved(purchaseID uint) error
+}
+
 type ApprovalService struct {
 	db *gorm.DB
+	postApprovalCallback PostApprovalCallback
 }
 
 func NewApprovalService(db *gorm.DB) *ApprovalService {
 	return &ApprovalService{db: db}
+}
+
+// SetPostApprovalCallback sets the callback for post-approval processing
+func (s *ApprovalService) SetPostApprovalCallback(callback PostApprovalCallback) {
+	s.postApprovalCallback = callback
 }
 
 // Workflow Management
@@ -351,8 +362,25 @@ func (s *ApprovalService) ProcessApprovalAction(requestID uint, userID uint, act
 		}
 	}
 
+	var purchaseToProcess *uint
+	// Check if we need to trigger post-approval processing for purchase
+	if approvalReq.Status == models.ApprovalStatusApproved && approvalReq.EntityType == models.EntityTypePurchase {
+		purchaseToProcess = &approvalReq.EntityID
+	}
+	
 	if err := tx.Commit().Error; err != nil {
 		return err
+	}
+
+	// POST-APPROVAL PROCESSING: Trigger business logic for approved purchases
+	if purchaseToProcess != nil && s.postApprovalCallback != nil {
+		go func(purchaseID uint) {
+			if err := s.postApprovalCallback.OnPurchaseApproved(purchaseID); err != nil {
+				fmt.Printf("⚠️ Post-approval processing failed for purchase %d: %v\n", purchaseID, err)
+			} else {
+				fmt.Printf("✅ Post-approval processing completed for purchase %d\n", purchaseID)
+			}
+		}(*purchaseToProcess)
 	}
 
 	// Send notification to requester
@@ -537,7 +565,19 @@ func (s *ApprovalService) updateEntityStatus(tx *gorm.DB, entityType string, ent
 	case models.EntityTypeSale:
 		return tx.Model(&models.Sale{}).Where("id = ?", entityID).Updates(updates).Error
 	case models.EntityTypePurchase:
-		return tx.Model(&models.Purchase{}).Where("id = ?", entityID).Updates(updates).Error
+		err := tx.Model(&models.Purchase{}).Where("id = ?", entityID).Updates(updates).Error
+		if err != nil {
+			return err
+		}
+		
+		// POST-APPROVAL PROCESSING for approved purchases
+		if approvalStatus == "APPROVED" {
+			// Note: We'll trigger post-approval processing after transaction commits
+			// This is handled by the calling function via callback
+			fmt.Printf("✅ Purchase %d approved - will trigger post-approval processing\n", entityID)
+		}
+		
+		return nil
 	default:
 		return errors.New("unsupported entity type")
 	}
@@ -555,11 +595,20 @@ func (s *ApprovalService) notifyApprovers(request *models.ApprovalRequest, step 
 			continue // Skip creating duplicate
 		}
 
+		// Get the actual purchase to show correct amount
+		var actualAmount float64 = request.Amount
+		if request.EntityType == models.EntityTypePurchase {
+			var purchase models.Purchase
+			if err := s.db.First(&purchase, request.EntityID).Error; err == nil {
+				actualAmount = purchase.TotalAmount // Use TotalAmount instead of ApprovalBaseAmount
+			}
+		}
+
 		notification := models.Notification{
 			UserID:   user.ID,
 			Type:     models.NotificationTypeApprovalPending,
 			Title:    fmt.Sprintf("Approval Required: %s", request.RequestTitle),
-			Message:  fmt.Sprintf("You have a pending approval request for %s (Amount: %.2f)", request.RequestTitle, request.Amount),
+			Message:  fmt.Sprintf("You have a pending approval request for %s (Amount: %.2f)", request.RequestTitle, actualAmount),
 			Priority: request.Priority,
 			Data:     s.createNotificationData(request),
 		}
@@ -626,12 +675,30 @@ func (s *ApprovalService) isDuplicateApprovalNotification(userID uint, requestID
 
 // createNotificationData creates JSON data for notifications
 func (s *ApprovalService) createNotificationData(request *models.ApprovalRequest) string {
+	// Get the actual purchase amount for proper display
+	var actualAmount float64 = request.Amount
+	if request.EntityType == models.EntityTypePurchase {
+		var purchase models.Purchase
+		if err := s.db.First(&purchase, request.EntityID).Error; err == nil {
+			actualAmount = purchase.TotalAmount // Use TotalAmount instead of ApprovalBaseAmount
+		}
+	}
+	
 	data := map[string]interface{}{
 		"request_id":   request.ID,
 		"entity_type":  request.EntityType,
 		"entity_id":    request.EntityID,
-		"amount":       request.Amount,
+		"amount":       actualAmount, // Use actualAmount instead of request.Amount
 		"status":       request.Status,
+		"purchase_code": "", // Will be filled if this is a purchase
+	}
+	
+	// Add purchase code for better identification
+	if request.EntityType == models.EntityTypePurchase {
+		var purchase models.Purchase
+		if err := s.db.Select("code").First(&purchase, request.EntityID).Error; err == nil {
+			data["purchase_code"] = purchase.Code
+		}
 	}
 
 	jsonData, _ := json.Marshal(data)
@@ -876,12 +943,21 @@ func (s *ApprovalService) notifyDirectors(request *models.ApprovalRequest, escal
 	
 	fmt.Printf("Found %d active directors to notify for request %d\n", len(directors), request.ID)
 
+	// Get the actual purchase to show correct amount
+	var actualAmount float64 = request.Amount
+	if request.EntityType == models.EntityTypePurchase {
+		var purchase models.Purchase
+		if err := s.db.First(&purchase, request.EntityID).Error; err == nil {
+			actualAmount = purchase.TotalAmount // Use TotalAmount instead of ApprovalBaseAmount
+		}
+	}
+
 	for _, director := range directors {
 		notification := models.Notification{
 			UserID:   director.ID,
 			Type:     models.NotificationTypeApprovalPending,
 			Title:    fmt.Sprintf("URGENT: Director Approval Required - %s", request.RequestTitle),
-			Message:  fmt.Sprintf("Finance has escalated this request: %s. Reason: %s (Amount: %.2f)", request.RequestTitle, escalationReason, request.Amount),
+			Message:  fmt.Sprintf("Finance has escalated this request: %s. Reason: %s (Amount: %.2f)", request.RequestTitle, escalationReason, actualAmount),
 			Priority: models.ApprovalPriorityUrgent,
 			Data:     s.createNotificationData(request),
 		}

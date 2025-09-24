@@ -4,17 +4,39 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"sync"
 	"app-sistem-akuntansi/models"
 	"gorm.io/gorm"
 )
 
 type BalanceMonitoringService struct {
 	db *gorm.DB
+	integrityValidator *BalanceIntegrityValidator
+	monitoringEnabled  bool
+	mutex             sync.RWMutex
+	lastCheck         time.Time
+	alertThresholds   AlertThresholds
+}
+
+// AlertThresholds defines when to trigger alerts
+type AlertThresholds struct {
+	CriticalBalanceDifference float64 // IDR amount
+	HighBalanceDifference     float64
+	MaxTolerableInconsistencies int
+	ValidationFrequency       time.Duration
 }
 
 func NewBalanceMonitoringService(db *gorm.DB) *BalanceMonitoringService {
 	return &BalanceMonitoringService{
 		db: db,
+		integrityValidator: NewBalanceIntegrityValidator(db),
+		monitoringEnabled: true,
+		alertThresholds: AlertThresholds{
+			CriticalBalanceDifference:   1000000, // 1M IDR
+			HighBalanceDifference:      100000,  // 100K IDR
+			MaxTolerableInconsistencies: 5,
+			ValidationFrequency:        time.Minute * 15,
+		},
 	}
 }
 
@@ -30,6 +52,16 @@ type BalanceDiscrepancy struct {
 	GLBalance       float64 `json:"gl_balance"`
 	Difference      float64 `json:"difference"`
 	DetectedAt      time.Time `json:"detected_at"`
+}
+
+// DoublePostingReport represents the result of double posting detection
+type DoublePostingReport struct {
+	CheckTime                    time.Time `json:"check_time"`
+	TotalAccountsChecked         int       `json:"total_accounts_checked"`
+	DoublePostingPatternsFound   int       `json:"double_posting_patterns_found"`
+	DoublePostingInconsistencies []BalanceInconsistency `json:"double_posting_inconsistencies"`
+	OverallHealthScore          float64   `json:"overall_health_score"`
+	Status                      string    `json:"status"` // "CLEAN", "WARNING", "CRITICAL"
 }
 
 // BalanceMonitoringResult represents the result of balance monitoring check
@@ -250,3 +282,173 @@ func (s *BalanceMonitoringService) GetBalanceHealth() (map[string]interface{}, e
 
 	return health, nil
 }
+
+// DetectDoublePosting detects potential double posting patterns using integrity validator
+func (s *BalanceMonitoringService) DetectDoublePosting() (*DoublePostingReport, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	
+	log.Println("🔍 Detecting double posting patterns...")
+	
+	// Run integrity validation to detect double posting patterns
+	validationResult, err := s.integrityValidator.ValidateAllBalances()
+	if err != nil {
+		return nil, fmt.Errorf("validation failed: %v", err)
+	}
+	
+	// Convert BalanceInconsistency to BalanceDiscrepancy for compatibility
+	doublePostingInconsistencies := []BalanceInconsistency{}
+	for _, inconsistency := range validationResult.Inconsistencies {
+		if inconsistency.Type == "DOUBLE_POSTING_PATTERN" {
+			doublePostingInconsistencies = append(doublePostingInconsistencies, inconsistency)
+		}
+	}
+	
+	report := &DoublePostingReport{
+		CheckTime:                    time.Now(),
+		TotalAccountsChecked:         validationResult.TotalChecks,
+		DoublePostingPatternsFound:   len(doublePostingInconsistencies),
+		DoublePostingInconsistencies: doublePostingInconsistencies,
+		OverallHealthScore:          float64(validationResult.TotalChecks-validationResult.FailedChecks) / float64(validationResult.TotalChecks) * 100,
+	}
+	
+	// Determine severity
+	if len(doublePostingInconsistencies) == 0 {
+		report.Status = "CLEAN"
+		log.Println("✅ No double posting patterns detected")
+	} else if len(doublePostingInconsistencies) <= 2 {
+		report.Status = "WARNING"
+		log.Printf("⚠️ Found %d potential double posting patterns (WARNING)", len(doublePostingInconsistencies))
+	} else {
+		report.Status = "CRITICAL"
+		log.Printf("🚨 Found %d double posting patterns (CRITICAL)", len(doublePostingInconsistencies))
+	}
+	
+	return report, nil
+}
+
+// MonitorPaymentPosting monitors a specific payment for double posting
+func (s *BalanceMonitoringService) MonitorPaymentPosting(paymentID uint, cashBankID uint, expectedAmount float64) {
+	if !s.monitoringEnabled {
+		return
+	}
+	
+	log.Printf("👁️ Monitoring payment %d for double posting (Amount: %.2f)", paymentID, expectedAmount)
+	
+	// Wait for posting operations to complete
+	time.Sleep(time.Second * 2)
+	
+	// Check cash bank transactions for this payment
+	var transactions []models.CashBankTransaction
+	err := s.db.Where("reference_type IN (?, ?) AND reference_id = ?", 
+		"PAYMENT", "SINGLE_SOURCE_POST", paymentID).Find(&transactions).Error
+	
+	if err != nil {
+		log.Printf("❌ Failed to check transactions for payment %d: %v", paymentID, err)
+		return
+	}
+	
+	var totalAmount float64
+	for _, tx := range transactions {
+		if tx.CashBankID == cashBankID {
+			totalAmount += tx.Amount
+		}
+	}
+	
+	// Check for double posting indicators
+	if len(transactions) > 1 {
+		log.Printf("🚨 ALERT: Payment %d created %d transactions - potential double posting!", 
+			paymentID, len(transactions))
+	}
+	
+	if abs(totalAmount - expectedAmount) > 0.01 {
+		log.Printf("🚨 ALERT: Payment %d amount mismatch - Expected: %.2f, Actual: %.2f", 
+			paymentID, expectedAmount, totalAmount)
+	}
+	
+	// Check if balance is exactly double (classic double posting pattern)
+	var cashBank models.CashBank
+	if err := s.db.First(&cashBank, cashBankID).Error; err == nil {
+		var transactionSum float64
+		s.db.Model(&models.CashBankTransaction{}).
+			Where("cash_bank_id = ?", cashBankID).
+			Select("COALESCE(SUM(amount), 0)").
+			Scan(&transactionSum)
+		
+		if abs(cashBank.Balance - transactionSum*2) < 0.01 {
+			log.Printf("🚨 CRITICAL: Double posting pattern detected in CashBank %d - Balance is exactly 2x transaction sum!", cashBankID)
+		}
+	}
+}
+
+// StartContinuousMonitoring starts continuous balance monitoring
+func (s *BalanceMonitoringService) StartContinuousMonitoring() {
+	if !s.monitoringEnabled {
+		log.Println("📊 Balance monitoring is disabled")
+		return
+	}
+	
+	log.Printf("🚀 Starting continuous balance monitoring (every %v)", s.alertThresholds.ValidationFrequency)
+	
+	ticker := time.NewTicker(s.alertThresholds.ValidationFrequency)
+	go func() {
+		for range ticker.C {
+			if s.monitoringEnabled {
+				s.runFullIntegrityCheck()
+			}
+		}
+	}()
+}
+
+// runFullIntegrityCheck runs a complete integrity check
+func (s *BalanceMonitoringService) runFullIntegrityCheck() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	
+	s.lastCheck = time.Now()
+	log.Println("🔍 Running full integrity check...")
+	
+	// Run balance synchronization check
+	syncResult, err := s.CheckBalanceSynchronization()
+	if err != nil {
+		log.Printf("❌ Sync check failed: %v", err)
+		return
+	}
+	
+	// Run double posting detection
+	doublePostingReport, err := s.DetectDoublePosting()
+	if err != nil {
+		log.Printf("❌ Double posting detection failed: %v", err)
+		return
+	}
+	
+	// Log results
+	if syncResult.Status == "OK" && doublePostingReport.Status == "CLEAN" {
+		log.Println("✅ Full integrity check passed - all systems healthy")
+	} else {
+		log.Printf("⚠️ Integrity issues detected - Sync: %s, DoublePosting: %s", 
+			syncResult.Status, doublePostingReport.Status)
+		
+		if doublePostingReport.Status == "CRITICAL" {
+			log.Printf("🚨 CRITICAL: %d double posting patterns detected - immediate action required!", 
+				doublePostingReport.DoublePostingPatternsFound)
+		}
+	}
+}
+
+// GetMonitoringStatus returns current monitoring status
+func (s *BalanceMonitoringService) GetMonitoringStatus() map[string]interface{} {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	
+	return map[string]interface{}{
+		"monitoring_enabled":      s.monitoringEnabled,
+		"last_check":              s.lastCheck.Format(time.RFC3339),
+		"validation_frequency":    s.alertThresholds.ValidationFrequency.String(),
+		"critical_threshold_idr":  s.alertThresholds.CriticalBalanceDifference,
+		"high_threshold_idr":      s.alertThresholds.HighBalanceDifference,
+		"max_inconsistencies":     s.alertThresholds.MaxTolerableInconsistencies,
+		"system_status":           "OPERATIONAL",
+	}
+}
+

@@ -86,28 +86,44 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 			}
 		}
 	case "inventory_manager":
-		// Inventory manager has access to inventory-related modules
-		inventoryModules := []string{"products", "purchases", "sales"}
+		// Inventory manager has comprehensive access to inventory and related operations
+		coreInventoryModules := []string{"products", "purchases", "sales"}
+		supportingModules := []string{"contacts", "assets", "reports"}
+		financialSupportModules := []string{"accounts", "payments", "cash_bank"}
+		
 		for _, module := range modules {
-			if contains(inventoryModules, module) {
+			if contains(coreInventoryModules, module) {
+				// Full access to core inventory modules
 				permissions[module] = &ModulePermission{
 					CanView:    true,
 					CanCreate:  true,
 					CanEdit:    true,
-					CanDelete:  false,
-					CanApprove: false,
+					CanDelete:  false, // Safety: no delete permission
+					CanApprove: false, // Purchase approvals handled by finance/director
 					CanExport:  true,
 				}
-			} else if module == "contacts" {
+			} else if contains(supportingModules, module) {
+				// Good access to supporting modules (contacts for vendors/customers, assets for inventory items, reports for analytics)
 				permissions[module] = &ModulePermission{
 					CanView:    true,
 					CanCreate:  true,
 					CanEdit:    true,
 					CanDelete:  false,
 					CanApprove: false,
-					CanExport:  false,
+					CanExport:  true, // Can export reports and asset lists
+				}
+			} else if contains(financialSupportModules, module) {
+				// Limited financial access - can create entries for inventory operations but cannot approve
+				permissions[module] = &ModulePermission{
+					CanView:    true,
+					CanCreate:  true,  // Can create expense accounts, payments for purchases
+					CanEdit:    false, // Cannot edit financial records (safety)
+					CanDelete:  false,
+					CanApprove: false, // Financial approvals remain with finance team
+					CanExport:  true,  // Can export for reporting
 				}
 			} else {
+				// View-only access to other modules
 				permissions[module] = &ModulePermission{
 					CanView:    true,
 					CanCreate:  false,
@@ -130,6 +146,26 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanApprove: false,
 					CanExport:  false,
 				}
+			} else if module == "accounts" {
+				// Employee needs view access to accounts for purchase form dropdowns
+				permissions[module] = &ModulePermission{
+					CanView:    true,  // Essential for purchase forms
+					CanCreate:  false,
+					CanEdit:    false,
+					CanDelete:  false,
+					CanApprove: false,
+					CanExport:  false,
+				}
+			} else if module == "purchases" {
+				// Employee should be able to create purchases
+				permissions[module] = &ModulePermission{
+					CanView:    true,
+					CanCreate:  true,  // Employees can create purchase requests
+					CanEdit:    true,  // Can edit their own purchases
+					CanDelete:  false, // Cannot delete purchases
+					CanApprove: false, // Cannot approve purchases
+					CanExport:  false,
+				}
 			} else {
 				permissions[module] = &ModulePermission{
 					CanView:    true,
@@ -142,15 +178,29 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 			}
 		}
 	case "director":
-		// Director has view and approve access
+		// Director has view, approve, and limited create/edit access
 		for _, module := range modules {
-			permissions[module] = &ModulePermission{
-				CanView:    true,
-				CanCreate:  false,
-				CanEdit:    false,
-				CanDelete:  false,
-				CanApprove: true,
-				CanExport:  true,
+			if module == "purchases" || module == "sales" || module == "payments" || module == "cash_bank" {
+				// Directors need create/edit access for purchases to create receipts,
+				// and for sales/payments for operational oversight
+				permissions[module] = &ModulePermission{
+					CanView:    true,
+					CanCreate:  true,  // ✅ Allow creating for operational modules
+					CanEdit:    true,  // ✅ Allow editing for operational modules (needed for receipts)
+					CanDelete:  false, // Still no delete access for safety
+					CanApprove: true,
+					CanExport:  true,
+				}
+			} else {
+				// For other modules, keep view/approve only access
+				permissions[module] = &ModulePermission{
+					CanView:    true,
+					CanCreate:  false,
+					CanEdit:    false,
+					CanDelete:  false,
+					CanApprove: true,
+					CanExport:  true,
+				}
 			}
 		}
 	default:

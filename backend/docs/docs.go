@@ -24,71 +24,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/accounts/{account_id}/journal-entries": {
-            "get": {
-                "description": "Get journal entries that affect a specific account (General Ledger view)",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Get account journal entries",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Account ID",
-                        "name": "account_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Start date (YYYY-MM-DD)",
-                        "name": "start_date",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "End date (YYYY-MM-DD)",
-                        "name": "end_date",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Page number (default: 1)",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Items per page (default: 20)",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "data": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/definitions/models.JournalEntry"
-                                    }
-                                },
-                                "total": {
-                                    "type": "integer",
-                                    "format": "int64"
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/admin/check-cashbank-gl-links": {
             "get": {
                 "security": [
@@ -531,6 +466,314 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/cashbank/integrated/accounts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get cash/bank account details integrated with SSOT journal data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CashBank Integration"
+                ],
+                "summary": "Get integrated account details",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.IntegratedAccountResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/cashbank/integrated/accounts/{id}/journal-entries": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get journal entries related to specific cash/bank account with pagination",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CashBank Integration"
+                ],
+                "summary": "Get account journal entries",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/cashbank/integrated/accounts/{id}/reconciliation": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get balance reconciliation between CashBank and SSOT for specific account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CashBank Integration"
+                ],
+                "summary": "Get account reconciliation",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.ReconciliationData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/cashbank/integrated/accounts/{id}/transactions": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get transaction history with journal entry references",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CashBank Integration"
+                ],
+                "summary": "Get account transaction history",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/cashbank/integrated/summary": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get summary of all cash/bank accounts integrated with SSOT journal data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CashBank Integration"
+                ],
+                "summary": "Get integrated summary",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.IntegratedSummaryResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/cashbank/payment-accounts": {
             "get": {
                 "security": [
@@ -827,7 +1070,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Get paginated list of payments with filters",
+                "description": "DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Get paginated list of payments with filters",
                 "consumes": [
                     "application/json"
                 ],
@@ -835,9 +1078,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Payments"
+                    "Deprecated-Payments"
                 ],
-                "summary": "Get payments list",
+                "summary": "[DEPRECATED] Get payments list",
+                "deprecated": true,
                 "parameters": [
                     {
                         "type": "integer",
@@ -887,6 +1131,70 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments/account-balances/real-time": {
+            "get": {
+                "description": "Retrieves current account balances from SSOT materialized view",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment Integration"
+                ],
+                "summary": "Get real-time account balances",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.SSOTAccountBalance"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments/account-balances/refresh": {
+            "post": {
+                "description": "Manually triggers a refresh of the account balances materialized view",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment Integration"
+                ],
+                "summary": "Refresh account balances",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -974,6 +1282,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/payments/enhanced-with-journal": {
+            "post": {
+                "description": "Creates a payment and automatically generates corresponding journal entry",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment Integration"
+                ],
+                "summary": "Create payment with journal integration",
+                "parameters": [
+                    {
+                        "description": "Payment with Journal Request",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.PaymentWithJournalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/services.PaymentWithJournalResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/payments/export/excel": {
             "get": {
                 "security": [
@@ -1028,6 +1388,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/payments/integration-metrics": {
+            "get": {
+                "description": "Provides metrics about payment-journal integration performance and status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment Integration"
+                ],
+                "summary": "Get payment-journal integration metrics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PaymentIntegrationMetrics"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments/journal-entries": {
+            "get": {
+                "description": "Retrieves all journal entries related to a specific payment",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment Integration"
+                ],
+                "summary": "Get journal entries for payment",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Payment ID",
+                        "name": "payment_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.PaginatedJournalResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/payments/payable": {
             "post": {
                 "security": [
@@ -1035,7 +1453,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Create payment to vendor (payable)",
+                "description": "DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Create payment to vendor (payable)",
                 "consumes": [
                     "application/json"
                 ],
@@ -1043,9 +1461,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Payments"
+                    "Deprecated-Payments"
                 ],
-                "summary": "Create payable payment",
+                "summary": "[DEPRECATED] Create payable payment",
+                "deprecated": true,
                 "parameters": [
                     {
                         "description": "Payment data",
@@ -1067,14 +1486,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/payments/receivable": {
+        "/api/payments/preview-journal": {
             "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Create payment from customer (receivable)",
+                "description": "Shows what journal entry would be created for a payment without actually creating it",
                 "consumes": [
                     "application/json"
                 ],
@@ -1082,9 +1496,58 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Payments"
+                    "Payment Integration"
                 ],
-                "summary": "Create receivable payment",
+                "summary": "Preview journal entry for payment",
+                "parameters": [
+                    {
+                        "description": "Payment Preview Request",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.PaymentWithJournalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.PaymentJournalResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments/receivable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Create payment from customer (receivable)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deprecated-Payments"
+                ],
+                "summary": "[DEPRECATED] Create receivable payment",
+                "deprecated": true,
                 "parameters": [
                     {
                         "description": "Payment data",
@@ -1292,7 +1755,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Get single payment details",
+                "description": "DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Get single payment details",
                 "consumes": [
                     "application/json"
                 ],
@@ -1300,9 +1763,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Payments"
+                    "Deprecated-Payments"
                 ],
-                "summary": "Get payment by ID",
+                "summary": "[DEPRECATED] Get payment by ID",
+                "deprecated": true,
                 "parameters": [
                     {
                         "type": "integer",
@@ -1362,6 +1826,47 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments/{id}/account-updates": {
+            "get": {
+                "description": "Retrieves the account balance changes caused by a payment transaction",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment Integration"
+                ],
+                "summary": "Get account balance updates from payment",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Payment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/services.AccountBalanceUpdate"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1456,6 +1961,112 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments/{id}/reverse": {
+            "post": {
+                "description": "Reverses a payment transaction and creates a corresponding reversing journal entry",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment Integration"
+                ],
+                "summary": "Reverse payment and journal entry",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Payment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reversal Request",
+                        "name": "reversal",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.ReversePaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.PaymentWithJournalResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments/{id}/with-journal": {
+            "get": {
+                "description": "Retrieves a payment along with its associated journal entry information",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Payment Integration"
+                ],
+                "summary": "Get payment with journal details",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Payment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.PaymentWithJournalResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -1581,189 +2192,6 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/models.PurchasePayment"
                             }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/reports/enhanced/financial-metrics": {
-            "get": {
-                "description": "Get key profitability and performance metrics from P\u0026L data",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Enhanced Reports"
-                ],
-                "summary": "Get Key Financial Metrics",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Start date (YYYY-MM-DD)",
-                        "name": "start_date",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "End date (YYYY-MM-DD)",
-                        "name": "end_date",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Financial metrics",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/reports/enhanced/profit-loss": {
-            "get": {
-                "description": "Generate a comprehensive P\u0026L statement with proper accounting categorization and financial metrics",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Enhanced Reports"
-                ],
-                "summary": "Generate Enhanced Profit \u0026 Loss Statement",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Start date (YYYY-MM-DD)",
-                        "name": "start_date",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "End date (YYYY-MM-DD)",
-                        "name": "end_date",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "default": "json",
-                        "description": "Output format (json, pdf)",
-                        "name": "format",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Enhanced P\u0026L data",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/reports/enhanced/profit-loss-comparison": {
-            "get": {
-                "description": "Compare P\u0026L metrics between current period and previous period",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Enhanced Reports"
-                ],
-                "summary": "Compare P\u0026L Between Periods",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Current period start date (YYYY-MM-DD)",
-                        "name": "current_start",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Current period end date (YYYY-MM-DD)",
-                        "name": "current_end",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Previous period start date (YYYY-MM-DD)",
-                        "name": "previous_start",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Previous period end date (YYYY-MM-DD)",
-                        "name": "previous_end",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "P\u0026L comparison data",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
                         }
                     }
                 }
@@ -2301,6 +2729,1420 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/journals": {
+            "get": {
+                "description": "Get journal entries with filtering, pagination, and sorting",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal"
+                ],
+                "summary": "Get journal entries list",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source type filter",
+                        "name": "source_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Date from filter (YYYY-MM-DD)",
+                        "name": "date_from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Date to filter (YYYY-MM-DD)",
+                        "name": "date_to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Reference search",
+                        "name": "reference",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.PaginatedJournalResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new journal entry with validation and optional auto-posting",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal"
+                ],
+                "summary": "Create a new journal entry",
+                "parameters": [
+                    {
+                        "description": "Journal Entry Request",
+                        "name": "journal",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.JournalEntryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/services.JournalResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/journals/account-balances": {
+            "get": {
+                "description": "Get account balances from materialized view",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal"
+                ],
+                "summary": "Get account balances",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.SSOTAccountBalance"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/journals/account-balances/refresh": {
+            "post": {
+                "description": "Manually refresh the materialized view for account balances",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal"
+                ],
+                "summary": "Refresh account balances",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/journals/summary": {
+            "get": {
+                "description": "Get summary statistics for journal entries",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal"
+                ],
+                "summary": "Get journal summary",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.JournalSummary"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/journals/{id}": {
+            "get": {
+                "description": "Get a specific journal entry with its lines",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal"
+                ],
+                "summary": "Get journal entry by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Journal Entry ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.JournalResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/journals/{id}/post": {
+            "put": {
+                "description": "Change journal entry status from draft to posted",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal"
+                ],
+                "summary": "Post a journal entry",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Journal Entry ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/journals/{id}/reverse": {
+            "post": {
+                "description": "Create a reversing journal entry for a posted entry",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Journal"
+                ],
+                "summary": "Reverse a journal entry",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Journal Entry ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Reversal Request",
+                        "name": "reversal",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.ReverseJournalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/services.JournalResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/payments/fast/health": {
+            "get": {
+                "description": "Returns health status of the fast payment service",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fast-payments"
+                ],
+                "summary": "Health check for fast payment service",
+                "responses": {
+                    "200": {
+                        "description": "Health status",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/payments/fast/record": {
+            "post": {
+                "description": "Records a payment with minimal database operations for fast response",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fast-payments"
+                ],
+                "summary": "Record payment with fast processing",
+                "parameters": [
+                    {
+                        "description": "Payment details",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.LightweightPaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.LightweightPaymentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/payments/fast/record-async": {
+            "post": {
+                "description": "Records payment immediately and creates journal entry in background",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fast-payments"
+                ],
+                "summary": "Record payment with async journal processing",
+                "parameters": [
+                    {
+                        "description": "Payment details",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.LightweightPaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.LightweightPaymentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/payments/fast/status/{id}": {
+            "get": {
+                "description": "Gets real-time payment processing status",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fast-payments"
+                ],
+                "summary": "Get payment status",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Payment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payment status",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Payment not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/payments/fast/validate": {
+            "post": {
+                "description": "Validates payment data quickly for frontend feedback",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "fast-payments"
+                ],
+                "summary": "Validate payment data",
+                "parameters": [
+                    {
+                        "description": "Payment details",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.LightweightPaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Validation result",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Validation errors",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reports/psak/balance-sheet": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate Balance Sheet sesuai PSAK 1 (Penyajian Laporan Keuangan)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PSAK Reports"
+                ],
+                "summary": "Generate PSAK-compliant Balance Sheet",
+                "parameters": [
+                    {
+                        "description": "Balance Sheet Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKBalanceSheetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/controllers.PSAKReportResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.PSAKBalanceSheetData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reports/psak/cash-flow": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate Cash Flow Statement sesuai PSAK 2 (Laporan Arus Kas)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PSAK Reports"
+                ],
+                "summary": "Generate PSAK-compliant Cash Flow Statement",
+                "parameters": [
+                    {
+                        "description": "Cash Flow Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKCashFlowRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/controllers.PSAKReportResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.PSAKCashFlowData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reports/psak/check-compliance": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Check compliance terhadap standar PSAK untuk laporan tertentu",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PSAK Reports"
+                ],
+                "summary": "Check PSAK compliance for specific report",
+                "parameters": [
+                    {
+                        "description": "Compliance Check Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKComplianceCheckRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/controllers.PSAKReportResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.PSAKComplianceInfo"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reports/psak/compliance-summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate compliance summary untuk semua laporan keuangan terhadap standar PSAK",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PSAK Reports"
+                ],
+                "summary": "Get PSAK Compliance Summary for all reports",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "2024-12-31",
+                        "description": "As of date for balance sheet (YYYY-MM-DD)",
+                        "name": "as_of_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "2024-01-01",
+                        "description": "Start date for P\u0026L and cash flow (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "2024-12-31",
+                        "description": "End date for P\u0026L and cash flow (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/controllers.PSAKReportResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/controllers.PSAKComplianceSummaryResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reports/psak/profit-loss": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate P\u0026L Statement sesuai PSAK 1 (Laporan Laba Rugi dan Penghasilan Komprehensif Lain)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PSAK Reports"
+                ],
+                "summary": "Generate PSAK-compliant Profit \u0026 Loss Statement",
+                "parameters": [
+                    {
+                        "description": "Profit \u0026 Loss Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKProfitLossRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/controllers.PSAKReportResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.PSAKProfitLossData"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.PSAKReportResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reports/psak/standards": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get daftar standar PSAK yang didukung dalam sistem",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "PSAK Reports"
+                ],
+                "summary": "Get list of supported PSAK standards",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/controllers.PSAKReportResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/controllers.PSAKStandardsListResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/general-ledger": {
+            "get": {
+                "description": "Generate general ledger using SSOT journal data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get general ledger integrated with SSOT journal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID (specific account or 'all' for all accounts)",
+                        "name": "account_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format (json, pdf, excel)",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.GeneralLedgerData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/integrated": {
+            "get": {
+                "description": "Generate all financial reports (P\u0026L, Balance Sheet, Cash Flow, etc.) integrated with SSOT journal system",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get all integrated financial reports",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.IntegratedFinancialReports"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/journal-analysis": {
+            "get": {
+                "description": "Generate comprehensive journal entry analysis using SSOT data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get journal entry analysis integrated with SSOT",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format (json, pdf)",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.JournalAnalysisData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/refresh": {
+            "post": {
+                "description": "Manually trigger report refresh and broadcast updates via websocket",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Trigger manual report refresh",
+                "parameters": [
+                    {
+                        "description": "Refresh request parameters",
+                        "name": "refresh_request",
+                        "in": "body",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/sales-summary": {
+            "get": {
+                "description": "Generate comprehensive sales summary using SSOT journal data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get sales summary integrated with SSOT journal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format (json, pdf, excel)",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.SalesSummaryData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/status": {
+            "get": {
+                "description": "Get status information about SSOT journal integration and report generation",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get SSOT report integration status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/trial-balance": {
+            "get": {
+                "description": "Generate trial balance using SSOT journal data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get trial balance integrated with SSOT journal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "today",
+                        "description": "As of date (YYYY-MM-DD)",
+                        "name": "as_of_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format (json, pdf, excel)",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.TrialBalanceData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/vendor-analysis": {
+            "get": {
+                "description": "Generate comprehensive vendor analysis using SSOT journal data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get vendor analysis integrated with SSOT journal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format (json, pdf)",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.VendorAnalysisData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Authenticate user and return access token and refresh token",
@@ -2530,6 +4372,52 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden - insufficient privileges",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/finance": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve finance-specific dashboard metrics including invoices, journals, and reconciliation status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get finance dashboard data",
+                "responses": {
+                    "200": {
+                        "description": "Finance dashboard data retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - not finance role",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -2856,62 +4744,96 @@ const docTemplate = `{
                 }
             }
         },
-        "/journal-entries": {
+        "/monitoring/api-usage/analytics": {
             "get": {
-                "description": "Get paginated list of journal entries with optional filtering",
+                "description": "Get detailed analytics and insights about API usage patterns",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "journal-entries"
+                    "monitoring"
                 ],
-                "summary": "List journal entries",
+                "summary": "Get API usage analytics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/monitoring/api-usage/reset": {
+            "post": {
+                "description": "Reset all API usage tracking statistics (admin only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "monitoring"
+                ],
+                "summary": "Reset API usage statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/monitoring/api-usage/stats": {
+            "get": {
+                "description": "Get comprehensive API endpoint usage statistics",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "monitoring"
+                ],
+                "summary": "Get API usage statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/monitoring/api-usage/top": {
+            "get": {
+                "description": "Get list of most frequently used API endpoints",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "monitoring"
+                ],
+                "summary": "Get top used endpoints",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Filter by status (DRAFT, POSTED, REVERSED)",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by reference type",
-                        "name": "reference_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by account ID",
-                        "name": "account_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by start date (YYYY-MM-DD)",
-                        "name": "start_date",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by end date (YYYY-MM-DD)",
-                        "name": "end_date",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Search in description, reference, or code",
-                        "name": "search",
-                        "in": "query"
-                    },
-                    {
                         "type": "integer",
-                        "description": "Page number (default: 1)",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Items per page (default: 20)",
+                        "default": 10,
+                        "description": "Number of top endpoints to return",
                         "name": "limit",
                         "in": "query"
                     }
@@ -2921,207 +4843,15 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "object",
-                            "properties": {
-                                "data": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/definitions/models.JournalEntry"
-                                    }
-                                },
-                                "total": {
-                                    "type": "integer",
-                                    "format": "int64"
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            "post": {
-                "description": "Create a new journal entry with balanced debit and credit lines",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Create journal entry",
-                "parameters": [
-                    {
-                        "description": "Journal entry data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntryCreateRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntry"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ErrorResponse"
+                            "additionalProperties": true
                         }
                     }
                 }
             }
         },
-        "/journal-entries/auto-generate/purchase": {
-            "post": {
-                "description": "Automatically generate journal entry from a purchase transaction",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Auto-generate from purchase",
-                "parameters": [
-                    {
-                        "description": "Purchase ID",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "purchase_id": {
-                                    "type": "integer"
-                                }
-                            }
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntry"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/journal-entries/auto-generate/sale": {
-            "post": {
-                "description": "Automatically generate journal entry from a sale transaction",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Auto-generate from sale",
-                "parameters": [
-                    {
-                        "description": "Sale ID",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "sale_id": {
-                                    "type": "integer"
-                                }
-                            }
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntry"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/journal-entries/summary": {
+        "/monitoring/api-usage/unused": {
             "get": {
-                "description": "Get summary statistics for journal entries",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Get journal entry summary",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntrySummary"
-                        }
-                    }
-                }
-            }
-        },
-        "/journal-entries/{id}": {
-            "get": {
-                "description": "Get journal entry details by ID",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Get journal entry",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Journal Entry ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntry"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "description": "Update journal entry details (only draft entries can be updated)",
+                "description": "Get list of potentially unused API endpoints",
                 "consumes": [
                     "application/json"
                 ],
@@ -3129,55 +4859,16 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "journal-entries"
+                    "monitoring"
                 ],
-                "summary": "Update journal entry",
+                "summary": "Get unused endpoints",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Journal Entry ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Updated journal entry data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntryUpdateRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntry"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "description": "Delete a journal entry (only draft entries can be deleted)",
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Delete journal entry",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Journal Entry ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
+                        "default": 1,
+                        "description": "Minimum usage count to consider as used",
+                        "name": "min_usage",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3185,106 +4876,7 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "type": "object",
-                            "properties": {
-                                "message": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/journal-entries/{id}/post": {
-            "post": {
-                "description": "Post a journal entry to update account balances (changes status to POSTED)",
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Post journal entry",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Journal Entry ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "message": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/journal-entries/{id}/reverse": {
-            "post": {
-                "description": "Create a reversing journal entry to undo the effects of a posted entry",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "journal-entries"
-                ],
-                "summary": "Reverse journal entry",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Journal Entry ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Reversal reason",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "reason": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.JournalEntry"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/utils.ErrorResponse"
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -3341,9 +4933,517 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/reports/ssot-profit-loss": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate a comprehensive Profit \u0026 Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Generate SSOT Profit \u0026 Loss Report",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "2025-01-01",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "2025-12-31",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "json",
+                            "pdf",
+                            "excel",
+                            "csv"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "P\u0026L report generated successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/ssot/balance-sheet": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate a comprehensive Balance Sheet using Single Source of Truth (SSOT) journal system with real-time data integration and automatic balance validation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Generate SSOT Balance Sheet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "2025-12-31",
+                        "description": "As of date (YYYY-MM-DD)",
+                        "name": "as_of_date",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "json",
+                            "summary"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Balance Sheet generated successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/ssot/balance-sheet/account-details": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get detailed account information for Balance Sheet drilldown analysis",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get SSOT Balance Sheet Account Details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "2025-12-31",
+                        "description": "As of date (YYYY-MM-DD)",
+                        "name": "as_of_date",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "ASSET",
+                            "LIABILITY",
+                            "EQUITY"
+                        ],
+                        "type": "string",
+                        "description": "Filter by account type",
+                        "name": "account_type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Account details retrieved successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/reports/ssot/cash-flow": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate a comprehensive Cash Flow statement using Single Source of Truth (SSOT) journal system with operating, investing, and financing activities analysis",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Generate SSOT Cash Flow Statement",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "2025-01-01",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "2025-12-31",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "json",
+                            "pdf",
+                            "excel",
+                            "csv"
+                        ],
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Cash Flow statement generated successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "controllers.JournalSummary": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.PSAKBalanceSheetRequest": {
+            "type": "object",
+            "required": [
+                "as_of_date"
+            ],
+            "properties": {
+                "as_of_date": {
+                    "type": "string",
+                    "example": "2024-12-31"
+                }
+            }
+        },
+        "controllers.PSAKCashFlowRequest": {
+            "type": "object",
+            "required": [
+                "end_date",
+                "start_date"
+            ],
+            "properties": {
+                "end_date": {
+                    "type": "string",
+                    "example": "2024-12-31"
+                },
+                "method": {
+                    "description": "DIRECT or INDIRECT",
+                    "type": "string",
+                    "example": "INDIRECT"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2024-01-01"
+                }
+            }
+        },
+        "controllers.PSAKComplianceCheckRequest": {
+            "type": "object",
+            "required": [
+                "report_type"
+            ],
+            "properties": {
+                "as_of_date": {
+                    "type": "string",
+                    "example": "2024-12-31"
+                },
+                "end_date": {
+                    "type": "string",
+                    "example": "2024-12-31"
+                },
+                "report_type": {
+                    "description": "BALANCE_SHEET, PROFIT_LOSS, CASH_FLOW",
+                    "type": "string",
+                    "example": "BALANCE_SHEET"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2024-01-01"
+                }
+            }
+        },
+        "controllers.PSAKComplianceSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "critical_issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKIssue"
+                    }
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "overall_compliance": {
+                    "type": "string"
+                },
+                "overall_score": {
+                    "type": "number"
+                },
+                "period": {
+                    "$ref": "#/definitions/controllers.PSAKPeriodInfo"
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "report_compliances": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/services.PSAKComplianceInfo"
+                    }
+                }
+            }
+        },
+        "controllers.PSAKPeriodInfo": {
+            "type": "object",
+            "properties": {
+                "as_of_date": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.PSAKProfitLossRequest": {
+            "type": "object",
+            "required": [
+                "end_date",
+                "start_date"
+            ],
+            "properties": {
+                "end_date": {
+                    "type": "string",
+                    "example": "2024-12-31"
+                },
+                "start_date": {
+                    "type": "string",
+                    "example": "2024-01-01"
+                }
+            }
+        },
+        "controllers.PSAKReportResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "message": {
+                    "type": "string"
+                },
+                "request_id": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.PSAKStandardInfo": {
+            "type": "object",
+            "properties": {
+                "applicable_to": {
+                    "description": "e.g., [\"BALANCE_SHEET\", \"PROFIT_LOSS\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "code": {
+                    "description": "e.g., \"PSAK 1\"",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "effective_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "e.g., \"ACTIVE\", \"SUPERSEDED\"",
+                    "type": "string"
+                },
+                "title": {
+                    "description": "e.g., \"Penyajian Laporan Keuangan\"",
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.PSAKStandardsListResponse": {
+            "type": "object",
+            "properties": {
+                "standards": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controllers.PSAKStandardInfo"
+                    }
+                },
+                "total_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "controllers.PaymentIntegrationMetrics": {
+            "type": "object",
+            "properties": {
+                "payments_with_journal": {
+                    "type": "integer"
+                },
+                "success_rate": {
+                    "type": "number"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "total_payments": {
+                    "type": "integer"
+                }
+            }
+        },
+        "controllers.ReverseJournalRequest": {
+            "type": "object",
+            "required": [
+                "description"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.ReversePaymentRequest": {
+            "type": "object",
+            "required": [
+                "reason"
+            ],
+            "properties": {
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
         "models.APIResponse": {
             "type": "object",
             "properties": {
@@ -4188,103 +6288,6 @@ const docTemplate = `{
                 }
             }
         },
-        "models.JournalEntryCreateRequest": {
-            "type": "object",
-            "required": [
-                "description",
-                "entry_date",
-                "user_id"
-            ],
-            "properties": {
-                "account_id": {
-                    "type": "integer"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "entry_date": {
-                    "type": "string"
-                },
-                "is_auto_generated": {
-                    "type": "boolean"
-                },
-                "notes": {
-                    "type": "string"
-                },
-                "reference": {
-                    "type": "string"
-                },
-                "reference_id": {
-                    "type": "integer"
-                },
-                "reference_type": {
-                    "type": "string"
-                },
-                "total_credit": {
-                    "type": "number"
-                },
-                "total_debit": {
-                    "type": "number"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "models.JournalEntrySummary": {
-            "type": "object",
-            "properties": {
-                "balanced_entries": {
-                    "type": "integer"
-                },
-                "status_counts": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer",
-                        "format": "int64"
-                    }
-                },
-                "total_credit": {
-                    "type": "number"
-                },
-                "total_debit": {
-                    "type": "number"
-                },
-                "total_entries": {
-                    "type": "integer"
-                },
-                "type_counts": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer",
-                        "format": "int64"
-                    }
-                }
-            }
-        },
-        "models.JournalEntryUpdateRequest": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string"
-                },
-                "entry_date": {
-                    "type": "string"
-                },
-                "journal_lines": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.JournalLineCreateRequest"
-                    }
-                },
-                "notes": {
-                    "type": "string"
-                },
-                "reference": {
-                    "type": "string"
-                }
-            }
-        },
         "models.JournalLine": {
             "type": "object",
             "properties": {
@@ -4321,37 +6324,17 @@ const docTemplate = `{
                 }
             }
         },
-        "models.JournalLineCreateRequest": {
-            "type": "object",
-            "required": [
-                "account_id"
-            ],
-            "properties": {
-                "account_id": {
-                    "type": "integer"
-                },
-                "credit_amount": {
-                    "type": "number"
-                },
-                "debit_amount": {
-                    "type": "number"
-                },
-                "description": {
-                    "type": "string"
-                }
-            }
-        },
         "models.LoginRequest": {
             "type": "object",
             "required": [
-                "password",
-                "username"
+                "email",
+                "password"
             ],
             "properties": {
-                "password": {
+                "email": {
                     "type": "string"
                 },
-                "username": {
+                "password": {
                     "type": "string"
                 }
             }
@@ -4396,8 +6379,12 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "journal_entry_id": {
+                    "description": "Link to SSOT journal entry",
+                    "type": "integer"
+                },
                 "method": {
-                    "description": "CASH, BANK",
+                    "description": "CASH, BANK_TRANSFER, CHECK, etc.",
                     "type": "string"
                 },
                 "notes": {
@@ -4407,7 +6394,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "status": {
-                    "description": "PENDING, COMPLETED, FAILED",
+                    "description": "PENDING, COMPLETED, FAILED, REVERSED",
                     "type": "string"
                 },
                 "updated_at": {
@@ -4418,6 +6405,43 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "models.PaymentAllocation": {
+            "type": "object",
+            "properties": {
+                "allocated_amount": {
+                    "type": "number"
+                },
+                "bill_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "invoice_id": {
+                    "type": "integer"
+                },
+                "payment": {
+                    "description": "Relations",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Payment"
+                        }
+                    ]
+                },
+                "payment_id": {
+                    "type": "integer"
+                },
+                "sale": {
+                    "$ref": "#/definitions/models.Sale"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -4951,6 +6975,53 @@ const docTemplate = `{
                 }
             }
         },
+        "models.SSOTAccountBalance": {
+            "type": "object",
+            "properties": {
+                "account_category": {
+                    "type": "string"
+                },
+                "account_code": {
+                    "type": "string"
+                },
+                "account_id": {
+                    "type": "integer"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "account_type": {
+                    "type": "string"
+                },
+                "current_balance": {
+                    "type": "number"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_header": {
+                    "type": "boolean"
+                },
+                "last_transaction_date": {
+                    "type": "string"
+                },
+                "last_updated": {
+                    "type": "string"
+                },
+                "normal_balance": {
+                    "type": "string"
+                },
+                "total_credits": {
+                    "type": "number"
+                },
+                "total_debits": {
+                    "type": "number"
+                },
+                "transaction_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.Sale": {
             "type": "object",
             "properties": {
@@ -5260,23 +7331,16 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
-                "date": {
-                    "type": "string"
-                },
                 "id": {
                     "type": "integer"
-                },
-                "method": {
-                    "type": "string"
                 },
                 "notes": {
                     "type": "string"
                 },
-                "payment_id": {
-                    "description": "Cross-reference to Payment Management",
-                    "type": "integer"
+                "payment_date": {
+                    "type": "string"
                 },
-                "payment_number": {
+                "payment_method": {
                     "type": "string"
                 },
                 "reference": {
@@ -5292,6 +7356,10 @@ const docTemplate = `{
                 },
                 "sale_id": {
                     "type": "integer"
+                },
+                "status": {
+                    "description": "COMPLETED, PENDING, CANCELLED",
+                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
@@ -5677,6 +7745,76 @@ const docTemplate = `{
                 }
             }
         },
+        "services.AccountBalanceUpdate": {
+            "type": "object",
+            "properties": {
+                "account_code": {
+                    "type": "string"
+                },
+                "account_id": {
+                    "type": "integer"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "change": {
+                    "type": "number"
+                },
+                "change_type": {
+                    "description": "INCREASE, DECREASE",
+                    "type": "string"
+                },
+                "new_balance": {
+                    "type": "number"
+                },
+                "old_balance": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.AccountBreakdown": {
+            "type": "object",
+            "properties": {
+                "account_code": {
+                    "type": "string"
+                },
+                "account_id": {
+                    "type": "integer"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "total_credit": {
+                    "type": "number"
+                },
+                "total_debit": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.AccountTypeSummary": {
+            "type": "object",
+            "properties": {
+                "account_count": {
+                    "type": "integer"
+                },
+                "account_type": {
+                    "type": "string"
+                },
+                "net_balance": {
+                    "type": "number"
+                },
+                "total_credits": {
+                    "type": "number"
+                },
+                "total_debits": {
+                    "type": "number"
+                }
+            }
+        },
         "services.BalanceDiscrepancy": {
             "type": "object",
             "properties": {
@@ -5736,6 +7874,107 @@ const docTemplate = `{
                 },
                 "unsynchronized_accounts": {
                     "type": "integer"
+                }
+            }
+        },
+        "services.BalanceSheetData": {
+            "type": "object",
+            "properties": {
+                "as_of_date": {
+                    "type": "string"
+                },
+                "assets": {
+                    "$ref": "#/definitions/services.BalanceSheetSection"
+                },
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "difference": {
+                    "type": "number"
+                },
+                "equity": {
+                    "$ref": "#/definitions/services.BalanceSheetSection"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "is_balanced": {
+                    "type": "boolean"
+                },
+                "liabilities": {
+                    "$ref": "#/definitions/services.BalanceSheetSection"
+                },
+                "total_assets": {
+                    "type": "number"
+                },
+                "total_equity": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.BalanceSheetItem": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "balance": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "is_header": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.BalanceSheetSection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.BalanceSheetItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subtotals": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.BalanceSheetSubtotal"
+                    }
+                },
+                "total": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.BalanceSheetSubtotal": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
                 }
             }
         },
@@ -5919,6 +8158,246 @@ const docTemplate = `{
                 }
             }
         },
+        "services.CashFlowData": {
+            "type": "object",
+            "properties": {
+                "beginning_cash": {
+                    "type": "number"
+                },
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "ending_cash": {
+                    "type": "number"
+                },
+                "financing_activities": {
+                    "$ref": "#/definitions/services.CashFlowSection"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "investing_activities": {
+                    "$ref": "#/definitions/services.CashFlowSection"
+                },
+                "net_cash_flow": {
+                    "type": "number"
+                },
+                "operating_activities": {
+                    "$ref": "#/definitions/services.CashFlowSection"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.CashFlowItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.CashFlowSection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.CashFlowItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.CompanyInfo": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "postal_code": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "tax_number": {
+                    "type": "string"
+                },
+                "website": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.ComplianceIssue": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "journal_id": {
+                    "type": "integer"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.ComplianceReport": {
+            "type": "object",
+            "properties": {
+                "compliance_score": {
+                    "type": "number"
+                },
+                "failed_checks": {
+                    "type": "integer"
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.ComplianceIssue"
+                    }
+                },
+                "passed_checks": {
+                    "type": "integer"
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "total_checks": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.CustomerSalesData": {
+            "type": "object",
+            "properties": {
+                "average_order": {
+                    "type": "number"
+                },
+                "customer_id": {
+                    "type": "integer"
+                },
+                "customer_name": {
+                    "type": "string"
+                },
+                "first_order_date": {
+                    "type": "string"
+                },
+                "last_order_date": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "transaction_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.DataQualityIssue": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.DataQualityMetrics": {
+            "type": "object",
+            "properties": {
+                "accuracy_score": {
+                    "type": "number"
+                },
+                "completeness_score": {
+                    "type": "number"
+                },
+                "consistency_score": {
+                    "type": "number"
+                },
+                "detailed_metrics": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.DataQualityIssue"
+                    }
+                },
+                "overall_score": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.DataSourceInfo": {
+            "type": "object",
+            "properties": {
+                "data_integrity_check": {
+                    "type": "boolean"
+                },
+                "draft_entries": {
+                    "type": "integer"
+                },
+                "last_journal_sync": {
+                    "type": "string"
+                },
+                "posted_entries": {
+                    "type": "integer"
+                },
+                "ssot_version": {
+                    "type": "string"
+                },
+                "total_journal_entries": {
+                    "type": "integer"
+                }
+            }
+        },
         "services.DepositRequest": {
             "type": "object",
             "required": [
@@ -5966,6 +8445,430 @@ const docTemplate = `{
                 }
             }
         },
+        "services.EntryTypeBreakdown": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "percentage": {
+                    "type": "number"
+                },
+                "source_type": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.GeneralLedgerData": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "$ref": "#/definitions/models.Account"
+                },
+                "closing_balance": {
+                    "type": "number"
+                },
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "monthly_summary": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.MonthlyLedgerSummary"
+                    }
+                },
+                "opening_balance": {
+                    "type": "number"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "total_credits": {
+                    "type": "number"
+                },
+                "total_debits": {
+                    "type": "number"
+                },
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.GeneralLedgerEntry"
+                    }
+                }
+            }
+        },
+        "services.GeneralLedgerEntry": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "number"
+                },
+                "credit_amount": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "debit_amount": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "entry_type": {
+                    "type": "string"
+                },
+                "journal_code": {
+                    "type": "string"
+                },
+                "reference": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.GrowthAnalysisData": {
+            "type": "object",
+            "properties": {
+                "month_over_month": {
+                    "type": "number"
+                },
+                "quarter_over_quarter": {
+                    "type": "number"
+                },
+                "seasonality_index": {
+                    "type": "number"
+                },
+                "trend_direction": {
+                    "type": "string"
+                },
+                "year_over_year": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.IntegratedAccountDetail": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "balance": {
+                    "type": "number"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_transaction_date": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "reconciliation_status": {
+                    "type": "string"
+                },
+                "ssot_balance": {
+                    "type": "number"
+                },
+                "total_journal_entries": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "variance": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.IntegratedAccountResponse": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "$ref": "#/definitions/services.IntegratedAccountDetail"
+                },
+                "last_synced_at": {
+                    "type": "string"
+                },
+                "recent_journal_entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.IntegratedJournalEntry"
+                    }
+                },
+                "recent_transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.IntegratedTransaction"
+                    }
+                }
+            }
+        },
+        "services.IntegratedAccountSummary": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "number"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_transaction_date": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "reconciliation_status": {
+                    "type": "string"
+                },
+                "ssot_balance": {
+                    "type": "number"
+                },
+                "total_journal_entries": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "variance": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.IntegratedActivity": {
+            "type": "object",
+            "properties": {
+                "account_name": {
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "number": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.IntegratedBalanceSummary": {
+            "type": "object",
+            "properties": {
+                "balance_variance": {
+                    "type": "number"
+                },
+                "total_balance": {
+                    "type": "number"
+                },
+                "total_bank": {
+                    "type": "number"
+                },
+                "total_cash": {
+                    "type": "number"
+                },
+                "total_ssot_balance": {
+                    "type": "number"
+                },
+                "variance_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.IntegratedFinancialReports": {
+            "type": "object",
+            "properties": {
+                "balance_sheet": {
+                    "$ref": "#/definitions/services.BalanceSheetData"
+                },
+                "cash_flow": {
+                    "$ref": "#/definitions/services.CashFlowData"
+                },
+                "data_source_info": {
+                    "$ref": "#/definitions/services.DataSourceInfo"
+                },
+                "general_ledger": {
+                    "$ref": "#/definitions/services.GeneralLedgerData"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "journal_analysis": {
+                    "$ref": "#/definitions/services.JournalAnalysisData"
+                },
+                "profit_loss": {
+                    "$ref": "#/definitions/services.ProfitLossData"
+                },
+                "sales_summary": {
+                    "$ref": "#/definitions/services.SalesSummaryData"
+                },
+                "trial_balance": {
+                    "$ref": "#/definitions/services.TrialBalanceData"
+                },
+                "vendor_analysis": {
+                    "$ref": "#/definitions/services.VendorAnalysisData"
+                }
+            }
+        },
+        "services.IntegratedJournalEntry": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "entry_date": {
+                    "type": "string"
+                },
+                "entry_number": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.IntegratedJournalLine"
+                    }
+                },
+                "source_type": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "total_credit": {
+                    "type": "number"
+                },
+                "total_debit": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.IntegratedJournalLine": {
+            "type": "object",
+            "properties": {
+                "account_code": {
+                    "type": "string"
+                },
+                "account_id": {
+                    "type": "integer"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "credit_amount": {
+                    "type": "number"
+                },
+                "debit_amount": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.IntegratedSummaryResponse": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.IntegratedAccountSummary"
+                    }
+                },
+                "recent_activities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.IntegratedActivity"
+                    }
+                },
+                "summary": {
+                    "$ref": "#/definitions/services.IntegratedBalanceSummary"
+                },
+                "sync_status": {
+                    "$ref": "#/definitions/services.SyncStatus"
+                }
+            }
+        },
+        "services.IntegratedTransaction": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "balance_after": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "journal_entry_id": {
+                    "type": "integer"
+                },
+                "journal_entry_number": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "string"
+                },
+                "reference_number": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
         "services.InvoiceAllocation": {
             "type": "object",
             "properties": {
@@ -5973,6 +8876,65 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "invoice_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.JournalAnalysisData": {
+            "type": "object",
+            "properties": {
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "compliance_check": {
+                    "$ref": "#/definitions/services.ComplianceReport"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "data_quality_metrics": {
+                    "$ref": "#/definitions/services.DataQualityMetrics"
+                },
+                "draft_entries": {
+                    "type": "integer"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "entries_by_account": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.AccountBreakdown"
+                    }
+                },
+                "entries_by_period": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PeriodBreakdown"
+                    }
+                },
+                "entries_by_type": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.EntryTypeBreakdown"
+                    }
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "posted_entries": {
+                    "type": "integer"
+                },
+                "reversed_entries": {
+                    "type": "integer"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "total_entries": {
                     "type": "integer"
                 }
             }
@@ -6053,6 +9015,38 @@ const docTemplate = `{
                 }
             }
         },
+        "services.JournalEntryRequest": {
+            "type": "object",
+            "properties": {
+                "auto_post": {
+                    "type": "boolean"
+                },
+                "created_by": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "entry_date": {
+                    "type": "string"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.JournalLineRequest"
+                    }
+                },
+                "reference": {
+                    "type": "string"
+                },
+                "source_id": {
+                    "type": "integer"
+                },
+                "source_type": {
+                    "type": "string"
+                }
+            }
+        },
         "services.JournalEntrySummary": {
             "type": "object",
             "properties": {
@@ -6078,6 +9072,1063 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "total_debit": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.JournalLineRequest": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "credit_amount": {
+                    "type": "number"
+                },
+                "debit_amount": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.JournalLineResponse": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "credit_amount": {
+                    "type": "number"
+                },
+                "debit_amount": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "line_number": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.JournalResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "entry_number": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_balanced": {
+                    "type": "boolean"
+                },
+                "lines": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.JournalLineResponse"
+                    }
+                },
+                "status": {
+                    "type": "string"
+                },
+                "total_credit": {
+                    "type": "number"
+                },
+                "total_debit": {
+                    "type": "number"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.LightweightPaymentRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "cash_bank_id",
+                "method",
+                "payment_date",
+                "sale_id"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "payment_date": {
+                    "type": "string"
+                },
+                "reference": {
+                    "type": "string"
+                },
+                "sale_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.LightweightPaymentResponse": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "new_status": {
+                    "type": "string"
+                },
+                "outstanding_amount": {
+                    "type": "number"
+                },
+                "payment_code": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "integer"
+                },
+                "processing_time": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "services.MonthlyLedgerSummary": {
+            "type": "object",
+            "properties": {
+                "credits": {
+                    "type": "number"
+                },
+                "debits": {
+                    "type": "number"
+                },
+                "end_balance": {
+                    "type": "number"
+                },
+                "month": {
+                    "type": "string"
+                },
+                "net_movement": {
+                    "type": "number"
+                },
+                "year": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.PLItem": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "percentage": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.PLSection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PLItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKAssetSection": {
+            "type": "object",
+            "properties": {
+                "cash_and_cash_equivalents": {
+                    "description": "Sub-sections untuk aset lancar (sesuai PSAK 1 paragraf 66)",
+                    "type": "number"
+                },
+                "deferred_tax_assets": {
+                    "description": "Aset Pajak Tangguhan",
+                    "type": "number"
+                },
+                "intangible_assets": {
+                    "description": "Aset Tidak Berwujud",
+                    "type": "number"
+                },
+                "inventories": {
+                    "description": "Persediaan",
+                    "type": "number"
+                },
+                "investment_properties": {
+                    "description": "Properti Investasi",
+                    "type": "number"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKBalanceItem"
+                    }
+                },
+                "long_term_investments": {
+                    "description": "Investasi Jangka Panjang",
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "prepaid_expenses": {
+                    "description": "Beban Dibayar Dimuka",
+                    "type": "number"
+                },
+                "property_plant_equipment": {
+                    "description": "Sub-sections untuk aset tidak lancar (sesuai PSAK 1 paragraf 66)",
+                    "type": "number"
+                },
+                "subtotal": {
+                    "type": "number"
+                },
+                "trade_receivables": {
+                    "description": "Piutang Usaha",
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKBalanceItem": {
+            "type": "object",
+            "properties": {
+                "account_code": {
+                    "type": "string"
+                },
+                "account_id": {
+                    "type": "integer"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "classification": {
+                    "description": "LANCAR, TIDAK_LANCAR, etc.",
+                    "type": "string"
+                },
+                "is_header": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "type": "integer"
+                },
+                "psak_reference": {
+                    "description": "Reference to specific PSAK paragraph",
+                    "type": "string"
+                }
+            }
+        },
+        "services.PSAKBalanceSheetData": {
+            "type": "object",
+            "properties": {
+                "balance_difference": {
+                    "type": "number"
+                },
+                "company_info": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "current_assets": {
+                    "description": "ASET (sesuai PSAK 1 paragraf 54-56)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKAssetSection"
+                        }
+                    ]
+                },
+                "current_liabilities": {
+                    "description": "LIABILITAS (sesuai PSAK 1 paragraf 60-65)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKLiabilitySection"
+                        }
+                    ]
+                },
+                "equity": {
+                    "description": "EKUITAS (sesuai PSAK 1 paragraf 54(r))",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKEquitySection"
+                        }
+                    ]
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "is_balanced": {
+                    "description": "Validation sesuai fundamental equation: Assets = Liabilities + Equity",
+                    "type": "boolean"
+                },
+                "non_current_assets": {
+                    "description": "Aset Tidak Lancar",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKAssetSection"
+                        }
+                    ]
+                },
+                "non_current_liabilities": {
+                    "description": "Liabilitas Jangka Panjang",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKLiabilitySection"
+                        }
+                    ]
+                },
+                "psak_compliance": {
+                    "description": "Compliance dan Audit Trail",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKComplianceInfo"
+                        }
+                    ]
+                },
+                "reporting_date": {
+                    "description": "Tanggal pelaporan",
+                    "type": "string"
+                },
+                "total_assets": {
+                    "description": "Total Aset",
+                    "type": "number"
+                },
+                "total_equity": {
+                    "description": "Total Ekuitas",
+                    "type": "number"
+                },
+                "total_liabilities": {
+                    "description": "Total Liabilitas",
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKCashFlowData": {
+            "type": "object",
+            "properties": {
+                "beginning_cash": {
+                    "description": "KAS DAN SETARA KAS AWAL PERIODE",
+                    "type": "number"
+                },
+                "company_info": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "ending_cash": {
+                    "description": "KAS DAN SETARA KAS AKHIR PERIODE",
+                    "type": "number"
+                },
+                "financing_activities": {
+                    "description": "ARUS KAS DARI AKTIVITAS PENDANAAN - sesuai PSAK 2 paragraf 17",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKCashFlowSection"
+                        }
+                    ]
+                },
+                "foreign_exchange_effect": {
+                    "description": "PENGARUH PERUBAHAN KURS VALUTA ASING",
+                    "type": "number"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "investing_activities": {
+                    "description": "ARUS KAS DARI AKTIVITAS INVESTASI - sesuai PSAK 2 paragraf 16-17",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKCashFlowSection"
+                        }
+                    ]
+                },
+                "method": {
+                    "description": "\"DIRECT\" atau \"INDIRECT\"",
+                    "type": "string"
+                },
+                "net_cash_increase": {
+                    "description": "KENAIKAN (PENURUNAN) KAS DAN SETARA KAS",
+                    "type": "number"
+                },
+                "net_financing_cash": {
+                    "description": "Kas Neto dari Pendanaan",
+                    "type": "number"
+                },
+                "net_investing_cash": {
+                    "description": "Kas Neto dari Investasi",
+                    "type": "number"
+                },
+                "net_operating_cash": {
+                    "description": "Kas Neto dari Operasi",
+                    "type": "number"
+                },
+                "operating_activities": {
+                    "description": "ARUS KAS DARI AKTIVITAS OPERASI - sesuai PSAK 2 paragraf 13-15",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKCashFlowSection"
+                        }
+                    ]
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "psak_compliance": {
+                    "description": "Compliance dan Audit Trail",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKComplianceInfo"
+                        }
+                    ]
+                },
+                "reconciliation": {
+                    "description": "REKONSILIASI (untuk metode tidak langsung)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKCashReconciliation"
+                        }
+                    ]
+                }
+            }
+        },
+        "services.PSAKCashFlowItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "classification": {
+                    "description": "OPERASI, INVESTASI, PENDANAAN",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "method": {
+                    "description": "LANGSUNG, TIDAK_LANGSUNG",
+                    "type": "string"
+                },
+                "psak_reference": {
+                    "type": "string"
+                },
+                "type": {
+                    "description": "INFLOW, OUTFLOW",
+                    "type": "string"
+                }
+            }
+        },
+        "services.PSAKCashFlowSection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKCashFlowItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKCashReconciliation": {
+            "type": "object",
+            "properties": {
+                "adjustments_for": {
+                    "description": "Penyesuaian untuk",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKCashFlowItem"
+                    }
+                },
+                "cash_from_operations": {
+                    "description": "Kas dari Operasi",
+                    "type": "number"
+                },
+                "changes_in_working_capital": {
+                    "description": "Perubahan Modal Kerja",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKCashFlowItem"
+                    }
+                },
+                "interest_paid": {
+                    "description": "Bunga Dibayar",
+                    "type": "number"
+                },
+                "net_operating_cash": {
+                    "description": "Kas Neto Operasi",
+                    "type": "number"
+                },
+                "net_profit": {
+                    "description": "Laba Neto",
+                    "type": "number"
+                },
+                "taxes_paid": {
+                    "description": "Pajak Dibayar",
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKComplianceInfo": {
+            "type": "object",
+            "properties": {
+                "compliance_level": {
+                    "description": "FULL, PARTIAL, NON_COMPLIANT",
+                    "type": "string"
+                },
+                "compliance_score": {
+                    "description": "Score 0-100",
+                    "type": "number"
+                },
+                "last_review_date": {
+                    "type": "string"
+                },
+                "non_compliance_issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKIssue"
+                    }
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "reviewer_notes": {
+                    "type": "string"
+                },
+                "standards_applied": {
+                    "description": "PSAK yang diterapkan",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "services.PSAKEquitySection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKBalanceItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "other_equity_components": {
+                    "description": "Komponen Ekuitas Lainnya",
+                    "type": "number"
+                },
+                "retained_earnings": {
+                    "description": "Saldo Laba",
+                    "type": "number"
+                },
+                "share_capital": {
+                    "description": "Sub-sections ekuitas (sesuai PSAK 1 paragraf 54(r))",
+                    "type": "number"
+                },
+                "share_premium": {
+                    "description": "Agio Saham",
+                    "type": "number"
+                },
+                "subtotal": {
+                    "type": "number"
+                },
+                "treasury_stock": {
+                    "description": "Saham Treasury",
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKExpenseSection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKPLItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKIssue": {
+            "type": "object",
+            "properties": {
+                "affected_accounts": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "issue_description": {
+                    "type": "string"
+                },
+                "recommended_action": {
+                    "type": "string"
+                },
+                "severity": {
+                    "description": "HIGH, MEDIUM, LOW",
+                    "type": "string"
+                },
+                "standard_reference": {
+                    "description": "e.g., \"PSAK 1 paragraf 54\"",
+                    "type": "string"
+                }
+            }
+        },
+        "services.PSAKLiabilitySection": {
+            "type": "object",
+            "properties": {
+                "accrued_liabilities": {
+                    "description": "Beban yang Masih Harus Dibayar",
+                    "type": "number"
+                },
+                "current_portion_long_term": {
+                    "description": "Bagian Lancar Utang Jangka Panjang",
+                    "type": "number"
+                },
+                "deferred_tax_liabilities": {
+                    "description": "Liabilitas Pajak Tangguhan",
+                    "type": "number"
+                },
+                "employee_benefits": {
+                    "description": "Imbalan Kerja",
+                    "type": "number"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKBalanceItem"
+                    }
+                },
+                "long_term_borrowings": {
+                    "description": "Sub-sections untuk liabilitas jangka panjang",
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "provisions": {
+                    "description": "Provisi",
+                    "type": "number"
+                },
+                "short_term_borrowings": {
+                    "description": "Pinjaman Jangka Pendek",
+                    "type": "number"
+                },
+                "subtotal": {
+                    "type": "number"
+                },
+                "tax_liabilities": {
+                    "description": "Utang Pajak",
+                    "type": "number"
+                },
+                "trade_payables": {
+                    "description": "Sub-sections untuk liabilitas jangka pendek (sesuai PSAK 1 paragraf 69)",
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKOCISection": {
+            "type": "object",
+            "properties": {
+                "actuarial_gain_loss": {
+                    "description": "Sub-sections OCI yang tidak akan direklasifikasi ke laba rugi",
+                    "type": "number"
+                },
+                "available_for_sale_securities": {
+                    "description": "Sekuritas Tersedia untuk Dijual",
+                    "type": "number"
+                },
+                "cash_flow_hedges": {
+                    "description": "Lindung Nilai Arus Kas",
+                    "type": "number"
+                },
+                "foreign_currency_translation": {
+                    "description": "Sub-sections OCI yang akan direklasifikasi ke laba rugi",
+                    "type": "number"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKPLItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "revaluation_surplus": {
+                    "description": "Surplus Revaluasi",
+                    "type": "number"
+                },
+                "subtotal": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKOtherSection": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKPLItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKPLItem": {
+            "type": "object",
+            "properties": {
+                "account_code": {
+                    "type": "string"
+                },
+                "account_id": {
+                    "type": "integer"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "classification": {
+                    "type": "string"
+                },
+                "percentage": {
+                    "description": "Percentage of total revenue",
+                    "type": "number"
+                },
+                "psak_reference": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.PSAKProfitLossData": {
+            "type": "object",
+            "properties": {
+                "basic_eps": {
+                    "description": "LABA PER SAHAM - sesuai PSAK 56 (Laba per Saham)",
+                    "type": "number"
+                },
+                "company_info": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "cost_of_sales": {
+                    "description": "BEBAN POKOK PENJUALAN (Cost of Sales) - sesuai PSAK 14 (Persediaan)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKExpenseSection"
+                        }
+                    ]
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "diluted_eps": {
+                    "description": "Laba per Saham Dilusian",
+                    "type": "number"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "gross_profit": {
+                    "description": "LABA KOTOR (Gross Profit)",
+                    "type": "number"
+                },
+                "gross_profit_margin": {
+                    "description": "Margin Laba Kotor (%)",
+                    "type": "number"
+                },
+                "net_other_income": {
+                    "description": "Pendapatan Lain-lain Neto",
+                    "type": "number"
+                },
+                "net_profit": {
+                    "description": "LABA NETO (Net Profit)",
+                    "type": "number"
+                },
+                "net_profit_margin": {
+                    "description": "Margin Laba Neto (%)",
+                    "type": "number"
+                },
+                "operating_expenses": {
+                    "description": "BEBAN USAHA (Operating Expenses)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKExpenseSection"
+                        }
+                    ]
+                },
+                "operating_margin": {
+                    "description": "Margin Usaha (%)",
+                    "type": "number"
+                },
+                "operating_profit": {
+                    "description": "LABA USAHA (Operating Profit)",
+                    "type": "number"
+                },
+                "other_comprehensive_income": {
+                    "description": "PENGHASILAN KOMPREHENSIF LAIN - sesuai PSAK 1 paragraf 82-85",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKOCISection"
+                        }
+                    ]
+                },
+                "other_expenses": {
+                    "description": "Beban Lain-lain",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKOtherSection"
+                        }
+                    ]
+                },
+                "other_income": {
+                    "description": "PENDAPATAN DAN BEBAN LAIN-LAIN (Other Income and Expenses)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKOtherSection"
+                        }
+                    ]
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "profit_before_tax": {
+                    "description": "LABA SEBELUM PAJAK (Profit Before Tax)",
+                    "type": "number"
+                },
+                "psak_compliance": {
+                    "description": "Compliance dan Audit Trail",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKComplianceInfo"
+                        }
+                    ]
+                },
+                "revenue": {
+                    "description": "PENDAPATAN (Revenue) - sesuai PSAK 23 (Pendapatan dari Kontrak dengan Pelanggan)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKRevenueSection"
+                        }
+                    ]
+                },
+                "tax_expense": {
+                    "description": "BEBAN PAJAK PENGHASILAN - sesuai PSAK 46 (Pajak Penghasilan)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.PSAKTaxSection"
+                        }
+                    ]
+                },
+                "total_comprehensive_income": {
+                    "description": "Total Laba Komprehensif",
+                    "type": "number"
+                },
+                "total_cost_of_sales": {
+                    "description": "Total Beban Pokok Penjualan",
+                    "type": "number"
+                },
+                "total_operating_expenses": {
+                    "description": "Total Beban Usaha",
+                    "type": "number"
+                },
+                "total_revenue": {
+                    "description": "Total Pendapatan",
+                    "type": "number"
+                },
+                "total_tax_expense": {
+                    "description": "Total Beban Pajak",
+                    "type": "number"
+                },
+                "weighted_avg_shares": {
+                    "description": "Rata-rata Tertimbang Saham",
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKRevenueSection": {
+            "type": "object",
+            "properties": {
+                "dividend_income": {
+                    "description": "Pendapatan Dividen",
+                    "type": "number"
+                },
+                "interest_income": {
+                    "description": "Pendapatan Bunga",
+                    "type": "number"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKPLItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "royalty_income": {
+                    "description": "Pendapatan Royalti",
+                    "type": "number"
+                },
+                "sales_revenue": {
+                    "description": "Sub-sections pendapatan (sesuai PSAK 23)",
+                    "type": "number"
+                },
+                "service_revenue": {
+                    "description": "Jasa",
+                    "type": "number"
+                },
+                "subtotal": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.PSAKTaxSection": {
+            "type": "object",
+            "properties": {
+                "current_tax_expense": {
+                    "description": "Sub-sections pajak (sesuai PSAK 46)",
+                    "type": "number"
+                },
+                "deferred_tax_expense": {
+                    "description": "Beban Pajak Tangguhan",
+                    "type": "number"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PSAKPLItem"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "subtotal": {
+                    "type": "number"
+                },
+                "tax_adjustment_prior_year": {
+                    "description": "Koreksi Pajak Tahun Lalu",
+                    "type": "number"
+                }
+            }
+        },
+        "services.PaginatedJournalResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.JournalResponse"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.PaymentAnalysisData": {
+            "type": "object",
+            "properties": {
+                "average_payment_days": {
+                    "type": "number"
+                },
+                "late_payments": {
+                    "type": "integer"
+                },
+                "on_time_payments": {
+                    "type": "integer"
+                },
+                "overdue_payments": {
+                    "type": "integer"
+                },
+                "payment_efficiency": {
                     "type": "number"
                 }
             }
@@ -6127,6 +10178,336 @@ const docTemplate = `{
                 }
             }
         },
+        "services.PaymentJournalResult": {
+            "type": "object",
+            "properties": {
+                "account_updates": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.AccountBalanceUpdate"
+                    }
+                },
+                "journal_entry": {
+                    "$ref": "#/definitions/services.JournalResponse"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "services.PaymentProcessingSummary": {
+            "type": "object",
+            "properties": {
+                "account_balances_updated": {
+                    "type": "boolean"
+                },
+                "allocations_created": {
+                    "type": "integer"
+                },
+                "journal_entry_created": {
+                    "type": "boolean"
+                },
+                "processing_time": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "transaction_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.PaymentWithJournalRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "cash_bank_id",
+                "contact_id",
+                "date",
+                "method"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "minimum": 0.01
+                },
+                "auto_create_journal": {
+                    "description": "Journal integration options",
+                    "type": "boolean",
+                    "default": true
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "contact_id": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "preview_journal": {
+                    "type": "boolean",
+                    "default": false
+                },
+                "reference": {
+                    "type": "string"
+                },
+                "target_bill_id": {
+                    "type": "integer"
+                },
+                "target_invoice_id": {
+                    "description": "Allocation options",
+                    "type": "integer"
+                },
+                "user_id": {
+                    "description": "User context",
+                    "type": "integer"
+                }
+            }
+        },
+        "services.PaymentWithJournalResponse": {
+            "type": "object",
+            "properties": {
+                "allocations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.PaymentAllocation"
+                    }
+                },
+                "cash_bank": {
+                    "$ref": "#/definitions/models.CashBank"
+                },
+                "contact": {
+                    "$ref": "#/definitions/models.Contact"
+                },
+                "journal_result": {
+                    "$ref": "#/definitions/services.PaymentJournalResult"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "payment": {
+                    "$ref": "#/definitions/models.Payment"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "summary": {
+                    "$ref": "#/definitions/services.PaymentProcessingSummary"
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "services.PeriodBreakdown": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "period": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.PeriodData": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "growth_rate": {
+                    "type": "number"
+                },
+                "period": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "transactions": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.ProductSalesData": {
+            "type": "object",
+            "properties": {
+                "average_price": {
+                    "type": "number"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "quantity_sold": {
+                    "type": "integer"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "transaction_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.ProfitLossData": {
+            "type": "object",
+            "properties": {
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "cost_of_goods_sold": {
+                    "$ref": "#/definitions/services.PLSection"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "data_quality_score": {
+                    "type": "number"
+                },
+                "data_quality_warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "diluted_eps": {
+                    "type": "number"
+                },
+                "earnings_per_share": {
+                    "type": "number"
+                },
+                "ebit": {
+                    "type": "number"
+                },
+                "ebitda": {
+                    "type": "number"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "gross_profit": {
+                    "type": "number"
+                },
+                "gross_profit_margin": {
+                    "type": "number"
+                },
+                "net_income": {
+                    "type": "number"
+                },
+                "net_income_before_tax": {
+                    "type": "number"
+                },
+                "net_income_margin": {
+                    "type": "number"
+                },
+                "operating_expenses": {
+                    "$ref": "#/definitions/services.PLSection"
+                },
+                "operating_income": {
+                    "type": "number"
+                },
+                "other_expenses": {
+                    "$ref": "#/definitions/services.PLSection"
+                },
+                "other_income": {
+                    "$ref": "#/definitions/services.PLSection"
+                },
+                "revenue": {
+                    "$ref": "#/definitions/services.PLSection"
+                },
+                "shares_outstanding": {
+                    "type": "number"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "tax_expense": {
+                    "type": "number"
+                },
+                "validation_report": {
+                    "description": "Data Quality and Validation Fields",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/services.ValidationReport"
+                        }
+                    ]
+                }
+            }
+        },
+        "services.ReconciliationData": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "cashbank_balance": {
+                    "type": "number"
+                },
+                "details": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "difference": {
+                    "type": "number"
+                },
+                "has_discrepancy": {
+                    "type": "boolean"
+                },
+                "last_reconciled_at": {
+                    "type": "string"
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "reconciliation_status": {
+                    "type": "string"
+                },
+                "ssot_balance": {
+                    "type": "number"
+                }
+            }
+        },
         "services.ReconciliationItemRequest": {
             "type": "object",
             "properties": {
@@ -6159,6 +10540,165 @@ const docTemplate = `{
                 },
                 "statement_balance": {
                     "type": "number"
+                }
+            }
+        },
+        "services.SalesSummaryData": {
+            "type": "object",
+            "properties": {
+                "average_order_value": {
+                    "type": "number"
+                },
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "data_quality_score": {
+                    "type": "number"
+                },
+                "debug_info": {
+                    "description": "Enhanced debugging and monitoring fields",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "growth_analysis": {
+                    "$ref": "#/definitions/services.GrowthAnalysisData"
+                },
+                "new_customers": {
+                    "type": "integer"
+                },
+                "processing_time": {
+                    "type": "string"
+                },
+                "returning_customers": {
+                    "type": "integer"
+                },
+                "sales_by_customer": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.CustomerSalesData"
+                    }
+                },
+                "sales_by_period": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PeriodData"
+                    }
+                },
+                "sales_by_product": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.ProductSalesData"
+                    }
+                },
+                "sales_by_status": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.StatusData"
+                    }
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "top_performers": {
+                    "$ref": "#/definitions/services.TopPerformersData"
+                },
+                "total_customers": {
+                    "type": "integer"
+                },
+                "total_revenue": {
+                    "type": "number"
+                },
+                "total_transactions": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.SalespersonData": {
+            "type": "object",
+            "properties": {
+                "commission": {
+                    "type": "number"
+                },
+                "salesperson_id": {
+                    "type": "integer"
+                },
+                "salesperson_name": {
+                    "type": "string"
+                },
+                "total_sales": {
+                    "type": "number"
+                },
+                "transaction_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.StatusData": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "percentage": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.SyncStatus": {
+            "type": "object",
+            "properties": {
+                "last_sync_at": {
+                    "type": "string"
+                },
+                "sync_status": {
+                    "type": "string"
+                },
+                "synced_accounts": {
+                    "type": "integer"
+                },
+                "total_accounts": {
+                    "type": "integer"
+                },
+                "variance_accounts": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.TopPerformersData": {
+            "type": "object",
+            "properties": {
+                "top_customers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.CustomerSalesData"
+                    }
+                },
+                "top_products": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.ProductSalesData"
+                    }
+                },
+                "top_salespeople": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.SalespersonData"
+                    }
                 }
             }
         },
@@ -6215,6 +10755,291 @@ const docTemplate = `{
                 },
                 "to_account_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "services.TrialBalanceData": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.TrialBalanceItem"
+                    }
+                },
+                "as_of_date": {
+                    "type": "string"
+                },
+                "asset_summary": {
+                    "$ref": "#/definitions/services.AccountTypeSummary"
+                },
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "difference": {
+                    "type": "number"
+                },
+                "equity_summary": {
+                    "$ref": "#/definitions/services.AccountTypeSummary"
+                },
+                "expense_summary": {
+                    "$ref": "#/definitions/services.AccountTypeSummary"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "is_balanced": {
+                    "type": "boolean"
+                },
+                "liability_summary": {
+                    "$ref": "#/definitions/services.AccountTypeSummary"
+                },
+                "revenue_summary": {
+                    "$ref": "#/definitions/services.AccountTypeSummary"
+                },
+                "total_credits": {
+                    "type": "number"
+                },
+                "total_debits": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.TrialBalanceItem": {
+            "type": "object",
+            "properties": {
+                "account_code": {
+                    "type": "string"
+                },
+                "account_id": {
+                    "type": "integer"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "account_type": {
+                    "type": "string"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "credit_balance": {
+                    "type": "number"
+                },
+                "debit_balance": {
+                    "type": "number"
+                },
+                "is_header": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.ValidationIssue": {
+            "type": "object",
+            "properties": {
+                "account_code": {
+                    "type": "string"
+                },
+                "amount": {
+                    "type": "number"
+                },
+                "category": {
+                    "description": "BALANCE, TRANSACTION, ACCOUNT, PERIOD",
+                    "type": "string"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "impact": {
+                    "description": "LOW, MEDIUM, HIGH",
+                    "type": "string"
+                },
+                "level": {
+                    "description": "INFO, WARNING, ERROR, CRITICAL",
+                    "type": "string"
+                },
+                "suggestion": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.ValidationReport": {
+            "type": "object",
+            "properties": {
+                "health_score": {
+                    "description": "0-100",
+                    "type": "number"
+                },
+                "issues": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.ValidationIssue"
+                    }
+                },
+                "issues_by_category": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "issues_by_level": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "overall_health": {
+                    "description": "EXCELLENT, GOOD, FAIR, POOR, CRITICAL",
+                    "type": "string"
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "total_issues": {
+                    "type": "integer"
+                },
+                "validation_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.VendorAnalysisData": {
+            "type": "object",
+            "properties": {
+                "active_vendors": {
+                    "type": "integer"
+                },
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "outstanding_payables": {
+                    "type": "number"
+                },
+                "payment_analysis": {
+                    "$ref": "#/definitions/services.PaymentAnalysisData"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "top_vendors_by_spend": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.VendorSpendData"
+                    }
+                },
+                "total_payments": {
+                    "type": "number"
+                },
+                "total_purchases": {
+                    "type": "number"
+                },
+                "total_vendors": {
+                    "type": "integer"
+                },
+                "vendor_payment_history": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.VendorPaymentHistory"
+                    }
+                },
+                "vendors_by_performance": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.VendorPerformanceData"
+                    }
+                }
+            }
+        },
+        "services.VendorPaymentHistory": {
+            "type": "object",
+            "properties": {
+                "month": {
+                    "type": "string"
+                },
+                "outstanding": {
+                    "type": "number"
+                },
+                "payments": {
+                    "type": "number"
+                },
+                "purchases": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.VendorPerformanceData": {
+            "type": "object",
+            "properties": {
+                "average_payment_days": {
+                    "type": "number"
+                },
+                "outstanding": {
+                    "type": "number"
+                },
+                "payment_score": {
+                    "type": "number"
+                },
+                "rating": {
+                    "type": "string"
+                },
+                "total_payments": {
+                    "type": "number"
+                },
+                "total_purchases": {
+                    "type": "number"
+                },
+                "vendor_id": {
+                    "type": "integer"
+                },
+                "vendor_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.VendorSpendData": {
+            "type": "object",
+            "properties": {
+                "percentage": {
+                    "type": "number"
+                },
+                "total_spend": {
+                    "type": "number"
+                },
+                "transactions": {
+                    "type": "integer"
+                },
+                "vendor_id": {
+                    "type": "integer"
+                },
+                "vendor_name": {
+                    "type": "string"
                 }
             }
         },

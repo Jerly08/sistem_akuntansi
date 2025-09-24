@@ -8,9 +8,11 @@ import {
   ApiResponse,
   ApiError
 } from '@/types/account';
+import { API_BASE_URL } from '@/config/api';
 
-// Base API URL - should be moved to environment variables
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+// Use relative URLs for frontend calls to work with Next.js proxy
+// This prevents double /api/v1 issues with Next.js rewrites
+const API_BASE = ''; // Empty string for relative URLs
 
 class AccountService {
 
@@ -46,12 +48,12 @@ class AccountService {
 
   // Get all accounts
   async getAccounts(token: string, type?: string): Promise<Account[]> {
-    const url = new URL(`${API_BASE_URL}/accounts`);
+    let url = `${API_BASE}/api/v1/accounts`;
     if (type) {
-      url.searchParams.append('type', type);
+      url += `?type=${encodeURIComponent(type)}`;
     }
     
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -60,14 +62,38 @@ class AccountService {
     return result.data;
   }
 
-  // Get account catalog (minimal data for EXPENSE accounts) - for EMPLOYEE role
-  async getAccountCatalog(token: string, type: string = 'EXPENSE'): Promise<AccountCatalogItem[]> {
-    const url = new URL(`${API_BASE_URL}/accounts/catalog`);
-    url.searchParams.append('type', type);
+  // Get account catalog (minimal data for accounts) - PUBLIC ENDPOINT (no auth required)
+  async getAccountCatalog(token?: string, type?: string): Promise<AccountCatalogItem[]> {
+    let url = `${API_BASE}/api/v1/accounts/catalog`;
+    if (type) {
+      url += `?type=${encodeURIComponent(type)}`;
+    }
     
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       method: 'GET',
-      headers: this.getHeaders(token),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    const result: ApiResponse<AccountCatalogItem[]> = await this.handleResponse(response);
+    return result.data;
+  }
+  
+  // Get expense accounts specifically for purchase items - PUBLIC ENDPOINT (no auth required)
+  async getExpenseAccounts(token?: string): Promise<AccountCatalogItem[]> {
+    return this.getAccountCatalog(undefined, 'EXPENSE');
+  }
+  
+  // Get liability accounts for credit payment methods - PUBLIC ENDPOINT (no auth required)
+  async getCreditAccounts(token?: string): Promise<AccountCatalogItem[]> {
+    const url = `${API_BASE}/api/v1/accounts/credit?type=LIABILITY`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
     
     const result: ApiResponse<AccountCatalogItem[]> = await this.handleResponse(response);
@@ -85,7 +111,7 @@ class AccountService {
     currency: string;
     balance: number;
   }[]> {
-    const response = await fetch(`${API_BASE_URL}/cashbank/payment-accounts`, {
+    const response = await fetch(`${API_BASE}/api/v1/cashbank/payment-accounts`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -110,7 +136,7 @@ class AccountService {
 
   // Get single account by code
   async getAccount(token: string, code: string): Promise<Account> {
-    const response = await fetch(`${API_BASE_URL}/accounts/${code}`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/${code}`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -121,7 +147,7 @@ class AccountService {
 
   // Create new account
   async createAccount(token: string, accountData: AccountCreateRequest): Promise<Account> {
-    const response = await fetch(`${API_BASE_URL}/accounts`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts`, {
       method: 'POST',
       headers: this.getHeaders(token),
       body: JSON.stringify(accountData),
@@ -133,7 +159,7 @@ class AccountService {
 
   // Update existing account
   async updateAccount(token: string, code: string, accountData: AccountUpdateRequest): Promise<Account> {
-    const response = await fetch(`${API_BASE_URL}/accounts/${code}`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/${code}`, {
       method: 'PUT',
       headers: this.getHeaders(token),
       body: JSON.stringify(accountData),
@@ -145,7 +171,7 @@ class AccountService {
 
   // Delete account
   async deleteAccount(token: string, code: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/accounts/${code}`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/${code}`, {
       method: 'DELETE',
       headers: this.getHeaders(token),
     });
@@ -158,7 +184,7 @@ class AccountService {
     cascade_delete?: boolean;
     new_parent_id?: number;
   }): Promise<{ message: string; cascade: boolean }> {
-    const response = await fetch(`${API_BASE_URL}/accounts/admin/${code}`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/admin/${code}`, {
       method: 'DELETE',
       headers: this.getHeaders(token),
       body: JSON.stringify(options),
@@ -169,7 +195,7 @@ class AccountService {
 
   // Get account hierarchy
   async getAccountHierarchy(token: string): Promise<Account[]> {
-    const response = await fetch(`${API_BASE_URL}/accounts/hierarchy`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/hierarchy`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -180,7 +206,7 @@ class AccountService {
 
   // Get balance summary
   async getBalanceSummary(token: string): Promise<AccountSummaryResponse[]> {
-    const response = await fetch(`${API_BASE_URL}/accounts/balance-summary`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/balance-summary`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -199,7 +225,7 @@ class AccountService {
       headers.Authorization = `Bearer ${token}`;
     }
     
-    const response = await fetch(`${API_BASE_URL}/accounts/import`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/import`, {
       method: 'POST',
       headers,
       body: formData,
@@ -210,7 +236,7 @@ class AccountService {
 
   // Download import template
   async downloadTemplate(): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/templates/accounts_import_template.csv`, {
+    const response = await fetch(`${API_BASE}/api/v1/templates/accounts_import_template.csv`, {
       method: 'GET',
     });
     
@@ -223,7 +249,7 @@ class AccountService {
 
   // Export accounts to PDF
   async exportAccountsPDF(token: string): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/accounts/export/pdf`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/export/pdf`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -248,7 +274,7 @@ class AccountService {
 
   // Export accounts to Excel
   async exportAccountsExcel(token: string): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/accounts/export/excel`, {
+    const response = await fetch(`${API_BASE}/api/v1/accounts/export/excel`, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -344,13 +370,12 @@ class AccountService {
       name: string;
     };
   }> {
-    const url = new URL(`${API_BASE_URL}/accounts/validate-code`);
-    url.searchParams.append('code', code);
+    let url = `${API_BASE}/api/v1/accounts/validate-code?code=${encodeURIComponent(code)}`;
     if (excludeId) {
-      url.searchParams.append('exclude_id', excludeId.toString());
+      url += `&exclude_id=${excludeId}`;
     }
 
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(token),
     });

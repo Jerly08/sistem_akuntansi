@@ -1,5 +1,6 @@
-import { API_BASE_URL } from '@/config/api';
+import { API_V1_BASE } from '@/config/api';
 import { ReportParameters } from './reportService';
+import { getAuthHeaders } from '../utils/authTokenUtils';
 
 export interface JournalEntry {
   id: number;
@@ -62,11 +63,8 @@ export interface JournalBasedReportData {
 
 class JournalIntegrationService {
   private getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
+    // Use centralized token utility for consistency across the application
+    return getAuthHeaders();
   }
 
   private buildQueryString(params: Record<string, any>): string {
@@ -100,7 +98,7 @@ class JournalIntegrationService {
     };
 
     const queryString = this.buildQueryString(queryParams);
-    const url = `${API_BASE_URL}/journal-entries${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/journals${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -129,7 +127,7 @@ class JournalIntegrationService {
 
   // Fetch all accounts for categorization
   async getAccounts(): Promise<Account[]> {
-    const response = await fetch(`${API_BASE_URL}/accounts`, {
+    const response = await fetch(`${API_V1_BASE}/accounts`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -388,7 +386,7 @@ class JournalIntegrationService {
     limit?: number;
   }): Promise<any> {
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/enhanced/journal/pl-line${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/enhanced/journal/pl-line${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),

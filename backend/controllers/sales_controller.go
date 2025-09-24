@@ -9,19 +9,24 @@ import (
 	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
+	"app-sistem-akuntansi/utils"
 
 	"github.com/gin-gonic/gin"
 )
 
 type SalesController struct {
-	salesService  *services.SalesService
-	paymentService *services.PaymentService
+	salesService         *services.SalesService
+	paymentService       *services.PaymentService
+	salesPaymentService  *services.SalesPaymentService
+	unifiedPaymentService *services.UnifiedSalesPaymentService // NEW: Single source of truth
 }
 
-func NewSalesController(salesService *services.SalesService, paymentService *services.PaymentService) *SalesController {
+func NewSalesController(salesService *services.SalesService, paymentService *services.PaymentService, salesPaymentService *services.SalesPaymentService, unifiedPaymentService *services.UnifiedSalesPaymentService) *SalesController {
 	return &SalesController{
-		salesService:  salesService,
-		paymentService: paymentService,
+		salesService:          salesService,
+		paymentService:        paymentService,
+		salesPaymentService:   salesPaymentService,
+		unifiedPaymentService: unifiedPaymentService, // NEW: Single source of truth
 	}
 }
 
@@ -29,8 +34,27 @@ func NewSalesController(salesService *services.SalesService, paymentService *ser
 
 // GetSales gets all sales with pagination and filters
 func (sc *SalesController) GetSales(c *gin.Context) {
+	log.Printf("📋 Getting sales list with filters")
+	
+	// Parse and validate pagination parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	
+	// Validate pagination bounds
+	if page < 1 {
+		utils.SendValidationError(c, "Invalid pagination parameters", map[string]string{
+			"page": "Page must be greater than 0",
+		})
+		return
+	}
+	if limit < 1 || limit > 100 {
+		utils.SendValidationError(c, "Invalid pagination parameters", map[string]string{
+			"limit": "Limit must be between 1 and 100",
+		})
+		return
+	}
+	
+	// Get filter parameters
 	status := c.Query("status")
 	customerID := c.Query("customer_id")
 	startDate := c.Query("start_date")
@@ -47,50 +71,105 @@ func (sc *SalesController) GetSales(c *gin.Context) {
 		Limit:      limit,
 	}
 
+	log.Printf("🔍 Fetching sales with filters: page=%d, limit=%d, status=%s, customer_id=%s", 
+		page, limit, status, customerID)
+	
 	result, err := sc.salesService.GetSales(filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("❌ Failed to get sales: %v", err)
+		utils.SendInternalError(c, "Failed to retrieve sales data", err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	log.Printf("✅ Retrieved %d sales (total: %d)", len(result.Data), result.Total)
+	
+	// Send paginated success response
+	utils.SendPaginatedSuccess(c, 
+		"Sales retrieved successfully", 
+		result.Data, 
+		result.Page, 
+		result.Limit, 
+		result.Total)
 }
 
 // GetSale gets a single sale by ID
 func (sc *SalesController) GetSale(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid sale ID"})
+		log.Printf("❌ Invalid sale ID parameter: %v", err)
+		utils.SendValidationError(c, "Invalid sale ID", map[string]string{
+			"id": "Sale ID must be a valid positive number",
+		})
 		return
 	}
 
+	log.Printf("🔍 Getting sale details for ID: %d", id)
+	
 	sale, err := sc.salesService.GetSaleByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Sale not found"})
+		log.Printf("❌ Sale %d not found: %v", id, err)
+		utils.SendSaleNotFound(c, uint(id))
 		return
 	}
 
-	c.JSON(http.StatusOK, sale)
+	log.Printf("✅ Retrieved sale %d details successfully", id)
+	utils.SendSuccess(c, "Sale retrieved successfully", sale)
 }
 
 // CreateSale creates a new sale
 func (sc *SalesController) CreateSale(c *gin.Context) {
+	log.Printf("🎆 Creating new sale")
+	
 	var request models.SaleCreateRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Printf("❌ Invalid sale creation request: %v", err)
+		utils.SendValidationError(c, "Invalid sale data", map[string]string{
+			"request": "Please check the request format and required fields",
+		})
 		return
 	}
 
-	// Get user ID from context
-	userID := c.MustGet("user_id").(uint)
+	// Get user ID from context with error handling
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		log.Printf("❌ User authentication missing for sale creation")
+		utils.SendUnauthorized(c, "User authentication required")
+		return
+	}
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		log.Printf("❌ Invalid user ID type: %T", userIDInterface)
+		utils.SendUnauthorized(c, "Invalid user authentication")
+		return
+	}
 
+	log.Printf("📄 Creating sale for customer %d by user %d", request.CustomerID, userID)
+	
 	sale, err := sc.salesService.CreateSale(request, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("❌ Failed to create sale: %v", err)
+		
+		// Handle specific error types
+		errorMsg := err.Error()
+		switch {
+		case strings.Contains(errorMsg, "customer not found"):
+			utils.SendNotFound(c, "Customer not found")
+		case strings.Contains(errorMsg, "validation"):
+			utils.SendValidationError(c, "Sale validation failed", map[string]string{
+				"details": errorMsg,
+			})
+		case strings.Contains(errorMsg, "inventory"):
+			utils.SendBusinessRuleError(c, "Inventory validation failed", map[string]interface{}{
+				"details": errorMsg,
+			})
+		default:
+			utils.SendInternalError(c, "Failed to create sale", errorMsg)
+		}
 		return
 	}
 
-	c.JSON(http.StatusCreated, sale)
+	log.Printf("✅ Sale created successfully: ID=%d, Code=%s", sale.ID, sale.Code)
+	utils.SendCreated(c, "Sale created successfully", sale)
 }
 
 // UpdateSale updates an existing sale
@@ -223,22 +302,30 @@ func (sc *SalesController) GetSalePayments(c *gin.Context) {
 	c.JSON(http.StatusOK, payments)
 }
 
-// CreateSalePayment creates a payment for a sale
+// CreateSalePayment creates a payment for a sale with proper race condition protection
 func (sc *SalesController) CreateSalePayment(c *gin.Context) {
+	log.Printf("🚀 Starting payment creation process")
+	
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
+		log.Printf("❌ Invalid sale ID: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid sale ID",
+			"status":  "error",
+			"error":   "Invalid sale ID",
 			"details": err.Error(),
+			"code":    "INVALID_SALE_ID",
 		})
 		return
 	}
 
 	var request models.SalePaymentRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
+		log.Printf("❌ Invalid request data for sale %d: %v", id, err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request data",
-			"details": err.Error(),
+			"status":           "error",
+			"error":            "Invalid request data",
+			"details":          err.Error(),
+			"code":             "VALIDATION_ERROR",
 			"validation_error": true,
 		})
 		return
@@ -246,44 +333,99 @@ func (sc *SalesController) CreateSalePayment(c *gin.Context) {
 
 	// Set the sale ID from the URL parameter
 	request.SaleID = uint(id)
+	log.Printf("💰 Processing payment request for sale %d: amount=%.2f, method=%s", 
+		id, request.Amount, request.PaymentMethod)
 
-	// Get user ID from context - handle potential panic
+	// Get user ID from context with proper error handling
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
+		log.Printf("❌ User authentication missing for sale %d payment", id)
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "User not authenticated",
+			"status":  "error",
+			"error":   "User not authenticated",
 			"details": "user_id not found in context",
+			"code":    "AUTH_MISSING",
 		})
 		return
 	}
 	userID, ok := userIDInterface.(uint)
 	if !ok {
+		log.Printf("❌ Invalid user ID type for sale %d payment: %T", id, userIDInterface)
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Invalid user authentication",
+			"status":  "error",
+			"error":   "Invalid user authentication",
 			"details": "user_id has invalid type",
+			"code":    "AUTH_INVALID",
 		})
 		return
 	}
 
-	payment, err := sc.salesService.CreateSalePayment(uint(id), request, userID)
+	// Validate payment request before processing
+	if err := sc.unifiedPaymentService.ValidatePaymentRequest(request); err != nil {
+		log.Printf("❌ Payment validation failed for sale %d: %v", id, err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"error":   "Payment validation failed",
+			"details": err.Error(),
+			"code":    "PAYMENT_VALIDATION_ERROR",
+		})
+		return
+	}
+
+	// Use the UNIFIED payment service (SINGLE SOURCE OF TRUTH)
+	payment, err := sc.unifiedPaymentService.CreateSalesPayment(uint(id), request, userID)
 	if err != nil {
-		// Determine appropriate HTTP status based on error
+		log.Printf("❌ [UNIFIED] Payment creation failed for sale %d: %v", id, err)
+		
+		// Determine appropriate HTTP status based on error type
 		status := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "not found") {
+		code := "PAYMENT_CREATION_ERROR"
+		
+		errorMsg := err.Error()
+		switch {
+		case strings.Contains(errorMsg, "not found"):
 			status = http.StatusNotFound
-		} else if strings.Contains(err.Error(), "status") || strings.Contains(err.Error(), "validation") || strings.Contains(err.Error(), "exceeds") {
+			code = "SALE_NOT_FOUND"
+		case strings.Contains(errorMsg, "exceeds outstanding"):
 			status = http.StatusBadRequest
+			code = "AMOUNT_EXCEEDS_OUTSTANDING"
+		case strings.Contains(errorMsg, "cannot receive payments"):
+			status = http.StatusBadRequest
+			code = "INVALID_SALE_STATUS"
+		case strings.Contains(errorMsg, "no outstanding amount"):
+			status = http.StatusBadRequest
+			code = "NO_OUTSTANDING_AMOUNT"
+		case strings.Contains(errorMsg, "validation"):
+			status = http.StatusBadRequest
+			code = "VALIDATION_ERROR"
 		}
 		
 		c.JSON(status, gin.H{
-			"error": "Failed to create payment",
-			"details": err.Error(),
-			"sale_id": id,
+			"status":   "error",
+			"error":    "Failed to create payment",
+			"details":  errorMsg,
+			"code":     code,
+			"sale_id":  id,
+			"user_id":  userID,
 		})
 		return
 	}
 
-	c.JSON(http.StatusCreated, payment)
+	log.Printf("✅ Payment created successfully for sale %d: payment_id=%d, amount=%.2f", 
+		id, payment.ID, payment.Amount)
+
+	// Return success response with comprehensive data
+	c.JSON(http.StatusCreated, gin.H{
+		"status":  "success",
+		"message": "Payment created successfully with race condition protection",
+		"data":    payment,
+		"meta": gin.H{
+			"sale_id":    payment.SaleID,
+			"payment_id": payment.ID,
+			"user_id":    userID,
+			"created_at": payment.CreatedAt,
+		},
+	})
 }
 
 // Integrated Payment Management - uses Payment Service for comprehensive payment tracking

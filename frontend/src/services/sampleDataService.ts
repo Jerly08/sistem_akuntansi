@@ -5,6 +5,8 @@
  * It works entirely through the existing API endpoints to ensure data consistency.
  */
 
+import { getAuthHeaders } from '../utils/authTokenUtils';
+
 interface SampleAccount {
   code: string;
   name: string;
@@ -42,11 +44,15 @@ class SampleDataService {
    * Get authentication headers
    */
   private getAuthHeaders(): HeadersInit {
-    const token = localStorage.getItem('token');
-    return {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
-    };
+    // Use centralized token utility for consistency across the application
+    try {
+      return getAuthHeaders();
+    } catch (error) {
+      // Fallback to just content-type if no token is available
+      return {
+        'Content-Type': 'application/json',
+      };
+    }
   }
 
   /**

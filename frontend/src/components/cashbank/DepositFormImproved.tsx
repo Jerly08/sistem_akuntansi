@@ -105,10 +105,10 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
       setSourceAccounts(accounts);
     } catch (error) {
       console.error('Error loading deposit source accounts:', error);
-      // Set default accounts as fallback
+      // Set default equity account as fallback
       setSourceAccounts({
-        revenue: [{ id: 0, code: '4900', name: 'Other Income (Default)', type: 'REVENUE', category: 'OTHER_REVENUE', is_active: true, balance: 0 }],
-        equity: []
+        revenue: [], // No revenue accounts for deposits
+        equity: [{ id: 0, code: '3101', name: 'Modal Pemilik (Default)', type: 'EQUITY', category: 'OWNER_EQUITY', is_active: true, balance: 0 }]
       });
     } finally {
       setLoadingAccounts(false);
@@ -255,9 +255,9 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
       await cashbankService.processDeposit(requestData);
       
       // If we get here, it was successful
-      const allAccounts = [...sourceAccounts.revenue, ...sourceAccounts.equity];
+      const allAccounts = [...sourceAccounts.equity]; // Only equity accounts
       const selectedAccount = allAccounts.find(acc => acc.id === parseInt(formData.source_account_id || '0'));
-      const sourceAccountName = selectedAccount ? selectedAccount.name : 'Other Income (Default)';
+      const sourceAccountName = selectedAccount ? selectedAccount.name : 'Modal Pemilik (Default)';
       
       toast({
         title: 'Deposit Successful! 💰',
@@ -305,9 +305,9 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
   if (!account) return null;
 
   const newBalance = account.balance + formData.amount;
-  const allAccounts = [...sourceAccounts.revenue, ...sourceAccounts.equity];
+  const allAccounts = [...sourceAccounts.equity]; // Only equity accounts
   const selectedAccount = allAccounts.find(acc => acc.id === parseInt(formData.source_account_id || '0'));
-  const sourceAccountName = selectedAccount ? selectedAccount.name : 'Other Income (Default)';
+  const sourceAccountName = selectedAccount ? selectedAccount.name : 'Modal Pemilik (Default)';
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} size="2xl" scrollBehavior="inside">
@@ -459,54 +459,40 @@ const DepositFormImproved: React.FC<DepositFormImprovedProps> = ({
             {/* Deposit Source Account Selection */}
             <Box>
               <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={3}>
-                💰 Deposit Source Account Selection
+                💰 Capital/Equity Account Selection
               </Text>
               <Text fontSize="sm" color="gray.600" mb={3}>
-                Select the source account to be credited. Leave blank to use default "Other Income" account.
+                Select the equity account to be credited. Leave blank to use default "Modal Pemilik" (Owner's Equity) account for proper balance sheet treatment.
               </Text>
               
               <FormControl>
-                <FormLabel>💳 Credit Account (Deposit Source)</FormLabel>
+                <FormLabel>💳 Credit Account (Equity Source)</FormLabel>
                 <Select
                   value={formData.source_account_id}
                   onChange={(e) => handleInputChange('source_account_id', e.target.value)}
-                  placeholder="Use default 'Other Income' account"
+                  placeholder="Use default 'Modal Pemilik' (Owner's Equity) account"
                   isDisabled={loadingAccounts}
                 >
-                  {/* EQUITY SECTION */}
+                  {/* EQUITY SECTION ONLY */}
                   {sourceAccounts.equity.length > 0 && (
-                    <optgroup label="💰 CAPITAL/EQUITY">
-                      {sourceAccounts.equity.map((account) => (
-                        <option key={`equity-${account.id}`} value={account.id}>
-                          {account.code} - {account.name}
-                          {account.balance !== 0 && ` (Balance: ${account.balance.toLocaleString('id-ID')})`}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  
-                  {/* REVENUE SECTION */}
-                  {sourceAccounts.revenue.length > 0 && (
-                    <optgroup label="📈 OTHER INCOME">
-                      {sourceAccounts.revenue.map((account) => (
-                        <option key={`revenue-${account.id}`} value={account.id}>
-                          {account.code} - {account.name}
-                          {account.balance !== 0 && ` (Balance: ${account.balance.toLocaleString('id-ID')})`}
-                        </option>
-                      ))}
-                    </optgroup>
+                    sourceAccounts.equity.map((account) => (
+                      <option key={`equity-${account.id}`} value={account.id}>
+                        {account.code} - {account.name}
+                        {account.balance !== 0 && ` (Balance: ${account.balance.toLocaleString('id-ID')})`}
+                      </option>
+                    ))
                   )}
                 </Select>
                 {loadingAccounts && (
                   <Text fontSize="xs" color="gray.500" mt={1}>
-                    Loading deposit source accounts...
+                    Loading equity accounts...
                   </Text>
                 )}
                 
-                {/* Help Text */}
+                {/* Updated Help Text */}
                 <Text fontSize="xs" color="gray.500" mt={2}>
-                  💡 <strong>Capital/Equity:</strong> For owner investment or retained earnings<br/>
-                  📈 <strong>Other Income:</strong> For non-sales revenue like consulting, interest, etc.
+                  💡 <strong>Proper Accounting:</strong> Deposits are recorded as capital contributions to maintain balanced balance sheets.
+                  Only equity accounts are available to ensure correct accounting treatment.
                 </Text>
               </FormControl>
             </Box>

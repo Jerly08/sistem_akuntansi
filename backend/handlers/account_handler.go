@@ -306,19 +306,47 @@ func (h *AccountHandler) ExportAccountsPDF(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", pdfData)
 }
 
-// GetAccountCatalog gets minimal account data for EXPENSE accounts (id, code, name, active)
-// This endpoint is specifically for EMPLOYEE role to select expense accounts in purchases
+// GetAccountCatalog gets minimal account data for purchase-related accounts (id, code, name, active)
+// This endpoint is for authenticated users to select accounts in purchases and payments
 func (h *AccountHandler) GetAccountCatalog(c *gin.Context) {
 	accountType := c.Query("type")
 	
-	// Only allow EXPENSE type for catalog to restrict access
-	if accountType != "EXPENSE" {
-		appError := utils.NewBadRequestError("Account catalog only supports EXPENSE type")
-		c.JSON(appError.StatusCode, appError.ToErrorResponse(""))
-		return
+	// Allow specific types for purchase/payment operations
+	allowedTypes := []string{"EXPENSE", "ASSET", "LIABILITY"}
+	if accountType != "" {
+		isAllowed := false
+		for _, allowed := range allowedTypes {
+			if accountType == allowed {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			appError := utils.NewBadRequestError(fmt.Sprintf("Account catalog only supports types: %v", allowedTypes))
+			c.JSON(appError.StatusCode, appError.ToErrorResponse(""))
+			return
+		}
 	}
 	
-	accounts, err := h.repo.FindByType(c.Request.Context(), accountType)
+	var accounts []models.Account
+	var err error
+	
+	if accountType != "" {
+		// Get accounts for specific type
+		accounts, err = h.repo.FindByType(c.Request.Context(), accountType)
+	} else {
+		// Get accounts for all allowed types for purchase operations
+		allowedTypes := []string{"EXPENSE", "ASSET", "LIABILITY"}
+		for _, aType := range allowedTypes {
+			typeAccounts, typeErr := h.repo.FindByType(c.Request.Context(), aType)
+			if typeErr != nil {
+				err = typeErr
+				break
+			}
+			accounts = append(accounts, typeAccounts...)
+		}
+	}
+	
 	if err != nil {
 		if appErr := utils.GetAppError(err); appErr != nil {
 			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))

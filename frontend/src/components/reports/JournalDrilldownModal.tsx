@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -45,6 +45,7 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
+  useToast,
 } from '@chakra-ui/react';
 import {
   FiEye,
@@ -57,9 +58,11 @@ import {
   FiFileText,
   FiFile,
   FiPrinter,
+  FiActivity,
 } from 'react-icons/fi';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatCurrency } from '@/utils/formatters';
+import { BalanceWebSocketClient } from '@/services/balanceWebSocketService';
 
 // Types
 interface JournalEntry {
@@ -141,11 +144,14 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
   title = 'Journal Entry Details',
 }) => {
   const { token } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<JournalDrilldownResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [isConnectedToBalanceService, setIsConnectedToBalanceService] = useState(false);
+  const balanceClientRef = useRef<BalanceWebSocketClient | null>(null);
   const [filters, setFilters] = useState({
     transaction_type: '',
     min_amount: '',
@@ -168,8 +174,48 @@ export const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
   useEffect(() => {
     if (isOpen && token) {
       fetchJournalEntries();
+      initializeBalanceConnection();
     }
+    
+    return () => {
+      if (balanceClientRef.current) {
+        balanceClientRef.current.disconnect();
+      }
+    };
   }, [isOpen, token, currentPage, itemsPerPage]);
+  
+  const initializeBalanceConnection = async () => {
+    if (!token || !isOpen) return;
+    
+    try {
+      balanceClientRef.current = new BalanceWebSocketClient();
+      await balanceClientRef.current.connect(token);
+      
+      balanceClientRef.current.onBalanceUpdate((data) => {
+        // Auto-refresh journal data when balance updates occur
+        // This ensures the modal shows the most current data
+        if (data.account_code) {
+          toast({
+            title: 'Balance Updated',
+            description: `Account ${data.account_code} balance has changed. Refreshing journal data...`,
+            status: 'info',
+            duration: 3000,
+            isClosable: true,
+            position: 'bottom-right',
+            size: 'sm'
+          });
+          
+          // Refresh journal entries to show latest data
+          fetchJournalEntries();
+        }
+      });
+      
+      setIsConnectedToBalanceService(true);
+    } catch (error) {
+      console.warn('Failed to connect to balance service:', error);
+      setIsConnectedToBalanceService(false);
+    }
+  };
 
   const fetchJournalEntries = async () => {
     if (!token) return;

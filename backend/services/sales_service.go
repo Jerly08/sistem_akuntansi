@@ -21,7 +21,9 @@ type SalesService struct {
 	contactRepo     repositories.ContactRepository
 	accountRepo     repositories.AccountRepository
 	journalService  JournalServiceInterface
+	unifiedJournal  *UnifiedSalesJournalService // NEW: Unified journal service
 	pdfService      PDFServiceInterface
+	stateMachine    *SalesStateMachine
 }
 
 // Define interface types to avoid dependency issues
@@ -39,6 +41,15 @@ type PDFServiceInterface interface {
 	// Receipt PDF methods
 	GenerateReceiptPDF(receipt *models.PurchaseReceipt) ([]byte, error)
 	GenerateAllReceiptsPDF(purchase *models.Purchase, receipts []models.PurchaseReceipt) ([]byte, error)
+	// Financial Report PDF methods
+	GenerateGeneralLedgerPDF(ledgerData interface{}, accountInfo string, startDate, endDate string) ([]byte, error)
+	// Phase 2 - Priority Financial Reports PDF export
+	GenerateProfitLossPDF(profitLossData interface{}, startDate, endDate string) ([]byte, error)
+	GenerateBalanceSheetPDF(balanceSheetData interface{}, asOfDate string) ([]byte, error)
+	GenerateTrialBalancePDF(trialBalanceData interface{}, asOfDate string) ([]byte, error)
+	GenerateJournalAnalysisPDF(journalData interface{}, startDate, endDate string) ([]byte, error)
+	// SSOT Reports PDF export
+	GenerateSSOTProfitLossPDF(ssotData interface{}) ([]byte, error)
 }
 
 type SalesResult struct {
@@ -57,7 +68,9 @@ func NewSalesService(db *gorm.DB, salesRepo *repositories.SalesRepository, produ
 		contactRepo:     contactRepo,
 		accountRepo:     accountRepo,
 		journalService:  journalService,
+		unifiedJournal:  NewUnifiedSalesJournalService(db), // NEW: Initialize unified journal service
 		pdfService:      pdfService,
+		stateMachine:    NewSalesStateMachine(),
 	}
 }
 
@@ -529,15 +542,15 @@ func (s *SalesService) CreateSalePayment(saleID uint, request models.SalePayment
 	// Create payment record
 	payment := &models.SalePayment{
 		SaleID:        saleID,
-		PaymentNumber: s.generatePaymentNumber(),
-		Date:          request.PaymentDate,
 		Amount:        request.Amount,
-		Method:        request.PaymentMethod,
+		PaymentDate:   request.PaymentDate,
+		PaymentMethod: request.PaymentMethod,
 		Reference:     request.Reference,
 		Notes:         request.Notes,
 		CashBankID:    request.CashBankID,
 		AccountID:     request.AccountID,
 		UserID:        userID,
+		Status:        models.SalePaymentStatusCompleted,
 	}
 
 	createdPayment, err := s.salesRepo.CreatePayment(payment)
@@ -559,11 +572,10 @@ func (s *SalesService) CreateSalePayment(saleID uint, request models.SalePayment
 		return nil, err
 	}
 
-	// Create journal entries for payment
-	err = s.createJournalEntriesForPayment(createdPayment, userID)
-	if err != nil {
-		return nil, err
-	}
+	// NOTE: Journal entries for payment should be handled by the payment service, not here.
+	// This prevents double journal entries that were causing balance issues.
+	// The UnifiedSalesJournalService will be used by payment service to create entries with coordination.
+	log.Printf("💰 Payment %d created for sale %d - journal entries will be handled by payment service", createdPayment.ID, saleID)
 
 	return createdPayment, nil
 }
@@ -1288,19 +1300,18 @@ func (s *SalesService) restoreInventoryForSale(sale *models.Sale) error {
 }
 
 func (s *SalesService) createJournalEntriesForSale(sale *models.Sale, userID uint) error {
-	// Create journal entries for the sale
-	// Debit: Accounts Receivable (or Cash if COD)
-	// Credit: Sales Revenue
-	// Credit/Debit: Tax accounts
+	// Use the new SSOT Sales Journal Service
+	ssotJournalService := NewSSOTSalesJournalService(s.db)
 	
-	// Try to use journal service interface first
-	if s.journalService != nil {
-		return s.journalService.CreateSaleJournalEntries(sale, userID)
+	// Create the journal entry using SSOT
+	_, err := ssotJournalService.CreateSaleJournalEntry(sale, userID)
+	if err != nil {
+		log.Printf("❌ Failed to create SSOT journal entry for sale %d: %v", sale.ID, err)
+		return fmt.Errorf("failed to create journal entries: %v", err)
 	}
 	
-	// Fallback to direct accounting service implementation
-	log.Printf("Using direct accounting service for sale %d", sale.ID)
-	return s.createSaleAccountingEntries(sale, userID)
+	log.Printf("✅ Successfully created SSOT journal entries for sale %d", sale.ID)
+	return nil
 }
 
 func (s *SalesService) createJournalEntriesForPayment(payment *models.SalePayment, userID uint) error {
@@ -1373,9 +1384,9 @@ func (s *SalesService) createJournalEntriesForPayment(payment *models.SalePaymen
 	
 	// Create journal entry
 	journalEntry := &models.JournalEntry{
-		EntryDate:       payment.Date,
-		Description:     fmt.Sprintf("Customer Payment %s - %s", payment.PaymentNumber, customerName),
-		Reference:       payment.PaymentNumber,
+		EntryDate:       payment.PaymentDate,
+		Description:     fmt.Sprintf("Customer Payment %d - %s", payment.ID, customerName),
+		Reference:       fmt.Sprintf("PAY-%d", payment.ID),
 		ReferenceType:   models.JournalRefPayment,
 		ReferenceID:     &payment.ID,
 		UserID:          userID,

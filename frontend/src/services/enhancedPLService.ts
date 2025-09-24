@@ -1,5 +1,6 @@
-import { API_BASE_URL } from '@/config/api';
+import { API_V1_BASE } from '@/config/api';
 import { ReportParameters } from './reportService';
+import { getAuthHeaders } from '../utils/authTokenUtils';
 
 export interface JournalEntryData {
   id: number;
@@ -92,11 +93,8 @@ export interface EnhancedPLFromJournals {
 
 class EnhancedPLService {
   private getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
+    // Use centralized token utility for consistency across the application
+    return getAuthHeaders();
   }
 
   private buildQueryString(params: Record<string, any>): string {
@@ -122,7 +120,7 @@ class EnhancedPLService {
     };
 
     const queryString = this.buildQueryString(journalParams);
-    const url = `${API_BASE_URL}/journal-entries${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/journals${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -141,7 +139,7 @@ class EnhancedPLService {
 
   // Get account details to categorize entries
   private async getAccounts(): Promise<Array<{id: number, code: string, name: string, account_type: string}>> {
-    const response = await fetch(`${API_BASE_URL}/accounts`, {
+    const response = await fetch(`${API_V1_BASE}/accounts`, {
       headers: this.getAuthHeaders(),
     });
 

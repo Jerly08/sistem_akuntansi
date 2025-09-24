@@ -1,0 +1,130 @@
+import axios from 'axios';
+import { getAuthHeaders } from '../utils/authTokenUtils';
+
+export interface SSOTSalesSummaryData {
+  company?: CompanyInfo;
+  start_date: string;
+  end_date: string;
+  currency: string;
+  total_revenue: number;
+  total_sales: number;
+  total_discounts: number;
+  total_returns: number;
+  net_revenue: number;
+  sales_by_customer: CustomerSalesData[];
+  sales_by_product: ProductSalesData[];
+  sales_by_period: PeriodSalesData[];
+  generated_at: string;
+}
+
+export interface CompanyInfo {
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  phone: string;
+  email: string;
+  tax_number: string;
+}
+
+export interface CustomerSalesData {
+  customer_id: number;
+  customer_name: string;
+  total_sales: number;
+  transaction_count: number;
+  average_transaction: number;
+  percentage_of_total: number;
+}
+
+export interface ProductSalesData {
+  product_id: number;
+  product_name: string;
+  quantity_sold: number;
+  total_revenue: number;
+  average_price: number;
+  percentage_of_total: number;
+}
+
+export interface PeriodSalesData {
+  period: string;
+  start_date: string;
+  end_date: string;
+  total_sales: number;
+  transaction_count: number;
+  growth_rate: number;
+}
+
+export interface SSOTSalesSummaryParams {
+  start_date: string;
+  end_date: string;
+  format?: 'json' | 'pdf' | 'excel';
+}
+
+class SSOTSalesSummaryService {
+  private baseURL: string;
+
+  constructor() {
+    this.baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+  }
+
+  async generateSSOTSalesSummary(params: SSOTSalesSummaryParams): Promise<SSOTSalesSummaryData> {
+    try {
+      const queryParams = new URLSearchParams({
+        start_date: params.start_date,
+        end_date: params.end_date,
+        format: params.format || 'json'
+      });
+
+      const response = await axios.get(`${this.baseURL}/ssot-reports/sales-summary?${queryParams}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (response.data.status === 'success') {
+        return response.data.data;
+      }
+
+      throw new Error(response.data.message || 'Failed to generate sales summary');
+    } catch (error: any) {
+      console.error('Error generating SSOT sales summary:', error);
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      }
+      throw error;
+    }
+  }
+
+  async exportSalesSummary(data: SSOTSalesSummaryData, format: 'pdf' | 'excel'): Promise<Blob> {
+    try {
+      const response = await axios.post(
+        `${this.baseURL}/ssot-reports/sales-summary/export`,
+        {
+          data,
+          format
+        },
+        {
+          headers: getAuthHeaders(),
+          responseType: 'blob'
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error exporting sales summary:', error);
+      throw error;
+    }
+  }
+
+  formatCurrency(value: number): string {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR'
+    }).format(value);
+  }
+
+  calculateGrowthRate(current: number, previous: number): number {
+    if (previous === 0) return 0;
+    return ((current - previous) / previous) * 100;
+  }
+}
+
+export const ssotSalesSummaryService = new SSOTSalesSummaryService();

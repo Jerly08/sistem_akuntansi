@@ -11,13 +11,16 @@ import (
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
 	"app-sistem-akuntansi/database"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
 type CashBankService struct {
-	db           *gorm.DB
-	cashBankRepo *repositories.CashBankRepository
-	accountRepo  repositories.AccountRepository
+	db                    *gorm.DB
+	cashBankRepo         *repositories.CashBankRepository
+	accountRepo          repositories.AccountRepository
+	unifiedJournalService *UnifiedJournalService // New SSOT dependency
+	sSOTJournalAdapter   *CashBankSSOTJournalAdapter // SSOT Integration
 }
 
 func NewCashBankService(
@@ -25,10 +28,18 @@ func NewCashBankService(
 	cashBankRepo *repositories.CashBankRepository,
 	accountRepo repositories.AccountRepository,
 ) *CashBankService {
+	// Initialize UnifiedJournalService
+	unifiedJournalService := NewUnifiedJournalService(db)
+	
+	// Initialize SSOT Journal Adapter
+	sSOTJournalAdapter := NewCashBankSSOTJournalAdapter(db, unifiedJournalService, accountRepo)
+	
 	return &CashBankService{
-		db:           db,
-		cashBankRepo: cashBankRepo,
-		accountRepo:  accountRepo,
+		db:                    db,
+		cashBankRepo:         cashBankRepo,
+		accountRepo:          accountRepo,
+		unifiedJournalService: unifiedJournalService,
+		sSOTJournalAdapter:   sSOTJournalAdapter,
 	}
 }
 
@@ -237,33 +248,56 @@ func (s *CashBankService) ProcessTransfer(request TransferRequest, userID uint) 
 		transferAmount = request.Amount * request.ExchangeRate
 	}
 	
-	// Create transfer record
-	transfer := &CashBankTransfer{
-		TransferNumber: s.generateTransferNumber(),
-		FromAccountID:  request.FromAccountID,
-		ToAccountID:    request.ToAccountID,
-		Date:           request.Date.ToTime(),
-		Amount:         request.Amount,
-		ExchangeRate:   request.ExchangeRate,
-		ConvertedAmount: transferAmount,
-		Reference:      request.Reference,
-		Notes:          request.Notes,
-		Status:         "COMPLETED",
-		UserID:         userID,
+	// Create transfer record with retry mechanism for unique constraint violations
+	var transfer *CashBankTransfer
+	for retryAttempt := 0; retryAttempt < 5; retryAttempt++ {
+		transfer = &CashBankTransfer{
+			TransferNumber: s.generateTransferNumber(),
+			FromAccountID:  request.FromAccountID,
+			ToAccountID:    request.ToAccountID,
+			Date:           request.Date.ToTimeWithCurrentTime(),
+			Amount:         request.Amount,
+			ExchangeRate:   request.ExchangeRate,
+			ConvertedAmount: transferAmount,
+			Reference:      request.Reference,
+			Notes:          request.Notes,
+			Status:         "COMPLETED",
+			UserID:         userID,
+		}
+
+		if err := tx.Create(transfer).Error; err != nil {
+			// Check if it's a duplicate key constraint violation
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint") && 
+			   strings.Contains(err.Error(), "transfer_number_key") {
+				log.Printf("⚠️ Transfer number collision detected (attempt %d), retrying...", retryAttempt+1)
+				time.Sleep(time.Millisecond * time.Duration(50*(retryAttempt+1)))
+				continue // Retry with a new transfer number
+			}
+			// Other errors should not be retried
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to create transfer record: %v", err)
+		}
+		// Success, break out of retry loop
+		log.Printf("✅ Transfer created successfully with number: %s", transfer.TransferNumber)
+		break
 	}
 	
-	if err := tx.Create(transfer).Error; err != nil {
+	// If we've exhausted all retries
+	if transfer == nil || transfer.ID == 0 {
 		tx.Rollback()
-		return nil, err
+		return nil, errors.New("failed to create transfer after multiple attempts")
 	}
 	
-	// Update source account balance
+	// Update source account balance (essential since SSOT skips cash-bank accounts)
+	originalSourceBalance := sourceAccount.Balance
 	sourceAccount.Balance -= request.Amount
 	if err := tx.Save(sourceAccount).Error; err != nil {
 		tx.Rollback()
-		return nil, err
+		return nil, fmt.Errorf("failed to update source account balance: %v", err)
 	}
-	
+	log.Printf("✅ Source account balance updated from %.2f to %.2f (transfer out: %.2f)", 
+		originalSourceBalance, sourceAccount.Balance, request.Amount)
+
 	// Create source transaction record
 	sourceTx := &models.CashBankTransaction{
 		CashBankID:      request.FromAccountID,
@@ -271,7 +305,7 @@ func (s *CashBankService) ProcessTransfer(request TransferRequest, userID uint) 
 		ReferenceID:     transfer.ID,
 		Amount:          -request.Amount,
 		BalanceAfter:    sourceAccount.Balance,
-		TransactionDate: request.Date.ToTime(),
+		TransactionDate: request.Date.ToTimeWithCurrentTime(),
 		Notes:           fmt.Sprintf("Transfer to %s", destAccount.Name),
 	}
 	
@@ -280,13 +314,16 @@ func (s *CashBankService) ProcessTransfer(request TransferRequest, userID uint) 
 		return nil, err
 	}
 	
-	// Update destination account balance
+	// Update destination account balance (essential since SSOT skips cash-bank accounts)
+	originalDestBalance := destAccount.Balance
 	destAccount.Balance += transferAmount
 	if err := tx.Save(destAccount).Error; err != nil {
 		tx.Rollback()
-		return nil, err
+		return nil, fmt.Errorf("failed to update destination account balance: %v", err)
 	}
-	
+	log.Printf("✅ Destination account balance updated from %.2f to %.2f (transfer in: %.2f)", 
+		originalDestBalance, destAccount.Balance, transferAmount)
+
 	// Create destination transaction record
 	destTx := &models.CashBankTransaction{
 		CashBankID:      request.ToAccountID,
@@ -294,7 +331,7 @@ func (s *CashBankService) ProcessTransfer(request TransferRequest, userID uint) 
 		ReferenceID:     transfer.ID,
 		Amount:          transferAmount,
 		BalanceAfter:    destAccount.Balance,
-		TransactionDate: request.Date.ToTime(),
+		TransactionDate: request.Date.ToTimeWithCurrentTime(),
 		Notes:           fmt.Sprintf("Transfer from %s", sourceAccount.Name),
 	}
 	
@@ -303,11 +340,24 @@ func (s *CashBankService) ProcessTransfer(request TransferRequest, userID uint) 
 		return nil, err
 	}
 	
-	// Create journal entries
-	err = s.createTransferJournalEntries(tx, transfer, sourceAccount, destAccount, userID)
+	// Create SSOT journal entries using adapter
+	journalRequest := &CashBankJournalRequest{
+		TransactionType: TransactionTypeTransfer,
+		Amount:          decimal.NewFromFloat(request.Amount),
+		Date:            request.Date.ToTimeWithCurrentTime(),
+		Reference:       request.Reference,
+		Description:     fmt.Sprintf("Transfer from %s to %s", sourceAccount.Name, destAccount.Name),
+		Notes:           request.Notes,
+		FromCashBankID:  func() *uint64 { id := uint64(sourceAccount.ID); return &id }(),
+		ToCashBankID:    func() *uint64 { id := uint64(destAccount.ID); return &id }(),
+		CreatedBy:       uint64(userID),
+	}
+	
+	_, err = s.sSOTJournalAdapter.CreateTransferJournalEntryWithTx(
+		tx, sourceAccount, destAccount, sourceTx, journalRequest)
 	if err != nil {
 		tx.Rollback()
-		return nil, err
+		return nil, fmt.Errorf("failed to create SSOT transfer journal entry: %v", err)
 	}
 	
 	return transfer, tx.Commit().Error
@@ -315,14 +365,20 @@ func (s *CashBankService) ProcessTransfer(request TransferRequest, userID uint) 
 
 // ProcessDeposit processes a deposit transaction
 func (s *CashBankService) ProcessDeposit(request DepositRequest, userID uint) (*models.CashBankTransaction, error) {
+	log.Printf("🔄 Processing deposit: AccountID=%d, Amount=%.2f, UserID=%d", 
+		request.AccountID, request.Amount, userID)
+	
 	tx := s.db.Begin()
 	
 	// Validate account
+	log.Printf("🔍 Step 1: Finding cash-bank account %d", request.AccountID)
 	account, err := s.cashBankRepo.FindByID(request.AccountID)
 	if err != nil {
+		log.Printf("❌ Account %d not found: %v", request.AccountID, err)
 		tx.Rollback()
 		return nil, errors.New("account not found")
 	}
+	log.Printf("✅ Found account: %s (Balance: %.2f)", account.Name, account.Balance)
 	
 	// Ensure account integrity
 	if err := database.EnsureCashBankAccountIntegrity(s.db, account.ID); err != nil {
@@ -335,13 +391,16 @@ func (s *CashBankService) ProcessDeposit(request DepositRequest, userID uint) (*
 		}
 	}
 	
-	// Update balance
+	// Update cash bank balance (essential since SSOT skips cash-bank accounts)
+	originalBalance := account.Balance
 	account.Balance += request.Amount
 	if err := tx.Save(account).Error; err != nil {
 		tx.Rollback()
-		return nil, err
+		return nil, fmt.Errorf("failed to update cash bank balance: %v", err)
 	}
-	
+	log.Printf("✅ Step 2: Updated cash bank balance from %.2f to %.2f (deposit: %.2f)", 
+		originalBalance, account.Balance, request.Amount)
+
 	// Create transaction record
 	transaction := &models.CashBankTransaction{
 		CashBankID:      request.AccountID,
@@ -349,7 +408,7 @@ func (s *CashBankService) ProcessDeposit(request DepositRequest, userID uint) (*
 		ReferenceID:     0, // No specific reference for direct deposit
 		Amount:          request.Amount,
 		BalanceAfter:    account.Balance,
-		TransactionDate: request.Date.ToTime(),
+		TransactionDate: request.Date.ToTimeWithCurrentTime(),
 		Notes:           request.Notes,
 	}
 	
@@ -358,26 +417,64 @@ func (s *CashBankService) ProcessDeposit(request DepositRequest, userID uint) (*
 		return nil, err
 	}
 	
-	// Create journal entries
-	err = s.createDepositJournalEntries(tx, transaction, account, request, userID)
-	if err != nil {
-		tx.Rollback()
-		return nil, err
+	// Create SSOT journal entries using adapter
+	log.Printf("📋 Step 3: Creating SSOT journal entry for deposit")
+	journalRequest := &CashBankJournalRequest{
+		TransactionType: TransactionTypeDeposit,
+		CashBankID:      uint64(request.AccountID),
+		Amount:          decimal.NewFromFloat(request.Amount),
+		Date:            request.Date.ToTimeWithCurrentTime(),
+		Reference:       request.Reference,
+		Description:     fmt.Sprintf("Deposit to %s", account.Name),
+		Notes:           request.Notes,
+		CounterAccountID: func() *uint64 {
+			if request.SourceAccountID != nil {
+				id := uint64(*request.SourceAccountID)
+				return &id
+			}
+			return nil
+		}(),
+		CreatedBy: uint64(userID),
 	}
 	
-	return transaction, tx.Commit().Error
+	log.Printf("📋 Creating SSOT journal entry...")
+	journalResult, err := s.sSOTJournalAdapter.CreateDepositJournalEntryWithTx(
+		tx, account, transaction, journalRequest)
+	if err != nil {
+		log.Printf("❌ SSOT journal creation failed: %v", err)
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to create SSOT deposit journal entry: %v", err)
+	}
+	log.Printf("✅ SSOT journal created: %s", journalResult.JournalEntry.EntryNumber)
+	
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("❌ Transaction commit failed: %v", err)
+		return nil, fmt.Errorf("failed to commit deposit transaction: %v", err)
+	}
+	
+	log.Printf("🎉 Deposit completed successfully: TransactionID=%d, FinalBalance=%.2f", 
+		transaction.ID, account.Balance)
+	
+	return transaction, nil
 }
 
 // ProcessWithdrawal processes a withdrawal transaction
 func (s *CashBankService) ProcessWithdrawal(request WithdrawalRequest, userID uint) (*models.CashBankTransaction, error) {
+	log.Printf("🔄 Processing withdrawal: AccountID=%d, Amount=%.2f, UserID=%d", 
+		request.AccountID, request.Amount, userID)
+	
 	tx := s.db.Begin()
 	
 	// Validate account
+	log.Printf("🔍 Step 1: Finding cash-bank account %d", request.AccountID)
 	account, err := s.cashBankRepo.FindByID(request.AccountID)
 	if err != nil {
+		log.Printf("❌ Account %d not found: %v", request.AccountID, err)
 		tx.Rollback()
 		return nil, errors.New("account not found")
 	}
+	log.Printf("✅ Found account: %s (Balance: %.2f)", account.Name, account.Balance)
 	
 	// Ensure account integrity
 	if err := database.EnsureCashBankAccountIntegrity(s.db, account.ID); err != nil {
@@ -391,18 +488,23 @@ func (s *CashBankService) ProcessWithdrawal(request WithdrawalRequest, userID ui
 	}
 	
 	// Check balance
+	log.Printf("💰 Step 2: Checking balance %.2f vs requested %.2f", account.Balance, request.Amount)
 	if account.Balance < request.Amount {
+		log.Printf("❌ Insufficient balance: %.2f < %.2f", account.Balance, request.Amount)
 		tx.Rollback()
 		return nil, fmt.Errorf("insufficient balance. Available: %.2f", account.Balance)
 	}
 	
-	// Update balance
+	// Update cash bank balance (essential since SSOT skips cash-bank accounts)
+	originalBalance := account.Balance
 	account.Balance -= request.Amount
 	if err := tx.Save(account).Error; err != nil {
 		tx.Rollback()
-		return nil, err
+		return nil, fmt.Errorf("failed to update cash bank balance: %v", err)
 	}
-	
+	log.Printf("✅ Step 3: Updated cash bank balance from %.2f to %.2f (withdrawal: %.2f)", 
+		originalBalance, account.Balance, request.Amount)
+
 	// Create transaction record
 	transaction := &models.CashBankTransaction{
 		CashBankID:      request.AccountID,
@@ -410,7 +512,7 @@ func (s *CashBankService) ProcessWithdrawal(request WithdrawalRequest, userID ui
 		ReferenceID:     0,
 		Amount:          -request.Amount,
 		BalanceAfter:    account.Balance,
-		TransactionDate: request.Date.ToTime(),
+		TransactionDate: request.Date.ToTimeWithCurrentTime(),
 		Notes:           request.Notes,
 	}
 	
@@ -419,14 +521,45 @@ func (s *CashBankService) ProcessWithdrawal(request WithdrawalRequest, userID ui
 		return nil, err
 	}
 	
-	// Create journal entries
-	err = s.createWithdrawalJournalEntries(tx, transaction, account, request, userID)
-	if err != nil {
-		tx.Rollback()
-		return nil, err
+	// Create SSOT journal entries using adapter
+	log.Printf("📋 Step 4: Creating SSOT journal entry for withdrawal")
+	journalRequest := &CashBankJournalRequest{
+		TransactionType: TransactionTypeWithdrawal,
+		CashBankID:      uint64(request.AccountID),
+		Amount:          decimal.NewFromFloat(request.Amount),
+		Date:            request.Date.ToTimeWithCurrentTime(),
+		Reference:       request.Reference,
+		Description:     fmt.Sprintf("Withdrawal from %s", account.Name),
+		Notes:           request.Notes,
+		CounterAccountID: func() *uint64 {
+			if request.TargetAccountID != nil {
+				id := uint64(*request.TargetAccountID)
+				return &id
+			}
+			return nil
+		}(),
+		CreatedBy: uint64(userID),
 	}
 	
-	return transaction, tx.Commit().Error
+	log.Printf("📋 Creating SSOT journal entry...")
+	_, err = s.sSOTJournalAdapter.CreateWithdrawalJournalEntryWithTx(
+		tx, account, transaction, journalRequest)
+	if err != nil {
+		log.Printf("❌ SSOT journal creation failed: %v", err)
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to create SSOT withdrawal journal entry: %v", err)
+	}
+	
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		log.Printf("❌ Transaction commit failed: %v", err)
+		return nil, fmt.Errorf("failed to commit withdrawal transaction: %v", err)
+	}
+	
+	log.Printf("🎉 Withdrawal completed successfully: TransactionID=%d, FinalBalance=%.2f", 
+		transaction.ID, account.Balance)
+	
+	return transaction, nil
 }
 
 // GetTransactions retrieves transactions for a cash/bank account
@@ -458,39 +591,39 @@ func (s *CashBankService) GetTransactions(accountID uint, filter TransactionFilt
 
 // GetBalanceSummary gets balance summary for all accounts
 func (s *CashBankService) GetBalanceSummary() (*BalanceSummary, error) {
+	// Use the repository method which correctly handles active accounts
+	// and avoids double counting issues
+	repoSummary, err := s.cashBankRepo.GetBalanceSummary()
+	if err != nil {
+		return nil, err
+	}
+	
+	// Get individual account details for ByAccount field
 	accounts, err := s.cashBankRepo.FindAll()
 	if err != nil {
 		return nil, err
 	}
 	
+	// Convert to service format
 	summary := &BalanceSummary{
-		TotalCash:     0,
-		TotalBank:     0,
-		TotalBalance:  0,
-		ByAccount:     []AccountBalance{},
-		ByCurrency:    make(map[string]float64),
+		TotalCash:    repoSummary.TotalCash,
+		TotalBank:    repoSummary.TotalBank, 
+		TotalBalance: repoSummary.TotalBalance,
+		ByAccount:    []AccountBalance{},
+		ByCurrency:   repoSummary.ByCurrency,
 	}
 	
+	// Add individual account details (ONLY ACTIVE ACCOUNTS)
 	for _, account := range accounts {
-		if account.Type == models.CashBankTypeCash {
-			summary.TotalCash += account.Balance
-		} else {
-			summary.TotalBank += account.Balance
+		if account.IsActive { // Only include active accounts
+			summary.ByAccount = append(summary.ByAccount, AccountBalance{
+				AccountID:   account.ID,
+				AccountName: account.Name,
+				AccountType: account.Type,
+				Balance:     account.Balance,
+				Currency:    account.Currency,
+			})
 		}
-		
-		summary.TotalBalance += account.Balance
-		
-		// Group by currency
-		summary.ByCurrency[account.Currency] += account.Balance
-		
-		// Add to account list
-		summary.ByAccount = append(summary.ByAccount, AccountBalance{
-			AccountID:   account.ID,
-			AccountName: account.Name,
-			AccountType: account.Type,
-			Balance:     account.Balance,
-			Currency:    account.Currency,
-		})
 	}
 	
 	return summary, nil
@@ -602,9 +735,34 @@ func (s *CashBankService) getAccountCategory(cashBankType string) string {
 func (s *CashBankService) generateTransferNumber() string {
 	year := time.Now().Year()
 	month := time.Now().Month()
-	// Would need proper counting
-	count := 1
-	return fmt.Sprintf("TRF/%04d/%02d/%04d", year, month, count)
+	
+	// Get the count of transfers for this month with retry logic
+	var count int64
+	for retry := 0; retry < 5; retry++ {
+		err := s.db.Raw(`
+			SELECT COALESCE(COUNT(*), 0) 
+			FROM cash_bank_transfers 
+			WHERE EXTRACT(YEAR FROM created_at) = ? 
+			  AND EXTRACT(MONTH FROM created_at) = ?
+			  AND deleted_at IS NULL
+		`, year, month).Scan(&count).Error
+		
+		if err == nil {
+			break
+		}
+		
+		// Log warning and retry
+		log.Printf("Warning: Failed to get transfer count (attempt %d): %v", retry+1, err)
+		time.Sleep(time.Millisecond * time.Duration(100*(retry+1)))
+	}
+	
+	// Increment count to get next number
+	count++
+	
+	// Add microsecond timestamp to ensure uniqueness in case of concurrent requests
+	microsecond := time.Now().UnixMicro() % 10000
+	
+	return fmt.Sprintf("TRF/%04d/%02d/%04d-%04d", year, month, count, microsecond)
 }
 
 func (s *CashBankService) createOpeningBalanceTransaction(tx *gorm.DB, cashBank *models.CashBank, amount float64, date time.Time, userID uint) error {
@@ -625,334 +783,33 @@ func (s *CashBankService) createOpeningBalanceTransaction(tx *gorm.DB, cashBank 
 		Notes:           "Opening Balance",
 	}
 	
-	return tx.Create(transaction).Error
-}
-
-func (s *CashBankService) createTransferJournalEntries(tx *gorm.DB, transfer *CashBankTransfer, source, dest *models.CashBank, userID uint) error {
-	// Create journal entry for transfer using new JournalEntry structure
-	journalEntry := &models.JournalEntry{
-		Description:     fmt.Sprintf("Transfer from %s to %s", source.Name, dest.Name),
-		Reference:       fmt.Sprintf("TRF-%d", transfer.ID),
-		ReferenceType:   models.JournalRefTransfer,
-		ReferenceID:     &transfer.ID,
-		EntryDate:       transfer.Date,
-		UserID:          userID,
-		Status:          models.JournalStatusPosted,
-		IsAutoGenerated: true,
+	if err := tx.Create(transaction).Error; err != nil {
+		return err
 	}
 	
-	// Journal lines
-	lines := []models.JournalLine{
-		// Debit: Destination account (Asset increases)
-		{
-			AccountID:    dest.AccountID,
-			Description:  fmt.Sprintf("Transfer from %s", source.Name),
-			DebitAmount:  transfer.ConvertedAmount,
-			CreditAmount: 0,
-			LineNumber:   1,
-		},
-		// Credit: Source account (Asset decreases)
-		{
-			AccountID:    source.AccountID,
-			Description:  fmt.Sprintf("Transfer to %s", dest.Name),
-			DebitAmount:  0,
-			CreditAmount: transfer.Amount,
-			LineNumber:   2,
-		},
+	// Create SSOT journal entries for opening balance
+	journalRequest := &CashBankJournalRequest{
+		TransactionType: TransactionTypeOpeningBalance,
+		CashBankID:      uint64(cashBank.ID),
+		Amount:          decimal.NewFromFloat(amount),
+		Date:            date,
+		Reference:       fmt.Sprintf("OB-%s", cashBank.Code),
+		Description:     fmt.Sprintf("Opening balance for %s", cashBank.Name),
+		Notes:           "Opening Balance",
+		CreatedBy:       uint64(userID),
 	}
 	
-	// Handle exchange rate difference if applicable
-	if transfer.ExchangeRate > 0 && transfer.ExchangeRate != 1 {
-		exchangeDiff := transfer.ConvertedAmount - transfer.Amount
-		if exchangeDiff != 0 {
-			// Get exchange gain/loss account
-			var exchangeAccountID uint
-			// TODO: Implement GetAccountByCode or FindByCode
-			// For now, skip exchange rate handling
-			if exchangeDiff > 0 {
-				// Exchange gain - would need account lookup
-				// account, _ := s.accountRepo.FindByCode(context.Background(), "7100")
-			} else {
-				// Exchange loss - would need account lookup
-				// account, _ := s.accountRepo.FindByCode(context.Background(), "8100")
-			}
-			
-			if exchangeAccountID > 0 {
-				line := models.JournalLine{
-					AccountID:   exchangeAccountID,
-					Description: "Exchange rate difference",
-					LineNumber:  len(lines) + 1,
-				}
-				
-				if exchangeDiff > 0 {
-					line.CreditAmount = exchangeDiff
-				} else {
-					line.DebitAmount = -exchangeDiff
-				}
-				
-				lines = append(lines, line)
-			}
-		}
-	}
-	
-	journalEntry.JournalLines = lines
-	
-	// Validate balance
-	if !journalEntry.ValidateBalance() {
-		return fmt.Errorf("journal entry imbalanced: debits %.2f != credits %.2f", journalEntry.TotalDebit, journalEntry.TotalCredit)
-	}
-	
-	// Create the journal entry
-	if err := tx.Create(journalEntry).Error; err != nil {
-		return fmt.Errorf("failed to create transfer journal entry: %w", err)
-	}
-	
-	// Update GL account balances for both source and destination
-	if err := s.updateGLAccountBalance(tx, source.AccountID, source.Balance); err != nil {
-		return fmt.Errorf("failed to sync source GL account balance for transfer: %w", err)
-	}
-	
-	if err := s.updateGLAccountBalance(tx, dest.AccountID, dest.Balance); err != nil {
-		return fmt.Errorf("failed to sync destination GL account balance for transfer: %w", err)
-	}
-	
-	return nil
-}
-
-// updateGLAccountBalance updates the balance of the linked GL account to match cash/bank balance
-func (s *CashBankService) updateGLAccountBalance(tx *gorm.DB, accountID uint, newBalance float64) error {
-	if accountID == 0 {
-		return errors.New("GL account ID is required")
-	}
-	
-	// Update GL account balance to match cash/bank balance
-	err := tx.Model(&models.Account{}).Where("id = ?", accountID).Update("balance", newBalance).Error
+	_, err := s.sSOTJournalAdapter.CreateOpeningBalanceJournalEntryWithTx(
+		tx, cashBank, transaction, journalRequest)
 	if err != nil {
-		return fmt.Errorf("failed to update GL account balance: %w", err)
+		return fmt.Errorf("failed to create SSOT opening balance journal entry: %v", err)
 	}
 	
 	return nil
 }
 
-// getOrCreateDepositSourceAccount gets or creates a default source account for deposits
-func (s *CashBankService) getOrCreateDepositSourceAccount(tx *gorm.DB) (*models.Account, error) {
-	// Try to find existing "Other Income" account
-	var account models.Account
-	err := tx.Where("code = ? AND type = ?", "4900", "REVENUE").First(&account).Error
-	if err == nil {
-		return &account, nil
-	}
-	
-	// If not found, create it
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		newAccount := &models.Account{
-			Code:        "4900",
-			Name:        "Other Income",
-			Type:        "REVENUE",
-			Category:    "OTHER_REVENUE",
-			IsActive:    true,
-			Description: "Auto-created account for cash/bank deposits",
-			Level:       2,
-		}
-		
-		if createErr := tx.Create(newAccount).Error; createErr != nil {
-			return nil, fmt.Errorf("failed to create deposit source account: %w", createErr)
-		}
-		return newAccount, nil
-	}
-	
-	return nil, fmt.Errorf("failed to find deposit source account: %w", err)
-}
 
-// getOrCreateWithdrawalExpenseAccount gets or creates a default expense account for withdrawals
-func (s *CashBankService) getOrCreateWithdrawalExpenseAccount(tx *gorm.DB) (*models.Account, error) {
-	// Try to find existing "General Expense" account
-	var account models.Account
-	err := tx.Where("code = ? AND type = ?", "5900", "EXPENSE").First(&account).Error
-	if err == nil {
-		return &account, nil
-	}
-	
-	// If not found, create it
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		newAccount := &models.Account{
-			Code:        "5900",
-			Name:        "General Expense",
-			Type:        "EXPENSE",
-			Category:    "OTHER_EXPENSE",
-			IsActive:    true,
-			Description: "Auto-created account for cash/bank withdrawals",
-			Level:       2,
-		}
-		
-		if createErr := tx.Create(newAccount).Error; createErr != nil {
-			return nil, fmt.Errorf("failed to create withdrawal expense account: %w", createErr)
-		}
-		return newAccount, nil
-	}
-	
-	return nil, fmt.Errorf("failed to find withdrawal expense account: %w", err)
-}
 
-func (s *CashBankService) createDepositJournalEntries(tx *gorm.DB, transaction *models.CashBankTransaction, account *models.CashBank, request DepositRequest, userID uint) error {
-	// Create journal entry for deposit using new JournalEntry structure
-	journalEntry := &models.JournalEntry{
-		Description:     fmt.Sprintf("Deposit to %s", account.Name),
-		Reference:       fmt.Sprintf("DEP-%d", transaction.ID),
-		ReferenceType:   models.JournalRefDeposit,
-		ReferenceID:     &transaction.ID,
-		EntryDate:       request.Date.ToTime(),
-		UserID:          userID,
-		Status:          models.JournalStatusPosted,
-		IsAutoGenerated: true, // Always automatic now
-	}
-	
-	var lines []models.JournalLine
-	var sourceAccount *models.Account
-	var err error
-	
-	// Use custom source account if provided, otherwise use default
-	if request.SourceAccountID != nil && *request.SourceAccountID > 0 {
-		// Validate the provided source account (allow REVENUE or EQUITY)
-		sourceAccount = &models.Account{}
-		err = tx.Where("id = ? AND type IN (?, ?) AND is_active = ?", *request.SourceAccountID, "REVENUE", "EQUITY", true).First(sourceAccount).Error
-		if err != nil {
-			return fmt.Errorf("invalid source account: must be active revenue or equity account")
-		}
-	} else {
-		// Get or create default source account for automatic deposit
-		sourceAccount, err = s.getOrCreateDepositSourceAccount(tx)
-		if err != nil {
-			return fmt.Errorf("failed to get deposit source account: %w", err)
-		}
-	}
-	
-	// Always use automatic entries (guaranteed balance)
-	lines = []models.JournalLine{
-		// Debit: Cash/Bank Account (Asset increases)
-		{
-			AccountID:    account.AccountID,
-			Description:  fmt.Sprintf("Deposit - %s", request.Notes),
-			DebitAmount:  request.Amount,
-			CreditAmount: 0,
-			LineNumber:   1,
-		},
-		// Credit: Source Account (Revenue/Equity increases)
-		{
-			AccountID:    sourceAccount.ID,
-			Description:  fmt.Sprintf("Deposit from %s - %s", account.Name, request.Notes),
-			DebitAmount:  0,
-			CreditAmount: request.Amount,
-			LineNumber:   2,
-		},
-	}
-	
-	// Update source account balance (Revenue/Equity account - credit increases balance)
-	err = tx.Model(&models.Account{}).Where("id = ?", sourceAccount.ID).
-		Update("balance", gorm.Expr("balance + ?", request.Amount)).Error
-	if err != nil {
-		return fmt.Errorf("failed to update source account balance: %w", err)
-	}
-	
-	journalEntry.JournalLines = lines
-	
-	// Validate balance (should always be balanced in automatic mode)
-	if !journalEntry.ValidateBalance() {
-		return fmt.Errorf("journal entry imbalanced: debits %.2f != credits %.2f", journalEntry.TotalDebit, journalEntry.TotalCredit)
-	}
-	
-	// Create the journal entry
-	if err := tx.Create(journalEntry).Error; err != nil {
-		return fmt.Errorf("failed to create deposit journal entry: %w", err)
-	}
-	
-	// Update GL account balances
-	if err := s.updateGLAccountBalance(tx, account.AccountID, account.Balance); err != nil {
-		return fmt.Errorf("failed to sync GL account balance for deposit: %w", err)
-	}
-	
-	return nil
-}
-
-func (s *CashBankService) createWithdrawalJournalEntries(tx *gorm.DB, transaction *models.CashBankTransaction, account *models.CashBank, request WithdrawalRequest, userID uint) error {
-	// Create journal entry for withdrawal using new JournalEntry structure
-	journalEntry := &models.JournalEntry{
-		Description:     fmt.Sprintf("Withdrawal from %s", account.Name),
-		Reference:       fmt.Sprintf("WTH-%d", transaction.ID),
-		ReferenceType:   models.JournalRefWithdrawal,
-		ReferenceID:     &transaction.ID,
-		EntryDate:       request.Date.ToTime(),
-		UserID:          userID,
-		Status:          models.JournalStatusPosted,
-		IsAutoGenerated: true, // Always automatic now
-	}
-	
-	var lines []models.JournalLine
-	var targetAccount *models.Account
-	var err error
-	
-	// Use custom target account if provided, otherwise use default
-	if request.TargetAccountID != nil && *request.TargetAccountID > 0 {
-		// Validate the provided target account
-		targetAccount = &models.Account{}
-		err = tx.Where("id = ? AND type = ? AND is_active = ?", *request.TargetAccountID, "EXPENSE", true).First(targetAccount).Error
-		if err != nil {
-			return fmt.Errorf("invalid target account: must be active expense account")
-		}
-	} else {
-		// Get or create default target account for automatic withdrawal
-		targetAccount, err = s.getOrCreateWithdrawalExpenseAccount(tx)
-		if err != nil {
-			return fmt.Errorf("failed to get withdrawal expense account: %w", err)
-		}
-	}
-	
-	// Always use automatic entries (guaranteed balance)
-	lines = []models.JournalLine{
-		// Debit: Expense Account (Expense increases)
-		{
-			AccountID:    targetAccount.ID,
-			Description:  fmt.Sprintf("Withdrawal - %s", request.Notes),
-			DebitAmount:  request.Amount,
-			CreditAmount: 0,
-			LineNumber:   1,
-		},
-		// Credit: Cash/Bank Account (Asset decreases)
-		{
-			AccountID:    account.AccountID,
-			Description:  fmt.Sprintf("Withdrawal from %s - %s", account.Name, request.Notes),
-			DebitAmount:  0,
-			CreditAmount: request.Amount,
-			LineNumber:   2,
-		},
-	}
-	
-	// Update target account balance (Expense account - debit increases balance)
-	err = tx.Model(&models.Account{}).Where("id = ?", targetAccount.ID).
-		Update("balance", gorm.Expr("balance + ?", request.Amount)).Error
-	if err != nil {
-		return fmt.Errorf("failed to update expense account balance: %w", err)
-	}
-	
-	journalEntry.JournalLines = lines
-	
-	// Validate balance (should always be balanced in automatic mode)
-	if !journalEntry.ValidateBalance() {
-		return fmt.Errorf("journal entry imbalanced: debits %.2f != credits %.2f", journalEntry.TotalDebit, journalEntry.TotalCredit)
-	}
-	
-	// Create the journal entry
-	if err := tx.Create(journalEntry).Error; err != nil {
-		return fmt.Errorf("failed to create withdrawal journal entry: %w", err)
-	}
-	
-	// Update GL account balances
-	if err := s.updateGLAccountBalance(tx, account.AccountID, account.Balance); err != nil {
-		return fmt.Errorf("failed to sync GL account balance for withdrawal: %w", err)
-	}
-	
-	return nil
-}
 
 // ensureValidAccountID creates or finds a valid account_id for cash bank record
 func (s *CashBankService) ensureValidAccountID(cashBank *models.CashBank) (uint, error) {
@@ -1038,6 +895,23 @@ func (cd CustomDate) MarshalJSON() ([]byte, error) {
 // ToTime converts to time.Time
 func (cd CustomDate) ToTime() time.Time {
 	return time.Time(cd)
+}
+
+// ToTimeWithCurrentTime converts date to current time (preserving date but using current time)
+func (cd CustomDate) ToTimeWithCurrentTime() time.Time {
+	baseDate := time.Time(cd)
+	now := time.Now()
+	// Combine the date from request with current time
+	return time.Date(
+		baseDate.Year(),
+		baseDate.Month(), 
+		baseDate.Day(),
+		now.Hour(),
+		now.Minute(),
+		now.Second(),
+		now.Nanosecond(),
+		now.Location(),
+	)
 }
 
 type CashBankCreateRequest struct {

@@ -28,6 +28,7 @@ import {
 import { FiSave, FiX, FiUpload, FiTrash2 } from 'react-icons/fi';
 import ProductService, { Product, Category, ProductUnit, WarehouseLocation } from '@/services/productService';
 import CurrencyInput from '@/components/common/CurrencyInput';
+import { getProductImageUrl, debugImageUrl } from '@/utils/imageUrl';
 
 interface ProductFormProps {
   product?: Product;
@@ -164,11 +165,23 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
         status: 'success',
         isClosable: true,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Image upload error:', error);
+      let errorMessage = 'Failed to upload image';
+      let errorDetail = 'An unknown error occurred';
+      
+      if (error.response?.data?.error) {
+        errorDetail = error.response.data.error;
+      } else if (error.message) {
+        errorDetail = error.message;
+      }
+      
       toast({
-        title: 'Failed to upload image',
+        title: errorMessage,
+        description: errorDetail,
         status: 'error',
         isClosable: true,
+        duration: 5000,
       });
     }
   };
@@ -502,7 +515,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
                 <FormLabel>Gambar Saat Ini</FormLabel>
                 {formData.image_path ? (
                   <Image 
-                    src={`${process.env.NEXT_PUBLIC_STATIC_URL}${formData.image_path}`} 
+                    src={getProductImageUrl(formData.image_path) || ''} 
                     alt={formData.name || 'Product image'}
                     maxH="150px"
                     maxW="200px"
@@ -513,6 +526,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
                     fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='150' viewBox='0 0 200 150'%3E%3Crect width='200' height='150' fill='%23f0f0f0'/%3E%3Ctext x='100' y='75' text-anchor='middle' dy='.3em' font-family='Arial, sans-serif' font-size='12' fill='%23999'%3EImage not found%3C/text%3E%3C/svg%3E"
                     onError={(e) => {
                       console.error('Image failed to load:', formData.image_path);
+                      console.error('Attempted URL:', getProductImageUrl(formData.image_path));
+                      debugImageUrl(formData.image_path);
                     }}
                   />
                 ) : (

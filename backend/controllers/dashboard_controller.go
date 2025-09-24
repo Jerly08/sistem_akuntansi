@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
@@ -191,7 +192,7 @@ func (dc *DashboardController) GetAnalytics(c *gin.Context) {
 	}
 	
 	// Get comprehensive analytics with real growth calculations
-	analytics, err := dc.dashboardService.GetDashboardAnalytics()
+	analytics, err := dc.dashboardService.GetDashboardAnalyticsForRole(userRoleLower)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to fetch dashboard analytics",
@@ -201,6 +202,116 @@ func (dc *DashboardController) GetAnalytics(c *gin.Context) {
 	}
 	
 	c.JSON(http.StatusOK, analytics)
+}
+
+// GetFinanceDashboardData returns finance-specific dashboard data
+// @Summary Get finance dashboard data
+// @Description Retrieve finance-specific dashboard metrics including invoices, journals, and reconciliation status
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Finance dashboard data retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 403 {object} models.ErrorResponse "Forbidden - not finance role"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/finance [get]
+func (dc *DashboardController) GetFinanceDashboardData(c *gin.Context) {
+	userRole := c.GetString("user_role")
+	
+	// Only allow finance and admin roles
+	userRoleLower := strings.ToLower(userRole)
+	if userRoleLower != "finance" && userRoleLower != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Access denied - Finance role required"})
+		return
+	}
+	
+	financeData := make(map[string]interface{})
+	
+	// Invoices pending payment (outstanding sales)
+	var invoicesPendingPayment int64
+	dc.DB.Model(&models.Sale{}).
+		Where("status IN (?) AND outstanding_amount > 0 AND deleted_at IS NULL", 
+			[]string{"INVOICED", "PENDING", "OVERDUE"}).
+		Count(&invoicesPendingPayment)
+	financeData["invoices_pending_payment"] = invoicesPendingPayment
+	
+	// Invoices not yet paid (outstanding purchases)
+	var invoicesNotPaid int64
+	dc.DB.Model(&models.Purchase{}).
+		Where("status IN (?) AND outstanding_amount > 0 AND deleted_at IS NULL", 
+			[]string{"APPROVED", "COMPLETED", "PENDING"}).
+		Count(&invoicesNotPaid)
+	financeData["invoices_not_paid"] = invoicesNotPaid
+	
+	// Journal entries requiring posting (unposted)
+	var journalsNeedPosting int64
+	dc.DB.Model(&models.JournalEntry{}).
+		Where("status = ? AND deleted_at IS NULL", "DRAFT").
+		Count(&journalsNeedPosting)
+	financeData["journals_need_posting"] = journalsNeedPosting
+	
+	// Bank reconciliation status
+	type BankReconciliation struct {
+		LastReconciled *time.Time `json:"last_reconciled"`
+		DaysAgo        int        `json:"days_ago"`
+		Status         string     `json:"status"`
+	}
+	
+	// Get most recent bank reconciliation from journal entries
+	var lastReconciliation time.Time
+	err := dc.DB.Model(&models.JournalEntry{}).
+		Where("description ILIKE ? AND deleted_at IS NULL", "%reconciliation%").
+		Order("created_at DESC").
+		Select("created_at").
+		Scan(&lastReconciliation).Error
+	
+	bankRecon := BankReconciliation{}
+	if err == nil && !lastReconciliation.IsZero() {
+		bankRecon.LastReconciled = &lastReconciliation
+		bankRecon.DaysAgo = int(time.Since(lastReconciliation).Hours() / 24)
+		if bankRecon.DaysAgo <= 1 {
+			bankRecon.Status = "up_to_date"
+		} else if bankRecon.DaysAgo <= 7 {
+			bankRecon.Status = "recent"
+		} else {
+			bankRecon.Status = "needs_attention"
+		}
+	} else {
+		bankRecon.Status = "never_reconciled"
+		bankRecon.DaysAgo = -1
+	}
+	financeData["bank_reconciliation"] = bankRecon
+	
+	// Outstanding receivables amount
+	var outstandingReceivables float64
+	dc.DB.Model(&models.Sale{}).
+		Where("status IN (?) AND deleted_at IS NULL", []string{"INVOICED", "PENDING", "OVERDUE"}).
+		Select("COALESCE(SUM(outstanding_amount), 0)").
+		Scan(&outstandingReceivables)
+	financeData["outstanding_receivables"] = outstandingReceivables
+	
+	// Outstanding payables amount
+	var outstandingPayables float64
+	dc.DB.Model(&models.Purchase{}).
+		Where("status IN (?) AND deleted_at IS NULL", []string{"APPROVED", "COMPLETED", "PENDING"}).
+		Select("COALESCE(SUM(outstanding_amount), 0)").
+		Scan(&outstandingPayables)
+	financeData["outstanding_payables"] = outstandingPayables
+	
+	// Cash and bank balance
+	var cashBankBalance float64
+	dc.DB.Model(&models.Account{}).
+		Where("type = ? AND is_active = true AND deleted_at IS NULL", "ASSET").
+		Where("name ILIKE ? OR name ILIKE ?", "%kas%", "%bank%").
+		Select("COALESCE(SUM(balance), 0)").
+		Scan(&cashBankBalance)
+	financeData["cash_bank_balance"] = cashBankBalance
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Finance dashboard data retrieved successfully",
+		"data":    financeData,
+	})
 }
 
 // GetQuickStats returns quick statistics for dashboard widgets

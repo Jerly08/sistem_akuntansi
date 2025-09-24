@@ -1,5 +1,5 @@
-import { API_BASE_URL } from '@/config/api';
-import { journalIntegrationService } from './journalIntegrationService';
+import { API_V1_BASE } from '../config/api';
+import { getAuthHeaders } from '../utils/authTokenUtils';
 
 export interface Report {
   id: string;
@@ -28,7 +28,7 @@ export interface ReportParameters {
   group_by?: 'month' | 'quarter' | 'year';
   customer_id?: string;
   vendor_id?: string;
-  account_code?: string;
+  account_id?: string; // Updated to match backend parameter
   include_valuation?: boolean;
   period?: 'current' | 'ytd' | 'comparative';
   format?: 'json' | 'pdf' | 'csv';
@@ -38,11 +38,8 @@ export interface ReportParameters {
 
 class ReportService {
   private getAuthHeaders() {
-    const token = localStorage.getItem('token');
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
+    // Use centralized token utility for consistency across the application
+    return getAuthHeaders();
   }
 
   private buildQueryString(params: ReportParameters): string {
@@ -57,6 +54,33 @@ class ReportService {
     return searchParams.toString();
   }
 
+  private formatErrorMessage(textResponse: string, status: number): string {
+    if (!textResponse || textResponse.trim() === '') {
+      return this.getStatusMessage(status);
+    }
+    
+    // Clean up common backend error formats
+    const cleanMessage = textResponse
+      .replace(/ERROR:\s*/gi, '')
+      .replace(/SQLSTATE\s+\d+/gi, '')
+      .replace(/\(.*?\)$/, '') // Remove parenthetical codes at end
+      .trim();
+    
+    return cleanMessage || this.getStatusMessage(status);
+  }
+
+  private getStatusMessage(status: number): string {
+    switch (status) {
+      case 400: return 'Invalid request parameters. Please check your input.';
+      case 401: return 'Authentication required. Please log in again.';
+      case 403: return 'You do not have permission to access this report.';
+      case 404: return 'Report endpoint not found. Please contact support.';
+      case 500: return 'Server error occurred. Please try again later.';
+      case 503: return 'Service temporarily unavailable. Please try again later.';
+      default: return `HTTP ${status}: Request failed`;
+    }
+  }
+
   private async handleUnifiedResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       let errorData: any;
@@ -66,14 +90,14 @@ class ReportService {
         try {
           errorData = JSON.parse(textResponse);
         } catch {
-          // If not JSON, use text as error message
-          errorData = { message: textResponse || `HTTP ${response.status}: ${response.statusText}` };
+          // If not JSON, use text as error message with better formatting
+          errorData = { message: this.formatErrorMessage(textResponse, response.status) };
         }
       } catch {
         errorData = {
           error: { 
             code: 'NETWORK_ERROR',
-            message: `HTTP error! status: ${response.status} ${response.statusText}` 
+            message: this.getStatusMessage(response.status)
           }
         };
       }
@@ -158,7 +182,7 @@ class ReportService {
 
   // Get list of available reports
   async getAvailableReports(): Promise<Report[]> {
-    const response = await fetch(`${API_BASE_URL}/reports`, {
+    const response = await fetch(`${API_V1_BASE}/reports`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -172,22 +196,8 @@ class ReportService {
 
   // Generate Balance Sheet
   async generateBalanceSheet(params: ReportParameters): Promise<ReportData | Blob> {
-    // Try journal-based Balance Sheet first for JSON format
-    if (params.format === 'json') {
-      try {
-        const journalBasedBS = await journalIntegrationService.generateBalanceSheetFromJournals(params);
-        if (journalBasedBS.sections?.some((section: any) => section.items?.length > 0)) {
-          console.log('Using journal-based Balance Sheet');
-          return journalBasedBS as any;
-        }
-      } catch (journalError) {
-        console.log('Journal-based Balance Sheet failed, trying backend endpoint:', journalError);
-      }
-    }
-
-    // Fallback to backend endpoint
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/balance-sheet${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/balance-sheet${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -202,49 +212,14 @@ class ReportService {
       throw new Error('Start date and end date are required for profit & loss statement');
     }
 
-    // Try journal-based Enhanced P&L first
-    try {
-      const { enhancedPLService } = await import('./enhancedPLService');
-      const enhancedPLData = await enhancedPLService.generateEnhancedPLFromJournals(params);
-      
-      // If we have meaningful data (revenue or expenses), use journal-based P&L
-      if (enhancedPLData.revenue.total_revenue > 0 || 
-          enhancedPLData.cost_of_goods_sold.total_cogs > 0 || 
-          enhancedPLData.operating_expenses.total_opex > 0) {
-        console.log('Using Enhanced P&L from Journal Entries');
-        return enhancedPLData as any;
-      }
-    } catch (journalError) {
-      console.log('Journal-based Enhanced P&L failed, trying backend endpoints:', journalError);
-    }
+    const queryString = this.buildQueryString(params);
+    const url = `${API_V1_BASE}/reports/profit-loss${queryString ? '?' + queryString : ''}`;
+    
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
 
-    // Try enhanced endpoint (POST method with body)
-    try {
-      const response = await fetch(`${API_BASE_URL}/reports/enhanced/profit-loss`, {
-        method: 'POST',
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify({
-          start_date: params.start_date,
-          end_date: params.end_date,
-          format: params.format || 'json'
-        }),
-      });
-      
-      return await this.handleUnifiedResponse(response);
-    } catch (enhancedError) {
-      console.log('Enhanced endpoint failed, trying comprehensive endpoint:', enhancedError);
-      
-      // Fallback to comprehensive endpoint with GET method
-      const queryString = this.buildQueryString(params);
-      const fallbackUrl = `${API_BASE_URL}/reports/comprehensive/profit-loss${queryString ? '?' + queryString : ''}`;
-      
-      const fallbackResponse = await fetch(fallbackUrl, {
-        method: 'GET',
-        headers: this.getAuthHeaders(),
-      });
-
-      return this.handleUnifiedResponse(fallbackResponse);
-    }
+    return this.handleUnifiedResponse(response);
   }
 
   // Generate Enhanced Financial Metrics
@@ -254,7 +229,7 @@ class ReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `http://localhost:8080/api/reports/comprehensive/profit-loss${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/profit-loss${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -274,7 +249,7 @@ class ReportService {
     };
 
     const queryString = this.buildQueryString(params);
-    const url = `http://localhost:8080/api/reports/comprehensive/profit-loss${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/profit-loss${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -283,28 +258,15 @@ class ReportService {
     return this.handleUnifiedResponse(response);
   }
 
-  // Generate Cash Flow Statement
+  // Generate Cash Flow Statement (SSOT)
   async generateCashFlow(params: ReportParameters): Promise<ReportData | Blob> {
     if (!params.start_date || !params.end_date) {
       throw new Error('Start date and end date are required for cash flow statement');
     }
 
-    // Try journal-based Cash Flow first for JSON format
-    if (params.format === 'json') {
-      try {
-        const journalBasedCF = await journalIntegrationService.generateCashFlowFromJournals(params);
-        if (journalBasedCF.sections?.some((section: any) => section.items?.length > 0)) {
-          console.log('Using journal-based Cash Flow Statement');
-          return journalBasedCF as any;
-        }
-      } catch (journalError) {
-        console.log('Journal-based Cash Flow failed, trying backend endpoint:', journalError);
-      }
-    }
-
-    // Fallback to backend endpoint
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/cash-flow${queryString ? '?' + queryString : ''}`;
+    // Use SSOT Cash Flow endpoint for real-time data from journal system
+    const url = `${API_V1_BASE}/reports/ssot/cash-flow${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -315,22 +277,8 @@ class ReportService {
 
   // Generate Trial Balance
   async generateTrialBalance(params: ReportParameters): Promise<ReportData | Blob> {
-    // Try journal-based Trial Balance first for JSON format
-    if (params.format === 'json') {
-      try {
-        const journalBasedTB = await journalIntegrationService.generateTrialBalanceFromJournals(params);
-        if (journalBasedTB.sections?.[0]?.items?.length > 0) {
-          console.log('Using journal-based Trial Balance');
-          return journalBasedTB as any;
-        }
-      } catch (journalError) {
-        console.log('Journal-based Trial Balance failed, trying backend endpoint:', journalError);
-      }
-    }
-
-    // Fallback to backend endpoint
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/trial-balance${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/trial-balance${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -346,7 +294,7 @@ class ReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/general-ledger${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/general-ledger${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -358,7 +306,7 @@ class ReportService {
   // Generate Accounts Receivable Report
   async generateAccountsReceivable(params: ReportParameters): Promise<ReportData | Blob> {
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/accounts-receivable${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/accounts-receivable${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -379,7 +327,7 @@ class ReportService {
   // Generate Accounts Payable Report
   async generateAccountsPayable(params: ReportParameters): Promise<ReportData | Blob> {
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/accounts-payable${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/accounts-payable${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -404,7 +352,7 @@ class ReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/sales-summary${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/sales-summary${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -420,28 +368,35 @@ class ReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/purchase-summary${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/purchase-summary${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate purchase summary report');
+    return this.handleUnifiedResponse(response);
+  }
+
+  // Generate Vendor Analysis Report
+  async generateVendorAnalysis(params: ReportParameters): Promise<ReportData | Blob> {
+    if (!params.start_date || !params.end_date) {
+      throw new Error('Start date and end date are required for vendor analysis');
     }
 
-    if (params.format === 'pdf') {
-      return await response.blob();
-    }
+    const queryString = this.buildQueryString(params);
+    const url = `${API_V1_BASE}/reports/vendor-analysis${queryString ? '?' + queryString : ''}`;
+    
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
 
-    const result = await response.json();
-    return result.data;
+    return this.handleUnifiedResponse(response);
   }
 
   // Generate Inventory Report
   async generateInventoryReport(params: ReportParameters): Promise<ReportData | Blob> {
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/inventory-report${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/inventory-report${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -462,7 +417,7 @@ class ReportService {
   // Generate Financial Ratios Analysis
   async generateFinancialRatios(params: ReportParameters): Promise<ReportData | Blob> {
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}/reports/financial-ratios${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/reports/financial-ratios${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -480,43 +435,21 @@ class ReportService {
     return result.data;
   }
 
-  // Generate Journal Entry Analysis
+  // Generate Journal Entry Analysis (SSOT endpoint)
   async generateJournalEntryAnalysis(params: ReportParameters): Promise<ReportData | Blob> {
     if (!params.start_date || !params.end_date) {
       throw new Error('Start date and end date are required for journal entry analysis');
     }
 
-    // Build parameters for journal entries endpoint
-    const journalParams = {
-      start_date: params.start_date,
-      end_date: params.end_date,
-      status: params.status && params.status !== 'ALL' ? params.status : 'POSTED', // Default to POSTED if not specified
-      reference_type: params.reference_type && params.reference_type !== 'ALL' ? params.reference_type : undefined,
-      page: 1,
-      limit: 1000 // Get a large number for analysis
-    };
-
-    const queryString = this.buildQueryString(journalParams);
-    const url = `${API_BASE_URL}/journal-entries${queryString ? '?' + queryString : ''}`;
+    const queryString = this.buildQueryString(params);
+    // Route to SSOT endpoint that supports PDF/CSV
+    const url = `${API_V1_BASE}/ssot-reports/journal-analysis${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
 
-    if (!response.ok) {
-      throw new Error('Failed to generate journal entry analysis');
-    }
-
-    const result = await response.json();
-    
-    // Transform the journal entries data to match expected report format
-    return {
-      journal_entries: result.data || [],
-      total_entries: result.total || 0,
-      start_date: params.start_date,
-      end_date: params.end_date,
-      generated_at: new Date().toISOString()
-    };
+    return this.handleUnifiedResponse(response);
   }
 
   // Generic report generator
@@ -527,12 +460,24 @@ class ReportService {
     }
     
     
+    // Handle special cases that use different endpoints
+    if (reportId === 'cash-flow') {
+      return this.generateCashFlow(params);
+    }
+    
+    // Map report IDs to endpoints. Values that start with '/'
+    // are treated as absolute under API_V1_BASE (e.g. '/ssot-reports/...').
+    // Otherwise they are appended under '/reports/'.
     const endpointMap: { [key: string]: string } = {
-      'balance-sheet': 'balance-sheet',
-      'profit-loss': 'profit-loss',
-      'cash-flow': 'cash-flow',
-      'trial-balance': 'trial-balance',
-      'general-ledger': 'general-ledger',
+      // SSOT Balance Sheet lives under /api/v1/reports/ssot/balance-sheet
+      'balance-sheet': 'ssot/balance-sheet',
+      // SSOT P&L under /api/v1/reports/ssot-profit-loss
+      'profit-loss': 'ssot-profit-loss',
+      // These SSOT reports live under /api/v1/ssot-reports/*
+      'trial-balance': '/ssot-reports/trial-balance',
+      'general-ledger': '/ssot-reports/general-ledger',
+      'purchase-report': '/ssot-reports/purchase-report',
+      // Legacy/other reports remain under /api/v1/reports/*
       'accounts-receivable': 'accounts-receivable',
       'accounts-payable': 'accounts-payable',
       'sales-summary': 'sales-summary',
@@ -548,8 +493,10 @@ class ReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    // All reports now use the unified /reports endpoint
-    const url = `${API_BASE_URL}/reports/${endpoint}${queryString ? '?' + queryString : ''}`;
+    // Build URL based on whether the endpoint is absolute (starts with '/')
+    const url = endpoint.startsWith('/')
+      ? `${API_V1_BASE}${endpoint}${queryString ? '?' + queryString : ''}`
+      : `${API_V1_BASE}/reports/${endpoint}${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -588,7 +535,7 @@ class ReportService {
 
   // Get report templates (if implemented)
   async getReportTemplates(): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/reports/templates`, {
+    const response = await fetch(`${API_V1_BASE}/reports/templates`, {
       headers: this.getAuthHeaders(),
     });
 
@@ -608,7 +555,7 @@ class ReportService {
     template: string;
     is_default: boolean;
   }): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/reports/templates`, {
+    const response = await fetch(`${API_V1_BASE}/reports/templates`, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(template),

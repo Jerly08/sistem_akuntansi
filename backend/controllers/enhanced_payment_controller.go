@@ -387,7 +387,7 @@ func (ctrl *EnhancedPaymentController) createSmartAllocations(tx *gorm.DB, payme
 	// Create generic allocation for remaining amount
 	if remainingAmount > 0.01 {
 		genericAllocation := models.PaymentAllocation{
-			PaymentID:       payment.ID,
+			PaymentID:       uint64(payment.ID),
 			AllocatedAmount: remainingAmount,
 		}
 		
@@ -416,7 +416,7 @@ func (ctrl *EnhancedPaymentController) allocateToSpecificInvoice(tx *gorm.DB, pa
 
 	// Create allocation
 	allocation := models.PaymentAllocation{
-		PaymentID:       paymentID,
+		PaymentID:       uint64(paymentID),
 		InvoiceID:       &invoiceID,
 		AllocatedAmount: allocAmount,
 	}
@@ -458,7 +458,7 @@ func (ctrl *EnhancedPaymentController) allocateToSpecificBill(tx *gorm.DB, payme
 
 	// Create allocation
 	allocation := models.PaymentAllocation{
-		PaymentID:       paymentID,
+		PaymentID:       uint64(paymentID),
 		BillID:          &billID,
 		AllocatedAmount: allocAmount,
 	}

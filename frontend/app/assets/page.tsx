@@ -174,12 +174,32 @@ const AssetsPage = () => {
     }
   };
 
+  // Fetch categories from database
+  const fetchCategories = async () => {
+    try {
+      const ProductService = await import('@/services/productService').then(module => module.default);
+      const response = await ProductService.getCategories();
+      
+      // Extract category names from response
+      const categoryNames = response.data?.map((cat: any) => cat.name) || [];
+      
+      // Merge with default categories (avoid duplicates)
+      const allCategories = [...new Set([...ASSET_CATEGORIES, ...categoryNames])];
+      setCustomCategories(allCategories);
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+      // Fallback to default categories only
+      setCustomCategories([...ASSET_CATEGORIES]);
+    }
+  };
+
   // Load assets on component mount
   useEffect(() => {
     if (token) {
       fetchAssets();
       fetchAssetsSummary();
       fetchAccounts();
+      fetchCategories(); // Load categories from database
     }
   }, [token]);
 
@@ -720,7 +740,7 @@ const AssetsPage = () => {
     setEditingCategoryIndex(null);
   };
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (!newCategoryName.trim()) {
       toast({
         title: 'Error',
@@ -743,15 +763,43 @@ const AssetsPage = () => {
       return;
     }
 
-    setCustomCategories([...customCategories, newCategoryName.trim()]);
-    setNewCategoryName('');
-    toast({
-      title: 'Success',
-      description: 'Category added successfully',
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
+    try {
+      // Generate a simple code from the name
+      const code = newCategoryName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 10);
+      
+      // Call backend API to create category
+      const categoryData = {
+        code: code || 'CAT' + Date.now(),
+        name: newCategoryName.trim(),
+        description: '',
+        is_active: true
+      };
+      
+      await import('@/services/productService').then(async ({ default: ProductService }) => {
+        await ProductService.createCategory(categoryData);
+      });
+      
+      // Refresh categories from database to get the latest list
+      await fetchCategories();
+      setNewCategoryName('');
+      
+      toast({
+        title: 'Success',
+        description: 'Category added and saved to database successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      console.error('Error creating category:', error);
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to create category',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
   };
 
   const handleEditCategory = (index: number) => {

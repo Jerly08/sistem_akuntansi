@@ -6,12 +6,156 @@ import (
 	"time"
 )
 
+// Jakarta timezone for Indonesia
+var JakartaTZ *time.Location
+
+func init() {
+	var err error
+	JakartaTZ, err = time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		// Fallback to UTC+7 if timezone loading fails
+		JakartaTZ = time.FixedZone("WIB", 7*3600)
+	}
+}
+
 // DateUtils provides utilities for date handling in the application
 type DateUtils struct{}
 
 // NewDateUtils creates a new DateUtils instance
 func NewDateUtils() *DateUtils {
 	return &DateUtils{}
+}
+
+// ParseDateTimeWithTZ parses date string in YYYY-MM-DD format with Jakarta timezone
+func (du *DateUtils) ParseDateTimeWithTZ(dateStr string) (time.Time, error) {
+	if dateStr == "" {
+		return time.Time{}, fmt.Errorf("date string cannot be empty")
+	}
+
+	// Parse as start of day in Jakarta timezone
+	t, err := time.ParseInLocation("2006-01-02", dateStr, JakartaTZ)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse date '%s': %v", dateStr, err)
+	}
+	return t, nil
+}
+
+// ParseEndDateTimeWithTZ parses date string as end of day in Jakarta timezone
+func (du *DateUtils) ParseEndDateTimeWithTZ(dateStr string) (time.Time, error) {
+	if dateStr == "" {
+		return time.Time{}, fmt.Errorf("date string cannot be empty")
+	}
+
+	// Parse as start of day first
+	startOfDay, err := time.ParseInLocation("2006-01-02", dateStr, JakartaTZ)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse date '%s': %v", dateStr, err)
+	}
+
+	// Convert to end of day (23:59:59.999)
+	endOfDay := startOfDay.Add(24*time.Hour - time.Nanosecond)
+	return endOfDay, nil
+}
+
+// FormatDateRange formats date range for display with timezone awareness
+func (du *DateUtils) FormatDateRange(start, end time.Time) string {
+	startFormatted := start.In(JakartaTZ).Format("2006-01-02 15:04:05 MST")
+	endFormatted := end.In(JakartaTZ).Format("2006-01-02 15:04:05 MST")
+	return fmt.Sprintf("%s to %s", startFormatted, endFormatted)
+}
+
+// GetCurrentJakartaTime returns current time in Jakarta timezone
+func (du *DateUtils) GetCurrentJakartaTime() time.Time {
+	return time.Now().In(JakartaTZ)
+}
+
+// ValidateDateRange validates that end date is after start date
+func (du *DateUtils) ValidateDateRange(start, end time.Time) error {
+	if end.Before(start) {
+		return fmt.Errorf("end date (%s) cannot be before start date (%s)", 
+			end.Format("2006-01-02"), start.Format("2006-01-02"))
+	}
+
+	// Check for reasonable date range (not more than 5 years)
+	maxDuration := 5 * 365 * 24 * time.Hour
+	if end.Sub(start) > maxDuration {
+		return fmt.Errorf("date range too large (max 5 years): %s to %s",
+			start.Format("2006-01-02"), end.Format("2006-01-02"))
+	}
+
+	return nil
+}
+
+// GetPeriodBounds returns start and end bounds for a given period
+func (du *DateUtils) GetPeriodBounds(date time.Time, groupBy string) (time.Time, time.Time) {
+	jakartaDate := date.In(JakartaTZ)
+	
+	switch groupBy {
+	case "day":
+		start := time.Date(jakartaDate.Year(), jakartaDate.Month(), jakartaDate.Day(), 0, 0, 0, 0, JakartaTZ)
+		end := start.Add(24*time.Hour - time.Nanosecond)
+		return start, end
+
+	case "week":
+		// Start from Monday
+		weekday := int(jakartaDate.Weekday())
+		if weekday == 0 { // Sunday
+			weekday = 7
+		}
+		start := time.Date(jakartaDate.Year(), jakartaDate.Month(), jakartaDate.Day(), 0, 0, 0, 0, JakartaTZ).AddDate(0, 0, -(weekday-1))
+		end := start.AddDate(0, 0, 7).Add(-time.Nanosecond)
+		return start, end
+
+	case "month":
+		start := time.Date(jakartaDate.Year(), jakartaDate.Month(), 1, 0, 0, 0, 0, JakartaTZ)
+		end := start.AddDate(0, 1, 0).Add(-time.Nanosecond)
+		return start, end
+
+	case "quarter":
+		month := jakartaDate.Month()
+		quarterStart := ((int(month) - 1) / 3) * 3 + 1
+		start := time.Date(jakartaDate.Year(), time.Month(quarterStart), 1, 0, 0, 0, 0, JakartaTZ)
+		end := start.AddDate(0, 3, 0).Add(-time.Nanosecond)
+		return start, end
+
+	case "year":
+		start := time.Date(jakartaDate.Year(), 1, 1, 0, 0, 0, 0, JakartaTZ)
+		end := start.AddDate(1, 0, 0).Add(-time.Nanosecond)
+		return start, end
+
+	default:
+		// Default to day
+		start := time.Date(jakartaDate.Year(), jakartaDate.Month(), jakartaDate.Day(), 0, 0, 0, 0, JakartaTZ)
+		end := start.Add(24*time.Hour - time.Nanosecond)
+		return start, end
+	}
+}
+
+// FormatPeriodWithTZ formats date according to groupBy parameter with timezone awareness
+func (du *DateUtils) FormatPeriodWithTZ(date time.Time, groupBy string) string {
+	jakartaDate := date.In(JakartaTZ)
+
+	switch groupBy {
+	case "day":
+		return jakartaDate.Format("2006-01-02")
+	case "week":
+		// Get start of week (Monday)
+		weekday := int(jakartaDate.Weekday())
+		if weekday == 0 { // Sunday
+			weekday = 7
+		}
+		startOfWeek := jakartaDate.AddDate(0, 0, -(weekday-1))
+		return fmt.Sprintf("Week of %s", startOfWeek.Format("2006-01-02"))
+	case "month":
+		return jakartaDate.Format("2006-01")
+	case "quarter":
+		quarter := ((int(jakartaDate.Month()) - 1) / 3) + 1
+		return fmt.Sprintf("%d-Q%d", jakartaDate.Year(), quarter)
+	case "year":
+		return jakartaDate.Format("2006")
+	default:
+		return jakartaDate.Format("2006-01-02")
+	}
 }
 
 // CalculateDueDateFromPaymentTerms calculates due date based on payment terms
@@ -183,7 +327,7 @@ func (du *DateUtils) AdjustToBusinessDay(date time.Time) time.Time {
 
 // CalculateDaysOverdue calculates how many days an invoice is overdue
 func (du *DateUtils) CalculateDaysOverdue(dueDate time.Time) int {
-	now := time.Now()
+	now := time.Now().In(JakartaTZ)
 	if now.Before(dueDate) {
 		return 0 // Not overdue yet
 	}

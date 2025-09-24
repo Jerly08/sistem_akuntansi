@@ -43,6 +43,7 @@ import CategoryForm from './CategoryForm';
 import UnitForm, { ProductUnit } from './UnitForm';
 import WarehouseLocationForm from './WarehouseLocationForm';
 import { formatIDR, formatCurrencyDetailed } from '@/utils/currency';
+import { getProductImageUrl, debugImageUrl } from '@/utils/imageUrl';
 
 const ProductCatalog: React.FC = () => {
   const { user } = useAuth();
@@ -600,7 +601,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                   <Flex justify="center" mb={6}>
                     {detailProduct.image_path ? (
                       <Image 
-                        src={`${process.env.NEXT_PUBLIC_STATIC_URL}${detailProduct.image_path}`} 
+                        src={getProductImageUrl(detailProduct.image_path) || ''} 
                         alt={detailProduct.name}
                         maxH="250px"
                         maxW="350px"
@@ -614,6 +615,8 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                         fallbackSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' font-family='Arial, sans-serif' font-size='14' fill='%23999'%3ENo Image%3C/text%3E%3C/svg%3E"
                         onError={(e) => {
                           console.error('Image failed to load:', detailProduct.image_path);
+                          console.error('Attempted URL:', getProductImageUrl(detailProduct.image_path));
+                          debugImageUrl(detailProduct.image_path);
                         }}
                       />
                     ) : (

@@ -99,7 +99,7 @@ func LoadConfig() *Config {
 		JWTAccessSecret:  getEnv("JWT_ACCESS_SECRET", getEnv("JWT_SECRET", generateDefaultSecret())),
 		JWTRefreshSecret: getEnv("JWT_REFRESH_SECRET", getEnv("JWT_SECRET", generateDefaultSecret())),
 		JWTSecret:        getEnv("JWT_SECRET", generateDefaultSecret()), // Backward compatibility
-		JWTAccessExpiry:  parseDuration(getEnv("JWT_ACCESS_EXPIRY", "15m"), 15*time.Minute),
+		JWTAccessExpiry:  parseDuration(getEnv("JWT_ACCESS_EXPIRY", "90m"), 90*time.Minute),
 		JWTRefreshExpiry: parseDuration(getEnv("JWT_REFRESH_EXPIRY", "7d"), 7*24*time.Hour),
 		JWTIssuer:        getEnv("JWT_ISSUER", "accounting-system"),
 		JWTAudience:      getEnv("JWT_AUDIENCE", "accounting-app"),

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -23,12 +23,18 @@ import {
   StatArrow,
   Badge,
   Divider,
+  Tooltip,
+  IconButton,
+  Switch,
+  Flex,
 } from '@chakra-ui/react';
-import { FiTrendingUp, FiDownload, FiEye, FiDatabase } from 'react-icons/fi';
+import { FiTrendingUp, FiDownload, FiEye, FiDatabase, FiActivity, FiRefreshCw } from 'react-icons/fi';
 import { formatCurrency } from '@/utils/formatters';
 import { reportService } from '@/services/reportService';
 import { enhancedPLService } from '@/services/enhancedPLService';
-import { journalIntegrationService } from '@/services/journalIntegrationService';
+import { ssotJournalService } from '@/services/ssotJournalService';
+import { BalanceWebSocketClient } from '@/services/balanceWebSocketService';
+import { useAuth } from '@/contexts/AuthContext';
 import EnhancedProfitLossModal from './EnhancedProfitLossModal';
 import { JournalDrilldownModal } from './JournalDrilldownModal';
 
@@ -65,6 +71,8 @@ interface JournalDrilldownRequest {
 }
 
 const EnhancedPLReportPage: React.FC = () => {
+  const { token } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [plData, setPLData] = useState<EnhancedPLData | null>(null);
   const [reportParams, setReportParams] = useState({
@@ -72,10 +80,13 @@ const EnhancedPLReportPage: React.FC = () => {
     end_date: '',
   });
   const [drilldownRequest, setDrilldownRequest] = useState<JournalDrilldownRequest | null>(null);
+  const [realTimeUpdates, setRealTimeUpdates] = useState(false);
+  const [isConnectedToBalanceService, setIsConnectedToBalanceService] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
+  const balanceClientRef = useRef<BalanceWebSocketClient | null>(null);
   
   const { isOpen: isPLModalOpen, onOpen: onPLModalOpen, onClose: onPLModalClose } = useDisclosure();
   const { isOpen: isDrilldownModalOpen, onOpen: onDrilldownModalOpen, onClose: onDrilldownModalClose } = useDisclosure();
-  const toast = useToast();
 
   // Set default date range (current month)
   React.useEffect(() => {
@@ -86,6 +97,74 @@ const EnhancedPLReportPage: React.FC = () => {
       end_date: today.toISOString().split('T')[0],
     });
   }, []);
+  
+  // Real-time WebSocket connection effect
+  useEffect(() => {
+    if (realTimeUpdates && token) {
+      initializeBalanceConnection();
+    } else {
+      disconnectBalanceService();
+    }
+    
+    return () => {
+      disconnectBalanceService();
+    };
+  }, [realTimeUpdates, token]);
+  
+  const initializeBalanceConnection = async () => {
+    if (!token) return;
+    
+    try {
+      balanceClientRef.current = new BalanceWebSocketClient();
+      await balanceClientRef.current.connect(token);
+      
+      balanceClientRef.current.onBalanceUpdate((data) => {
+        setLastUpdateTime(new Date());
+        
+        // Auto-refresh P&L data if we have current data and dates are set
+        if (plData && reportParams.start_date && reportParams.end_date) {
+          toast({
+            title: 'Balance Updated',
+            description: `Account ${data.account_code} updated. Refreshing P&L data...`,
+            status: 'info',
+            duration: 2000,
+            isClosable: true,
+            position: 'bottom-right',
+            size: 'sm'
+          });
+          
+          // Auto-regenerate P&L with updated data
+          generateEnhancedPL();
+        }
+      });
+      
+      setIsConnectedToBalanceService(true);
+      toast({
+        title: 'Real-time Updates Enabled',
+        description: 'P&L report will refresh automatically when balances change',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.warn('Failed to connect to balance service:', error);
+      setIsConnectedToBalanceService(false);
+      toast({
+        title: 'Real-time Connection Failed',
+        description: 'Manual refresh is still available',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+  
+  const disconnectBalanceService = () => {
+    if (balanceClientRef.current) {
+      balanceClientRef.current.disconnect();
+      setIsConnectedToBalanceService(false);
+    }
+  };
 
   const generateEnhancedPL = async () => {
     if (!reportParams.start_date || !reportParams.end_date) {
@@ -365,7 +444,40 @@ const EnhancedPLReportPage: React.FC = () => {
         <Card>
           <CardBody>
             <VStack spacing={4} align="stretch">
-              <Text fontSize="lg" fontWeight="semibold">Report Parameters</Text>
+              <Flex justify="space-between" align="center">
+                <Text fontSize="lg" fontWeight="semibold">Report Parameters</Text>
+                
+                {/* Real-time Updates Control */}
+                <HStack spacing={3}>
+                  <Text fontSize="sm" color="gray.600">Real-time Updates</Text>
+                  <Switch
+                    isChecked={realTimeUpdates}
+                    onChange={(e) => setRealTimeUpdates(e.target.checked)}
+                    colorScheme="green"
+                  />
+                  {isConnectedToBalanceService && (
+                    <Tooltip label="Connected to real-time balance service" fontSize="xs">
+                      <Badge
+                        colorScheme="green"
+                        variant="subtle"
+                        fontSize="xs"
+                        display="flex"
+                        alignItems="center"
+                        gap={1}
+                      >
+                        <FiActivity size={10} />
+                        LIVE
+                      </Badge>
+                    </Tooltip>
+                  )}
+                  {lastUpdateTime && (
+                    <Text fontSize="xs" color="gray.500">
+                      Last update: {lastUpdateTime.toLocaleTimeString()}
+                    </Text>
+                  )}
+                </HStack>
+              </Flex>
+              
               <Grid templateColumns="repeat(2, 1fr)" gap={4}>
                 <GridItem>
                   <FormControl isRequired>
@@ -406,6 +518,23 @@ const EnhancedPLReportPage: React.FC = () => {
           >
             Generate Enhanced P&L
           </Button>
+          
+          {/* Manual Refresh Button - visible when we have existing data */}
+          {plData && (
+            <Tooltip label="Refresh with latest data" fontSize="xs">
+              <IconButton
+                aria-label="Refresh P&L data"
+                icon={<FiRefreshCw />}
+                size="lg"
+                variant="outline"
+                colorScheme="gray"
+                onClick={generateEnhancedPL}
+                isLoading={loading}
+                isDisabled={loading}
+              />
+            </Tooltip>
+          )}
+          
           <Button
             variant="outline"
             size="lg"
@@ -517,6 +646,14 @@ const EnhancedPLReportPage: React.FC = () => {
                 <HStack>
                   <Badge colorScheme="orange">Export Ready</Badge>
                   <Text fontSize="sm">Export to PDF or CSV with detailed formatting</Text>
+                </HStack>
+                <HStack>
+                  <Badge colorScheme="teal">Real-time</Badge>
+                  <Text fontSize="sm">Enable auto-refresh when account balances change via WebSocket</Text>
+                </HStack>
+                <HStack>
+                  <Badge colorScheme="yellow">Live Data</Badge>
+                  <Text fontSize="sm">Get instant notifications when underlying journal entries are updated</Text>
                 </HStack>
               </VStack>
             </VStack>

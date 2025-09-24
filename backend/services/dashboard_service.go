@@ -68,6 +68,11 @@ type TransactionData struct {
 
 // GetDashboardAnalytics returns comprehensive dashboard analytics with real growth calculations
 func (ds *DashboardService) GetDashboardAnalytics() (*AnalyticsData, error) {
+	return ds.GetDashboardAnalyticsForRole("")
+}
+
+// GetDashboardAnalyticsForRole returns dashboard analytics filtered by user role
+func (ds *DashboardService) GetDashboardAnalyticsForRole(role string) (*AnalyticsData, error) {
 	analytics := &AnalyticsData{}
 	
 	// Get current period data (this month)

@@ -136,15 +136,45 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
       return;
     }
 
-    if (!formData.cash_bank_id && formData.payment_method !== 'Cash') {
+    if (!formData.cash_bank_id) {
       toast({
         title: 'Validation Error',
-        description: 'Please select a bank account',
+        description: 'Please select a cash/bank account',
         status: 'error',
         duration: 4000,
         isClosable: true,
       });
       return;
+    }
+
+    // Balance validation - prevent payments when insufficient balance
+    const selectedAccount = cashBanks.find(account => account.id === formData.cash_bank_id);
+    if (selectedAccount) {
+      if (selectedAccount.balance <= 0) {
+        toast({
+          title: 'Insufficient Balance ⚠️',
+          description: `Cannot process payment. The selected account "${selectedAccount.name}" has zero or negative balance (${formatCurrency(selectedAccount.balance)}).`,
+          status: 'error',
+          duration: 8000,
+          isClosable: true,
+        });
+        return;
+      }
+      
+      if (formData.amount > selectedAccount.balance) {
+        toast({
+          title: 'Insufficient Balance ⚠️',
+          description: (
+            `Payment amount ${formatCurrency(formData.amount)} exceeds available balance ${formatCurrency(selectedAccount.balance)} ` +
+            `in account "${selectedAccount.name}". ` +
+            `Please reduce the payment amount or select a different account.`
+          ),
+          status: 'error',
+          duration: 10000,
+          isClosable: true,
+        });
+        return;
+      }
     }
 
     setLoading(true);
@@ -488,22 +518,118 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
                 </Select>
               </FormControl>
 
-              {formData.payment_method !== 'Cash' && (
-                <FormControl isRequired>
-                  <FormLabel>Bank Account</FormLabel>
-                  <Select
-                    value={formData.cash_bank_id || ''}
-                    onChange={handleChange('cash_bank_id')}
-                    placeholder="Select bank account"
-                  >
-                    {cashBanks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.name} ({bank.account_code}) - {formatCurrency(bank.balance)}
-                      </option>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
+              <FormControl isRequired>
+                <FormLabel>
+                  {formData.payment_method === 'Cash' ? 'Cash Account' : 'Bank Account'}
+                </FormLabel>
+                <Select
+                  value={formData.cash_bank_id || ''}
+                  onChange={handleChange('cash_bank_id')}
+                  placeholder={`Select ${formData.payment_method === 'Cash' ? 'cash' : 'bank'} account`}
+                >
+                  {cashBanks
+                    .filter(account => {
+                      // Filter based on payment method
+                      if (formData.payment_method === 'Cash') {
+                        return account.account_code?.toUpperCase().includes('CASH') || 
+                               account.name?.toUpperCase().includes('CASH') ||
+                               (account as any).type === 'CASH';
+                      } else {
+                        return account.account_code?.toUpperCase().includes('BANK') || 
+                               account.name?.toUpperCase().includes('BANK') ||
+                               (account as any).type === 'BANK' ||
+                               (!account.account_code?.toUpperCase().includes('CASH') && 
+                                !account.name?.toUpperCase().includes('CASH'));
+                      }
+                    })
+                    .map((account) => {
+                      const isInsufficientBalance = account.balance < formData.amount;
+                      const isZeroBalance = account.balance <= 0;
+                      const balanceStatus = isZeroBalance ? ' ❌ NO BALANCE' : 
+                                           isInsufficientBalance ? ' ⚠️ INSUFFICIENT' : 
+                                           ' ✅';
+                      
+                      return (
+                        <option 
+                          key={account.id} 
+                          value={account.id}
+                          style={{ 
+                            color: isZeroBalance ? '#e53e3e' : 
+                                   isInsufficientBalance ? '#dd6b20' : 
+                                   '#38a169',
+                            backgroundColor: isZeroBalance ? '#fed7d7' : 
+                                           isInsufficientBalance ? '#feebc8' : 
+                                           '#f0fff4'
+                          }}
+                        >
+                          {account.name} ({account.account_code}) - {formatCurrency(account.balance)}{balanceStatus}
+                        </option>
+                      );
+                    })}
+                  {/* If no filtered accounts, show all accounts */}
+                  {cashBanks.filter(account => {
+                    if (formData.payment_method === 'Cash') {
+                      return account.account_code?.toUpperCase().includes('CASH') || 
+                             account.name?.toUpperCase().includes('CASH') ||
+                             (account as any).type === 'CASH';
+                    } else {
+                      return account.account_code?.toUpperCase().includes('BANK') || 
+                             account.name?.toUpperCase().includes('BANK') ||
+                             (account as any).type === 'BANK' ||
+                             (!account.account_code?.toUpperCase().includes('CASH') && 
+                              !account.name?.toUpperCase().includes('CASH'));
+                    }
+                  }).length === 0 && cashBanks.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name} ({account.account_code}) - {formatCurrency(account.balance)}
+                    </option>
+                  ))}
+                </Select>
+                
+                {/* Real-time Balance Warning */}
+                {formData.cash_bank_id && (() => {
+                  const selectedAccount = cashBanks.find(account => account.id === formData.cash_bank_id);
+                  if (!selectedAccount) return null;
+                  
+                  const isZeroBalance = selectedAccount.balance <= 0;
+                  const isInsufficientBalance = formData.amount > selectedAccount.balance;
+                  const remainingBalance = selectedAccount.balance - formData.amount;
+                  
+                  if (isZeroBalance) {
+                    return (
+                      <Text fontSize="sm" color="red.500" mt={2} fontWeight="medium">
+                        ❌ <strong>No Balance Available</strong><br/>
+                        Account "{selectedAccount.name}" has {formatCurrency(selectedAccount.balance)} balance. Cannot process any payments.
+                      </Text>
+                    );
+                  }
+                  
+                  if (isInsufficientBalance && formData.amount > 0) {
+                    return (
+                      <Text fontSize="sm" color="orange.500" mt={2} fontWeight="medium">
+                        ⚠️ <strong>Insufficient Balance</strong><br/>
+                        Available: {formatCurrency(selectedAccount.balance)} | Required: {formatCurrency(formData.amount)} | 
+                        Short by: {formatCurrency(formData.amount - selectedAccount.balance)}
+                      </Text>
+                    );
+                  }
+                  
+                  if (formData.amount > 0 && remainingBalance >= 0) {
+                    return (
+                      <Text fontSize="sm" color="green.600" mt={2}>
+                        ✅ <strong>Sufficient Balance</strong><br/>
+                        Available: {formatCurrency(selectedAccount.balance)} | After payment: {formatCurrency(remainingBalance)}
+                      </Text>
+                    );
+                  }
+                  
+                  return (
+                    <Text fontSize="sm" color="blue.600" mt={2}>
+                      💰 <strong>Account Balance:</strong> {formatCurrency(selectedAccount.balance)}
+                    </Text>
+                  );
+                })()}
+              </FormControl>
 
               <FormControl>
                 <FormLabel>Reference</FormLabel>
@@ -533,12 +659,44 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
             <Button 
               colorScheme="green" 
               type="submit" 
-              disabled={loading}
+              disabled={loading || (() => {
+                // Disable if no account selected
+                if (!formData.cash_bank_id) return true;
+                
+                // Disable if amount is invalid
+                if (!formData.amount || formData.amount <= 0) return true;
+                
+                // Check balance availability
+                const selectedAccount = cashBanks.find(account => account.id === formData.cash_bank_id);
+                if (selectedAccount) {
+                  // Disable if zero balance or insufficient balance
+                  if (selectedAccount.balance <= 0 || formData.amount > selectedAccount.balance) {
+                    return true;
+                  }
+                }
+                
+                return false;
+              })()}
               leftIcon={loading ? <Spinner size="sm" /> : undefined}
               loadingText="Processing Payment..."
               isLoading={loading}
             >
-              {loading ? 'Processing Payment...' : 'Record Payment'}
+              {(() => {
+                if (loading) return 'Processing Payment...';
+                
+                // Check for balance issues
+                const selectedAccount = cashBanks.find(account => account.id === formData.cash_bank_id);
+                if (selectedAccount && formData.cash_bank_id) {
+                  if (selectedAccount.balance <= 0) {
+                    return 'No Balance Available';
+                  }
+                  if (formData.amount > selectedAccount.balance) {
+                    return 'Insufficient Balance';
+                  }
+                }
+                
+                return 'Record Payment';
+              })()} 
             </Button>
           </ModalFooter>
         </form>

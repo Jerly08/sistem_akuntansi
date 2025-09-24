@@ -463,8 +463,73 @@ var GlobalAuditLogger *AuditLogger
 func InitAuditLogger(db *gorm.DB) {
 	GlobalAuditLogger = NewAuditLogger(db)
 	
-	// Auto-migrate audit log table
-	if err := db.AutoMigrate(&AuditLog{}); err != nil {
+	// Safe auto-migrate audit log table with conflict handling
+	if err := safeAuditLogMigration(db); err != nil {
 		log.Printf("Failed to migrate audit log table: %v", err)
 	}
+}
+
+// safeAuditLogMigration performs safe migration for audit log table
+func safeAuditLogMigration(db *gorm.DB) error {
+	// Check if audit_logs table exists
+	var tableExists bool
+	db.Raw(`SELECT EXISTS (
+		SELECT 1 FROM information_schema.tables 
+		WHERE table_name = 'audit_logs'
+	)`).Scan(&tableExists)
+
+	if !tableExists {
+		// Table doesn't exist, safe to create
+		log.Println("Creating audit_logs table...")
+		return db.AutoMigrate(&AuditLog{})
+	}
+
+	// Table exists, check if we need to add any missing columns
+	log.Println("Audit logs table exists, checking for missing columns...")
+	
+	// Check for missing columns and add them if needed
+	if err := addMissingAuditColumns(db); err != nil {
+		return fmt.Errorf("failed to add missing audit columns: %w", err)
+	}
+
+	log.Println("✅ Audit logs table migration completed safely")
+	return nil
+}
+
+// addMissingAuditColumns adds any missing columns to audit_logs table
+func addMissingAuditColumns(db *gorm.DB) error {
+	// List of columns that should exist in audit_logs table
+	expectedColumns := map[string]string{
+		"username":      "VARCHAR(100)",
+		"resource":      "VARCHAR(50)",
+		"resource_id":   "VARCHAR(100)",
+		"method":        "VARCHAR(10)",
+		"endpoint":      "VARCHAR(255)",
+		"request_data":  "TEXT",
+		"response_code": "INTEGER",
+		"duration":      "BIGINT",
+		"success":       "BOOLEAN",
+		"error_message": "TEXT",
+		"timestamp":     "TIMESTAMP",
+	}
+
+	for columnName, columnType := range expectedColumns {
+		var columnExists bool
+		db.Raw(`SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'audit_logs' AND column_name = ?
+		)`, columnName).Scan(&columnExists)
+
+		if !columnExists {
+			log.Printf("Adding missing column %s to audit_logs table...", columnName)
+			err := db.Exec(fmt.Sprintf("ALTER TABLE audit_logs ADD COLUMN %s %s", columnName, columnType)).Error
+			if err != nil {
+				log.Printf("Warning: Failed to add column %s: %v", columnName, err)
+			} else {
+				log.Printf("✅ Added column %s to audit_logs table", columnName)
+			}
+		}
+	}
+
+	return nil
 }

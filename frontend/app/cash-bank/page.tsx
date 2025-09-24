@@ -339,6 +339,19 @@ const getAccountColumns = (
               />
             </Tooltip>
           )}
+          
+          {row.is_active && row.balance > 0 && (
+            <Tooltip label="Transfer" fontSize="xs">
+              <IconButton
+                aria-label="Transfer funds"
+                icon={<FiArrowRight />}
+                size="xs"
+                variant="ghost"
+                colorScheme="orange"
+                onClick={() => onTransfer?.(row)}
+              />
+            </Tooltip>
+          )}
         </HStack>
       </Box>
     )) as (row: CashBank) => React.ReactNode

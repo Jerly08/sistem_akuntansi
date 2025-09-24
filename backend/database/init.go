@@ -14,8 +14,14 @@ func InitializeDatabase(db *gorm.DB) {
 	log.Println("✅ Account balances are protected from automatic modifications")
 	log.Println("Initializing database...")
 	
-	// Run migrations
+	// Run GORM auto migrations for basic models
 	RunMigrations(db)
+	
+	// Run SQL-based auto migrations (including SSOT)
+	if err := RunAutoMigrations(db); err != nil {
+		log.Printf("⚠️  Auto migration warning: %v", err)
+		// Continue with initialization even if auto migration fails
+	}
 	
 	// Seed initial data
 	SeedData(db)
@@ -120,7 +126,7 @@ func RunMigrations(db *gorm.DB) {
 			&models.Report{},
 			&models.ReportTemplate{},
 			&models.FinancialRatio{},
-			&models.AccountBalance{},
+			&models.AccountPeriodBalance{},
 			
 			// Audit models
 			&models.AuditLog{},

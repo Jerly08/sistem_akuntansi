@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Quick WebSocket Debug</title>
+    <style>
+        body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+        .status { padding: 10px; margin: 10px 0; border: 1px solid #333; }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .warning { color: #ff0; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Quick WebSocket Debug</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `${new Date().toLocaleTimeString()}: ${message}`;
+            results.appendChild(div);
+        }
+        
+        // Check localStorage
+        const token = localStorage.getItem('token');
+        const user = localStorage.getItem('user');
+        
+        log(`Token in localStorage: ${token ? 'Found (' + token.length + ' chars)' : 'NOT FOUND'}`, token ? 'success' : 'error');
+        log(`User in localStorage: ${user ? 'Found' : 'NOT FOUND'}`, user ? 'success' : 'error');
+        
+        if (user) {
+            try {
+                const userData = JSON.parse(user);
+                log(`User: ${userData.email} (${userData.role})`, 'success');
+            } catch (e) {
+                log('Error parsing user data', 'error');
+            }
+        }
+        
+        if (!token) {
+            log('❌ NO TOKEN FOUND - This is the likely cause of the WebSocket error!', 'error');
+            log('💡 To fix: Login to the app first, then try connecting to WebSocket', 'warning');
+        } else {
+            log('✅ Token found - WebSocket should be able to connect', 'success');
+            
+            // Quick test WebSocket connection
+            log('Testing WebSocket connection...', 'info');
+            
+            const wsUrl = `ws://localhost:8080/ws/balance?token=${encodeURIComponent(token)}`;
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                log('✅ WebSocket connected successfully!', 'success');
+                ws.close();
+            };
+            
+            ws.onclose = (event) => {
+                log(`WebSocket closed: ${event.code} - ${event.reason || 'No reason'}`, event.code === 1000 ? 'success' : 'warning');
+            };
+            
+            ws.onerror = (error) => {
+                log('❌ WebSocket connection failed', 'error');
+            };
+            
+            ws.onmessage = (event) => {
+                log(`📨 Received: ${event.data}`, 'success');
+            };
+        }
+    </script>
+</body>
+</html>

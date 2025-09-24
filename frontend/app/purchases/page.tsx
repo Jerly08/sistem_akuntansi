@@ -94,6 +94,9 @@ import { normalizeRole } from '@/utils/roles';
 import { useColorModeValue } from '@chakra-ui/react';
 import SearchableSelect from '@/components/common/SearchableSelect';
 import CurrencyInput from '@/components/common/CurrencyInput';
+// SSOT Journal Integration
+import PurchaseJournalEntriesModal from '../../src/components/purchase/PurchaseJournalEntriesModal';
+import purchaseJournalService from '../../src/services/purchaseJournalService';
 
 // Types for form data
 interface PurchaseFormData {
@@ -499,6 +502,10 @@ const PurchasesPage: React.FC = () => {
     }>
   });
   const [savingReceipt, setSavingReceipt] = useState(false);
+
+  // Journal Modal states
+  const { isOpen: isJournalOpen, onOpen: onJournalOpen, onClose: onJournalClose } = useDisclosure();
+  const [selectedPurchaseForJournal, setSelectedPurchaseForJournal] = useState<Purchase | null>(null);
 
   // Receipts modal state
   const { isOpen: isReceiptsOpen, onOpen: onReceiptsOpen, onClose: onReceiptsClose } = useDisclosure();
@@ -1050,7 +1057,7 @@ const PurchasesPage: React.FC = () => {
   const fetchCashBanksForPayment = async () => {
     if (!token) return;
     try {
-      const response = await fetch('http://localhost:8080/api/v1/cashbank/payment-accounts', {
+      const response = await fetch('/api/v1/cashbank/payment-accounts', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1143,7 +1150,7 @@ const PurchasesPage: React.FC = () => {
       };
 
       // Call API to create receipt
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/receipts`, {
+      const response = await fetch(`/api/v1/purchases/receipts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1218,7 +1225,7 @@ const PurchasesPage: React.FC = () => {
     try {
       setLoadingVendors(true);
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contacts?type=VENDOR`, {
+      const response = await fetch(`/api/v1/contacts?type=VENDOR`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1281,7 +1288,7 @@ const PurchasesPage: React.FC = () => {
     try {
       setLoadingBankAccounts(true);
       
-      const response = await fetch('http://localhost:8080/api/v1/cashbank/payment-accounts', {
+      const response = await fetch('/api/v1/cashbank/payment-accounts', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1320,30 +1327,28 @@ const PurchasesPage: React.FC = () => {
     try {
       setLoadingCreditAccounts(true);
       
-      // Try catalog endpoint first for EMPLOYEE role, fallback to regular endpoint
-      if (user?.role === 'EMPLOYEE') {
-        try {
-          const catalogData = await accountService.getAccountCatalog(token, 'LIABILITY');
-          const formattedAccounts: GLAccount[] = catalogData.map(item => ({
-            id: item.id,
-            code: item.code,
-            name: item.name,
-            type: 'LIABILITY' as const,
-            is_active: item.active,
-            level: 1,
-            is_header: false,
-            balance: 0,
-            created_at: '',
-            updated_at: '',
-            description: '',
-          }));
-          console.log('Formatted credit accounts from catalog:', formattedAccounts);
-          setCreditAccounts(formattedAccounts);
-          return; // Success, exit early
-        } catch (catalogError: any) {
-          console.log('Catalog endpoint not available, trying regular endpoint:', catalogError.message);
-          // Fall through to try regular endpoint
-        }
+      // Use public catalog endpoint for all roles - no authentication required
+      try {
+        const catalogData = await accountService.getCreditAccounts(); // Use our fixed public method
+        const formattedAccounts: GLAccount[] = catalogData.map(item => ({
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          type: 'LIABILITY' as const,
+          is_active: item.active,
+          level: 1,
+          is_header: false,
+          balance: 0,
+          created_at: '',
+          updated_at: '',
+          description: '',
+        }));
+        console.log('Formatted credit accounts from public catalog:', formattedAccounts);
+        setCreditAccounts(formattedAccounts);
+        return; // Success, exit early
+      } catch (catalogError: any) {
+        console.log('Public catalog endpoint failed, trying regular endpoint with auth:', catalogError.message);
+        // Fall through to try regular endpoint with authentication
       }
       
       // Use full account data for other roles or as fallback for EMPLOYEE
@@ -1361,13 +1366,15 @@ const PurchasesPage: React.FC = () => {
       // If both endpoints fail, fall back to manual entry mode
       setCreditAccounts([]);
       
-      // Only show warning for non-EMPLOYEE users or if it's not a permission error
-      if (user?.role !== 'EMPLOYEE' || !err.message?.includes('Insufficient permissions')) {
+      // Show friendly message for network errors, but don't show "Limited Access" for public endpoint failures
+      console.log('Unable to load credit accounts, falling back to manual entry mode');
+      // Only show toast for actual network errors, not permission issues
+      if (!err.message?.includes('Network error') && !err.message?.includes('Failed to fetch')) {
         toast({
-          title: 'Limited Access',
-          description: 'Unable to load credit accounts list. Credit payment will use default liability account.',
+          title: 'Network Issue',
+          description: 'Unable to load credit accounts list. Please check your connection.',
           status: 'warning',
-          duration: 5000,
+          duration: 3000,
           isClosable: true,
         });
       }
@@ -1384,28 +1391,27 @@ const PurchasesPage: React.FC = () => {
       
       let allAccounts: GLAccount[] = [];
       
-      // Try catalog endpoint first for EMPLOYEE role, fallback to regular endpoint
-      if (user?.role === 'EMPLOYEE') {
-        try {
-          // Fetch expense accounts
-          const expenseCatalogData = await accountService.getAccountCatalog(token, 'EXPENSE');
-          const formattedExpenseAccounts: GLAccount[] = expenseCatalogData.map(item => ({
-            id: item.id,
-            code: item.code,
-            name: item.name,
-            type: 'EXPENSE' as const,
-            is_active: item.active,
-            level: 1,
-            is_header: false,
-            balance: 0,
-            created_at: '',
-            updated_at: '',
-            description: '',
-          }));
+      // Use public catalog endpoint for all roles - no authentication required
+      try {
+        // Fetch expense accounts using public endpoint
+        const expenseCatalogData = await accountService.getExpenseAccounts(); // Use our fixed public method
+        const formattedExpenseAccounts: GLAccount[] = expenseCatalogData.map(item => ({
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          type: 'EXPENSE' as const,
+          is_active: item.active,
+          level: 1,
+          is_header: false,
+          balance: 0,
+          created_at: '',
+          updated_at: '',
+          description: '',
+        }));
           
-          // Fetch asset accounts (inventory + fixed assets)
+          // Fetch asset accounts (inventory + fixed assets) using public endpoint
           try {
-            const assetCatalogData = await accountService.getAccountCatalog(token, 'ASSET');
+            const assetCatalogData = await accountService.getAccountCatalog(undefined, 'ASSET'); // Public endpoint
             // Include both inventory and fixed asset accounts
             const assetAccounts = assetCatalogData.filter(item => {
               const code = item.code || '';
@@ -1450,7 +1456,7 @@ const PurchasesPage: React.FC = () => {
             allAccounts = formattedExpenseAccounts;
           }
           
-          console.log('Formatted accounts from catalog (inventory + fixed assets + expense):', allAccounts);
+          console.log('Formatted accounts from public catalog (inventory + fixed assets + expense):', allAccounts);
           setExpenseAccounts(allAccounts);
           setCanListExpenseAccounts(true);
           if (allAccounts.length > 0) {
@@ -1458,10 +1464,9 @@ const PurchasesPage: React.FC = () => {
           }
           return; // Success, exit early
         } catch (catalogError: any) {
-          console.log('Catalog endpoint not available, trying regular endpoint:', catalogError.message);
-          // Fall through to try regular endpoint
+          console.log('Public catalog endpoint failed, trying regular endpoint with auth:', catalogError.message);
+          // Fall through to try regular endpoint with authentication
         }
-      }
       
       // Use full account data for other roles or as fallback for EMPLOYEE
       try {
@@ -1521,13 +1526,15 @@ const PurchasesPage: React.FC = () => {
       setExpenseAccounts([]);
       setDefaultExpenseAccountId(null);
       
-      // Only show warning for non-EMPLOYEE users or if it's not a permission error
-      if (user?.role !== 'EMPLOYEE' || !err.message?.includes('Insufficient permissions')) {
+      // Show friendly message for network errors, but don't show "Limited Access" for public endpoint failures
+      console.log('Unable to load expense accounts, falling back to manual entry mode');
+      // Only show toast for actual network errors, not permission issues
+      if (!err.message?.includes('Network error') && !err.message?.includes('Failed to fetch')) {
         toast({
-          title: 'Limited Access',
-          description: 'Unable to load accounts list. You can enter Account ID manually in the items.',
+          title: 'Network Issue',
+          description: 'Unable to load accounts list. Please check your connection.',
           status: 'warning',
-          duration: 5000,
+          duration: 3000,
           isClosable: true,
         });
       }
@@ -2188,8 +2195,8 @@ const handleCreate = async () => {
           {actionProps.text}
         </Button>
         
-        {/* Record Payment button for APPROVED CREDIT purchases with outstanding amount */}
-        {purchaseStatus === 'APPROVED' && 
+        {/* Record Payment button for APPROVED or PAID CREDIT purchases with outstanding amount */}
+        {(purchaseStatus === 'APPROVED' || purchaseStatus === 'PAID') && 
          purchaseService.canReceivePayment(purchase) &&
          (roleNorm === 'admin' || roleNorm === 'finance' || roleNorm === 'director') && (
           <Button
@@ -2208,8 +2215,8 @@ const handleCreate = async () => {
           </Button>
         )}
         
-        {/* Create Receipt button for APPROVED purchases for Inventory Manager, Admin, Director */}
-        {purchaseStatus === 'APPROVED' && 
+        {/* Create Receipt button for APPROVED or PAID purchases for Inventory Manager, Admin, Director */}
+        {(purchaseStatus === 'APPROVED' || purchaseStatus === 'PAID') && 
          (roleNorm === 'inventory_manager' || roleNorm === 'admin' || roleNorm === 'director') && (
           <Button
             size="sm"
@@ -2242,6 +2249,28 @@ const handleCreate = async () => {
             }}
           >
             Receipts
+          </Button>
+        )}
+        
+        {/* View Journal Entries button for APPROVED or PAID purchases - for users with report view permissions */}
+        {(purchaseStatus === 'APPROVED' || purchaseStatus === 'PAID') && 
+         (roleNorm === 'admin' || roleNorm === 'finance' || roleNorm === 'director') && (
+          <Button
+            size="sm"
+            colorScheme="purple"
+            variant="outline"
+            leftIcon={<FiFileText />}
+            onClick={() => {
+              setSelectedPurchaseForJournal(purchase);
+              onJournalOpen();
+            }}
+            fontWeight="medium"
+            _hover={{
+              transform: 'translateY(-1px)',
+              boxShadow: 'md'
+            }}
+          >
+            View Journal
           </Button>
         )}
         
@@ -3921,11 +3950,14 @@ const handleCreate = async () => {
                         <FormLabel fontSize="sm" fontWeight="medium">Payment Method</FormLabel>
                         <Select
                           value={formData.payment_method}
-                          onChange={(e) => setFormData({
-                            ...formData, 
-                            payment_method: e.target.value,
-                            bank_account_id: (e.target.value === 'CASH' || e.target.value === 'CREDIT') ? '' : formData.bank_account_id
-                          })}
+                          onChange={(e) => {
+                            // Reset bank_account_id saat ganti payment method untuk menghindari konflik
+                            setFormData({
+                              ...formData, 
+                              payment_method: e.target.value,
+                              bank_account_id: e.target.value === 'CREDIT' ? '' : '' // Reset untuk memaksa user pilih ulang
+                            })
+                          }}
                           size="sm"
                         >
                           <option value="CREDIT">Credit</option>
@@ -3941,27 +3973,47 @@ const handleCreate = async () => {
                         </FormHelperText>
                       </FormControl>
 
-                      {/* Bank Account dropdown for Bank Transfer, Cash, Check */}
-                      {formData.payment_method !== 'CREDIT' && formData.payment_method !== 'CASH' && (
+                      {/* Cash/Bank Account dropdown for Bank Transfer, Cash, Check */}
+                      {formData.payment_method !== 'CREDIT' && (
                         <FormControl isRequired>
                           <FormLabel fontSize="sm" fontWeight="medium">
-                            Bank Account
+                            {formData.payment_method === 'CASH' ? 'Cash Account' : 'Bank Account'}
                           </FormLabel>
                           <Select
                             value={formData.bank_account_id}
                             onChange={(e) => setFormData({...formData, bank_account_id: e.target.value})}
                             size="sm"
                             disabled={loadingBankAccounts}
-                            placeholder={loadingBankAccounts ? 'Loading accounts...' : 'Select bank account'}
+                            placeholder={loadingBankAccounts ? 'Loading accounts...' : formData.payment_method === 'CASH' ? 'Select cash account' : 'Select bank account'}
                           >
-                            {bankAccounts.map((account) => (
-                              <option key={account.id} value={account.id.toString()}>
-                                {account.name} ({account.code}) - {account.currency} {account.balance?.toLocaleString() || '0'}
-                              </option>
-                            ))}
+                            {bankAccounts
+                              .filter(account => {
+                                // Filter berdasarkan payment method
+                                if (formData.payment_method === 'CASH') {
+                                  return account.type === 'CASH';
+                                } else {
+                                  return account.type === 'BANK';
+                                }
+                              })
+                              .map((account) => (
+                                <option key={account.id} value={account.id.toString()}>
+                                  {account.name} ({account.code}) - {account.currency} {account.balance?.toLocaleString() || '0'}
+                                </option>
+                              ))
+                            }
                           </Select>
                           <FormHelperText fontSize="xs">
-                            Required: Select account for payment processing
+                            Required: Select {formData.payment_method === 'CASH' ? 'cash' : 'bank'} account for payment processing
+                            {/* Show filtered count */}
+                            {bankAccounts.filter(account => 
+                              formData.payment_method === 'CASH' ? account.type === 'CASH' : account.type === 'BANK'
+                            ).length > 0 && (
+                              <Text as="span" color="blue.500" ml={2}>
+                                ({bankAccounts.filter(account => 
+                                  formData.payment_method === 'CASH' ? account.type === 'CASH' : account.type === 'BANK'
+                                ).length} {formData.payment_method === 'CASH' ? 'cash' : 'bank'} accounts available)
+                              </Text>
+                            )}
                           </FormHelperText>
                         </FormControl>
                       )}
@@ -4584,11 +4636,14 @@ const handleCreate = async () => {
                         <FormLabel fontSize="sm" fontWeight="medium">Payment Method</FormLabel>
                         <Select
                           value={formData.payment_method}
-                          onChange={(e) => setFormData({
-                            ...formData, 
-                            payment_method: e.target.value,
-                            bank_account_id: (e.target.value === 'CASH' || e.target.value === 'CREDIT') ? '' : formData.bank_account_id
-                          })}
+                          onChange={(e) => {
+                            // Reset bank_account_id saat ganti payment method untuk menghindari konflik
+                            setFormData({
+                              ...formData, 
+                              payment_method: e.target.value,
+                              bank_account_id: e.target.value === 'CREDIT' ? '' : '' // Reset untuk memaksa user pilih ulang
+                            })
+                          }}
                           size="sm"
                         >
                           <option value="CREDIT">Credit</option>
@@ -4604,27 +4659,47 @@ const handleCreate = async () => {
                         </FormHelperText>
                       </FormControl>
 
-                      {/* Bank Account dropdown for Bank Transfer, Cash, Check */}
-                      {formData.payment_method !== 'CREDIT' && formData.payment_method !== 'CASH' && (
+                      {/* Cash/Bank Account dropdown for Bank Transfer, Cash, Check */}
+                      {formData.payment_method !== 'CREDIT' && (
                         <FormControl isRequired>
                           <FormLabel fontSize="sm" fontWeight="medium">
-                            Bank Account
+                            {formData.payment_method === 'CASH' ? 'Cash Account' : 'Bank Account'}
                           </FormLabel>
                           <Select
                             value={formData.bank_account_id}
                             onChange={(e) => setFormData({...formData, bank_account_id: e.target.value})}
                             size="sm"
                             disabled={loadingBankAccounts}
-                            placeholder={loadingBankAccounts ? 'Loading accounts...' : 'Select bank account'}
+                            placeholder={loadingBankAccounts ? 'Loading accounts...' : formData.payment_method === 'CASH' ? 'Select cash account' : 'Select bank account'}
                           >
-                            {bankAccounts.map((account) => (
-                              <option key={account.id} value={account.id.toString()}>
-                                {account.name} ({account.code}) - {account.currency} {account.balance?.toLocaleString() || '0'}
-                              </option>
-                            ))}
+                            {bankAccounts
+                              .filter(account => {
+                                // Filter berdasarkan payment method
+                                if (formData.payment_method === 'CASH') {
+                                  return account.type === 'CASH';
+                                } else {
+                                  return account.type === 'BANK';
+                                }
+                              })
+                              .map((account) => (
+                                <option key={account.id} value={account.id.toString()}>
+                                  {account.name} ({account.code}) - {account.currency} {account.balance?.toLocaleString() || '0'}
+                                </option>
+                              ))
+                            }
                           </Select>
                           <FormHelperText fontSize="xs">
-                            Required: Select account for payment processing
+                            Required: Select {formData.payment_method === 'CASH' ? 'cash' : 'bank'} account for payment processing
+                            {/* Show filtered count */}
+                            {bankAccounts.filter(account => 
+                              formData.payment_method === 'CASH' ? account.type === 'CASH' : account.type === 'BANK'
+                            ).length > 0 && (
+                              <Text as="span" color="blue.500" ml={2}>
+                                ({bankAccounts.filter(account => 
+                                  formData.payment_method === 'CASH' ? account.type === 'CASH' : account.type === 'BANK'
+                                ).length} {formData.payment_method === 'CASH' ? 'cash' : 'bank'} accounts available)
+                              </Text>
+                            )}
                           </FormHelperText>
                         </FormControl>
                       )}
@@ -5368,6 +5443,13 @@ const handleCreate = async () => {
             </ModalFooter>
           </ModalContent>
         </Modal>
+
+        {/* Journal Entries Modal */}
+        <PurchaseJournalEntriesModal
+          isOpen={isJournalOpen}
+          onClose={onJournalClose}
+          purchase={selectedPurchaseForJournal}
+        />
 
         {/* Payment Modal */}
         <PurchasePaymentForm

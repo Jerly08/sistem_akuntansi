@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
@@ -48,7 +49,9 @@ func (s *CashBankEnhancedService) ProcessDepositV2(request DepositRequest, userI
 	}
 
 	// Use new accounting service for automatic journal entries and balance sync
+	ctx := context.Background() // Create a background context
 	err = s.accountingService.ProcessCashBankDeposit(
+		ctx,
 		request.AccountID,
 		request.Amount,
 		sourceAccountID,
@@ -87,7 +90,9 @@ func (s *CashBankEnhancedService) ProcessWithdrawalV2(request WithdrawalRequest,
 	}
 
 	// Use new accounting service for automatic journal entries and balance sync
+	ctx := context.Background() // Create a background context
 	err = s.accountingService.ProcessCashBankWithdrawal(
+		ctx,
 		request.AccountID,
 		request.Amount,
 		expenseAccountID,
@@ -136,7 +141,9 @@ func (s *CashBankEnhancedService) ProcessTransferV2(request TransferRequest, use
 	}
 
 	// Use new accounting service for automatic transfer
+	ctx := context.Background() // Create a background context
 	err = s.accountingService.ProcessCashBankTransfer(
+		ctx,
 		request.FromAccountID,
 		request.ToAccountID,
 		request.Amount,
@@ -198,7 +205,9 @@ func (s *CashBankEnhancedService) ProcessPayment(cashBankID uint, paymentID uint
 	}
 
 	// Process payment as withdrawal to payable account
+	ctx := context.Background() // Create a background context
 	return s.accountingService.ProcessCashBankWithdrawal(
+		ctx,
 		cashBankID,
 		amount,
 		payableAccountID,
@@ -221,7 +230,9 @@ func (s *CashBankEnhancedService) ProcessReceipt(cashBankID uint, receiptID uint
 	}
 
 	// Process receipt as deposit from receivable account
+	ctx := context.Background() // Create a background context
 	return s.accountingService.ProcessCashBankDeposit(
+		ctx,
 		cashBankID,
 		amount,
 		receivableAccountID,

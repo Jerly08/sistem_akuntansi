@@ -192,6 +192,90 @@ func WithError(err error) *logrus.Entry {
 	return defaultLogger.WithError(err)
 }
 
+// ReportLogger provides specialized logging for reports
+type ReportLogger struct {
+	*Logger
+}
+
+// NewReportLogger creates a new report logger
+func NewReportLogger() *ReportLogger {
+	return &ReportLogger{
+		Logger: NewLogger(),
+	}
+}
+
+// LogSalesQuery logs sales query details
+func (rl *ReportLogger) LogSalesQuery(operation string, startDate, endDate time.Time, groupBy string, recordsFound int, totalAmount float64) {
+	rl.WithFields(Fields{
+		"operation":     operation,
+		"start_date":    startDate.Format("2006-01-02 15:04:05"),
+		"end_date":      endDate.Format("2006-01-02 15:04:05"),
+		"group_by":      groupBy,
+		"records_found": recordsFound,
+		"total_amount":  totalAmount,
+	}).Info("Sales Query Executed")
+}
+
+// LogQueryPerformance logs query execution performance
+func (rl *ReportLogger) LogQueryPerformance(operation string, duration time.Duration, recordCount int) {
+	avgTime := float64(0)
+	if recordCount > 0 {
+		avgTime = float64(duration.Milliseconds()) / float64(recordCount)
+	}
+	
+	rl.WithFields(Fields{
+		"operation":           operation,
+		"duration_ms":         duration.Milliseconds(),
+		"records":             recordCount,
+		"avg_ms_per_record":   avgTime,
+	}).Info("Query Performance")
+}
+
+// LogReportError logs detailed error information
+func (rl *ReportLogger) LogReportError(operation string, err error, context Fields) {
+	logEntry := rl.WithError(err).WithFields(logrus.Fields(context))
+	logEntry.Errorf("Report operation failed: %s", operation)
+}
+
+// LogDataQuality logs data quality issues
+func (rl *ReportLogger) LogDataQuality(reportType string, issues []string, totalRecords int, validRecords int) {
+	qualityScore := float64(0)
+	if totalRecords > 0 {
+		qualityScore = (float64(validRecords) / float64(totalRecords)) * 100
+	}
+	
+	rl.WithFields(Fields{
+		"report_type":    reportType,
+		"total_records":  totalRecords,
+		"valid_records":  validRecords,
+		"quality_score":  fmt.Sprintf("%.2f%%", qualityScore),
+		"issues":         issues,
+	}).Warn("Data Quality Issues Detected")
+}
+
+// LogReportGeneration logs report generation details
+func (rl *ReportLogger) LogReportGeneration(reportType string, params Fields, processingTime time.Duration, success bool) {
+	logFields := Fields{
+		"report_type":     reportType,
+		"processing_time": processingTime.String(),
+		"success":         success,
+	}
+	
+	// Merge with params
+	for k, v := range params {
+		logFields[k] = v
+	}
+	
+	if success {
+		rl.WithFields(logFields).Info("Report generated successfully")
+	} else {
+		rl.WithFields(logFields).Error("Report generation failed")
+	}
+}
+
+// Global report logger instance
+var ReportLog = NewReportLogger()
+
 // LogRequest logs HTTP request information
 func LogRequest(method, path, userAgent, ip string, statusCode int, duration time.Duration) {
 	WithFields(Fields{

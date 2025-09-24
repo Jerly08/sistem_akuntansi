@@ -57,6 +57,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const { isOpen, onOpen, onClose } = useDisclosure();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Find the selected option based on value
   useEffect(() => {
@@ -126,6 +127,34 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     };
   }, [onClose]);
 
+  // Smooth mouse-wheel scrolling when dropdown is open
+  useEffect(() => {
+    const el = dropdownRef.current;
+    if (!isOpen || !el) return;
+
+    const onWheel = (e: WheelEvent) => {
+      // ignore zoom or horizontal scroll gestures
+      if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (el.scrollHeight <= el.clientHeight) return;
+      e.preventDefault();
+      el.scrollBy({ top: e.deltaY, left: 0, behavior: 'smooth' });
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel as EventListener);
+    };
+  }, [isOpen]);
+
+  // Ensure active/selected option is visible when opening
+  useEffect(() => {
+    if (!isOpen || !dropdownRef.current || !selectedOption) return;
+    const el = dropdownRef.current.querySelector(
+      `[data-option-id="${selectedOption.id}"]`
+    ) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [isOpen, selectedOption]);
+
   // Display value in input
   const getInputValue = () => {
     if (searchTerm) {
@@ -176,6 +205,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
       <Collapse in={isOpen && !isDisabled}>
         <Box
+          ref={dropdownRef}
           position="absolute"
           top="100%"
           left={0}
@@ -189,6 +219,8 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
           maxHeight="200px"
           overflowY="auto"
           mt={1}
+          // Smooth programmatic scroll and better overscroll behaviour
+          sx={{ scrollBehavior: 'smooth', overscrollBehavior: 'contain' }}
         >
           {isLoading ? (
             <Box p={4} textAlign="center">
@@ -200,6 +232,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
               {filteredOptions.map((option) => (
                 <ListItem
                   key={option.id}
+                  data-option-id={option.id}
                   p={3}
                   cursor="pointer"
                   _hover={{ bg: 'gray.50' }}

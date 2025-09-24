@@ -391,6 +391,17 @@ func (s *SmartNotificationService) isDuplicateNotification(userID uint, notifica
 	return count > 0
 }
 
+// getPurchaseDisplayAmount gets the correct amount to display for purchase notifications
+func (s *SmartNotificationService) getPurchaseDisplayAmount(purchaseID uint) float64 {
+	var purchase models.Purchase
+	if err := s.db.First(&purchase, purchaseID).Error; err != nil {
+		// If we can't get the purchase, return 0 to avoid showing wrong amounts
+		return 0
+	}
+	// Always use TotalAmount for notifications to ensure consistency
+	return purchase.TotalAmount
+}
+
 // getNotificationPriority determines priority based on type
 func (s *SmartNotificationService) getNotificationPriority(notificationType string) string {
 	switch notificationType {

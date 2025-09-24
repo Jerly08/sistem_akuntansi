@@ -142,7 +142,7 @@ func (pc *PurchaseController) DeletePurchase(c *gin.Context) {
 	}
 
 	// Get user role from context
-	userRole := c.MustGet("role").(string)
+	userRole := c.MustGet("user_role").(string)
 	
 	// Check if purchase exists and get its status
 	purchase, err := pc.purchaseService.GetPurchaseByID(uint(id))
@@ -203,7 +203,23 @@ func (pc *PurchaseController) ApprovePurchase(c *gin.Context) {
 	}
 
 	userID := c.MustGet("user_id").(uint)
-	userRole := c.MustGet("role").(string)
+	userRole := c.MustGet("user_role").(string)
+	
+	// SAFETY CHECK: Ensure purchase is not in DRAFT status
+	purchase, err := pc.purchaseService.GetPurchaseByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Purchase not found"})
+		return
+	}
+	
+	if purchase.Status == models.PurchaseStatusDraft {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cannot approve DRAFT purchase - please submit for approval first",
+			"current_status": purchase.Status,
+			"required_action": "Use 'Submit for Approval' button first",
+		})
+		return
+	}
 
 	// Parse request body to check for escalation
 	var request struct {
@@ -238,7 +254,7 @@ func (pc *PurchaseController) RejectPurchase(c *gin.Context) {
 	}
 
 	userID := c.MustGet("user_id").(uint)
-	userRole := c.MustGet("role").(string)
+	userRole := c.MustGet("user_role").(string)
 
 	// Parse request body to get comments
 	var request struct {
@@ -272,19 +288,72 @@ func (pc *PurchaseController) RejectPurchase(c *gin.Context) {
 func (pc *PurchaseController) CreatePurchaseReceipt(c *gin.Context) {
 	var request models.PurchaseReceiptRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid request data",
+			"details": err.Error(),
+		})
 		return
 	}
 
-	userID := c.MustGet("user_id").(uint)
+	// Get user ID with proper error handling
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		log.Printf("Error: user_id not found in context for receipt creation")
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+			"details": "user_id not found in context",
+		})
+		return
+	}
+	
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		log.Printf("Error: user_id has invalid type for receipt creation: %T", userIDInterface)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid user authentication",
+			"details": "user_id has invalid type",
+		})
+		return
+	}
+	
+	log.Printf("Creating receipt for purchase %d with user ID %d", request.PurchaseID, userID)
 
 	receipt, err := pc.purchaseService.CreatePurchaseReceipt(request, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("Error creating receipt: %v", err)
+		
+		// Check for specific error types
+		errorMessage := err.Error()
+		if strings.Contains(errorMessage, "fk_purchase_receipts_receiver") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Invalid user reference",
+				"details": "The user ID in your session is not valid. Please log out and log in again.",
+				"user_id": userID,
+			})
+			return
+		}
+		
+		if strings.Contains(errorMessage, "foreign key constraint") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Database constraint violation",
+				"details": "There is a reference issue in the database. Please contact administrator.",
+			})
+			return
+		}
+		
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to create receipt",
+			"details": err.Error(),
+		})
 		return
 	}
-
-	c.JSON(http.StatusCreated, receipt)
+	
+	log.Printf("Receipt created successfully: ID=%d, Number=%s", receipt.ID, receipt.ReceiptNumber)
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"receipt": receipt,
+		"message": "Receipt created successfully",
+	})
 }
 
 // GetPurchaseReceipts returns receipts for a purchase
@@ -528,7 +597,7 @@ func (pc *PurchaseController) GetVendorPurchaseSummary(c *gin.Context) {
 // GetPendingApprovals returns purchases pending approval for current user
 func (pc *PurchaseController) GetPendingApprovals(c *gin.Context) {
 	_ = c.MustGet("user_id").(uint) // userID not used in current implementation
-	userRole := c.MustGet("user_role").(string)
+	userRole := c.MustGet("role").(string)
 
 	// Filter purchases requiring approval that user can approve
 	filter := models.PurchaseFilter{
@@ -725,7 +794,7 @@ func (pc *PurchaseController) CreatePurchasePayment(c *gin.Context) {
 	}
 
 	var request struct {
-		Amount        float64 `json:"amount" binding:"required,min=0"`
+		Amount        float64 `json:"amount" binding:"required,gt=0"`
 		Date          string  `json:"date" binding:"required"`
 		Method        string  `json:"method" binding:"required"`
 		CashBankID    uint    `json:"cash_bank_id" binding:"required"`
@@ -877,6 +946,23 @@ func (pc *PurchaseController) CreatePurchasePayment(c *gin.Context) {
 	}
 	log.Printf("✅ Payment created successfully: ID=%d, Code=%s", payment.ID, payment.Code)
 
+	// 🔥 NEW: Create SSOT journal entry for purchase payment
+	log.Printf("🧾 Creating SSOT journal entry for purchase payment...")
+	err = pc.purchaseService.CreatePurchasePaymentJournal(
+		uint(purchaseID),
+		request.Amount,
+		request.CashBankID,
+		fmt.Sprintf("PAY-%s", purchase.Code),
+		fmt.Sprintf("Payment for Purchase %s", purchase.Code),
+		userID,
+	)
+	if err != nil {
+		log.Printf("⚠️ Warning: Failed to create SSOT journal entry for payment: %v", err)
+		// Don't fail the payment process, but log the issue
+	} else {
+		log.Printf("✅ SSOT journal entry created for purchase payment")
+	}
+
 	// CRITICAL FIX: Update purchase payment amounts after successful payment
 	log.Printf("🔄 Updating purchase payment amounts for purchase %d...", purchaseID)
 	
@@ -884,12 +970,14 @@ func (pc *PurchaseController) CreatePurchasePayment(c *gin.Context) {
 	newPaidAmount := purchase.PaidAmount + request.Amount
 	newOutstandingAmount := purchase.TotalAmount - newPaidAmount
 	
-	// Determine new status
+	// DO NOT change status to PAID automatically when payment is made
+	// The purchase should remain APPROVED to allow receipt creation
+	// Only change to COMPLETED when both payment AND receipt are complete
 	newStatus := purchase.Status
-	if newOutstandingAmount <= 0 {
-		newStatus = "PAID"
+	if newOutstandingAmount < 0 {
 		newOutstandingAmount = 0 // Ensure it doesn't go negative
 	}
+	// Status remains APPROVED - will be changed to COMPLETED only when receipt is created
 	
 	log.Printf("📊 Payment amounts: Paid %.2f → %.2f, Outstanding %.2f → %.2f, Status %s → %s", 
 		purchase.PaidAmount, newPaidAmount, purchase.OutstandingAmount, newOutstandingAmount, purchase.Status, newStatus)
@@ -949,7 +1037,7 @@ func (pc *PurchaseController) CreatePurchasePayment(c *gin.Context) {
 // Dashboard endpoint for purchases
 func (pc *PurchaseController) GetPurchaseDashboard(c *gin.Context) {
 	_ = c.MustGet("user_id").(uint) // userID not used in current implementation
-	userRole := c.MustGet("user_role").(string)
+	userRole := c.MustGet("role").(string)
 
 	// Get summary
 	summary, err := pc.purchaseService.GetPurchasesSummary("", "")
@@ -979,4 +1067,26 @@ func (pc *PurchaseController) GetPurchaseDashboard(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// GetPurchaseJournalEntries retrieves SSOT journal entries for a purchase
+func (pc *PurchaseController) GetPurchaseJournalEntries(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid purchase ID"})
+		return
+	}
+
+	// Get journal entries for the purchase
+	entries, err := pc.purchaseService.GetPurchaseJournalEntries(uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"purchase_id": id,
+		"journal_entries": entries,
+		"count": len(entries),
+	})
 }

@@ -405,8 +405,8 @@ func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
 }
 
 // GetDepositSourceAccounts godoc
-// @Summary Get accounts for deposit source (Revenue + Equity)
-// @Description Get active revenue and equity accounts for deposit source selection
+// @Summary Get equity accounts for deposit source
+// @Description Get active equity accounts for deposit source selection (proper accounting treatment)
 // @Tags CashBank
 // @Accept json
 // @Produce json
@@ -414,17 +414,7 @@ func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
 // @Success 200 {object} models.APIResponse
 // @Router /api/cashbank/deposit-source-accounts [get]
 func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
-	// Get Revenue accounts
-	revenueAccounts, err := c.accountService.GetRevenueAccounts(ctx.Request.Context())
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to retrieve revenue accounts",
-			"details": err.Error(),
-		})
-		return
-	}
-	
-	// Get Equity accounts
+	// Get Equity accounts only - deposits should be treated as capital contributions
 	equityAccounts, err := c.accountService.GetEquityAccounts(ctx.Request.Context())
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -432,14 +422,6 @@ func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
 			"details": err.Error(),
 		})
 		return
-	}
-	
-	// Filter active revenue accounts (exclude sales revenue for clean separation)
-	var activeRevenueAccounts []models.Account
-	for _, account := range revenueAccounts {
-		if account.IsActive && account.Code != "4101" { // Exclude main sales revenue
-			activeRevenueAccounts = append(activeRevenueAccounts, account)
-		}
 	}
 	
 	// Filter active equity accounts
@@ -450,13 +432,14 @@ func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
 		}
 	}
 	
+	// Return only equity accounts for proper balance sheet treatment
 	ctx.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"revenue": activeRevenueAccounts,
+			"revenue": []models.Account{}, // Empty - no revenue accounts for deposits
 			"equity":  activeEquityAccounts,
 		},
-		"message": "Deposit source accounts retrieved successfully",
+		"message": "Deposit source accounts retrieved successfully - equity accounts only for proper accounting",
 	})
 }
 

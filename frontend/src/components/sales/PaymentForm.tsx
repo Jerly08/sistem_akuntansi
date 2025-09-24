@@ -278,6 +278,10 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
         return;
       }
 
+      // For sales payments (receivables), we don't need balance validation
+      // because we're receiving money from customers, not paying out
+      // Balance validation only applies to payable payments (to vendors)
+
       // Convert date to proper ISO datetime format for backend
       const paymentDateTime = new Date(data.date).toISOString();
       
@@ -555,13 +559,17 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                   <FormErrorMessage>{errors.method?.message}</FormErrorMessage>
                 </FormControl>
 
-                {/* Bank Account dropdown for all payment methods (including Credit Card) */}
+                {/* Cash/Bank Account dropdown for all payment methods */}
                 {watch('method') && (
                   <FormControl isRequired isInvalid={!!errors.account_id}>
-                    <FormLabel>{watch('method') === 'CREDIT_CARD' ? 'Credit Card Account *' : 'Bank Account *'}</FormLabel>
+                    <FormLabel>
+                      {watch('method') === 'CASH' ? 'Cash Account *' : 
+                       watch('method') === 'CREDIT_CARD' ? 'Credit Card Account *' : 'Bank Account *'}
+                    </FormLabel>
                     <Select
                       {...register('account_id', {
-                        required: watch('method') === 'CREDIT_CARD' ? 'Credit card account is required' : 'Bank account is required',
+                        required: watch('method') === 'CASH' ? 'Cash account is required' :
+                                 watch('method') === 'CREDIT_CARD' ? 'Credit card account is required' : 'Bank account is required',
                         setValueAs: value => parseInt(value) || 0
                       })}
                       disabled={accountsLoading || accounts.length === 0}
@@ -572,22 +580,70 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                         <option value="">No accounts available</option>
                       ) : (
                         <>
-                          <option value="">{watch('method') === 'CREDIT_CARD' ? 'Select credit card account' : 'Select bank account'}</option>
-                          {accounts.map(account => (
-                            <option key={account.id} value={account.id}>
-                              {account.type === 'BANK' && account.bank_name 
-                                ? `${account.code} - ${account.name} (${account.bank_name} - ${account.account_no})`
-                                : `${account.code} - ${account.name} (${account.type})`
+                          <option value="">
+                            {watch('method') === 'CASH' ? 'Select cash account' :
+                             watch('method') === 'CREDIT_CARD' ? 'Select credit card account' : 'Select bank account'}
+                          </option>
+                          {accounts
+                            .filter(account => {
+                              const method = watch('method');
+                              if (method === 'CASH') {
+                                return account.type === 'CASH';
+                              } else if (method === 'CREDIT_CARD') {
+                                // Show all accounts for credit card (could be liability or bank accounts)
+                                return true;
+                              } else {
+                                // For other methods, show BANK accounts
+                                return account.type === 'BANK' || account.type !== 'CASH';
                               }
-                            </option>
-                          ))}
+                            })
+                            .map(account => {
+                              // For sales payments, we don't need balance validation warnings
+                              // since we're receiving money, not paying out
+                              return (
+                                <option key={account.id} value={account.id}>
+                                  {account.type === 'BANK' && account.bank_name 
+                                    ? `${account.code} - ${account.name} (${account.bank_name}) - ${salesService.formatCurrency(account.balance)}`
+                                    : `${account.code} - ${account.name} (${account.type}) - ${salesService.formatCurrency(account.balance)}`
+                                  }
+                                </option>
+                              );
+                            })}
                         </>
                       )}
                     </Select>
                     <FormErrorMessage>{errors.account_id?.message}</FormErrorMessage>
+                    
+                    {/* For sales payments, show positive account balance info */}
+                    {watch('account_id') && (() => {
+                      const selectedAccountId = watch('account_id');
+                      const currentAmount = watch('amount') || 0;
+                      const selectedAccount = accounts.find(account => account.id === selectedAccountId);
+                      if (!selectedAccount) return null;
+                      
+                      const newBalance = selectedAccount.balance + currentAmount;
+                      
+                      if (currentAmount > 0) {
+                        return (
+                          <Text fontSize="sm" color="green.600" mt={2}>
+                            💰 <strong>Receiving Payment</strong><br/>
+                            Current Balance: {salesService.formatCurrency(selectedAccount.balance)} |
+                            After Payment: {salesService.formatCurrency(newBalance)}
+                          </Text>
+                        );
+                      }
+                      
+                      return (
+                        <Text fontSize="sm" color="blue.600" mt={2}>
+                          💰 <strong>Account Balance:</strong> {salesService.formatCurrency(selectedAccount.balance)}
+                        </Text>
+                      );
+                    })()}
+                    
                     {accounts.length === 0 && !accountsLoading && (
                       <Text fontSize="xs" color="orange.500" mt={1}>
-                        ⚠️ No {watch('method') === 'CREDIT_CARD' ? 'credit card' : 'bank'} accounts loaded. Contact your administrator if this persists.
+                        ⚠️ No {watch('method') === 'CASH' ? 'cash' : 
+                                watch('method') === 'CREDIT_CARD' ? 'credit card' : 'bank'} accounts loaded. Contact your administrator if this persists.
                       </Text>
                     )}
                   </FormControl>
@@ -621,8 +677,9 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
               colorScheme="blue"
               isLoading={loading}
               loadingText="Recording Payment..."
+              isDisabled={loading}
             >
-              Record Payment
+              {loading ? 'Recording Payment...' : 'Record Payment'}
             </Button>
           </ModalFooter>
         </form>

@@ -141,41 +141,20 @@ func (ac *AuthController) Register(c *gin.Context) {
 // @Failure 500 {object} models.ErrorResponse "Internal server error"
 // @Router /auth/login [post]
 func (ac *AuthController) Login(c *gin.Context) {
-	// Support both simple and enhanced login requests
-	var simpleReq struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	
-	var enhancedReq models.EnhancedLoginRequest
-	
-	// Try to bind as simple request first (for frontend compatibility)
-	if err := c.ShouldBindJSON(&simpleReq); err != nil {
-		// If simple binding fails, try enhanced request
-		if err := c.ShouldBindJSON(&enhancedReq); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
-			return
-		}
+	// Use standard LoginRequest model
+	var req models.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
+		return
 	}
 	
 	// Debug logging
-	if simpleReq.Email != "" {
-		log.Printf("Login attempt - Email: %s, Password length: %d", simpleReq.Email, len(simpleReq.Password))
-	} else {
-		log.Printf("Login attempt - Identifier: %s, Password length: %d", enhancedReq.EmailOrUsername, len(enhancedReq.Password))
-	}
+	log.Printf("Login attempt - Email: %s, Password length: %d", req.Email, len(req.Password))
 	
-	// Determine the identifier and password
-	var identifier, password, deviceInfo string
-	if simpleReq.Email != "" {
-		identifier = simpleReq.Email
-		password = simpleReq.Password
-		deviceInfo = "Web Browser"
-	} else {
-		identifier = enhancedReq.EmailOrUsername
-		password = enhancedReq.Password
-		deviceInfo = enhancedReq.DeviceInfo
-	}
+	// Use email as identifier
+	identifier := req.Email
+	password := req.Password
+	deviceInfo := "Web Browser"
 
 	// Find user by email or username
 	var user models.User

@@ -1,0 +1,160 @@
+package services
+
+import (
+	"bytes"
+	"encoding/csv"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/jung-kurt/gofpdf"
+)
+
+// PurchaseReportExportService handles export functionality for Purchase Report
+type PurchaseReportExportService struct{}
+
+// NewPurchaseReportExportService creates a new purchase report export service
+func NewPurchaseReportExportService() *PurchaseReportExportService {
+	return &PurchaseReportExportService{}
+}
+
+// ExportToCSV exports purchase report to CSV bytes (optional helper)
+func (s *PurchaseReportExportService) ExportToCSV(data *PurchaseReportData) ([]byte, error) {
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+
+	// Header
+	w.Write([]string{"Purchase Report"})
+	w.Write([]string{data.Company.Name})
+	w.Write([]string{"Period:", data.StartDate.Format("2006-01-02"), "to", data.EndDate.Format("2006-01-02")})
+	w.Write([]string{"Generated:", data.GeneratedAt.In(time.Local).Format("2006-01-02 15:04")})
+	w.Write([]string{})
+
+	// Summary
+	w.Write([]string{"SUMMARY"})
+	w.Write([]string{"Total Purchases", fmt.Sprintf("%d", data.TotalPurchases)})
+	w.Write([]string{"Completed Purchases", fmt.Sprintf("%d", data.CompletedPurchases)})
+	w.Write([]string{"Total Amount", fmt.Sprintf("%.2f", data.TotalAmount)})
+	w.Write([]string{"Total Paid", fmt.Sprintf("%.2f", data.TotalPaid)})
+	w.Write([]string{"Outstanding Payables", fmt.Sprintf("%.2f", data.OutstandingPayables)})
+	w.Write([]string{})
+
+	// Purchases by vendor (top 20)
+	if len(data.PurchasesByVendor) > 0 {
+		w.Write([]string{"PURCHASES BY VENDOR (Top 20)"})
+		w.Write([]string{"Vendor ID", "Vendor Name", "Total Purchases", "Total Amount", "Total Paid", "Outstanding", "Last Purchase", "Payment Method", "Status"})
+		limit := len(data.PurchasesByVendor)
+		if limit > 20 { limit = 20 }
+		for i := 0; i < limit; i++ {
+			v := data.PurchasesByVendor[i]
+			w.Write([]string{
+				fmt.Sprintf("%d", v.VendorID), v.VendorName,
+				fmt.Sprintf("%d", v.TotalPurchases),
+				fmt.Sprintf("%.2f", v.TotalAmount),
+				fmt.Sprintf("%.2f", v.TotalPaid),
+				fmt.Sprintf("%.2f", v.Outstanding),
+				v.LastPurchaseDate.Format("2006-01-02"),
+				v.PaymentMethod, v.Status,
+			})
+		}
+		w.Write([]string{})
+	}
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		return nil, fmt.Errorf("failed to write CSV: %v", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// ExportToPDF exports purchase report to PDF bytes
+func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData) ([]byte, error) {
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+
+	// Title
+	pdf.SetFont("Arial", "B", 16)
+	pdf.Cell(190, 10, "PURCHASE REPORT")
+	pdf.Ln(12)
+
+	// Company & Period
+	pdf.SetFont("Arial", "", 11)
+	pdf.Cell(190, 6, data.Company.Name)
+	pdf.Ln(6)
+	pdf.Cell(190, 6, fmt.Sprintf("Period: %s to %s", data.StartDate.Format("2006-01-02"), data.EndDate.Format("2006-01-02")))
+	pdf.Ln(6)
+	pdf.Cell(190, 6, fmt.Sprintf("Generated: %s", data.GeneratedAt.In(time.Local).Format("2006-01-02 15:04")))
+	pdf.Ln(10)
+
+	// Summary block
+	pdf.SetFont("Arial", "B", 12)
+	pdf.Cell(0, 8, "SUMMARY")
+	pdf.Ln(8)
+	pdf.SetFont("Arial", "", 10)
+	pdf.CellFormat(90, 6, "Total Purchases", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, fmt.Sprintf("%d", data.TotalPurchases), "1", 1, "R", false, 0, "")
+	pdf.CellFormat(90, 6, "Completed Purchases", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, fmt.Sprintf("%d", data.CompletedPurchases), "1", 1, "R", false, 0, "")
+	pdf.CellFormat(90, 6, "Total Amount", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, formatRupiahSimple(data.TotalAmount), "1", 1, "R", false, 0, "")
+	pdf.CellFormat(90, 6, "Total Paid", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, formatRupiahSimple(data.TotalPaid), "1", 1, "R", false, 0, "")
+	pdf.CellFormat(90, 6, "Outstanding Payables", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, formatRupiahSimple(data.OutstandingPayables), "1", 1, "R", false, 0, "")
+	pdf.Ln(6)
+
+	// Top vendors table (limit to fit one page)
+	if len(data.PurchasesByVendor) > 0 {
+		pdf.SetFont("Arial", "B", 12)
+		pdf.Cell(0, 8, "TOP VENDORS")
+		pdf.Ln(8)
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetFillColor(220, 220, 220)
+		pdf.CellFormat(60, 7, "Vendor", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(25, 7, "Orders", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(35, 7, "Amount", "1", 0, "R", true, 0, "")
+		pdf.CellFormat(35, 7, "Paid", "1", 0, "R", true, 0, "")
+		pdf.CellFormat(35, 7, "Outstanding", "1", 1, "R", true, 0, "")
+		pdf.SetFont("Arial", "", 9)
+		limit := len(data.PurchasesByVendor)
+		if limit > 12 { limit = 12 }
+		for i := 0; i < limit; i++ {
+			v := data.PurchasesByVendor[i]
+			name := v.VendorName
+			if len(name) > 30 { name = name[:27] + "..." }
+			pdf.CellFormat(60, 6, name, "1", 0, "L", false, 0, "")
+			pdf.CellFormat(25, 6, fmt.Sprintf("%d", v.TotalPurchases), "1", 0, "C", false, 0, "")
+			pdf.CellFormat(35, 6, formatRupiahSimple(v.TotalAmount), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(35, 6, formatRupiahSimple(v.TotalPaid), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(35, 6, formatRupiahSimple(v.Outstanding), "1", 1, "R", false, 0, "")
+		}
+	}
+
+	var out bytes.Buffer
+	if err := pdf.Output(&out); err != nil {
+		return nil, fmt.Errorf("failed to generate purchase report PDF: %v", err)
+	}
+	return out.Bytes(), nil
+}
+
+// formatRupiahSimple formats a number as Indonesian Rupiah (no decimals)
+func formatRupiahSimple(amount float64) string {
+	// Round to integer and format with thousand separators using simple logic
+	s := fmt.Sprintf("%.0f", amount)
+	if s == "0" { return "Rp 0" }
+	var parts []string
+	for i, r := range reverseString(s) {
+		if i > 0 && i%3 == 0 { parts = append(parts, ".") }
+		parts = append(parts, string(r))
+	}
+	formatted := reverseString(strings.Join(parts, ""))
+	return "Rp " + formatted
+}
+
+func reverseString(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
+}

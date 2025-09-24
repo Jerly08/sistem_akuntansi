@@ -2,18 +2,13 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
 	"math"
-	"os"
 	"sort"
-	"strings"
 	"time"
-
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
-
+	"app-sistem-akuntansi/utils"
 	"gorm.io/gorm"
 )
 
@@ -29,6 +24,42 @@ type EnhancedReportService struct {
 	paymentRepo     *repositories.PaymentRepository
 	cashBankRepo    *repositories.CashBankRepository
 	companyProfile  *models.CompanyProfile
+	cacheService    *ReportCacheService
+	validationService *ReportValidationService
+}
+
+// NewEnhancedReportService creates a new enhanced report service with caching and validation
+func NewEnhancedReportService(
+	db *gorm.DB,
+	accountRepo repositories.AccountRepository,
+	salesRepo *repositories.SalesRepository,
+	purchaseRepo *repositories.PurchaseRepository,
+	productRepo *repositories.ProductRepository,
+	contactRepo repositories.ContactRepository,
+	paymentRepo *repositories.PaymentRepository,
+	cashBankRepo *repositories.CashBankRepository,
+	cacheService *ReportCacheService,
+) *EnhancedReportService {
+	// Get company profile
+	var companyProfile models.CompanyProfile
+	db.First(&companyProfile)
+	
+	// Initialize validation service
+	validationService := NewReportValidationService(db)
+	
+	return &EnhancedReportService{
+		db:                db,
+		accountRepo:       accountRepo,
+		salesRepo:         salesRepo,
+		purchaseRepo:      purchaseRepo,
+		productRepo:       productRepo,
+		contactRepo:       contactRepo,
+		paymentRepo:       paymentRepo,
+		cashBankRepo:      cashBankRepo,
+		companyProfile:    &companyProfile,
+		cacheService:      cacheService,
+		validationService: validationService,
+	}
 }
 
 // BalanceSheetData represents a comprehensive balance sheet structure
@@ -48,28 +79,32 @@ type BalanceSheetData struct {
 
 // ProfitLossData represents a comprehensive P&L statement structure
 type ProfitLossData struct {
-	Company            CompanyInfo         `json:"company"`
-	StartDate          time.Time           `json:"start_date"`
-	EndDate            time.Time           `json:"end_date"`
-	Currency           string              `json:"currency"`
-	Revenue            PLSection           `json:"revenue"`
-	CostOfGoodsSold    PLSection           `json:"cost_of_goods_sold"`
-	GrossProfit        float64             `json:"gross_profit"`
-	GrossProfitMargin  float64             `json:"gross_profit_margin"`
-	OperatingExpenses  PLSection           `json:"operating_expenses"`
-	OperatingIncome    float64             `json:"operating_income"`
-	OtherIncome        PLSection           `json:"other_income"`
-	OtherExpenses      PLSection           `json:"other_expenses"`
-	EBITDA             float64             `json:"ebitda"`
-	EBIT               float64             `json:"ebit"`
-	NetIncomeBeforeTax float64             `json:"net_income_before_tax"`
-	TaxExpense         float64             `json:"tax_expense"`
-	NetIncome          float64             `json:"net_income"`
-	NetIncomeMargin    float64             `json:"net_income_margin"`
-	EarningsPerShare   float64             `json:"earnings_per_share"`
-	DilutedEPS         float64             `json:"diluted_eps"`
-	SharesOutstanding  float64             `json:"shares_outstanding"`
-	GeneratedAt        time.Time           `json:"generated_at"`
+	Company               CompanyInfo          `json:"company"`
+	StartDate             time.Time            `json:"start_date"`
+	EndDate               time.Time            `json:"end_date"`
+	Currency              string               `json:"currency"`
+	Revenue               PLSection            `json:"revenue"`
+	CostOfGoodsSold       PLSection            `json:"cost_of_goods_sold"`
+	GrossProfit           float64              `json:"gross_profit"`
+	GrossProfitMargin     float64              `json:"gross_profit_margin"`
+	OperatingExpenses     PLSection            `json:"operating_expenses"`
+	OperatingIncome       float64              `json:"operating_income"`
+	OtherIncome           PLSection            `json:"other_income"`
+	OtherExpenses         PLSection            `json:"other_expenses"`
+	EBITDA                float64              `json:"ebitda"`
+	EBIT                  float64              `json:"ebit"`
+	NetIncomeBeforeTax    float64              `json:"net_income_before_tax"`
+	TaxExpense            float64              `json:"tax_expense"`
+	NetIncome             float64              `json:"net_income"`
+	NetIncomeMargin       float64              `json:"net_income_margin"`
+	EarningsPerShare      float64              `json:"earnings_per_share"`
+	DilutedEPS            float64              `json:"diluted_eps"`
+	SharesOutstanding     float64              `json:"shares_outstanding"`
+	GeneratedAt           time.Time            `json:"generated_at"`
+	// Data Quality and Validation Fields
+	ValidationReport      *ValidationReport    `json:"validation_report,omitempty"`
+	DataQualityScore      float64              `json:"data_quality_score,omitempty"`
+	DataQualityWarnings   []string             `json:"data_quality_warnings,omitempty"`
 }
 
 // ProfitLossComparative represents comparative P&L analysis
@@ -147,6 +182,10 @@ type SalesSummaryData struct {
 	TopPerformers          TopPerformersData      `json:"top_performers"`
 	GrowthAnalysis         GrowthAnalysisData     `json:"growth_analysis"`
 	GeneratedAt            time.Time              `json:"generated_at"`
+	// Enhanced debugging and monitoring fields
+	DebugInfo              map[string]interface{} `json:"debug_info,omitempty"`
+	DataQualityScore       float64                `json:"data_quality_score,omitempty"`
+	ProcessingTime         string                 `json:"processing_time,omitempty"`
 }
 
 // PurchaseSummaryData represents comprehensive purchase analytics
@@ -180,6 +219,216 @@ type CompanyInfo struct {
 	Email       string `json:"email"`
 	Website     string `json:"website"`
 	TaxNumber   string `json:"tax_number"`
+}
+
+// VendorAnalysisData represents comprehensive vendor analysis
+type VendorAnalysisData struct {
+	Company               CompanyInfo            `json:"company"`
+	StartDate             time.Time              `json:"start_date"`
+	EndDate               time.Time              `json:"end_date"`
+	Currency              string                 `json:"currency"`
+	TotalVendors          int64                  `json:"total_vendors"`
+	ActiveVendors         int64                  `json:"active_vendors"`
+	TotalPurchases        float64                `json:"total_purchases"`
+	TotalPayments         float64                `json:"total_payments"`
+	OutstandingPayables   float64                `json:"outstanding_payables"`
+	VendorsByPerformance  []VendorPerformanceData `json:"vendors_by_performance"`
+	PaymentAnalysis       PaymentAnalysisData     `json:"payment_analysis"`
+	TopVendorsBySpend     []VendorSpendData       `json:"top_vendors_by_spend"`
+	VendorPaymentHistory  []VendorPaymentHistory  `json:"vendor_payment_history"`
+	GeneratedAt           time.Time               `json:"generated_at"`
+}
+
+// TrialBalanceData represents comprehensive trial balance
+type TrialBalanceData struct {
+	Company        CompanyInfo        `json:"company"`
+	AsOfDate       time.Time          `json:"as_of_date"`
+	Currency       string             `json:"currency"`
+	Accounts       []TrialBalanceItem `json:"accounts"`
+	TotalDebits    float64            `json:"total_debits"`
+	TotalCredits   float64            `json:"total_credits"`
+	IsBalanced     bool               `json:"is_balanced"`
+	Difference     float64            `json:"difference"`
+	AssetSummary   AccountTypeSummary `json:"asset_summary"`
+	LiabilitySummary AccountTypeSummary `json:"liability_summary"`
+	EquitySummary  AccountTypeSummary `json:"equity_summary"`
+	RevenueSummary AccountTypeSummary `json:"revenue_summary"`
+	ExpenseSummary AccountTypeSummary `json:"expense_summary"`
+	GeneratedAt    time.Time          `json:"generated_at"`
+}
+
+// GeneralLedgerData represents detailed general ledger report
+type GeneralLedgerData struct {
+	Company              CompanyInfo            `json:"company"`
+	Account              models.Account         `json:"account"`
+	StartDate            time.Time              `json:"start_date"`
+	EndDate              time.Time              `json:"end_date"`
+	Currency             string                 `json:"currency"`
+	OpeningBalance       float64                `json:"opening_balance"`
+	ClosingBalance       float64                `json:"closing_balance"`
+	TotalDebits          float64                `json:"total_debits"`
+	TotalCredits         float64                `json:"total_credits"`
+	// Enhanced UI fields
+	NetPositionChange    float64                `json:"net_position_change"`
+	NetPositionStatus    string                 `json:"net_position_status"`
+	TotalTransactionVol  float64                `json:"total_transaction_volume"`
+	CashImpact          float64                `json:"cash_impact"`
+	CashImpactStatus    string                 `json:"cash_impact_status"`
+	IsBalanced          bool                   `json:"is_balanced"`
+	Transactions         []GeneralLedgerEntry   `json:"transactions"`
+	MonthlySummary       []MonthlyLedgerSummary `json:"monthly_summary"`
+	GeneratedAt          time.Time              `json:"generated_at"`
+}
+
+// GeneralLedgerAllData represents general ledger report for all accounts
+type GeneralLedgerAllData struct {
+	Company           CompanyInfo         `json:"company"`
+	StartDate         time.Time           `json:"start_date"`
+	EndDate           time.Time           `json:"end_date"`
+	Currency          string              `json:"currency"`
+	AccountCount      int                 `json:"account_count"`
+	TotalDebits       float64             `json:"total_debits"`
+	TotalCredits      float64             `json:"total_credits"`
+	TotalTransactions int                 `json:"total_transactions"`
+	Accounts          []GeneralLedgerData `json:"accounts"`
+	GeneratedAt       time.Time           `json:"generated_at"`
+}
+
+// JournalEntryAnalysisData represents comprehensive journal entry analysis
+type JournalEntryAnalysisData struct {
+	Company             CompanyInfo            `json:"company"`
+	StartDate           time.Time              `json:"start_date"`
+	EndDate             time.Time              `json:"end_date"`
+	Currency            string                 `json:"currency"`
+	TotalEntries        int64                  `json:"total_entries"`
+	TotalDebitAmount    float64                `json:"total_debit_amount"`
+	TotalCreditAmount   float64                `json:"total_credit_amount"`
+	EntriesByType       []JournalTypeData      `json:"entries_by_type"`
+	EntriesByStatus     []JournalStatusData    `json:"entries_by_status"`
+	EntriesByUser       []JournalUserData      `json:"entries_by_user"`
+	RecentEntries       []JournalEntryDetail   `json:"recent_entries"`
+	LargestEntries      []JournalEntryDetail   `json:"largest_entries"`
+	UnbalancedEntries   []JournalEntryDetail   `json:"unbalanced_entries"`
+	ComplianceCheck     JournalComplianceData  `json:"compliance_check"`
+	GeneratedAt         time.Time              `json:"generated_at"`
+}
+
+// Supporting structures for new report types
+type VendorPerformanceData struct {
+	VendorID          uint    `json:"vendor_id"`
+	VendorName        string  `json:"vendor_name"`
+	TotalPurchases    float64 `json:"total_purchases"`
+	TotalPayments     float64 `json:"total_payments"`
+	Outstanding       float64 `json:"outstanding"`
+	AveragePaymentDays float64 `json:"average_payment_days"`
+	PaymentScore      float64 `json:"payment_score"`
+	Rating            string  `json:"rating"`
+}
+
+type PaymentAnalysisData struct {
+	OnTimePayments    int64   `json:"on_time_payments"`
+	LatePayments      int64   `json:"late_payments"`
+	OverduePayments   int64   `json:"overdue_payments"`
+	AveragePaymentDays float64 `json:"average_payment_days"`
+	PaymentEfficiency  float64 `json:"payment_efficiency"`
+}
+
+type VendorSpendData struct {
+	VendorID     uint    `json:"vendor_id"`
+	VendorName   string  `json:"vendor_name"`
+	TotalSpend   float64 `json:"total_spend"`
+	Percentage   float64 `json:"percentage"`
+	Transactions int64   `json:"transactions"`
+}
+
+type VendorPaymentHistory struct {
+	Month        string  `json:"month"`
+	Purchases    float64 `json:"purchases"`
+	Payments     float64 `json:"payments"`
+	Outstanding  float64 `json:"outstanding"`
+}
+
+type TrialBalanceItem struct {
+	AccountID     uint    `json:"account_id"`
+	AccountCode   string  `json:"account_code"`
+	AccountName   string  `json:"account_name"`
+	AccountType   string  `json:"account_type"`
+	Category      string  `json:"category"`
+	DebitBalance  float64 `json:"debit_balance"`
+	CreditBalance float64 `json:"credit_balance"`
+	Level         int     `json:"level"`
+	IsHeader      bool    `json:"is_header"`
+}
+
+type AccountTypeSummary struct {
+	AccountType   string  `json:"account_type"`
+	TotalDebits   float64 `json:"total_debits"`
+	TotalCredits  float64 `json:"total_credits"`
+	NetBalance    float64 `json:"net_balance"`
+	AccountCount  int64   `json:"account_count"`
+}
+
+type GeneralLedgerEntry struct {
+	Date         time.Time `json:"date"`
+	JournalCode  string    `json:"journal_code"`
+	Description  string    `json:"description"`
+	Reference    string    `json:"reference"`
+	DebitAmount  float64   `json:"debit_amount"`
+	CreditAmount float64   `json:"credit_amount"`
+	Balance      float64   `json:"balance"`
+	EntryType    string    `json:"entry_type"`
+}
+
+type MonthlyLedgerSummary struct {
+	Month        string  `json:"month"`
+	Year         int     `json:"year"`
+	Debits       float64 `json:"debits"`
+	Credits      float64 `json:"credits"`
+	NetMovement  float64 `json:"net_movement"`
+	EndBalance   float64 `json:"end_balance"`
+}
+
+type JournalTypeData struct {
+	ReferenceType string  `json:"reference_type"`
+	Count         int64   `json:"count"`
+	TotalAmount   float64 `json:"total_amount"`
+	Percentage    float64 `json:"percentage"`
+}
+
+type JournalStatusData struct {
+	Status      string  `json:"status"`
+	Count       int64   `json:"count"`
+	TotalAmount float64 `json:"total_amount"`
+	Percentage  float64 `json:"percentage"`
+}
+
+type JournalUserData struct {
+	UserID      uint    `json:"user_id"`
+	UserName    string  `json:"user_name"`
+	Count       int64   `json:"count"`
+	TotalAmount float64 `json:"total_amount"`
+	Percentage  float64 `json:"percentage"`
+}
+
+type JournalEntryDetail struct {
+	ID          uint      `json:"id"`
+	Code        string    `json:"code"`
+	Date        time.Time `json:"date"`
+	Description string    `json:"description"`
+	Reference   string    `json:"reference"`
+	DebitAmount float64   `json:"debit_amount"`
+	CreditAmount float64  `json:"credit_amount"`
+	Status      string    `json:"status"`
+	User        string    `json:"user"`
+}
+
+type JournalComplianceData struct {
+	BalancedEntries    int64   `json:"balanced_entries"`
+	UnbalancedEntries  int64   `json:"unbalanced_entries"`
+	ComplianceRate     float64 `json:"compliance_rate"`
+	MissingReferences  int64   `json:"missing_references"`
+	FutureDatedEntries int64   `json:"future_dated_entries"`
+	ComplianceIssues   []string `json:"compliance_issues"`
 }
 
 type BalanceSheetSection struct {
@@ -328,33 +577,6 @@ type CostAnalysisData struct {
 	InflationImpact  float64 `json:"inflation_impact"`
 }
 
-// NewEnhancedReportService creates a new enhanced report service
-func NewEnhancedReportService(
-	db *gorm.DB,
-	accountRepo repositories.AccountRepository,
-	salesRepo *repositories.SalesRepository,
-	purchaseRepo *repositories.PurchaseRepository,
-	productRepo *repositories.ProductRepository,
-	contactRepo repositories.ContactRepository,
-	paymentRepo *repositories.PaymentRepository,
-	cashBankRepo *repositories.CashBankRepository,
-) *EnhancedReportService {
-	service := &EnhancedReportService{
-		db:           db,
-		accountRepo:  accountRepo,
-		salesRepo:    salesRepo,
-		purchaseRepo: purchaseRepo,
-		productRepo:  productRepo,
-		contactRepo:  contactRepo,
-		paymentRepo:  paymentRepo,
-		cashBankRepo: cashBankRepo,
-	}
-	
-	// Load company profile
-	service.loadCompanyProfile()
-	
-	return service
-}
 
 // loadCompanyProfile loads the company profile for report headers
 func (ers *EnhancedReportService) loadCompanyProfile() {
@@ -485,6 +707,49 @@ func (ers *EnhancedReportService) GenerateBalanceSheet(asOfDate time.Time) (*Bal
 
 // GenerateProfitLoss creates a comprehensive P&L statement with proper accounting logic
 func (ers *EnhancedReportService) GenerateProfitLoss(startDate, endDate time.Time) (*ProfitLossData, error) {
+	// Generate cache key
+	if ers.cacheService != nil {
+		cacheParams := map[string]interface{}{
+			"start_date": startDate.Format("2006-01-02"),
+			"end_date":   endDate.Format("2006-01-02"),
+		}
+		cacheKey := ers.cacheService.GenerateCacheKey("profit-loss", cacheParams)
+		
+		// Try to get from cache first
+		if cachedData, found := ers.cacheService.Get(cacheKey); found {
+			if profitLoss, ok := cachedData.(*ProfitLossData); ok {
+				return profitLoss, nil
+			}
+		}
+		
+		// Generate report
+		profitLoss, err := ers.generateProfitLossData(startDate, endDate)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Add validation warnings if validation service is available
+		if ers.validationService != nil {
+			validationReport, err := ers.validationService.ValidateReportData(startDate, endDate)
+			if err == nil && validationReport != nil {
+				// Add validation info to the profit & loss data
+				profitLoss.ValidationReport = validationReport
+				profitLoss.DataQualityScore = validationReport.HealthScore
+				profitLoss.DataQualityWarnings = validationReport.Recommendations
+			}
+		}
+		
+		// Cache the result
+		ers.cacheService.Set(cacheKey, "profit-loss", profitLoss)
+		return profitLoss, nil
+	}
+	
+	// Fallback without caching
+	return ers.generateProfitLossData(startDate, endDate)
+}
+
+// generateProfitLossData is the actual implementation separated from caching logic
+func (ers *EnhancedReportService) generateProfitLossData(startDate, endDate time.Time) (*ProfitLossData, error) {
 	// Get all accounts with their period balances
 	ctx := context.Background()
 	accounts, err := ers.accountRepo.FindAll(ctx)
@@ -688,27 +953,163 @@ func (ers *EnhancedReportService) GenerateCashFlow(startDate, endDate time.Time)
 	return cashFlow, nil
 }
 
-// GenerateSalesSummary creates comprehensive sales analytics
+// GenerateSalesSummary creates a comprehensive sales summary report with enhanced analytics and growth analysis
 func (ers *EnhancedReportService) GenerateSalesSummary(startDate, endDate time.Time, groupBy string) (*SalesSummaryData, error) {
-	// Query sales data
+	// Enhanced date handling with timezone awareness
+	dateUtils := utils.NewDateUtils()
+	
+	// Log the operation start
+	startTime := time.Now()
+	utils.ReportLog.WithFields(utils.Fields{
+		"operation":  "GenerateSalesSummary",
+		"start_date": startDate.In(utils.JakartaTZ).Format("2006-01-02 15:04:05 MST"),
+		"end_date":   endDate.In(utils.JakartaTZ).Format("2006-01-02 15:04:05 MST"),
+		"group_by":   groupBy,
+	}).Info("Starting sales summary generation with timezone awareness")
+	
+	// Log input parameters for debugging
+	utils.ReportLog.WithFields(utils.Fields{
+		"input_start_date_utc": startDate.UTC().Format("2006-01-02 15:04:05 UTC"),
+		"input_end_date_utc":   endDate.UTC().Format("2006-01-02 15:04:05 UTC"),
+		"input_start_date_jkt": startDate.In(utils.JakartaTZ).Format("2006-01-02 15:04:05 MST"),
+		"input_end_date_jkt":   endDate.In(utils.JakartaTZ).Format("2006-01-02 15:04:05 MST"),
+		"formatted_range":     dateUtils.FormatDateRange(startDate, endDate),
+	}).Debug("Sales summary date parameter details")
+	
+	// Validate date range
+	if err := dateUtils.ValidateDateRange(startDate, endDate); err != nil {
+		utils.ReportLog.LogReportError("GenerateSalesSummary", err, utils.Fields{
+			"start_date": startDate.In(utils.JakartaTZ).Format("2006-01-02"),
+			"end_date":   endDate.In(utils.JakartaTZ).Format("2006-01-02"),
+		})
+		return nil, fmt.Errorf("invalid date range: %v", err)
+	}
+	
+	// Query sales data with detailed logging and enhanced timezone handling
 	var sales []models.Sale
-	if err := ers.db.Preload("Customer").
+	queryStartTime := time.Now()
+	
+	query := ers.db.Preload("Customer").
 		Preload("SaleItems").
 		Preload("SaleItems.Product").
-		Preload("SalesPerson").
-		Where("date BETWEEN ? AND ?", startDate, endDate).
-		Find(&sales).Error; err != nil {
-		return nil, fmt.Errorf("failed to fetch sales data: %v", err)
+		Preload("SalesPerson")
+	
+	// Log the exact query parameters
+	utils.ReportLog.WithFields(utils.Fields{
+		"query_start_date": startDate.Format("2006-01-02 15:04:05"),
+		"query_end_date":   endDate.Format("2006-01-02 15:04:05"),
+		"query_sql_filter": fmt.Sprintf("date >= '%s' AND date <= '%s'", 
+			startDate.Format("2006-01-02 15:04:05"), 
+			endDate.Format("2006-01-02 15:04:05")),
+	}).Debug("Executing sales data query")
+	
+	// Use timezone-aware date range for better accuracy
+	queryResult := query.Where("date >= ? AND date <= ?", startDate, endDate).Find(&sales)
+	
+	queryDuration := time.Since(queryStartTime)
+	utils.ReportLog.LogQueryPerformance("SalesQuery", queryDuration, len(sales))
+	
+	if queryResult.Error != nil {
+		utils.ReportLog.LogReportError("GenerateSalesSummary", queryResult.Error, utils.Fields{
+			"start_date": startDate.In(utils.JakartaTZ).Format("2006-01-02"),
+			"end_date":   endDate.In(utils.JakartaTZ).Format("2006-01-02"),
+			"group_by":   groupBy,
+			"query_duration": queryDuration.String(),
+		})
+		return nil, fmt.Errorf("failed to fetch sales data: %v", queryResult.Error)
 	}
+	
+	// Log query results with detailed analysis
+	totalAmount := float64(0)
+	uniqueCustomers := make(map[uint]bool)
+	statusBreakdown := make(map[string]int)
+	for _, sale := range sales {
+		totalAmount += sale.TotalAmount
+		uniqueCustomers[sale.CustomerID] = true
+		statusBreakdown[sale.Status]++
+	}
+	
+	utils.ReportLog.LogSalesQuery("SalesDataQuery", startDate, endDate, groupBy, len(sales), totalAmount)
+	
+	// Log additional insights about the data retrieved
+	utils.ReportLog.WithFields(utils.Fields{
+		"total_records":     len(sales),
+		"total_amount":      totalAmount,
+		"unique_customers":  len(uniqueCustomers),
+		"status_breakdown": statusBreakdown,
+		"data_quality_score": calculateDataQualityScore(sales),
+	}).Info("Sales data query completed with analysis")
 
-	// Initialize sales summary
+	// Handle case when no data is found - provide informative response
+	if len(sales) == 0 {
+		utils.ReportLog.WithFields(utils.Fields{
+			"start_date": startDate.Format("2006-01-02"),
+			"end_date":   endDate.Format("2006-01-02"),
+			"group_by":   groupBy,
+		}).Warn("No sales data found for the specified period")
+		
+		// Return empty but valid response with helpful message
+		emptySummary := &SalesSummaryData{
+			Company:           ers.getCompanyInfo(),
+			StartDate:         startDate,
+			EndDate:           endDate,
+			Currency:          ers.companyProfile.Currency,
+			TotalTransactions: 0,
+			TotalRevenue:      0,
+			TotalCustomers:    0,
+			AverageOrderValue: 0,
+			SalesByPeriod:     make([]PeriodData, 0),
+			SalesByCustomer:   make([]CustomerSalesData, 0),
+			SalesByProduct:    make([]ProductSalesData, 0),
+			SalesByStatus:     make([]StatusData, 0),
+			GeneratedAt:       time.Now().In(utils.JakartaTZ),
+		}
+		
+		// Add helpful debugging information
+		emptySummary.DebugInfo = map[string]interface{}{
+			"message": fmt.Sprintf("No sales data found for period %s to %s", 
+				startDate.In(utils.JakartaTZ).Format("2006-01-02"), 
+				endDate.In(utils.JakartaTZ).Format("2006-01-02")),
+			"suggestions": []string{
+				"Check if there are any sales records in the database for this period",
+				"Verify the date range is correct",
+				"Ensure sales records have the correct date format",
+				"Check if there are any timezone-related issues with date filtering",
+			},
+			"date_range_info": map[string]interface{}{
+				"start_date_jakarta": startDate.In(utils.JakartaTZ).Format("2006-01-02 15:04:05 MST"),
+				"end_date_jakarta":   endDate.In(utils.JakartaTZ).Format("2006-01-02 15:04:05 MST"),
+				"query_used": fmt.Sprintf("date >= '%s' AND date <= '%s'", 
+					startDate.Format("2006-01-02 15:04:05"), 
+					endDate.Format("2006-01-02 15:04:05")),
+				"timezone": "Asia/Jakarta (WIB)",
+			},
+			"query_performance": map[string]interface{}{
+				"query_duration": queryDuration.String(),
+				"records_found": 0,
+			},
+		}
+		
+		processingTime := time.Since(startTime)
+		utils.ReportLog.LogReportGeneration("SalesSummary", utils.Fields{
+			"start_date": startDate.Format("2006-01-02"),
+			"end_date":   endDate.Format("2006-01-02"),
+			"group_by":   groupBy,
+			"records_found": 0,
+			"has_data": false,
+		}, processingTime, true)
+		
+		return emptySummary, nil
+	}
+	
+	// Initialize sales summary with data
 	summary := &SalesSummaryData{
 		Company:           ers.getCompanyInfo(),
 		StartDate:         startDate,
 		EndDate:           endDate,
 		Currency:          ers.companyProfile.Currency,
 		TotalTransactions: int64(len(sales)),
-		GeneratedAt:       time.Now(),
+		GeneratedAt:       time.Now().In(utils.JakartaTZ),
 	}
 
 	// Calculate basic metrics
@@ -743,18 +1144,20 @@ func (ers *EnhancedReportService) GenerateSalesSummary(startDate, endDate time.T
 			}
 		}
 
-		// Process period data
-		period := ers.formatPeriod(sale.Date, groupBy)
+		// Process period data using enhanced date utilities
+		dateUtils := utils.NewDateUtils()
+		period := dateUtils.FormatPeriodWithTZ(sale.Date, groupBy)
 		if periodData, exists := periodMap[period]; exists {
 			periodData.Amount += sale.TotalAmount
 			periodData.Transactions++
 		} else {
+			startDate, endDate := dateUtils.GetPeriodBounds(sale.Date, groupBy)
 			periodMap[period] = &PeriodData{
 				Period:       period,
 				Amount:       sale.TotalAmount,
 				Transactions: 1,
-				StartDate:    ers.getPeriodStart(sale.Date, groupBy),
-				EndDate:      ers.getPeriodEnd(sale.Date, groupBy),
+				StartDate:    startDate,
+				EndDate:      endDate,
 			}
 		}
 
@@ -807,7 +1210,7 @@ func (ers *EnhancedReportService) GenerateSalesSummary(startDate, endDate time.T
 		}
 	}
 
-	// Calculate percentages for status data
+// Calculate percentages for status data
 	for _, statusData := range statusMap {
 		if summary.TotalRevenue > 0 {
 			statusData.Percentage = (statusData.Amount / summary.TotalRevenue) * 100
@@ -815,22 +1218,761 @@ func (ers *EnhancedReportService) GenerateSalesSummary(startDate, endDate time.T
 	}
 
 	// Convert maps to slices and sort
-	summary.SalesByCustomer = ers.convertAndSortCustomerData(customerMap)
-	summary.SalesByProduct = ers.convertAndSortProductData(productMap)
-	summary.SalesByPeriod = ers.convertAndSortPeriodData(periodMap)
-	summary.SalesByStatus = ers.convertStatusData(statusMap)
+	summary.SalesByCustomer = ers.sortCustomersByRevenue(customerMap)
+	summary.SalesByProduct = ers.sortProductsBySales(productMap)
+	summary.SalesByPeriod = ers.sortPeriodsByDate(periodMap)
+	summary.SalesByStatus = ers.convertStatusMapToSlice(statusMap)
 
-	// Build top performers
-	summary.TopPerformers = TopPerformersData{
-		TopCustomers: ers.getTopCustomers(summary.SalesByCustomer, 10),
-		TopProducts:  ers.getTopProducts(summary.SalesByProduct, 10),
-		TopSalespeople: ers.getTopSalespeople(sales),
-	}
+	// Build top performers data
+	summary.TopPerformers = ers.buildTopPerformers(summary.SalesByCustomer, summary.SalesByProduct)
 
 	// Calculate growth analysis
-	summary.GrowthAnalysis = ers.calculateSalesGrowth(summary.SalesByPeriod, groupBy)
+	summary.GrowthAnalysis = ers.calculateGrowthAnalysis(startDate, endDate, summary.TotalRevenue)
+
+	// Enhanced processing with data quality analysis
+	processingTime := time.Since(startTime)
+	summary.ProcessingTime = processingTime.String()
+	
+	// Analyze data quality
+	dataQualityIssues := ers.analyzeDataQuality(sales)
+	validRecords := len(sales) - len(dataQualityIssues)
+	summary.DataQualityScore = (float64(validRecords) / float64(len(sales))) * 100
+	
+	if len(dataQualityIssues) > 0 {
+		utils.ReportLog.LogDataQuality("SalesSummary", dataQualityIssues, len(sales), validRecords)
+	}
+	
+	// Add debug information for successful generation
+	summary.DebugInfo = map[string]interface{}{
+		"message": fmt.Sprintf("Successfully generated sales summary for %d records", len(sales)),
+		"date_range_info": map[string]interface{}{
+			"start_date_jakarta": startDate.In(utils.JakartaTZ).Format("2006-01-02 15:04:05 MST"),
+			"end_date_jakarta":   endDate.In(utils.JakartaTZ).Format("2006-01-02 15:04:05 MST"),
+			"timezone": "Asia/Jakarta (WIB)",
+		},
+		"query_performance": map[string]interface{}{
+			"query_duration": queryDuration.String(),
+			"total_processing_time": processingTime.String(),
+			"records_processed": len(sales),
+		},
+		"data_summary": map[string]interface{}{
+			"total_revenue": summary.TotalRevenue,
+			"total_customers": summary.TotalCustomers,
+			"avg_order_value": summary.AverageOrderValue,
+			"periods_analyzed": len(summary.SalesByPeriod),
+		},
+	}
+	
+	// Log successful generation
+	utils.ReportLog.LogReportGeneration("SalesSummary", utils.Fields{
+		"start_date": startDate.Format("2006-01-02"),
+		"end_date":   endDate.Format("2006-01-02"),
+		"group_by":   groupBy,
+		"records_found": len(sales),
+		"total_revenue": summary.TotalRevenue,
+		"total_customers": summary.TotalCustomers,
+		"data_quality_score": summary.DataQualityScore,
+		"has_data": true,
+	}, processingTime, true)
 
 	return summary, nil
+}
+
+// calculateDataQualityScore calculates a data quality score for sales records
+func calculateDataQualityScore(sales []models.Sale) float64 {
+	if len(sales) == 0 {
+		return 100.0 // Perfect score for empty data
+	}
+	
+	var issues int
+	totalChecks := len(sales) * 5 // 5 checks per sale: code, customer, amount, date, status
+	
+	for _, sale := range sales {
+		// Check for missing sale code
+		if sale.Code == "" {
+			issues++
+		}
+		
+		// Check for missing customer
+		if sale.CustomerID == 0 {
+			issues++
+		}
+		
+		// Check for negative amounts
+		if sale.TotalAmount < 0 {
+			issues++
+		}
+		
+		// Check for future dates
+		if sale.Date.After(time.Now().In(utils.JakartaTZ)) {
+			issues++
+		}
+		
+		// Check for valid status
+		validStatuses := []string{"DRAFT", "PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "INVOICED", "OVERDUE", "PAID"}
+		validStatus := false
+		for _, status := range validStatuses {
+			if sale.Status == status {
+				validStatus = true
+				break
+			}
+		}
+		if !validStatus {
+			issues++
+		}
+	}
+	
+	if totalChecks == 0 {
+		return 100.0
+	}
+	
+	qualityScore := ((float64(totalChecks - issues)) / float64(totalChecks)) * 100
+	if qualityScore < 0 {
+		return 0.0
+	}
+	return qualityScore
+}
+
+// GenerateVendorAnalysis creates comprehensive vendor analysis report
+func (ers *EnhancedReportService) GenerateVendorAnalysis(startDate, endDate time.Time) (*VendorAnalysisData, error) {
+	// Query purchase data
+	var purchases []models.Purchase
+	if err := ers.db.Preload("Vendor").
+		Preload("PurchaseItems").
+		Preload("PurchaseItems.Product").
+		Where("date BETWEEN ? AND ?", startDate, endDate).
+		Find(&purchases).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch purchase data: %v", err)
+	}
+
+	// Query payment data for vendor analysis through purchase payments
+	var purchasePayments []models.PurchasePayment
+	if err := ers.db.Preload("Payment").
+		Where("date BETWEEN ? AND ?", startDate, endDate).
+		Find(&purchasePayments).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch purchase payment data: %v", err)
+	}
+
+	// Initialize vendor analysis
+	analysis := &VendorAnalysisData{
+		Company:     ers.getCompanyInfo(),
+		StartDate:   startDate,
+		EndDate:     endDate,
+		Currency:    ers.companyProfile.Currency,
+		GeneratedAt: time.Now(),
+	}
+
+	// Process vendor data
+	vendorMap := make(map[uint]*VendorPerformanceData)
+	vendorSpendMap := make(map[uint]*VendorSpendData)
+	totalPurchases := 0.0
+	totalPayments := 0.0
+
+	for _, purchase := range purchases {
+		analysis.TotalPurchases += purchase.TotalAmount
+		totalPurchases += purchase.TotalAmount
+
+		// Track vendor performance
+		if vendorData, exists := vendorMap[purchase.VendorID]; exists {
+			vendorData.TotalPurchases += purchase.TotalAmount
+		} else {
+			vendorMap[purchase.VendorID] = &VendorPerformanceData{
+				VendorID:       purchase.VendorID,
+				VendorName:     purchase.Vendor.Name,
+				TotalPurchases: purchase.TotalAmount,
+			}
+		}
+
+		// Track vendor spend
+		if spendData, exists := vendorSpendMap[purchase.VendorID]; exists {
+			spendData.TotalSpend += purchase.TotalAmount
+			spendData.Transactions++
+		} else {
+			vendorSpendMap[purchase.VendorID] = &VendorSpendData{
+				VendorID:     purchase.VendorID,
+				VendorName:   purchase.Vendor.Name,
+				TotalSpend:   purchase.TotalAmount,
+				Transactions: 1,
+			}
+		}
+	}
+
+	// Process payment data from purchase payments
+	for _, purchasePayment := range purchasePayments {
+		totalPayments += purchasePayment.Amount
+		
+		// Get the purchase to find the vendor
+		var purchase models.Purchase
+		if err := ers.db.First(&purchase, purchasePayment.PurchaseID).Error; err != nil {
+			continue // Skip if purchase not found
+		}
+		
+		if vendorData, exists := vendorMap[purchase.VendorID]; exists {
+			vendorData.TotalPayments += purchasePayment.Amount
+		}
+	}
+
+	analysis.TotalPayments = totalPayments
+	analysis.OutstandingPayables = totalPurchases - totalPayments
+
+	// Calculate vendor metrics
+	for _, vendor := range vendorMap {
+		vendor.Outstanding = vendor.TotalPurchases - vendor.TotalPayments
+		vendor.PaymentScore = ers.calculatePaymentScore(vendor)
+		vendor.Rating = ers.getVendorRating(vendor.PaymentScore)
+	}
+
+	// Calculate percentages for spend data
+	for _, spendData := range vendorSpendMap {
+		if totalPurchases > 0 {
+			spendData.Percentage = (spendData.TotalSpend / totalPurchases) * 100
+		}
+	}
+
+	// Convert maps to sorted slices
+	analysis.VendorsByPerformance = ers.sortVendorsByPerformance(vendorMap)
+	analysis.TopVendorsBySpend = ers.sortVendorsBySpend(vendorSpendMap)
+
+	// Calculate payment analysis using purchase payments
+	analysis.PaymentAnalysis = ers.calculatePaymentAnalysisFromPurchasePayments(purchasePayments)
+
+	// Build vendor payment history
+	analysis.VendorPaymentHistory = ers.buildVendorPaymentHistory(startDate, endDate)
+
+	// Calculate totals
+	analysis.TotalVendors = int64(len(vendorMap))
+	analysis.ActiveVendors = ers.countActiveVendors(vendorMap)
+
+	return analysis, nil
+}
+
+// analyzeDataQuality performs data quality analysis on sales records
+func (ers *EnhancedReportService) analyzeDataQuality(sales []models.Sale) []string {
+	var issues []string
+	
+	for _, sale := range sales {
+		// Check for missing required fields
+		if sale.Code == "" {
+			issues = append(issues, fmt.Sprintf("Sale ID %d: Missing sale code", sale.ID))
+		}
+		
+		if sale.CustomerID == 0 {
+			issues = append(issues, fmt.Sprintf("Sale %s: Missing customer ID", sale.Code))
+		}
+		
+		// Check for unrealistic amounts
+		if sale.TotalAmount < 0 {
+			issues = append(issues, fmt.Sprintf("Sale %s: Negative total amount (%.2f)", sale.Code, sale.TotalAmount))
+		}
+		
+		if sale.TotalAmount > 1000000000 { // More than 1 billion IDR might be suspicious
+			issues = append(issues, fmt.Sprintf("Sale %s: Unusually large amount (%.2f)", sale.Code, sale.TotalAmount))
+		}
+		
+		// Check for future dates
+		if sale.Date.After(time.Now().In(utils.JakartaTZ)) {
+			issues = append(issues, fmt.Sprintf("Sale %s: Future date (%s)", sale.Code, sale.Date.Format("2006-01-02")))
+		}
+		
+		// Check for very old dates (more than 10 years ago)
+		tenYearsAgo := time.Now().In(utils.JakartaTZ).AddDate(-10, 0, 0)
+		if sale.Date.Before(tenYearsAgo) {
+			issues = append(issues, fmt.Sprintf("Sale %s: Very old date (%s)", sale.Code, sale.Date.Format("2006-01-02")))
+		}
+		
+		// Check for inconsistent status
+		validStatuses := []string{"DRAFT", "PENDING", "CONFIRMED", "COMPLETED", "CANCELLED", "INVOICED", "OVERDUE", "PAID"}
+		validStatus := false
+		for _, status := range validStatuses {
+			if sale.Status == status {
+				validStatus = true
+				break
+			}
+		}
+		if !validStatus {
+			issues = append(issues, fmt.Sprintf("Sale %s: Invalid status (%s)", sale.Code, sale.Status))
+		}
+		
+		// Check for inconsistent amounts
+		if sale.PaidAmount > sale.TotalAmount {
+			issues = append(issues, fmt.Sprintf("Sale %s: Paid amount (%.2f) exceeds total amount (%.2f)", sale.Code, sale.PaidAmount, sale.TotalAmount))
+		}
+		
+		expectedOutstanding := sale.TotalAmount - sale.PaidAmount
+		if math.Abs(sale.OutstandingAmount - expectedOutstanding) > 0.01 { // Allow for small rounding errors
+			issues = append(issues, fmt.Sprintf("Sale %s: Outstanding amount mismatch (expected %.2f, got %.2f)", sale.Code, expectedOutstanding, sale.OutstandingAmount))
+		}
+	}
+	
+	return issues
+}
+
+// GenerateTrialBalance creates comprehensive trial balance report
+func (ers *EnhancedReportService) GenerateTrialBalance(asOfDate time.Time) (*TrialBalanceData, error) {
+	// Get all accounts
+	ctx := context.Background()
+	accounts, err := ers.accountRepo.FindAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch accounts: %v", err)
+	}
+
+	// Initialize trial balance
+	trialBalance := &TrialBalanceData{
+		Company:     ers.getCompanyInfo(),
+		AsOfDate:    asOfDate,
+		Currency:    ers.companyProfile.Currency,
+		GeneratedAt: time.Now(),
+	}
+
+	// Track account type summaries
+	accountTypeSummaries := make(map[string]*AccountTypeSummary)
+
+	// Process each account
+	for _, account := range accounts {
+		if !account.IsActive {
+			continue
+		}
+
+		balance := ers.calculateAccountBalance(account.ID, asOfDate)
+		normalBalance := account.GetNormalBalance()
+
+		item := TrialBalanceItem{
+			AccountID:   account.ID,
+			AccountCode: account.Code,
+			AccountName: account.Name,
+			AccountType: account.Type,
+			Category:    account.Category,
+			Level:       account.Level,
+			IsHeader:    account.IsHeader,
+		}
+
+		// Set debit or credit balance based on normal balance type
+		if normalBalance == models.NormalBalanceDebit {
+			item.DebitBalance = balance
+			trialBalance.TotalDebits += balance
+		} else {
+			item.CreditBalance = balance
+			trialBalance.TotalCredits += balance
+		}
+
+		trialBalance.Accounts = append(trialBalance.Accounts, item)
+
+		// Update account type summary
+		if summary, exists := accountTypeSummaries[account.Type]; exists {
+			if normalBalance == models.NormalBalanceDebit {
+				summary.TotalDebits += balance
+			} else {
+				summary.TotalCredits += balance
+			}
+			summary.AccountCount++
+		} else {
+			summary := &AccountTypeSummary{
+				AccountType:  account.Type,
+				AccountCount: 1,
+			}
+			if normalBalance == models.NormalBalanceDebit {
+				summary.TotalDebits = balance
+			} else {
+				summary.TotalCredits = balance
+			}
+			accountTypeSummaries[account.Type] = summary
+		}
+	}
+
+	// Calculate net balance for each account type
+	for _, summary := range accountTypeSummaries {
+		summary.NetBalance = summary.TotalDebits - summary.TotalCredits
+	}
+
+	// Set account type summaries
+	if assetSummary, exists := accountTypeSummaries[models.AccountTypeAsset]; exists {
+		trialBalance.AssetSummary = *assetSummary
+	}
+	if liabilitySummary, exists := accountTypeSummaries[models.AccountTypeLiability]; exists {
+		trialBalance.LiabilitySummary = *liabilitySummary
+	}
+	if equitySummary, exists := accountTypeSummaries[models.AccountTypeEquity]; exists {
+		trialBalance.EquitySummary = *equitySummary
+	}
+	if revenueSummary, exists := accountTypeSummaries[models.AccountTypeRevenue]; exists {
+		trialBalance.RevenueSummary = *revenueSummary
+	}
+	if expenseSummary, exists := accountTypeSummaries[models.AccountTypeExpense]; exists {
+		trialBalance.ExpenseSummary = *expenseSummary
+	}
+
+	// Check if trial balance is balanced
+	trialBalance.Difference = trialBalance.TotalDebits - trialBalance.TotalCredits
+	trialBalance.IsBalanced = math.Abs(trialBalance.Difference) < 0.01
+
+	// Sort accounts by code
+	sort.Slice(trialBalance.Accounts, func(i, j int) bool {
+		return trialBalance.Accounts[i].AccountCode < trialBalance.Accounts[j].AccountCode
+	})
+
+	return trialBalance, nil
+}
+
+// GenerateGeneralLedger creates detailed general ledger report for specific account
+func (ers *EnhancedReportService) GenerateGeneralLedger(accountID uint, startDate, endDate time.Time) (*GeneralLedgerData, error) {
+	// Get account details
+	ctx := context.Background()
+	account, err := ers.accountRepo.FindByID(ctx, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch account: %v", err)
+	}
+
+	// Query journal entries for this account
+	var journalLines []models.JournalLine
+	if err := ers.db.Preload("JournalEntry").
+		Preload("JournalEntry.Creator").
+		Joins("JOIN journal_entries ON journal_lines.journal_entry_id = journal_entries.id").
+		Where("journal_lines.account_id = ? AND journal_entries.entry_date BETWEEN ? AND ?", accountID, startDate, endDate).
+		Where("journal_entries.status = ?", models.JournalStatusPosted).
+		Order("journal_entries.entry_date ASC, journal_entries.created_at ASC").
+		Find(&journalLines).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch journal entries: %v", err)
+	}
+
+	// Initialize general ledger
+	generalLedger := &GeneralLedgerData{
+		Company:     ers.getCompanyInfo(),
+		Account:     *account,
+		StartDate:   startDate,
+		EndDate:     endDate,
+		Currency:    ers.companyProfile.Currency,
+		GeneratedAt: time.Now(),
+	}
+
+	// Calculate opening balance
+	prevDay := startDate.AddDate(0, 0, -1)
+	generalLedger.OpeningBalance = ers.calculateAccountBalance(accountID, prevDay)
+
+	// Process journal entries
+	runningBalance := generalLedger.OpeningBalance
+	monthlyMap := make(map[string]*MonthlyLedgerSummary)
+
+	for _, line := range journalLines {
+		// Update running balance
+		if line.DebitAmount > 0 {
+			if account.GetNormalBalance() == models.NormalBalanceDebit {
+				runningBalance += line.DebitAmount
+			} else {
+				runningBalance -= line.DebitAmount
+			}
+			generalLedger.TotalDebits += line.DebitAmount
+		} else {
+			if account.GetNormalBalance() == models.NormalBalanceCredit {
+				runningBalance += line.CreditAmount
+			} else {
+				runningBalance -= line.CreditAmount
+			}
+			generalLedger.TotalCredits += line.CreditAmount
+		}
+
+		// Create transaction entry
+		entry := GeneralLedgerEntry{
+			Date:         line.JournalEntry.EntryDate,
+			JournalCode:  line.JournalEntry.Code,
+			Description:  line.Description,
+			Reference:    line.JournalEntry.Reference,
+			DebitAmount:  line.DebitAmount,
+			CreditAmount: line.CreditAmount,
+			Balance:      runningBalance,
+			EntryType:    line.JournalEntry.ReferenceType,
+		}
+		generalLedger.Transactions = append(generalLedger.Transactions, entry)
+
+		// Update monthly summary
+		monthKey := line.JournalEntry.EntryDate.Format("2006-01")
+		if summary, exists := monthlyMap[monthKey]; exists {
+			summary.Debits += line.DebitAmount
+			summary.Credits += line.CreditAmount
+			summary.NetMovement = summary.Debits - summary.Credits
+			summary.EndBalance = runningBalance
+		} else {
+			monthlyMap[monthKey] = &MonthlyLedgerSummary{
+				Month:       line.JournalEntry.EntryDate.Format("January"),
+				Year:        line.JournalEntry.EntryDate.Year(),
+				Debits:      line.DebitAmount,
+				Credits:     line.CreditAmount,
+				NetMovement: line.DebitAmount - line.CreditAmount,
+				EndBalance:  runningBalance,
+			}
+		}
+	}
+
+	generalLedger.ClosingBalance = runningBalance
+
+	// Convert monthly map to sorted slice
+	for _, summary := range monthlyMap {
+		generalLedger.MonthlySummary = append(generalLedger.MonthlySummary, *summary)
+	}
+	sort.Slice(generalLedger.MonthlySummary, func(i, j int) bool {
+		return generalLedger.MonthlySummary[i].Year < generalLedger.MonthlySummary[j].Year ||
+			(generalLedger.MonthlySummary[i].Year == generalLedger.MonthlySummary[j].Year &&
+				generalLedger.MonthlySummary[i].Month < generalLedger.MonthlySummary[j].Month)
+	})
+
+	return generalLedger, nil
+}
+
+// GenerateGeneralLedgerAll creates general ledger report for all accounts with transactions
+func (ers *EnhancedReportService) GenerateGeneralLedgerAll(startDate, endDate time.Time) (*GeneralLedgerAllData, error) {
+	// Query accounts that have journal entries in the period
+	var accounts []models.Account
+	if err := ers.db.Select("DISTINCT accounts.*").
+		Joins("JOIN journal_lines ON accounts.id = journal_lines.account_id").
+		Joins("JOIN journal_entries ON journal_lines.journal_entry_id = journal_entries.id").
+		Where("journal_entries.entry_date BETWEEN ? AND ?", startDate, endDate).
+		Where("journal_entries.status = ?", models.JournalStatusPosted).
+		Where("accounts.is_active = true AND accounts.is_header = false").
+		Order("accounts.code ASC").
+		Find(&accounts).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch accounts: %v", err)
+	}
+
+	// Initialize general ledger for all accounts
+	generalLedgerAll := &GeneralLedgerAllData{
+		Company:     ers.getCompanyInfo(),
+		StartDate:   startDate,
+		EndDate:     endDate,
+		Currency:    ers.companyProfile.Currency,
+		AccountCount: len(accounts),
+		GeneratedAt: time.Now(),
+	}
+
+	// Generate individual general ledgers for each account
+	for _, account := range accounts {
+		accountLedger, err := ers.GenerateGeneralLedger(account.ID, startDate, endDate)
+		if err != nil {
+			// Log error but continue with other accounts
+			fmt.Printf("Warning: Failed to generate ledger for account %s: %v\n", account.Code, err)
+			continue
+		}
+		
+		// Only include accounts with transactions
+		if len(accountLedger.Transactions) > 0 {
+			generalLedgerAll.Accounts = append(generalLedgerAll.Accounts, *accountLedger)
+			generalLedgerAll.TotalDebits += accountLedger.TotalDebits
+			generalLedgerAll.TotalCredits += accountLedger.TotalCredits
+			generalLedgerAll.TotalTransactions += len(accountLedger.Transactions)
+		}
+	}
+
+	// Update account count to reflect only accounts with transactions
+	generalLedgerAll.AccountCount = len(generalLedgerAll.Accounts)
+
+	return generalLedgerAll, nil
+}
+
+// GetValidationReport provides data quality validation for the specified period
+func (ers *EnhancedReportService) GetValidationReport(startDate, endDate time.Time) (*ValidationReport, error) {
+	if ers.validationService == nil {
+		return nil, fmt.Errorf("validation service not available")
+	}
+	
+	return ers.validationService.ValidateReportData(startDate, endDate)
+}
+
+// GenerateJournalEntryAnalysis creates comprehensive journal entry analysis
+func (ers *EnhancedReportService) GenerateJournalEntryAnalysis(startDate, endDate time.Time) (*JournalEntryAnalysisData, error) {
+	return ers.GenerateJournalEntryAnalysisWithFilters(startDate, endDate, "ALL", "ALL")
+}
+
+// GenerateJournalEntryAnalysisWithFilters creates comprehensive journal entry analysis with optional filters
+func (ers *EnhancedReportService) GenerateJournalEntryAnalysisWithFilters(startDate, endDate time.Time, status, referenceType string) (*JournalEntryAnalysisData, error) {
+	// Build query with optional filters
+	query := ers.db.Preload("Creator").
+		Preload("JournalLines").
+		Where("entry_date BETWEEN ? AND ?", startDate, endDate)
+	
+	// Add status filter if specified
+	if status != "ALL" && status != "" {
+		query = query.Where("status = ?", status)
+	}
+	
+	// Add reference type filter if specified
+	if referenceType != "ALL" && referenceType != "" {
+		query = query.Where("reference_type = ?", referenceType)
+	}
+	
+	// Execute query
+	var journalEntries []models.JournalEntry
+	if err := query.Find(&journalEntries).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch journal entries: %v", err)
+	}
+
+	// Initialize analysis
+	analysis := &JournalEntryAnalysisData{
+		Company:     ers.getCompanyInfo(),
+		StartDate:   startDate,
+		EndDate:     endDate,
+		Currency:    ers.companyProfile.Currency,
+		GeneratedAt: time.Now(),
+	}
+
+	// Process entries
+	typeMap := make(map[string]*JournalTypeData)
+	statusMap := make(map[string]*JournalStatusData)
+	userMap := make(map[uint]*JournalUserData)
+	var recentEntries, largestEntries, unbalancedEntries []JournalEntryDetail
+	balancedCount := int64(0)
+	unbalancedCount := int64(0)
+	missingReferences := int64(0)
+	futureDated := int64(0)
+
+	for _, entry := range journalEntries {
+		analysis.TotalEntries++
+		analysis.TotalDebitAmount += entry.TotalDebit
+		analysis.TotalCreditAmount += entry.TotalCredit
+
+		// Check balance
+		if entry.IsBalanced {
+			balancedCount++
+		} else {
+			unbalancedCount++
+			unbalancedEntries = append(unbalancedEntries, JournalEntryDetail{
+				ID:          entry.ID,
+				Code:        entry.Code,
+				Date:        entry.EntryDate,
+				Description: entry.Description,
+				Reference:   entry.Reference,
+				DebitAmount: entry.TotalDebit,
+				CreditAmount: entry.TotalCredit,
+				Status:      entry.Status,
+				User:        entry.Creator.FirstName + " " + entry.Creator.LastName,
+			})
+		}
+
+		// Check compliance issues
+		if entry.Reference == "" {
+			missingReferences++
+		}
+		if entry.EntryDate.After(time.Now()) {
+			futureDated++
+		}
+
+		// Process by type
+		if typeData, exists := typeMap[entry.ReferenceType]; exists {
+			typeData.Count++
+			typeData.TotalAmount += entry.TotalDebit
+		} else {
+			typeMap[entry.ReferenceType] = &JournalTypeData{
+				ReferenceType: entry.ReferenceType,
+				Count:         1,
+				TotalAmount:   entry.TotalDebit,
+			}
+		}
+
+		// Process by status
+		if statusData, exists := statusMap[entry.Status]; exists {
+			statusData.Count++
+			statusData.TotalAmount += entry.TotalDebit
+		} else {
+			statusMap[entry.Status] = &JournalStatusData{
+				Status:      entry.Status,
+				Count:       1,
+				TotalAmount: entry.TotalDebit,
+			}
+		}
+
+		// Process by user
+		if userData, exists := userMap[entry.UserID]; exists {
+			userData.Count++
+			userData.TotalAmount += entry.TotalDebit
+		} else {
+			userMap[entry.UserID] = &JournalUserData{
+				UserID:      entry.UserID,
+				UserName:    entry.Creator.FirstName + " " + entry.Creator.LastName,
+				Count:       1,
+				TotalAmount: entry.TotalDebit,
+			}
+		}
+
+		// Collect recent entries (last 10)
+		if len(recentEntries) < 10 {
+			recentEntries = append(recentEntries, JournalEntryDetail{
+				ID:          entry.ID,
+				Code:        entry.Code,
+				Date:        entry.EntryDate,
+				Description: entry.Description,
+				Reference:   entry.Reference,
+				DebitAmount: entry.TotalDebit,
+				CreditAmount: entry.TotalCredit,
+				Status:      entry.Status,
+				User:        entry.Creator.FirstName + " " + entry.Creator.LastName,
+			})
+		}
+
+		// Collect largest entries
+		if entry.TotalDebit >= 1000000 { // Entries over 1 million
+			largestEntries = append(largestEntries, JournalEntryDetail{
+				ID:          entry.ID,
+				Code:        entry.Code,
+				Date:        entry.EntryDate,
+				Description: entry.Description,
+				Reference:   entry.Reference,
+				DebitAmount: entry.TotalDebit,
+				CreditAmount: entry.TotalCredit,
+				Status:      entry.Status,
+				User:        entry.Creator.FirstName + " " + entry.Creator.LastName,
+			})
+		}
+	}
+
+	// Calculate percentages
+	for _, typeData := range typeMap {
+		if analysis.TotalDebitAmount > 0 {
+			typeData.Percentage = (typeData.TotalAmount / analysis.TotalDebitAmount) * 100
+		}
+	}
+	for _, statusData := range statusMap {
+		if analysis.TotalDebitAmount > 0 {
+			statusData.Percentage = (statusData.TotalAmount / analysis.TotalDebitAmount) * 100
+		}
+	}
+	for _, userData := range userMap {
+		if analysis.TotalDebitAmount > 0 {
+			userData.Percentage = (userData.TotalAmount / analysis.TotalDebitAmount) * 100
+		}
+	}
+
+	// Convert maps to slices
+	analysis.EntriesByType = ers.convertJournalTypeMapToSlice(typeMap)
+	analysis.EntriesByStatus = ers.convertJournalStatusMapToSlice(statusMap)
+	analysis.EntriesByUser = ers.convertJournalUserMapToSlice(userMap)
+	analysis.RecentEntries = recentEntries
+	analysis.LargestEntries = largestEntries
+	analysis.UnbalancedEntries = unbalancedEntries
+
+	// Build compliance check
+	complianceRate := float64(0)
+	if analysis.TotalEntries > 0 {
+		complianceRate = (float64(balancedCount) / float64(analysis.TotalEntries)) * 100
+	}
+
+	var complianceIssues []string
+	if unbalancedCount > 0 {
+		complianceIssues = append(complianceIssues, fmt.Sprintf("%d unbalanced entries found", unbalancedCount))
+	}
+	if missingReferences > 0 {
+		complianceIssues = append(complianceIssues, fmt.Sprintf("%d entries missing references", missingReferences))
+	}
+	if futureDated > 0 {
+		complianceIssues = append(complianceIssues, fmt.Sprintf("%d future-dated entries", futureDated))
+	}
+
+	analysis.ComplianceCheck = JournalComplianceData{
+		BalancedEntries:    balancedCount,
+		UnbalancedEntries:  unbalancedCount,
+		ComplianceRate:     complianceRate,
+		MissingReferences:  missingReferences,
+		FutureDatedEntries: futureDated,
+		ComplianceIssues:   complianceIssues,
+	}
+
+	return analysis, nil
 }
 
 // GeneratePurchaseSummary creates comprehensive purchase analytics
@@ -929,1362 +2071,18 @@ func (ers *EnhancedReportService) GeneratePurchaseSummary(startDate, endDate tim
 	}
 
 	// Convert maps to slices and sort
-	summary.PurchasesByVendor = ers.convertAndSortVendorData(vendorMap)
-	summary.PurchasesByPeriod = ers.convertAndSortPeriodData(periodMap)
-	summary.PurchasesByStatus = ers.convertStatusData(statusMap)
+	summary.PurchasesByVendor = ers.sortVendorPurchaseData(vendorMap)
+	summary.PurchasesByPeriod = ers.sortPeriodsByDate(periodMap)
+	summary.PurchasesByStatus = ers.convertStatusMapToSlice(statusMap)
 
-	// Build top vendors
+	// Build top vendors (simplified)
 	summary.TopVendors = TopVendorsData{
-		TopVendors:    ers.getTopVendors(summary.PurchasesByVendor, 10),
-		TopCategories: ers.convertCategoryData(categoryMap),
+		TopVendors:    ers.getTopVendorPurchases(summary.PurchasesByVendor),
+		TopCategories: ers.getCategoryPurchaseData(categoryMap),
 	}
 
-	// Calculate cost analysis
-	summary.CostAnalysis = ers.calculateCostAnalysis(purchases)
+	// Calculate cost analysis (simplified)
+	summary.CostAnalysis = ers.calculateSimpleCostAnalysis(purchases)
 
 	return summary, nil
-}
-
-// Helper methods for balance sheet construction
-func (ers *EnhancedReportService) buildAssetsSection(assets []BalanceSheetItem) BalanceSheetSection {
-	section := BalanceSheetSection{Name: "Assets"}
-	
-	var currentAssets, fixedAssets []BalanceSheetItem
-	var currentTotal, fixedTotal float64
-
-	for _, asset := range assets {
-		if asset.Category == models.CategoryCurrentAsset {
-			currentAssets = append(currentAssets, asset)
-			currentTotal += asset.Balance
-		} else if asset.Category == models.CategoryFixedAsset {
-			fixedAssets = append(fixedAssets, asset)
-			fixedTotal += asset.Balance
-		}
-	}
-
-	section.Items = append(currentAssets, fixedAssets...)
-	section.Subtotals = []BalanceSheetSubtotal{
-		{Name: "Total Current Assets", Amount: currentTotal, Category: models.CategoryCurrentAsset},
-		{Name: "Total Fixed Assets", Amount: fixedTotal, Category: models.CategoryFixedAsset},
-	}
-	section.Total = currentTotal + fixedTotal
-
-	return section
-}
-
-func (ers *EnhancedReportService) buildLiabilitiesSection(liabilities []BalanceSheetItem) BalanceSheetSection {
-	section := BalanceSheetSection{Name: "Liabilities"}
-	
-	var currentLiabilities, longTermLiabilities []BalanceSheetItem
-	var currentTotal, longTermTotal float64
-
-	for _, liability := range liabilities {
-		if liability.Category == models.CategoryCurrentLiability {
-			currentLiabilities = append(currentLiabilities, liability)
-			currentTotal += liability.Balance
-		} else if liability.Category == models.CategoryLongTermLiability {
-			longTermLiabilities = append(longTermLiabilities, liability)
-			longTermTotal += liability.Balance
-		}
-	}
-
-	section.Items = append(currentLiabilities, longTermLiabilities...)
-	section.Subtotals = []BalanceSheetSubtotal{
-		{Name: "Total Current Liabilities", Amount: currentTotal, Category: models.CategoryCurrentLiability},
-		{Name: "Total Long-term Liabilities", Amount: longTermTotal, Category: models.CategoryLongTermLiability},
-	}
-	section.Total = currentTotal + longTermTotal
-
-	return section
-}
-
-func (ers *EnhancedReportService) buildEquitySection(equity []BalanceSheetItem) BalanceSheetSection {
-	section := BalanceSheetSection{Name: "Equity"}
-	
-	var total float64
-	for _, eq := range equity {
-		total += eq.Balance
-	}
-
-	section.Items = equity
-	section.Total = total
-
-	return section
-}
-
-// CalculateAccountBalance calculates account balance as of a specific date (exported for use by report service)
-func (ers *EnhancedReportService) CalculateAccountBalance(accountID uint, asOfDate time.Time) float64 {
-	return ers.calculateAccountBalance(accountID, asOfDate)
-}
-
-// Helper method to calculate account balance as of a specific date
-func (ers *EnhancedReportService) calculateAccountBalance(accountID uint, asOfDate time.Time) float64 {
-	// Get account to determine normal balance type
-	var account models.Account
-	if err := ers.db.First(&account, accountID).Error; err != nil {
-		return 0
-	}
-
-	// Calculate balance from journal entries up to asOfDate
-	var totalDebits, totalCredits float64
-	ers.db.Table("journal_entries").
-		Joins("JOIN journals ON journal_entries.journal_id = journals.id").
-		Where("journal_entries.account_id = ? AND journals.date <= ? AND journals.status = ?", 
-			accountID, asOfDate, models.JournalStatusPosted).
-		Select("COALESCE(SUM(journal_entries.debit_amount), 0) as total_debits, COALESCE(SUM(journal_entries.credit_amount), 0) as total_credits").
-		Row().Scan(&totalDebits, &totalCredits)
-
-	// Calculate balance based on account normal balance type
-	switch account.Type {
-	case models.AccountTypeAsset, models.AccountTypeExpense:
-		// Assets and Expenses: Debit increases, Credit decreases
-		return account.Balance + totalDebits - totalCredits
-	case models.AccountTypeLiability, models.AccountTypeEquity, models.AccountTypeRevenue:
-		// Liabilities, Equity, Revenue: Credit increases, Debit decreases
-		return account.Balance + totalCredits - totalDebits
-	default:
-		return account.Balance
-	}
-}
-
-// Helper method to calculate account balance for a specific period
-func (ers *EnhancedReportService) calculateAccountBalanceForPeriod(accountID uint, startDate, endDate time.Time) float64 {
-	// Get account to determine normal balance type
-	var account models.Account
-	if err := ers.db.First(&account, accountID).Error; err != nil {
-		return 0
-	}
-
-	var totalDebits, totalCredits float64
-	ers.db.Table("journal_entries").
-		Joins("JOIN journals ON journal_entries.journal_id = journals.id").
-		Where("journal_entries.account_id = ? AND journals.date BETWEEN ? AND ? AND journals.status = ?", 
-			accountID, startDate, endDate, models.JournalStatusPosted).
-		Select("COALESCE(SUM(journal_entries.debit_amount), 0) as total_debits, COALESCE(SUM(journal_entries.credit_amount), 0) as total_credits").
-		Row().Scan(&totalDebits, &totalCredits)
-
-	// For P&L accounts, we want the period activity
-	switch account.Type {
-	case models.AccountTypeRevenue:
-		// Revenue: Credit is positive
-		return totalCredits - totalDebits
-	case models.AccountTypeExpense:
-		// Expenses: Debit is positive  
-		return totalDebits - totalCredits
-	default:
-		// For balance sheet accounts, return cumulative balance
-		return ers.calculateAccountBalance(accountID, endDate)
-	}
-}
-
-// Additional helper methods for formatting, sorting, and data conversion would be implemented here...
-// These methods handle the detailed business logic for organizing and presenting the data
-
-// formatPeriod formats a date according to the groupBy parameter
-func (ers *EnhancedReportService) formatPeriod(date time.Time, groupBy string) string {
-	switch groupBy {
-	case "month":
-		return date.Format("2006-01")
-	case "quarter":
-		quarter := (date.Month()-1)/3 + 1
-		return fmt.Sprintf("%d-Q%d", date.Year(), quarter)
-	case "year":
-		return date.Format("2006")
-	default:
-		return date.Format("2006-01-02")
-	}
-}
-
-// getPeriodStart gets the start date of a period
-func (ers *EnhancedReportService) getPeriodStart(date time.Time, groupBy string) time.Time {
-	switch groupBy {
-	case "month":
-		return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
-	case "quarter":
-		quarter := (date.Month()-1)/3
-		return time.Date(date.Year(), time.Month(quarter*3+1), 1, 0, 0, 0, 0, date.Location())
-	case "year":
-		return time.Date(date.Year(), 1, 1, 0, 0, 0, 0, date.Location())
-	default:
-		return date
-	}
-}
-
-// getPeriodEnd gets the end date of a period
-func (ers *EnhancedReportService) getPeriodEnd(date time.Time, groupBy string) time.Time {
-	switch groupBy {
-	case "month":
-		return time.Date(date.Year(), date.Month()+1, 0, 23, 59, 59, 0, date.Location())
-	case "quarter":
-		quarter := (date.Month()-1)/3
-		endMonth := quarter*3 + 3
-		return time.Date(date.Year(), time.Month(endMonth)+1, 0, 23, 59, 59, 0, date.Location())
-	case "year":
-		return time.Date(date.Year(), 12, 31, 23, 59, 59, 0, date.Location())
-	default:
-		return date
-	}
-}
-
-// Placeholder implementations for complex helper methods
-// These would be fully implemented based on specific business requirements
-
-func (ers *EnhancedReportService) categorizePLItems(items []PLItem, category string) []PLItem {
-	// Implementation would categorize P&L items by type
-	return items
-}
-
-func (ers *EnhancedReportService) getCashAccounts() []models.Account {
-	// Implementation would get cash and cash equivalent accounts
-	var accounts []models.Account
-	ers.db.Where("type = ? AND (category LIKE ? OR name LIKE ?)", 
-		models.AccountTypeAsset, "%CASH%", "%cash%").Find(&accounts)
-	return accounts
-}
-
-func (ers *EnhancedReportService) calculateTotalCashBalance(accounts []models.Account, date time.Time) float64 {
-	var total float64
-	for _, account := range accounts {
-		total += ers.calculateAccountBalance(account.ID, date)
-	}
-	return total
-}
-
-func (ers *EnhancedReportService) calculateOperatingCashFlow(startDate, endDate time.Time) []CashFlowItem {
-	var items []CashFlowItem
-	
-	// Get net income for the period
-	profitLoss, err := ers.GenerateProfitLoss(startDate, endDate)
-	if err == nil {
-		items = append(items, CashFlowItem{
-			Description: "Net Income",
-			Amount:      profitLoss.NetIncome,
-			Category:    "NET_INCOME",
-		})
-	}
-	
-	// Add back non-cash expenses (depreciation, amortization)
-	depreciationAmount := ers.calculateDepreciationForPeriod(startDate, endDate)
-	if depreciationAmount > 0 {
-		items = append(items, CashFlowItem{
-			Description: "Depreciation and Amortization",
-			Amount:      depreciationAmount,
-			Category:    "NON_CASH_EXPENSES",
-		})
-	}
-	
-	// Calculate changes in working capital
-	workingCapitalChanges := ers.calculateWorkingCapitalChanges(startDate, endDate)
-	for _, change := range workingCapitalChanges {
-		items = append(items, change)
-	}
-	
-	// Add other operating cash flow items
-	operatingItems := ers.getOtherOperatingCashFlowItems(startDate, endDate)
-	items = append(items, operatingItems...)
-	
-	return items
-}
-
-func (ers *EnhancedReportService) calculateInvestingCashFlow(startDate, endDate time.Time) []CashFlowItem {
-	var items []CashFlowItem
-	
-	// Capital expenditures (purchases of fixed assets)
-	capitalExpenditures := ers.calculateCapitalExpenditures(startDate, endDate)
-	if capitalExpenditures != 0 {
-		items = append(items, CashFlowItem{
-			Description: "Capital Expenditures",
-			Amount:      -capitalExpenditures, // Negative because it's cash outflow
-			Category:    "CAPITAL_EXPENDITURES",
-		})
-	}
-	
-	// Asset disposals
-	assetDisposals := ers.calculateAssetDisposals(startDate, endDate)
-	if assetDisposals > 0 {
-		items = append(items, CashFlowItem{
-			Description: "Proceeds from Asset Sales",
-			Amount:      assetDisposals,
-			Category:    "ASSET_DISPOSALS",
-		})
-	}
-	
-	// Investment activities
-	investmentActivities := ers.calculateInvestmentActivities(startDate, endDate)
-	for _, activity := range investmentActivities {
-		items = append(items, activity)
-	}
-	
-	return items
-}
-
-func (ers *EnhancedReportService) calculateFinancingCashFlow(startDate, endDate time.Time) []CashFlowItem {
-	var items []CashFlowItem
-	
-	// Debt activities
-	debtActivities := ers.calculateDebtActivities(startDate, endDate)
-	for _, activity := range debtActivities {
-		items = append(items, activity)
-	}
-	
-	// Equity activities
-	equityActivities := ers.calculateEquityActivities(startDate, endDate)
-	for _, activity := range equityActivities {
-		items = append(items, activity)
-	}
-	
-	// Dividend payments
-	dividendPayments := ers.calculateDividendPayments(startDate, endDate)
-	if dividendPayments > 0 {
-		items = append(items, CashFlowItem{
-			Description: "Dividend Payments",
-			Amount:      -dividendPayments, // Negative because it's cash outflow
-			Category:    "DIVIDENDS",
-		})
-	}
-	
-	// Interest payments on debt
-	interestPayments := ers.calculateInterestPayments(startDate, endDate)
-	if interestPayments > 0 {
-		items = append(items, CashFlowItem{
-			Description: "Interest Paid",
-			Amount:      -interestPayments, // Negative because it's cash outflow
-			Category:    "INTEREST_PAID",
-		})
-	}
-	
-	return items
-}
-
-func (ers *EnhancedReportService) sumCashFlowItems(items []CashFlowItem) float64 {
-	var total float64
-	for _, item := range items {
-		total += item.Amount
-	}
-	return total
-}
-
-// Data conversion and sorting helper methods
-func (ers *EnhancedReportService) convertAndSortCustomerData(customerMap map[uint]*CustomerSalesData) []CustomerSalesData {
-	var customers []CustomerSalesData
-	for _, data := range customerMap {
-		customers = append(customers, *data)
-	}
-	sort.Slice(customers, func(i, j int) bool {
-		return customers[i].TotalAmount > customers[j].TotalAmount
-	})
-	return customers
-}
-
-func (ers *EnhancedReportService) convertAndSortProductData(productMap map[uint]*ProductSalesData) []ProductSalesData {
-	var products []ProductSalesData
-	for _, data := range productMap {
-		products = append(products, *data)
-	}
-	sort.Slice(products, func(i, j int) bool {
-		return products[i].TotalAmount > products[j].TotalAmount
-	})
-	return products
-}
-
-func (ers *EnhancedReportService) convertAndSortPeriodData(periodMap map[string]*PeriodData) []PeriodData {
-	var periods []PeriodData
-	for _, data := range periodMap {
-		periods = append(periods, *data)
-	}
-	sort.Slice(periods, func(i, j int) bool {
-		return periods[i].Period < periods[j].Period
-	})
-	return periods
-}
-
-func (ers *EnhancedReportService) convertStatusData(statusMap map[string]*StatusData) []StatusData {
-	var statuses []StatusData
-	for _, data := range statusMap {
-		statuses = append(statuses, *data)
-	}
-	return statuses
-}
-
-func (ers *EnhancedReportService) convertAndSortVendorData(vendorMap map[uint]*VendorPurchaseData) []VendorPurchaseData {
-	var vendors []VendorPurchaseData
-	for _, data := range vendorMap {
-		vendors = append(vendors, *data)
-	}
-	sort.Slice(vendors, func(i, j int) bool {
-		return vendors[i].TotalAmount > vendors[j].TotalAmount
-	})
-	return vendors
-}
-
-func (ers *EnhancedReportService) convertCategoryData(categoryMap map[uint]*CategoryPurchaseData) []CategoryPurchaseData {
-	var categories []CategoryPurchaseData
-	for _, data := range categoryMap {
-		categories = append(categories, *data)
-	}
-	return categories
-}
-
-func (ers *EnhancedReportService) getTopCustomers(customers []CustomerSalesData, limit int) []CustomerSalesData {
-	if len(customers) <= limit {
-		return customers
-	}
-	return customers[:limit]
-}
-
-func (ers *EnhancedReportService) getTopProducts(products []ProductSalesData, limit int) []ProductSalesData {
-	if len(products) <= limit {
-		return products
-	}
-	return products[:limit]
-}
-
-func (ers *EnhancedReportService) getTopSalespeople(sales []models.Sale) []SalespersonData {
-	// Implementation would calculate top salespeople performance
-	return []SalespersonData{}
-}
-
-func (ers *EnhancedReportService) getTopVendors(vendors []VendorPurchaseData, limit int) []VendorPurchaseData {
-	if len(vendors) <= limit {
-		return vendors
-	}
-	return vendors[:limit]
-}
-
-func (ers *EnhancedReportService) calculateSalesGrowth(periods []PeriodData, groupBy string) GrowthAnalysisData {
-	growthData := GrowthAnalysisData{
-		TrendDirection: "STABLE", // Default
-	}
-	
-	if len(periods) < 2 {
-		return growthData
-	}
-	
-	// Calculate different growth metrics based on available periods
-	switch groupBy {
-	case "month":
-		// Calculate month-over-month growth
-		if len(periods) >= 2 {
-			current := periods[len(periods)-1].Amount
-			previous := periods[len(periods)-2].Amount
-			if previous != 0 {
-				growthData.MonthOverMonth = ((current - previous) / previous) * 100
-			}
-		}
-		
-		// Calculate quarter-over-quarter if we have enough data
-		if len(periods) >= 3 {
-			currentQuarter := ers.calculateQuarterlyAverage(periods[len(periods)-3:])
-			if len(periods) >= 6 {
-				prevQuarter := ers.calculateQuarterlyAverage(periods[len(periods)-6:len(periods)-3])
-				if prevQuarter != 0 {
-					growthData.QuarterOverQuarter = ((currentQuarter - prevQuarter) / prevQuarter) * 100
-				}
-			}
-		}
-		
-		// Calculate year-over-year if we have 12+ months
-		if len(periods) >= 12 {
-			current := periods[len(periods)-1].Amount
-			yearAgo := periods[len(periods)-12].Amount
-			if yearAgo != 0 {
-				growthData.YearOverYear = ((current - yearAgo) / yearAgo) * 100
-			}
-		}
-		
-	case "quarter":
-		// Calculate quarter-over-quarter growth
-		if len(periods) >= 2 {
-			current := periods[len(periods)-1].Amount
-			previous := periods[len(periods)-2].Amount
-			if previous != 0 {
-				growthData.QuarterOverQuarter = ((current - previous) / previous) * 100
-			}
-		}
-		
-		// Calculate year-over-year if we have 4+ quarters
-		if len(periods) >= 4 {
-			current := periods[len(periods)-1].Amount
-			yearAgo := periods[len(periods)-4].Amount
-			if yearAgo != 0 {
-				growthData.YearOverYear = ((current - yearAgo) / yearAgo) * 100
-			}
-		}
-		
-	case "year":
-		// Calculate year-over-year growth
-		if len(periods) >= 2 {
-			current := periods[len(periods)-1].Amount
-			previous := periods[len(periods)-2].Amount
-			if previous != 0 {
-				growthData.YearOverYear = ((current - previous) / previous) * 100
-			}
-		}
-	}
-	
-	// Determine trend direction based on most recent growth
-	mostRecentGrowth := float64(0)
-	if growthData.MonthOverMonth != 0 {
-		mostRecentGrowth = growthData.MonthOverMonth
-	} else if growthData.QuarterOverQuarter != 0 {
-		mostRecentGrowth = growthData.QuarterOverQuarter
-	} else if growthData.YearOverYear != 0 {
-		mostRecentGrowth = growthData.YearOverYear
-	}
-	
-	if mostRecentGrowth > 5 {
-		growthData.TrendDirection = "UP"
-	} else if mostRecentGrowth < -5 {
-		growthData.TrendDirection = "DOWN"
-	} else {
-		growthData.TrendDirection = "STABLE"
-	}
-	
-	// Calculate seasonality index (simplified)
-	if len(periods) >= 12 {
-		growthData.SeasonalityIndex = ers.calculateSeasonalityIndex(periods)
-	}
-	
-	return growthData
-}
-
-func (ers *EnhancedReportService) calculateCostAnalysis(purchases []models.Purchase) CostAnalysisData {
-	// Implementation would calculate cost analysis metrics
-	var totalCost float64
-	for _, purchase := range purchases {
-		totalCost += purchase.TotalAmount
-	}
-	
-	return CostAnalysisData{
-		TotalCostOfGoods: totalCost,
-	}
-}
-
-// ========== ENHANCED HELPER METHODS FOR PRODUCTION-READY P&L ==========
-
-// isOperatingRevenue determines if an account category represents operating revenue
-func (ers *EnhancedReportService) isOperatingRevenue(category string) bool {
-	operatingRevenueCategories := []string{
-		models.CategoryOperatingRevenue,
-		models.CategoryServiceRevenue,
-		models.CategorySalesRevenue,
-	}
-	
-	for _, cat := range operatingRevenueCategories {
-		if category == cat {
-			return true
-		}
-	}
-	return false
-}
-
-// isCOGS determines if an account category represents Cost of Goods Sold
-func (ers *EnhancedReportService) isCOGS(category string) bool {
-	cogsCategories := []string{
-		models.CategoryCostOfGoodsSold,
-		models.CategoryDirectMaterial,
-		models.CategoryDirectLabor,
-		models.CategoryManufacturingOverhead,
-		models.CategoryFreightIn,
-	}
-	
-	for _, cat := range cogsCategories {
-		if category == cat {
-			return true
-		}
-	}
-	
-	// Fallback to name-based matching for legacy accounts
-	return strings.Contains(strings.ToLower(category), "cogs") ||
-		   strings.Contains(strings.ToLower(category), "cost of goods")
-}
-
-// isOperatingExpense determines if an account category represents operating expenses
-func (ers *EnhancedReportService) isOperatingExpense(category string) bool {
-	operatingExpenseCategories := []string{
-		models.CategoryOperatingExpense,
-		models.CategoryAdministrativeExp,
-		models.CategorySellingExpense,
-		models.CategoryMarketingExpense,
-		models.CategoryGeneralExpense,
-		models.CategoryDepreciationExp,
-		models.CategoryAmortizationExp,
-		models.CategoryBadDebtExpense,
-	}
-	
-	for _, cat := range operatingExpenseCategories {
-		if category == cat {
-			return true
-		}
-	}
-	return false
-}
-
-// isTaxExpense determines if an account category represents tax expenses
-func (ers *EnhancedReportService) isTaxExpense(category string) bool {
-	return category == models.CategoryTaxExpense ||
-		   strings.Contains(strings.ToLower(category), "tax")
-}
-
-// calculateItemPercentages calculates percentage of revenue for P&L items
-func (ers *EnhancedReportService) calculateItemPercentages(items []PLItem, totalRevenue float64) {
-	for i := range items {
-		if totalRevenue != 0 {
-			items[i].Percentage = (items[i].Amount / totalRevenue) * 100
-		} else {
-			items[i].Percentage = 0
-		}
-	}
-}
-
-// getSharesOutstanding retrieves shares outstanding from equity accounts
-func (ers *EnhancedReportService) getSharesOutstanding() float64 {
-	// First try to get shares outstanding from company profile
-	if ers.companyProfile != nil && ers.companyProfile.SharesOutstanding > 0 {
-		return ers.companyProfile.SharesOutstanding
-	}
-	
-	// Try to find share capital account by multiple criteria
-	var shareCapitalAccount models.Account
-	err := ers.db.Where("type = ? AND (category LIKE ? OR category LIKE ? OR name LIKE ? OR name LIKE ?) AND is_active = ?", 
-		models.AccountTypeEquity, "%SHARE_CAPITAL%", "%MODAL_SAHAM%", "%share%", "%saham%", true).First(&shareCapitalAccount).Error
-	
-	// Handle record not found gracefully - this is normal if no share capital accounts exist
-	// Only log unexpected database errors, not "record not found" which is normal
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		log.Printf("Unexpected error querying share capital account: %v", err)
-	}
-	
-	if err == nil && shareCapitalAccount.Balance > 0 {
-		// Try to get par value from company profile, otherwise use reasonable default
-		parValue := float64(1000) // Default IDR 1000 per share
-		if ers.companyProfile != nil && ers.companyProfile.ParValuePerShare > 0 {
-			parValue = ers.companyProfile.ParValuePerShare
-		}
-		return shareCapitalAccount.Balance / parValue
-	}
-	
-	// Try to calculate from total paid-in capital or total equity
-	var totalPaidInCapital float64
-	ers.db.Model(&models.Account{}).Where("type = ? AND (category LIKE ? OR category LIKE ?) AND is_active = ?", 
-		models.AccountTypeEquity, "%PAID_IN%", "%MODAL_DISETOR%", true).Select("COALESCE(SUM(balance), 0)").Scan(&totalPaidInCapital)
-	
-	if totalPaidInCapital > 0 {
-		parValue := float64(1000) // Default par value
-		if ers.companyProfile != nil && ers.companyProfile.ParValuePerShare > 0 {
-			parValue = ers.companyProfile.ParValuePerShare
-		}
-		return totalPaidInCapital / parValue
-	}
-	
-	// If no share capital data available, return 0 (EPS cannot be calculated)
-	return 0
-}
-
-// GenerateComparativeProfitLoss creates comparative P&L analysis
-func (ers *EnhancedReportService) GenerateComparativeProfitLoss(currentStart, currentEnd, priorStart, priorEnd time.Time) (*ProfitLossComparative, error) {
-	// Generate current period P&L
-	currentPL, err := ers.GenerateProfitLoss(currentStart, currentEnd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate current period P&L: %v", err)
-	}
-	
-	// Generate prior period P&L
-	priorPL, err := ers.GenerateProfitLoss(priorStart, priorEnd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate prior period P&L: %v", err)
-	}
-	
-	// Calculate variances
-	variances := ers.calculatePLVariances(currentPL, priorPL)
-	
-	// Calculate trend analysis
-	trendAnalysis := ers.calculatePLTrendAnalysis(currentPL, priorPL)
-	
-	return &ProfitLossComparative{
-		CurrentPeriod: *currentPL,
-		PriorPeriod:   *priorPL,
-		Variances:     variances,
-		TrendAnalysis: trendAnalysis,
-		GeneratedAt:   time.Now(),
-	}, nil
-}
-
-// calculatePLVariances calculates variances between current and prior periods
-func (ers *EnhancedReportService) calculatePLVariances(current, prior *ProfitLossData) PLVarianceData {
-	return PLVarianceData{
-		Revenue: ers.calculateVariance(current.Revenue.Subtotal, prior.Revenue.Subtotal),
-		CostOfGoodsSold: ers.calculateVariance(current.CostOfGoodsSold.Subtotal, prior.CostOfGoodsSold.Subtotal),
-		GrossProfit: ers.calculateVariance(current.GrossProfit, prior.GrossProfit),
-		OperatingExpenses: ers.calculateVariance(current.OperatingExpenses.Subtotal, prior.OperatingExpenses.Subtotal),
-		OperatingIncome: ers.calculateVariance(current.OperatingIncome, prior.OperatingIncome),
-		OtherIncome: ers.calculateVariance(current.OtherIncome.Subtotal, prior.OtherIncome.Subtotal),
-		OtherExpenses: ers.calculateVariance(current.OtherExpenses.Subtotal, prior.OtherExpenses.Subtotal),
-		NetIncome: ers.calculateVariance(current.NetIncome, prior.NetIncome),
-		EBITDA: ers.calculateVariance(current.EBITDA, prior.EBITDA),
-		EBIT: ers.calculateVariance(current.EBIT, prior.EBIT),
-	}
-}
-
-// calculateVariance calculates variance between two values
-func (ers *EnhancedReportService) calculateVariance(current, prior float64) PLVariance {
-	absoluteChange := current - prior
-	var percentChange float64
-	var trend string
-	
-	if prior != 0 {
-		percentChange = (absoluteChange / math.Abs(prior)) * 100
-	} else if current != 0 {
-		percentChange = 100 // 100% change from zero
-	}
-	
-	// Determine trend
-	if math.Abs(percentChange) < 5 {
-		trend = "STABLE"
-	} else if absoluteChange > 0 {
-		trend = "INCREASING"
-	} else {
-		trend = "DECREASING"
-	}
-	
-	return PLVariance{
-		Current:        current,
-		Prior:          prior,
-		AbsoluteChange: absoluteChange,
-		PercentChange:  percentChange,
-		Trend:          trend,
-	}
-}
-
-// calculatePLTrendAnalysis calculates comprehensive trend analysis
-func (ers *EnhancedReportService) calculatePLTrendAnalysis(current, prior *ProfitLossData) PLTrendAnalysis {
-	// Revenue growth rate
-	revenueGrowthRate := float64(0)
-	if prior.Revenue.Subtotal != 0 {
-		revenueGrowthRate = ((current.Revenue.Subtotal - prior.Revenue.Subtotal) / prior.Revenue.Subtotal) * 100
-	}
-	
-	// Profitability trend
-	profitabilityTrend := "STABLE"
-	if current.NetIncomeMargin > prior.NetIncomeMargin {
-		profitabilityTrend = "IMPROVING"
-	} else if current.NetIncomeMargin < prior.NetIncomeMargin {
-		profitabilityTrend = "DECLINING"
-	}
-	
-	// Cost management index (lower is better)
-	costManagementIndex := float64(0)
-	if current.Revenue.Subtotal != 0 {
-		costManagementIndex = (current.CostOfGoodsSold.Subtotal + current.OperatingExpenses.Subtotal) / current.Revenue.Subtotal
-	}
-	
-	// Operational efficiency (higher is better)
-	operationalEfficiency := float64(0)
-	if current.Revenue.Subtotal != 0 {
-		operationalEfficiency = current.OperatingIncome / current.Revenue.Subtotal * 100
-	}
-	
-	// Margin stability
-	marginStability := "STABLE"
-	marginDiff := math.Abs(current.NetIncomeMargin - prior.NetIncomeMargin)
-	if marginDiff > 10 {
-		marginStability = "VOLATILE"
-	} else if marginDiff < 2 {
-		marginStability = "STABLE"
-	} else {
-		marginStability = "MODERATE"
-	}
-	
-	return PLTrendAnalysis{
-		RevenueGrowthRate:     revenueGrowthRate,
-		ProfitabilityTrend:    profitabilityTrend,
-		CostManagementIndex:   costManagementIndex,
-		OperationalEfficiency: operationalEfficiency,
-		MarginStability:       marginStability,
-	}
-}
-
-// ========== CASH FLOW STATEMENT HELPER METHODS ==========
-
-// calculateDepreciationForPeriod calculates depreciation and amortization for the period
-func (ers *EnhancedReportService) calculateDepreciationForPeriod(startDate, endDate time.Time) float64 {
-	var totalDepreciation float64
-	
-	// Find depreciation expense accounts
-	var depreciationAccounts []models.Account
-	ers.db.Where("category = ? AND is_active = ?", 
-		models.CategoryDepreciationExp, true).Find(&depreciationAccounts)
-	
-	for _, account := range depreciationAccounts {
-		amount := ers.calculateAccountBalanceForPeriod(account.ID, startDate, endDate)
-		totalDepreciation += amount
-	}
-	
-	return totalDepreciation
-}
-
-// calculateWorkingCapitalChanges calculates changes in working capital components
-func (ers *EnhancedReportService) calculateWorkingCapitalChanges(startDate, endDate time.Time) []CashFlowItem {
-	var items []CashFlowItem
-	
-	// Calculate changes in accounts receivable
-	receivableChange := ers.calculateAccountsReceivableChange(startDate, endDate)
-	if receivableChange != 0 {
-		items = append(items, CashFlowItem{
-			Description: "Change in Accounts Receivable",
-			Amount:      -receivableChange, // Negative because increase in AR decreases cash
-			Category:    "WORKING_CAPITAL",
-		})
-	}
-	
-	// Calculate changes in inventory
-	inventoryChange := ers.calculateInventoryChange(startDate, endDate)
-	if inventoryChange != 0 {
-		items = append(items, CashFlowItem{
-			Description: "Change in Inventory",
-			Amount:      -inventoryChange, // Negative because increase in inventory decreases cash
-			Category:    "WORKING_CAPITAL",
-		})
-	}
-	
-	// Calculate changes in accounts payable
-	payableChange := ers.calculateAccountsPayableChange(startDate, endDate)
-	if payableChange != 0 {
-		items = append(items, CashFlowItem{
-			Description: "Change in Accounts Payable",
-			Amount:      payableChange, // Positive because increase in AP increases cash
-			Category:    "WORKING_CAPITAL",
-		})
-	}
-	
-	// Calculate changes in prepaid expenses
-	prepaidChange := ers.calculatePrepaidExpensesChange(startDate, endDate)
-	if prepaidChange != 0 {
-		items = append(items, CashFlowItem{
-			Description: "Change in Prepaid Expenses",
-			Amount:      -prepaidChange, // Negative because increase in prepaid decreases cash
-			Category:    "WORKING_CAPITAL",
-		})
-	}
-	
-	return items
-}
-
-// calculateAccountsReceivableChange calculates the change in accounts receivable
-func (ers *EnhancedReportService) calculateAccountsReceivableChange(startDate, endDate time.Time) float64 {
-	var arAccounts []models.Account
-	ers.db.Where("type = ? AND name ILIKE ? AND is_active = ?", 
-		models.AccountTypeAsset, "%receivable%", true).Find(&arAccounts)
-	
-	var totalChange float64
-	for _, account := range arAccounts {
-		startBalance := ers.calculateAccountBalance(account.ID, startDate.AddDate(0, 0, -1))
-		endBalance := ers.calculateAccountBalance(account.ID, endDate)
-		totalChange += (endBalance - startBalance)
-	}
-	
-	return totalChange
-}
-
-// calculateInventoryChange calculates the change in inventory
-func (ers *EnhancedReportService) calculateInventoryChange(startDate, endDate time.Time) float64 {
-	var inventoryAccounts []models.Account
-	ers.db.Where("type = ? AND name ILIKE ? AND is_active = ?", 
-		models.AccountTypeAsset, "%inventory%", true).Find(&inventoryAccounts)
-	
-	var totalChange float64
-	for _, account := range inventoryAccounts {
-		startBalance := ers.calculateAccountBalance(account.ID, startDate.AddDate(0, 0, -1))
-		endBalance := ers.calculateAccountBalance(account.ID, endDate)
-		totalChange += (endBalance - startBalance)
-	}
-	
-	return totalChange
-}
-
-// calculateAccountsPayableChange calculates the change in accounts payable
-func (ers *EnhancedReportService) calculateAccountsPayableChange(startDate, endDate time.Time) float64 {
-	var apAccounts []models.Account
-	ers.db.Where("type = ? AND name ILIKE ? AND is_active = ?", 
-		models.AccountTypeLiability, "%payable%", true).Find(&apAccounts)
-	
-	var totalChange float64
-	for _, account := range apAccounts {
-		startBalance := ers.calculateAccountBalance(account.ID, startDate.AddDate(0, 0, -1))
-		endBalance := ers.calculateAccountBalance(account.ID, endDate)
-		totalChange += (endBalance - startBalance)
-	}
-	
-	return totalChange
-}
-
-// calculatePrepaidExpensesChange calculates the change in prepaid expenses
-func (ers *EnhancedReportService) calculatePrepaidExpensesChange(startDate, endDate time.Time) float64 {
-	var prepaidAccounts []models.Account
-	ers.db.Where("type = ? AND name ILIKE ? AND is_active = ?", 
-		models.AccountTypeAsset, "%prepaid%", true).Find(&prepaidAccounts)
-	
-	var totalChange float64
-	for _, account := range prepaidAccounts {
-		startBalance := ers.calculateAccountBalance(account.ID, startDate.AddDate(0, 0, -1))
-		endBalance := ers.calculateAccountBalance(account.ID, endDate)
-		totalChange += (endBalance - startBalance)
-	}
-	
-	return totalChange
-}
-
-// getOtherOperatingCashFlowItems gets other operating cash flow items
-func (ers *EnhancedReportService) getOtherOperatingCashFlowItems(startDate, endDate time.Time) []CashFlowItem {
-	var items []CashFlowItem
-	
-	// Add other operating activities like tax payments, interest received, etc.
-	// This would be customized based on business needs
-	
-	return items
-}
-
-// calculateCapitalExpenditures calculates capital expenditures for the period
-func (ers *EnhancedReportService) calculateCapitalExpenditures(startDate, endDate time.Time) float64 {
-	var totalCapex float64
-	
-	// Look for purchases of fixed assets in journal entries
-	var fixedAssetAccounts []models.Account
-	ers.db.Where("type = ? AND category = ? AND is_active = ?", 
-		models.AccountTypeAsset, models.CategoryFixedAsset, true).Find(&fixedAssetAccounts)
-	
-	for _, account := range fixedAssetAccounts {
-		// Calculate net additions (debits) to fixed asset accounts during period
-		var totalDebits float64
-		ers.db.Table("journal_entries").
-			Joins("JOIN journals ON journal_entries.journal_id = journals.id").
-			Where("journal_entries.account_id = ? AND journals.date BETWEEN ? AND ? AND journals.status = ?", 
-				account.ID, startDate, endDate, models.JournalStatusPosted).
-			Select("COALESCE(SUM(journal_entries.debit_amount), 0)").
-			Row().Scan(&totalDebits)
-		
-		totalCapex += totalDebits
-	}
-	
-	return totalCapex
-}
-
-// calculateAssetDisposals calculates proceeds from asset disposals
-func (ers *EnhancedReportService) calculateAssetDisposals(startDate, endDate time.Time) float64 {
-	// This would typically come from gain/loss on asset disposal accounts
-	var totalDisposals float64
-	
-	var disposalAccounts []models.Account
-	ers.db.Where("category IN (?) AND is_active = ?", 
-		[]string{models.CategoryGainOnSale, models.CategoryLossOnSale}, true).Find(&disposalAccounts)
-	
-	for _, account := range disposalAccounts {
-		amount := ers.calculateAccountBalanceForPeriod(account.ID, startDate, endDate)
-		totalDisposals += math.Abs(amount) // Take absolute value as this represents cash proceeds
-	}
-	
-	return totalDisposals
-}
-
-// calculateInvestmentActivities calculates other investment activities
-func (ers *EnhancedReportService) calculateInvestmentActivities(startDate, endDate time.Time) []CashFlowItem {
-	var items []CashFlowItem
-	
-	// Look for investment accounts changes
-	var investmentAccounts []models.Account
-	ers.db.Where("type = ? AND category = ? AND is_active = ?", 
-		models.AccountTypeAsset, models.CategoryInvestmentAsset, true).Find(&investmentAccounts)
-	
-	for _, account := range investmentAccounts {
-		startBalance := ers.calculateAccountBalance(account.ID, startDate.AddDate(0, 0, -1))
-		endBalance := ers.calculateAccountBalance(account.ID, endDate)
-		change := endBalance - startBalance
-		
-		if change != 0 {
-			description := fmt.Sprintf("Investment in %s", account.Name)
-			if change < 0 {
-				description = fmt.Sprintf("Proceeds from %s", account.Name)
-			}
-			
-			items = append(items, CashFlowItem{
-				Description: description,
-				Amount:      -change, // Negative because investment outflow
-				Category:    "INVESTMENTS",
-			})
-		}
-	}
-	
-	return items
-}
-
-// calculateDebtActivities calculates debt-related financing activities
-func (ers *EnhancedReportService) calculateDebtActivities(startDate, endDate time.Time) []CashFlowItem {
-	var items []CashFlowItem
-	
-	// Look for changes in long-term debt
-	var debtAccounts []models.Account
-	ers.db.Where("type = ? AND category = ? AND is_active = ?", 
-		models.AccountTypeLiability, models.CategoryLongTermLiability, true).Find(&debtAccounts)
-	
-	for _, account := range debtAccounts {
-		if strings.Contains(strings.ToLower(account.Name), "loan") || 
-		   strings.Contains(strings.ToLower(account.Name), "debt") ||
-		   strings.Contains(strings.ToLower(account.Name), "note") {
-			
-			startBalance := ers.calculateAccountBalance(account.ID, startDate.AddDate(0, 0, -1))
-			endBalance := ers.calculateAccountBalance(account.ID, endDate)
-			change := endBalance - startBalance
-			
-			if change != 0 {
-				description := "Debt Repayment"
-				if change > 0 {
-					description = "Proceeds from Debt"
-				}
-				
-				items = append(items, CashFlowItem{
-					Description: description,
-					Amount:      change, // Positive for new debt, negative for repayment
-					Category:    "DEBT",
-				})
-			}
-		}
-	}
-	
-	return items
-}
-
-// calculateEquityActivities calculates equity-related financing activities
-func (ers *EnhancedReportService) calculateEquityActivities(startDate, endDate time.Time) []CashFlowItem {
-	var items []CashFlowItem
-	
-	// Look for changes in share capital
-	var equityAccounts []models.Account
-	ers.db.Where("type = ? AND category IN (?) AND is_active = ?", 
-		models.AccountTypeEquity, []string{models.CategoryShareCapital, models.CategoryEquity}, true).Find(&equityAccounts)
-	
-	for _, account := range equityAccounts {
-		if strings.Contains(strings.ToLower(account.Name), "capital") || 
-		   strings.Contains(strings.ToLower(account.Name), "stock") ||
-		   strings.Contains(strings.ToLower(account.Name), "share") {
-			
-			startBalance := ers.calculateAccountBalance(account.ID, startDate.AddDate(0, 0, -1))
-			endBalance := ers.calculateAccountBalance(account.ID, endDate)
-			change := endBalance - startBalance
-			
-			if change != 0 {
-				description := "Stock Repurchase"
-				if change > 0 {
-					description = "Proceeds from Stock Issuance"
-				}
-				
-				items = append(items, CashFlowItem{
-					Description: description,
-					Amount:      change, // Positive for new equity, negative for repurchase
-					Category:    "EQUITY",
-				})
-			}
-		}
-	}
-	
-	return items
-}
-
-// calculateDividendPayments calculates dividend payments for the period
-func (ers *EnhancedReportService) calculateDividendPayments(startDate, endDate time.Time) float64 {
-	var totalDividends float64
-	
-	// Look for dividend expense accounts
-	var dividendAccounts []models.Account
-	ers.db.Where("(name ILIKE ? OR name ILIKE ?) AND is_active = ?", 
-		"%dividend%", "%distribution%", true).Find(&dividendAccounts)
-	
-	for _, account := range dividendAccounts {
-		amount := ers.calculateAccountBalanceForPeriod(account.ID, startDate, endDate)
-		totalDividends += amount
-	}
-	
-	return totalDividends
-}
-
-// calculateInterestPayments calculates interest payments on debt
-func (ers *EnhancedReportService) calculateInterestPayments(startDate, endDate time.Time) float64 {
-	var totalInterest float64
-	
-	// Look for interest expense accounts
-	var interestAccounts []models.Account
-	ers.db.Where("category = ? AND is_active = ?", 
-		models.CategoryInterestExpense, true).Find(&interestAccounts)
-	
-	for _, account := range interestAccounts {
-		amount := ers.calculateAccountBalanceForPeriod(account.ID, startDate, endDate)
-		totalInterest += amount
-	}
-	
-	return totalInterest
-}
-
-// calculateQuarterlyAverage calculates the average of a set of periods (typically 3 months for a quarter)
-func (ers *EnhancedReportService) calculateQuarterlyAverage(periods []PeriodData) float64 {
-	if len(periods) == 0 {
-		return 0
-	}
-	
-	var total float64
-	for _, period := range periods {
-		total += period.Amount
-	}
-	
-	return total / float64(len(periods))
-}
-
-// calculateSeasonalityIndex calculates a simple seasonality index based on monthly data
-func (ers *EnhancedReportService) calculateSeasonalityIndex(periods []PeriodData) float64 {
-	if len(periods) < 12 {
-		return 0 // Not enough data for seasonality analysis
-	}
-	
-	// Group by month (assuming periods are monthly)
-	monthlyTotals := make(map[int]float64)
-	monthlyCounts := make(map[int]int)
-	
-	for _, period := range periods {
-		// Parse period to extract month
-		if len(period.Period) >= 7 { // Format: YYYY-MM
-			if month := period.StartDate.Month(); month > 0 {
-				monthlyTotals[int(month)] += period.Amount
-				monthlyCounts[int(month)]++
-			}
-		}
-	}
-	
-	// Calculate monthly averages
-	monthlyAverages := make([]float64, 12)
-	var yearlyAverage float64
-	validMonths := 0
-	
-	for month := 1; month <= 12; month++ {
-		if count := monthlyCounts[month]; count > 0 {
-			monthlyAverages[month-1] = monthlyTotals[month] / float64(count)
-			yearlyAverage += monthlyAverages[month-1]
-			validMonths++
-		}
-	}
-	
-	if validMonths == 0 {
-		return 0
-	}
-	
-	yearlyAverage /= float64(validMonths)
-	
-	// Calculate seasonality index as coefficient of variation
-	var variance float64
-	for _, avg := range monthlyAverages {
-		if avg > 0 {
-			diff := avg - yearlyAverage
-			variance += diff * diff
-		}
-	}
-	
-	variance /= float64(validMonths)
-	stdDev := math.Sqrt(variance)
-	
-	if yearlyAverage == 0 {
-		return 0
-	}
-	
-// Return coefficient of variation as seasonality index
-	return (stdDev / yearlyAverage) * 100
-}
-
-// ========== HELPER METHODS FOR DYNAMIC DEFAULT VALUES ==========
-
-// getDefaultCompanyName returns the default company name from environment or fallback
-func (ers *EnhancedReportService) getDefaultCompanyName() string {
-	// Try to get from environment variable
-	if companyName := os.Getenv("COMPANY_NAME"); companyName != "" {
-		return companyName
-	}
-	
-	// Try alternative environment variables
-	if appName := os.Getenv("APP_NAME"); appName != "" {
-		return appName + " Company"
-	}
-	
-	if businessName := os.Getenv("BUSINESS_NAME"); businessName != "" {
-		return businessName
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update company name]"
-}
-
-// getDefaultState returns the default state/province from environment or fallback
-func (ers *EnhancedReportService) getDefaultState() string {
-	// Try to get from environment variable
-	if state := os.Getenv("COMPANY_STATE"); state != "" {
-		return state
-	}
-	
-	if province := os.Getenv("COMPANY_PROVINCE"); province != "" {
-		return province
-	}
-	
-	// For Indonesia, common provinces as fallback
-	if region := os.Getenv("DEFAULT_REGION"); region != "" {
-		return region
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update state/province]"
-}
-
-// getDefaultCompanyEmail returns the default company email from environment or fallback
-func (ers *EnhancedReportService) getDefaultCompanyEmail() string {
-	// Try to get from environment variable
-	if email := os.Getenv("COMPANY_EMAIL"); email != "" {
-		return email
-	}
-	
-	if adminEmail := os.Getenv("ADMIN_EMAIL"); adminEmail != "" {
-		return adminEmail
-	}
-	
-	if contactEmail := os.Getenv("CONTACT_EMAIL"); contactEmail != "" {
-		return contactEmail
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update email address]"
-}
-
-// getDefaultCompanyPhone returns the default company phone from environment or fallback
-func (ers *EnhancedReportService) getDefaultCompanyPhone() string {
-	// Try to get from environment variable
-	if phone := os.Getenv("COMPANY_PHONE"); phone != "" {
-		return phone
-	}
-	
-	if contactPhone := os.Getenv("CONTACT_PHONE"); contactPhone != "" {
-		return contactPhone
-	}
-	
-	if businessPhone := os.Getenv("BUSINESS_PHONE"); businessPhone != "" {
-		return businessPhone
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update phone number]"
-}
-
-// getDefaultCompanyAddress returns the default company address from environment or fallback
-func (ers *EnhancedReportService) getDefaultCompanyAddress() string {
-	// Try to get from environment variable
-	if address := os.Getenv("COMPANY_ADDRESS"); address != "" {
-		return address
-	}
-	
-	if businessAddress := os.Getenv("BUSINESS_ADDRESS"); businessAddress != "" {
-		return businessAddress
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update company address]"
-}
-
-// getDefaultCompanyCity returns the default company city from environment or fallback
-func (ers *EnhancedReportService) getDefaultCompanyCity() string {
-	// Try to get from environment variable
-	if city := os.Getenv("COMPANY_CITY"); city != "" {
-		return city
-	}
-	
-	if businessCity := os.Getenv("BUSINESS_CITY"); businessCity != "" {
-		return businessCity
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update city]"
-}
-
-// getDefaultCompanyWebsite returns the default company website from environment or fallback
-func (ers *EnhancedReportService) getDefaultCompanyWebsite() string {
-	// Try to get from environment variable
-	if website := os.Getenv("COMPANY_WEBSITE"); website != "" {
-		return website
-	}
-	
-	if businessWebsite := os.Getenv("BUSINESS_WEBSITE"); businessWebsite != "" {
-		return businessWebsite
-	}
-	
-	if appUrl := os.Getenv("APP_URL"); appUrl != "" {
-		return appUrl
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update website]"
-}
-
-// getDefaultTaxNumber returns the default tax number from environment or fallback
-func (ers *EnhancedReportService) getDefaultTaxNumber() string {
-	// Try to get from environment variable
-	if taxNumber := os.Getenv("COMPANY_TAX_NUMBER"); taxNumber != "" {
-		return taxNumber
-	}
-	
-	if npwp := os.Getenv("COMPANY_NPWP"); npwp != "" {
-		return npwp
-	}
-	
-	if businessTaxId := os.Getenv("BUSINESS_TAX_ID"); businessTaxId != "" {
-		return businessTaxId
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update tax number]"
-}
-
-// getDefaultPostalCode returns the default postal code from environment or fallback
-func (ers *EnhancedReportService) getDefaultPostalCode() string {
-	// Try to get from environment variable
-	if postalCode := os.Getenv("COMPANY_POSTAL_CODE"); postalCode != "" {
-		return postalCode
-	}
-	
-	if zipCode := os.Getenv("COMPANY_ZIP_CODE"); zipCode != "" {
-		return zipCode
-	}
-	
-	// Default fallback that prompts user to update
-	return "[Please update postal code]"
-}
-
-// getDefaultCurrency returns the default currency from environment or fallback
-func (ers *EnhancedReportService) getDefaultCurrency() string {
-	// Try to get from environment variable
-	if currency := os.Getenv("DEFAULT_CURRENCY"); currency != "" {
-		return currency
-	}
-	
-	if companyCurrency := os.Getenv("COMPANY_CURRENCY"); companyCurrency != "" {
-		return companyCurrency
-	}
-	
-	// Default to IDR for Indonesian companies
-	return "IDR"
-}
-
-// getDefaultCountry returns the default country from environment or fallback
-func (ers *EnhancedReportService) getDefaultCountry() string {
-	// Try to get from environment variable
-	if country := os.Getenv("COMPANY_COUNTRY"); country != "" {
-		return country
-	}
-	
-	if defaultCountry := os.Getenv("DEFAULT_COUNTRY"); defaultCountry != "" {
-		return defaultCountry
-	}
-	
-	// Default to Indonesia
-	return "Indonesia"
 }

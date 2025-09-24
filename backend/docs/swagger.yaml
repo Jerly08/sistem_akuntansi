@@ -1,5 +1,163 @@
 basePath: /api/v1
 definitions:
+  controllers.JournalSummary:
+    properties:
+      message:
+        type: string
+    type: object
+  controllers.PSAKBalanceSheetRequest:
+    properties:
+      as_of_date:
+        example: "2024-12-31"
+        type: string
+    required:
+    - as_of_date
+    type: object
+  controllers.PSAKCashFlowRequest:
+    properties:
+      end_date:
+        example: "2024-12-31"
+        type: string
+      method:
+        description: DIRECT or INDIRECT
+        example: INDIRECT
+        type: string
+      start_date:
+        example: "2024-01-01"
+        type: string
+    required:
+    - end_date
+    - start_date
+    type: object
+  controllers.PSAKComplianceCheckRequest:
+    properties:
+      as_of_date:
+        example: "2024-12-31"
+        type: string
+      end_date:
+        example: "2024-12-31"
+        type: string
+      report_type:
+        description: BALANCE_SHEET, PROFIT_LOSS, CASH_FLOW
+        example: BALANCE_SHEET
+        type: string
+      start_date:
+        example: "2024-01-01"
+        type: string
+    required:
+    - report_type
+    type: object
+  controllers.PSAKComplianceSummaryResponse:
+    properties:
+      critical_issues:
+        items:
+          $ref: '#/definitions/services.PSAKIssue'
+        type: array
+      generated_at:
+        type: string
+      overall_compliance:
+        type: string
+      overall_score:
+        type: number
+      period:
+        $ref: '#/definitions/controllers.PSAKPeriodInfo'
+      recommendations:
+        items:
+          type: string
+        type: array
+      report_compliances:
+        additionalProperties:
+          $ref: '#/definitions/services.PSAKComplianceInfo'
+        type: object
+    type: object
+  controllers.PSAKPeriodInfo:
+    properties:
+      as_of_date:
+        type: string
+      end_date:
+        type: string
+      start_date:
+        type: string
+    type: object
+  controllers.PSAKProfitLossRequest:
+    properties:
+      end_date:
+        example: "2024-12-31"
+        type: string
+      start_date:
+        example: "2024-01-01"
+        type: string
+    required:
+    - end_date
+    - start_date
+    type: object
+  controllers.PSAKReportResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      request_id:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
+  controllers.PSAKStandardInfo:
+    properties:
+      applicable_to:
+        description: e.g., ["BALANCE_SHEET", "PROFIT_LOSS"]
+        items:
+          type: string
+        type: array
+      code:
+        description: e.g., "PSAK 1"
+        type: string
+      description:
+        type: string
+      effective_date:
+        type: string
+      status:
+        description: e.g., "ACTIVE", "SUPERSEDED"
+        type: string
+      title:
+        description: e.g., "Penyajian Laporan Keuangan"
+        type: string
+    type: object
+  controllers.PSAKStandardsListResponse:
+    properties:
+      standards:
+        items:
+          $ref: '#/definitions/controllers.PSAKStandardInfo'
+        type: array
+      total_count:
+        type: integer
+    type: object
+  controllers.PaymentIntegrationMetrics:
+    properties:
+      payments_with_journal:
+        type: integer
+      success_rate:
+        type: number
+      total_amount:
+        type: number
+      total_payments:
+        type: integer
+    type: object
+  controllers.ReverseJournalRequest:
+    properties:
+      description:
+        type: string
+    required:
+    - description
+    type: object
+  controllers.ReversePaymentRequest:
+    properties:
+      reason:
+        type: string
+    required:
+    - reason
+    type: object
   models.APIResponse:
     properties:
       data: {}
@@ -563,71 +721,6 @@ definitions:
         description: User who created the entry
         type: integer
     type: object
-  models.JournalEntryCreateRequest:
-    properties:
-      account_id:
-        type: integer
-      description:
-        type: string
-      entry_date:
-        type: string
-      is_auto_generated:
-        type: boolean
-      notes:
-        type: string
-      reference:
-        type: string
-      reference_id:
-        type: integer
-      reference_type:
-        type: string
-      total_credit:
-        type: number
-      total_debit:
-        type: number
-      user_id:
-        type: integer
-    required:
-    - description
-    - entry_date
-    - user_id
-    type: object
-  models.JournalEntrySummary:
-    properties:
-      balanced_entries:
-        type: integer
-      status_counts:
-        additionalProperties:
-          format: int64
-          type: integer
-        type: object
-      total_credit:
-        type: number
-      total_debit:
-        type: number
-      total_entries:
-        type: integer
-      type_counts:
-        additionalProperties:
-          format: int64
-          type: integer
-        type: object
-    type: object
-  models.JournalEntryUpdateRequest:
-    properties:
-      description:
-        type: string
-      entry_date:
-        type: string
-      journal_lines:
-        items:
-          $ref: '#/definitions/models.JournalLineCreateRequest'
-        type: array
-      notes:
-        type: string
-      reference:
-        type: string
-    type: object
   models.JournalLine:
     properties:
       account:
@@ -652,28 +745,15 @@ definitions:
       updated_at:
         type: string
     type: object
-  models.JournalLineCreateRequest:
-    properties:
-      account_id:
-        type: integer
-      credit_amount:
-        type: number
-      debit_amount:
-        type: number
-      description:
-        type: string
-    required:
-    - account_id
-    type: object
   models.LoginRequest:
     properties:
+      email:
+        type: string
       password:
         type: string
-      username:
-        type: string
     required:
+    - email
     - password
-    - username
     type: object
   models.LoginResponse:
     properties:
@@ -700,15 +780,18 @@ definitions:
         type: string
       id:
         type: integer
+      journal_entry_id:
+        description: Link to SSOT journal entry
+        type: integer
       method:
-        description: CASH, BANK
+        description: CASH, BANK_TRANSFER, CHECK, etc.
         type: string
       notes:
         type: string
       reference:
         type: string
       status:
-        description: PENDING, COMPLETED, FAILED
+        description: PENDING, COMPLETED, FAILED, REVERSED
         type: string
       updated_at:
         type: string
@@ -716,6 +799,29 @@ definitions:
         $ref: '#/definitions/models.User'
       user_id:
         type: integer
+    type: object
+  models.PaymentAllocation:
+    properties:
+      allocated_amount:
+        type: number
+      bill_id:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: integer
+      invoice_id:
+        type: integer
+      payment:
+        allOf:
+        - $ref: '#/definitions/models.Payment'
+        description: Relations
+      payment_id:
+        type: integer
+      sale:
+        $ref: '#/definitions/models.Sale'
+      updated_at:
+        type: string
     type: object
   models.Product:
     properties:
@@ -1069,6 +1175,37 @@ definitions:
     - password
     - username
     type: object
+  models.SSOTAccountBalance:
+    properties:
+      account_category:
+        type: string
+      account_code:
+        type: string
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      account_type:
+        type: string
+      current_balance:
+        type: number
+      is_active:
+        type: boolean
+      is_header:
+        type: boolean
+      last_transaction_date:
+        type: string
+      last_updated:
+        type: string
+      normal_balance:
+        type: string
+      total_credits:
+        type: number
+      total_debits:
+        type: number
+      transaction_count:
+        type: integer
+    type: object
   models.Sale:
     properties:
       billing_address:
@@ -1280,18 +1417,13 @@ definitions:
         type: integer
       created_at:
         type: string
-      date:
-        type: string
       id:
         type: integer
-      method:
-        type: string
       notes:
         type: string
-      payment_id:
-        description: Cross-reference to Payment Management
-        type: integer
-      payment_number:
+      payment_date:
+        type: string
+      payment_method:
         type: string
       reference:
         type: string
@@ -1301,6 +1433,9 @@ definitions:
         description: Relations
       sale_id:
         type: integer
+      status:
+        description: COMPLETED, PENDING, CANCELLED
+        type: string
       updated_at:
         type: string
       user:
@@ -1553,6 +1688,52 @@ definitions:
       currency:
         type: string
     type: object
+  services.AccountBalanceUpdate:
+    properties:
+      account_code:
+        type: string
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      change:
+        type: number
+      change_type:
+        description: INCREASE, DECREASE
+        type: string
+      new_balance:
+        type: number
+      old_balance:
+        type: number
+    type: object
+  services.AccountBreakdown:
+    properties:
+      account_code:
+        type: string
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      count:
+        type: integer
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+    type: object
+  services.AccountTypeSummary:
+    properties:
+      account_count:
+        type: integer
+      account_type:
+        type: string
+      net_balance:
+        type: number
+      total_credits:
+        type: number
+      total_debits:
+        type: number
+    type: object
   services.BalanceDiscrepancy:
     properties:
       cash_bank_balance:
@@ -1593,6 +1774,72 @@ definitions:
         type: integer
       unsynchronized_accounts:
         type: integer
+    type: object
+  services.BalanceSheetData:
+    properties:
+      as_of_date:
+        type: string
+      assets:
+        $ref: '#/definitions/services.BalanceSheetSection'
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      currency:
+        type: string
+      difference:
+        type: number
+      equity:
+        $ref: '#/definitions/services.BalanceSheetSection'
+      generated_at:
+        type: string
+      is_balanced:
+        type: boolean
+      liabilities:
+        $ref: '#/definitions/services.BalanceSheetSection'
+      total_assets:
+        type: number
+      total_equity:
+        type: number
+    type: object
+  services.BalanceSheetItem:
+    properties:
+      account_id:
+        type: integer
+      balance:
+        type: number
+      category:
+        type: string
+      code:
+        type: string
+      is_header:
+        type: boolean
+      level:
+        type: integer
+      name:
+        type: string
+    type: object
+  services.BalanceSheetSection:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.BalanceSheetItem'
+        type: array
+      name:
+        type: string
+      subtotals:
+        items:
+          $ref: '#/definitions/services.BalanceSheetSubtotal'
+        type: array
+      total:
+        type: number
+    type: object
+  services.BalanceSheetSubtotal:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      name:
+        type: string
     type: object
   services.BalanceSummary:
     properties:
@@ -1713,6 +1960,163 @@ definitions:
       name:
         type: string
     type: object
+  services.CashFlowData:
+    properties:
+      beginning_cash:
+        type: number
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      currency:
+        type: string
+      end_date:
+        type: string
+      ending_cash:
+        type: number
+      financing_activities:
+        $ref: '#/definitions/services.CashFlowSection'
+      generated_at:
+        type: string
+      investing_activities:
+        $ref: '#/definitions/services.CashFlowSection'
+      net_cash_flow:
+        type: number
+      operating_activities:
+        $ref: '#/definitions/services.CashFlowSection'
+      start_date:
+        type: string
+    type: object
+  services.CashFlowItem:
+    properties:
+      amount:
+        type: number
+      category:
+        type: string
+      description:
+        type: string
+    type: object
+  services.CashFlowSection:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.CashFlowItem'
+        type: array
+      name:
+        type: string
+      total:
+        type: number
+    type: object
+  services.CompanyInfo:
+    properties:
+      address:
+        type: string
+      city:
+        type: string
+      email:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      postal_code:
+        type: string
+      state:
+        type: string
+      tax_number:
+        type: string
+      website:
+        type: string
+    type: object
+  services.ComplianceIssue:
+    properties:
+      description:
+        type: string
+      journal_id:
+        type: integer
+      severity:
+        type: string
+      type:
+        type: string
+    type: object
+  services.ComplianceReport:
+    properties:
+      compliance_score:
+        type: number
+      failed_checks:
+        type: integer
+      issues:
+        items:
+          $ref: '#/definitions/services.ComplianceIssue'
+        type: array
+      passed_checks:
+        type: integer
+      recommendations:
+        items:
+          type: string
+        type: array
+      total_checks:
+        type: integer
+    type: object
+  services.CustomerSalesData:
+    properties:
+      average_order:
+        type: number
+      customer_id:
+        type: integer
+      customer_name:
+        type: string
+      first_order_date:
+        type: string
+      last_order_date:
+        type: string
+      total_amount:
+        type: number
+      transaction_count:
+        type: integer
+    type: object
+  services.DataQualityIssue:
+    properties:
+      category:
+        type: string
+      count:
+        type: integer
+      description:
+        type: string
+      severity:
+        type: string
+    type: object
+  services.DataQualityMetrics:
+    properties:
+      accuracy_score:
+        type: number
+      completeness_score:
+        type: number
+      consistency_score:
+        type: number
+      detailed_metrics:
+        additionalProperties: true
+        type: object
+      issues:
+        items:
+          $ref: '#/definitions/services.DataQualityIssue'
+        type: array
+      overall_score:
+        type: number
+    type: object
+  services.DataSourceInfo:
+    properties:
+      data_integrity_check:
+        type: boolean
+      draft_entries:
+        type: integer
+      last_journal_sync:
+        type: string
+      posted_entries:
+        type: integer
+      ssot_version:
+        type: string
+      total_journal_entries:
+        type: integer
+    type: object
   services.DepositRequest:
     properties:
       account_id:
@@ -1745,11 +2149,328 @@ definitions:
       report_type:
         type: string
     type: object
+  services.EntryTypeBreakdown:
+    properties:
+      count:
+        type: integer
+      percentage:
+        type: number
+      source_type:
+        type: string
+      total_amount:
+        type: number
+    type: object
+  services.GeneralLedgerData:
+    properties:
+      account:
+        $ref: '#/definitions/models.Account'
+      closing_balance:
+        type: number
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      currency:
+        type: string
+      end_date:
+        type: string
+      generated_at:
+        type: string
+      monthly_summary:
+        items:
+          $ref: '#/definitions/services.MonthlyLedgerSummary'
+        type: array
+      opening_balance:
+        type: number
+      start_date:
+        type: string
+      total_credits:
+        type: number
+      total_debits:
+        type: number
+      transactions:
+        items:
+          $ref: '#/definitions/services.GeneralLedgerEntry'
+        type: array
+    type: object
+  services.GeneralLedgerEntry:
+    properties:
+      balance:
+        type: number
+      credit_amount:
+        type: number
+      date:
+        type: string
+      debit_amount:
+        type: number
+      description:
+        type: string
+      entry_type:
+        type: string
+      journal_code:
+        type: string
+      reference:
+        type: string
+    type: object
+  services.GrowthAnalysisData:
+    properties:
+      month_over_month:
+        type: number
+      quarter_over_quarter:
+        type: number
+      seasonality_index:
+        type: number
+      trend_direction:
+        type: string
+      year_over_year:
+        type: number
+    type: object
+  services.IntegratedAccountDetail:
+    properties:
+      account_id:
+        type: integer
+      balance:
+        type: number
+      code:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      last_transaction_date:
+        type: string
+      name:
+        type: string
+      reconciliation_status:
+        type: string
+      ssot_balance:
+        type: number
+      total_journal_entries:
+        type: integer
+      type:
+        type: string
+      updated_at:
+        type: string
+      variance:
+        type: number
+    type: object
+  services.IntegratedAccountResponse:
+    properties:
+      account:
+        $ref: '#/definitions/services.IntegratedAccountDetail'
+      last_synced_at:
+        type: string
+      recent_journal_entries:
+        items:
+          $ref: '#/definitions/services.IntegratedJournalEntry'
+        type: array
+      recent_transactions:
+        items:
+          $ref: '#/definitions/services.IntegratedTransaction'
+        type: array
+    type: object
+  services.IntegratedAccountSummary:
+    properties:
+      balance:
+        type: number
+      code:
+        type: string
+      id:
+        type: integer
+      last_transaction_date:
+        type: string
+      name:
+        type: string
+      reconciliation_status:
+        type: string
+      ssot_balance:
+        type: number
+      total_journal_entries:
+        type: integer
+      type:
+        type: string
+      variance:
+        type: number
+    type: object
+  services.IntegratedActivity:
+    properties:
+      account_name:
+        type: string
+      amount:
+        type: number
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      number:
+        type: string
+      type:
+        type: string
+    type: object
+  services.IntegratedBalanceSummary:
+    properties:
+      balance_variance:
+        type: number
+      total_balance:
+        type: number
+      total_bank:
+        type: number
+      total_cash:
+        type: number
+      total_ssot_balance:
+        type: number
+      variance_count:
+        type: integer
+    type: object
+  services.IntegratedFinancialReports:
+    properties:
+      balance_sheet:
+        $ref: '#/definitions/services.BalanceSheetData'
+      cash_flow:
+        $ref: '#/definitions/services.CashFlowData'
+      data_source_info:
+        $ref: '#/definitions/services.DataSourceInfo'
+      general_ledger:
+        $ref: '#/definitions/services.GeneralLedgerData'
+      generated_at:
+        type: string
+      journal_analysis:
+        $ref: '#/definitions/services.JournalAnalysisData'
+      profit_loss:
+        $ref: '#/definitions/services.ProfitLossData'
+      sales_summary:
+        $ref: '#/definitions/services.SalesSummaryData'
+      trial_balance:
+        $ref: '#/definitions/services.TrialBalanceData'
+      vendor_analysis:
+        $ref: '#/definitions/services.VendorAnalysisData'
+    type: object
+  services.IntegratedJournalEntry:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      entry_date:
+        type: string
+      entry_number:
+        type: string
+      id:
+        type: integer
+      lines:
+        items:
+          $ref: '#/definitions/services.IntegratedJournalLine'
+        type: array
+      source_type:
+        type: string
+      status:
+        type: string
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+    type: object
+  services.IntegratedJournalLine:
+    properties:
+      account_code:
+        type: string
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      credit_amount:
+        type: number
+      debit_amount:
+        type: number
+      description:
+        type: string
+      id:
+        type: integer
+    type: object
+  services.IntegratedSummaryResponse:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/services.IntegratedAccountSummary'
+        type: array
+      recent_activities:
+        items:
+          $ref: '#/definitions/services.IntegratedActivity'
+        type: array
+      summary:
+        $ref: '#/definitions/services.IntegratedBalanceSummary'
+      sync_status:
+        $ref: '#/definitions/services.SyncStatus'
+    type: object
+  services.IntegratedTransaction:
+    properties:
+      amount:
+        type: number
+      balance_after:
+        type: number
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      journal_entry_id:
+        type: integer
+      journal_entry_number:
+        type: string
+      number:
+        type: string
+      reference_number:
+        type: string
+      type:
+        type: string
+    type: object
   services.InvoiceAllocation:
     properties:
       amount:
         type: number
       invoice_id:
+        type: integer
+    type: object
+  services.JournalAnalysisData:
+    properties:
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      compliance_check:
+        $ref: '#/definitions/services.ComplianceReport'
+      currency:
+        type: string
+      data_quality_metrics:
+        $ref: '#/definitions/services.DataQualityMetrics'
+      draft_entries:
+        type: integer
+      end_date:
+        type: string
+      entries_by_account:
+        items:
+          $ref: '#/definitions/services.AccountBreakdown'
+        type: array
+      entries_by_period:
+        items:
+          $ref: '#/definitions/services.PeriodBreakdown'
+        type: array
+      entries_by_type:
+        items:
+          $ref: '#/definitions/services.EntryTypeBreakdown'
+        type: array
+      generated_at:
+        type: string
+      posted_entries:
+        type: integer
+      reversed_entries:
+        type: integer
+      start_date:
+        type: string
+      total_amount:
+        type: number
+      total_entries:
         type: integer
     type: object
   services.JournalDrilldownRequest:
@@ -1805,6 +2526,27 @@ definitions:
       total:
         type: integer
     type: object
+  services.JournalEntryRequest:
+    properties:
+      auto_post:
+        type: boolean
+      created_by:
+        type: integer
+      description:
+        type: string
+      entry_date:
+        type: string
+      lines:
+        items:
+          $ref: '#/definitions/services.JournalLineRequest'
+        type: array
+      reference:
+        type: string
+      source_id:
+        type: integer
+      source_type:
+        type: string
+    type: object
   services.JournalEntrySummary:
     properties:
       accounts_involved:
@@ -1822,6 +2564,709 @@ definitions:
       total_credit:
         type: number
       total_debit:
+        type: number
+    type: object
+  services.JournalLineRequest:
+    properties:
+      account_id:
+        type: integer
+      credit_amount:
+        type: number
+      debit_amount:
+        type: number
+      description:
+        type: string
+    type: object
+  services.JournalLineResponse:
+    properties:
+      account_id:
+        type: integer
+      credit_amount:
+        type: number
+      debit_amount:
+        type: number
+      description:
+        type: string
+      id:
+        type: integer
+      line_number:
+        type: integer
+    type: object
+  services.JournalResponse:
+    properties:
+      created_at:
+        type: string
+      entry_number:
+        type: string
+      id:
+        type: integer
+      is_balanced:
+        type: boolean
+      lines:
+        items:
+          $ref: '#/definitions/services.JournalLineResponse'
+        type: array
+      status:
+        type: string
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+      updated_at:
+        type: string
+    type: object
+  services.LightweightPaymentRequest:
+    properties:
+      amount:
+        type: number
+      cash_bank_id:
+        type: integer
+      method:
+        type: string
+      notes:
+        type: string
+      payment_date:
+        type: string
+      reference:
+        type: string
+      sale_id:
+        type: integer
+    required:
+    - amount
+    - cash_bank_id
+    - method
+    - payment_date
+    - sale_id
+    type: object
+  services.LightweightPaymentResponse:
+    properties:
+      amount:
+        type: number
+      message:
+        type: string
+      new_status:
+        type: string
+      outstanding_amount:
+        type: number
+      payment_code:
+        type: string
+      payment_id:
+        type: integer
+      processing_time:
+        type: string
+      success:
+        type: boolean
+    type: object
+  services.MonthlyLedgerSummary:
+    properties:
+      credits:
+        type: number
+      debits:
+        type: number
+      end_balance:
+        type: number
+      month:
+        type: string
+      net_movement:
+        type: number
+      year:
+        type: integer
+    type: object
+  services.PLItem:
+    properties:
+      account_id:
+        type: integer
+      amount:
+        type: number
+      category:
+        type: string
+      code:
+        type: string
+      name:
+        type: string
+      percentage:
+        type: number
+    type: object
+  services.PLSection:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.PLItem'
+        type: array
+      name:
+        type: string
+      subtotal:
+        type: number
+    type: object
+  services.PSAKAssetSection:
+    properties:
+      cash_and_cash_equivalents:
+        description: Sub-sections untuk aset lancar (sesuai PSAK 1 paragraf 66)
+        type: number
+      deferred_tax_assets:
+        description: Aset Pajak Tangguhan
+        type: number
+      intangible_assets:
+        description: Aset Tidak Berwujud
+        type: number
+      inventories:
+        description: Persediaan
+        type: number
+      investment_properties:
+        description: Properti Investasi
+        type: number
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKBalanceItem'
+        type: array
+      long_term_investments:
+        description: Investasi Jangka Panjang
+        type: number
+      name:
+        type: string
+      prepaid_expenses:
+        description: Beban Dibayar Dimuka
+        type: number
+      property_plant_equipment:
+        description: Sub-sections untuk aset tidak lancar (sesuai PSAK 1 paragraf
+          66)
+        type: number
+      subtotal:
+        type: number
+      trade_receivables:
+        description: Piutang Usaha
+        type: number
+    type: object
+  services.PSAKBalanceItem:
+    properties:
+      account_code:
+        type: string
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      amount:
+        type: number
+      category:
+        type: string
+      classification:
+        description: LANCAR, TIDAK_LANCAR, etc.
+        type: string
+      is_header:
+        type: boolean
+      level:
+        type: integer
+      psak_reference:
+        description: Reference to specific PSAK paragraph
+        type: string
+    type: object
+  services.PSAKBalanceSheetData:
+    properties:
+      balance_difference:
+        type: number
+      company_info:
+        $ref: '#/definitions/services.CompanyInfo'
+      currency:
+        type: string
+      current_assets:
+        allOf:
+        - $ref: '#/definitions/services.PSAKAssetSection'
+        description: ASET (sesuai PSAK 1 paragraf 54-56)
+      current_liabilities:
+        allOf:
+        - $ref: '#/definitions/services.PSAKLiabilitySection'
+        description: LIABILITAS (sesuai PSAK 1 paragraf 60-65)
+      equity:
+        allOf:
+        - $ref: '#/definitions/services.PSAKEquitySection'
+        description: EKUITAS (sesuai PSAK 1 paragraf 54(r))
+      generated_at:
+        type: string
+      is_balanced:
+        description: 'Validation sesuai fundamental equation: Assets = Liabilities
+          + Equity'
+        type: boolean
+      non_current_assets:
+        allOf:
+        - $ref: '#/definitions/services.PSAKAssetSection'
+        description: Aset Tidak Lancar
+      non_current_liabilities:
+        allOf:
+        - $ref: '#/definitions/services.PSAKLiabilitySection'
+        description: Liabilitas Jangka Panjang
+      psak_compliance:
+        allOf:
+        - $ref: '#/definitions/services.PSAKComplianceInfo'
+        description: Compliance dan Audit Trail
+      reporting_date:
+        description: Tanggal pelaporan
+        type: string
+      total_assets:
+        description: Total Aset
+        type: number
+      total_equity:
+        description: Total Ekuitas
+        type: number
+      total_liabilities:
+        description: Total Liabilitas
+        type: number
+    type: object
+  services.PSAKCashFlowData:
+    properties:
+      beginning_cash:
+        description: KAS DAN SETARA KAS AWAL PERIODE
+        type: number
+      company_info:
+        $ref: '#/definitions/services.CompanyInfo'
+      currency:
+        type: string
+      ending_cash:
+        description: KAS DAN SETARA KAS AKHIR PERIODE
+        type: number
+      financing_activities:
+        allOf:
+        - $ref: '#/definitions/services.PSAKCashFlowSection'
+        description: ARUS KAS DARI AKTIVITAS PENDANAAN - sesuai PSAK 2 paragraf 17
+      foreign_exchange_effect:
+        description: PENGARUH PERUBAHAN KURS VALUTA ASING
+        type: number
+      generated_at:
+        type: string
+      investing_activities:
+        allOf:
+        - $ref: '#/definitions/services.PSAKCashFlowSection'
+        description: ARUS KAS DARI AKTIVITAS INVESTASI - sesuai PSAK 2 paragraf 16-17
+      method:
+        description: '"DIRECT" atau "INDIRECT"'
+        type: string
+      net_cash_increase:
+        description: KENAIKAN (PENURUNAN) KAS DAN SETARA KAS
+        type: number
+      net_financing_cash:
+        description: Kas Neto dari Pendanaan
+        type: number
+      net_investing_cash:
+        description: Kas Neto dari Investasi
+        type: number
+      net_operating_cash:
+        description: Kas Neto dari Operasi
+        type: number
+      operating_activities:
+        allOf:
+        - $ref: '#/definitions/services.PSAKCashFlowSection'
+        description: ARUS KAS DARI AKTIVITAS OPERASI - sesuai PSAK 2 paragraf 13-15
+      period_end:
+        type: string
+      period_start:
+        type: string
+      psak_compliance:
+        allOf:
+        - $ref: '#/definitions/services.PSAKComplianceInfo'
+        description: Compliance dan Audit Trail
+      reconciliation:
+        allOf:
+        - $ref: '#/definitions/services.PSAKCashReconciliation'
+        description: REKONSILIASI (untuk metode tidak langsung)
+    type: object
+  services.PSAKCashFlowItem:
+    properties:
+      amount:
+        type: number
+      classification:
+        description: OPERASI, INVESTASI, PENDANAAN
+        type: string
+      description:
+        type: string
+      method:
+        description: LANGSUNG, TIDAK_LANGSUNG
+        type: string
+      psak_reference:
+        type: string
+      type:
+        description: INFLOW, OUTFLOW
+        type: string
+    type: object
+  services.PSAKCashFlowSection:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKCashFlowItem'
+        type: array
+      name:
+        type: string
+      subtotal:
+        type: number
+    type: object
+  services.PSAKCashReconciliation:
+    properties:
+      adjustments_for:
+        description: Penyesuaian untuk
+        items:
+          $ref: '#/definitions/services.PSAKCashFlowItem'
+        type: array
+      cash_from_operations:
+        description: Kas dari Operasi
+        type: number
+      changes_in_working_capital:
+        description: Perubahan Modal Kerja
+        items:
+          $ref: '#/definitions/services.PSAKCashFlowItem'
+        type: array
+      interest_paid:
+        description: Bunga Dibayar
+        type: number
+      net_operating_cash:
+        description: Kas Neto Operasi
+        type: number
+      net_profit:
+        description: Laba Neto
+        type: number
+      taxes_paid:
+        description: Pajak Dibayar
+        type: number
+    type: object
+  services.PSAKComplianceInfo:
+    properties:
+      compliance_level:
+        description: FULL, PARTIAL, NON_COMPLIANT
+        type: string
+      compliance_score:
+        description: Score 0-100
+        type: number
+      last_review_date:
+        type: string
+      non_compliance_issues:
+        items:
+          $ref: '#/definitions/services.PSAKIssue'
+        type: array
+      recommendations:
+        items:
+          type: string
+        type: array
+      reviewer_notes:
+        type: string
+      standards_applied:
+        description: PSAK yang diterapkan
+        items:
+          type: string
+        type: array
+    type: object
+  services.PSAKEquitySection:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKBalanceItem'
+        type: array
+      name:
+        type: string
+      other_equity_components:
+        description: Komponen Ekuitas Lainnya
+        type: number
+      retained_earnings:
+        description: Saldo Laba
+        type: number
+      share_capital:
+        description: Sub-sections ekuitas (sesuai PSAK 1 paragraf 54(r))
+        type: number
+      share_premium:
+        description: Agio Saham
+        type: number
+      subtotal:
+        type: number
+      treasury_stock:
+        description: Saham Treasury
+        type: number
+    type: object
+  services.PSAKExpenseSection:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKPLItem'
+        type: array
+      name:
+        type: string
+      subtotal:
+        type: number
+    type: object
+  services.PSAKIssue:
+    properties:
+      affected_accounts:
+        items:
+          type: integer
+        type: array
+      issue_description:
+        type: string
+      recommended_action:
+        type: string
+      severity:
+        description: HIGH, MEDIUM, LOW
+        type: string
+      standard_reference:
+        description: e.g., "PSAK 1 paragraf 54"
+        type: string
+    type: object
+  services.PSAKLiabilitySection:
+    properties:
+      accrued_liabilities:
+        description: Beban yang Masih Harus Dibayar
+        type: number
+      current_portion_long_term:
+        description: Bagian Lancar Utang Jangka Panjang
+        type: number
+      deferred_tax_liabilities:
+        description: Liabilitas Pajak Tangguhan
+        type: number
+      employee_benefits:
+        description: Imbalan Kerja
+        type: number
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKBalanceItem'
+        type: array
+      long_term_borrowings:
+        description: Sub-sections untuk liabilitas jangka panjang
+        type: number
+      name:
+        type: string
+      provisions:
+        description: Provisi
+        type: number
+      short_term_borrowings:
+        description: Pinjaman Jangka Pendek
+        type: number
+      subtotal:
+        type: number
+      tax_liabilities:
+        description: Utang Pajak
+        type: number
+      trade_payables:
+        description: Sub-sections untuk liabilitas jangka pendek (sesuai PSAK 1 paragraf
+          69)
+        type: number
+    type: object
+  services.PSAKOCISection:
+    properties:
+      actuarial_gain_loss:
+        description: Sub-sections OCI yang tidak akan direklasifikasi ke laba rugi
+        type: number
+      available_for_sale_securities:
+        description: Sekuritas Tersedia untuk Dijual
+        type: number
+      cash_flow_hedges:
+        description: Lindung Nilai Arus Kas
+        type: number
+      foreign_currency_translation:
+        description: Sub-sections OCI yang akan direklasifikasi ke laba rugi
+        type: number
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKPLItem'
+        type: array
+      name:
+        type: string
+      revaluation_surplus:
+        description: Surplus Revaluasi
+        type: number
+      subtotal:
+        type: number
+    type: object
+  services.PSAKOtherSection:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKPLItem'
+        type: array
+      name:
+        type: string
+      subtotal:
+        type: number
+    type: object
+  services.PSAKPLItem:
+    properties:
+      account_code:
+        type: string
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      amount:
+        type: number
+      category:
+        type: string
+      classification:
+        type: string
+      percentage:
+        description: Percentage of total revenue
+        type: number
+      psak_reference:
+        type: string
+    type: object
+  services.PSAKProfitLossData:
+    properties:
+      basic_eps:
+        description: LABA PER SAHAM - sesuai PSAK 56 (Laba per Saham)
+        type: number
+      company_info:
+        $ref: '#/definitions/services.CompanyInfo'
+      cost_of_sales:
+        allOf:
+        - $ref: '#/definitions/services.PSAKExpenseSection'
+        description: BEBAN POKOK PENJUALAN (Cost of Sales) - sesuai PSAK 14 (Persediaan)
+      currency:
+        type: string
+      diluted_eps:
+        description: Laba per Saham Dilusian
+        type: number
+      generated_at:
+        type: string
+      gross_profit:
+        description: LABA KOTOR (Gross Profit)
+        type: number
+      gross_profit_margin:
+        description: Margin Laba Kotor (%)
+        type: number
+      net_other_income:
+        description: Pendapatan Lain-lain Neto
+        type: number
+      net_profit:
+        description: LABA NETO (Net Profit)
+        type: number
+      net_profit_margin:
+        description: Margin Laba Neto (%)
+        type: number
+      operating_expenses:
+        allOf:
+        - $ref: '#/definitions/services.PSAKExpenseSection'
+        description: BEBAN USAHA (Operating Expenses)
+      operating_margin:
+        description: Margin Usaha (%)
+        type: number
+      operating_profit:
+        description: LABA USAHA (Operating Profit)
+        type: number
+      other_comprehensive_income:
+        allOf:
+        - $ref: '#/definitions/services.PSAKOCISection'
+        description: PENGHASILAN KOMPREHENSIF LAIN - sesuai PSAK 1 paragraf 82-85
+      other_expenses:
+        allOf:
+        - $ref: '#/definitions/services.PSAKOtherSection'
+        description: Beban Lain-lain
+      other_income:
+        allOf:
+        - $ref: '#/definitions/services.PSAKOtherSection'
+        description: PENDAPATAN DAN BEBAN LAIN-LAIN (Other Income and Expenses)
+      period_end:
+        type: string
+      period_start:
+        type: string
+      profit_before_tax:
+        description: LABA SEBELUM PAJAK (Profit Before Tax)
+        type: number
+      psak_compliance:
+        allOf:
+        - $ref: '#/definitions/services.PSAKComplianceInfo'
+        description: Compliance dan Audit Trail
+      revenue:
+        allOf:
+        - $ref: '#/definitions/services.PSAKRevenueSection'
+        description: PENDAPATAN (Revenue) - sesuai PSAK 23 (Pendapatan dari Kontrak
+          dengan Pelanggan)
+      tax_expense:
+        allOf:
+        - $ref: '#/definitions/services.PSAKTaxSection'
+        description: BEBAN PAJAK PENGHASILAN - sesuai PSAK 46 (Pajak Penghasilan)
+      total_comprehensive_income:
+        description: Total Laba Komprehensif
+        type: number
+      total_cost_of_sales:
+        description: Total Beban Pokok Penjualan
+        type: number
+      total_operating_expenses:
+        description: Total Beban Usaha
+        type: number
+      total_revenue:
+        description: Total Pendapatan
+        type: number
+      total_tax_expense:
+        description: Total Beban Pajak
+        type: number
+      weighted_avg_shares:
+        description: Rata-rata Tertimbang Saham
+        type: number
+    type: object
+  services.PSAKRevenueSection:
+    properties:
+      dividend_income:
+        description: Pendapatan Dividen
+        type: number
+      interest_income:
+        description: Pendapatan Bunga
+        type: number
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKPLItem'
+        type: array
+      name:
+        type: string
+      royalty_income:
+        description: Pendapatan Royalti
+        type: number
+      sales_revenue:
+        description: Sub-sections pendapatan (sesuai PSAK 23)
+        type: number
+      service_revenue:
+        description: Jasa
+        type: number
+      subtotal:
+        type: number
+    type: object
+  services.PSAKTaxSection:
+    properties:
+      current_tax_expense:
+        description: Sub-sections pajak (sesuai PSAK 46)
+        type: number
+      deferred_tax_expense:
+        description: Beban Pajak Tangguhan
+        type: number
+      items:
+        items:
+          $ref: '#/definitions/services.PSAKPLItem'
+        type: array
+      name:
+        type: string
+      subtotal:
+        type: number
+      tax_adjustment_prior_year:
+        description: Koreksi Pajak Tahun Lalu
+        type: number
+    type: object
+  services.PaginatedJournalResponse:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/services.JournalResponse'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  services.PaymentAnalysisData:
+    properties:
+      average_payment_days:
+        type: number
+      late_payments:
+        type: integer
+      on_time_payments:
+        type: integer
+      overdue_payments:
+        type: integer
+      payment_efficiency:
         type: number
     type: object
   services.PaymentCreateRequest:
@@ -1855,6 +3300,225 @@ definitions:
     - date
     - method
     type: object
+  services.PaymentJournalResult:
+    properties:
+      account_updates:
+        items:
+          $ref: '#/definitions/services.AccountBalanceUpdate'
+        type: array
+      journal_entry:
+        $ref: '#/definitions/services.JournalResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  services.PaymentProcessingSummary:
+    properties:
+      account_balances_updated:
+        type: boolean
+      allocations_created:
+        type: integer
+      journal_entry_created:
+        type: boolean
+      processing_time:
+        type: string
+      total_amount:
+        type: number
+      transaction_id:
+        type: string
+    type: object
+  services.PaymentWithJournalRequest:
+    properties:
+      amount:
+        minimum: 0.01
+        type: number
+      auto_create_journal:
+        default: true
+        description: Journal integration options
+        type: boolean
+      cash_bank_id:
+        type: integer
+      contact_id:
+        type: integer
+      date:
+        type: string
+      method:
+        type: string
+      notes:
+        type: string
+      preview_journal:
+        default: false
+        type: boolean
+      reference:
+        type: string
+      target_bill_id:
+        type: integer
+      target_invoice_id:
+        description: Allocation options
+        type: integer
+      user_id:
+        description: User context
+        type: integer
+    required:
+    - amount
+    - cash_bank_id
+    - contact_id
+    - date
+    - method
+    type: object
+  services.PaymentWithJournalResponse:
+    properties:
+      allocations:
+        items:
+          $ref: '#/definitions/models.PaymentAllocation'
+        type: array
+      cash_bank:
+        $ref: '#/definitions/models.CashBank'
+      contact:
+        $ref: '#/definitions/models.Contact'
+      journal_result:
+        $ref: '#/definitions/services.PaymentJournalResult'
+      message:
+        type: string
+      payment:
+        $ref: '#/definitions/models.Payment'
+      success:
+        type: boolean
+      summary:
+        $ref: '#/definitions/services.PaymentProcessingSummary'
+      warnings:
+        items:
+          type: string
+        type: array
+    type: object
+  services.PeriodBreakdown:
+    properties:
+      count:
+        type: integer
+      end_date:
+        type: string
+      period:
+        type: string
+      start_date:
+        type: string
+      total_amount:
+        type: number
+    type: object
+  services.PeriodData:
+    properties:
+      amount:
+        type: number
+      end_date:
+        type: string
+      growth_rate:
+        type: number
+      period:
+        type: string
+      start_date:
+        type: string
+      transactions:
+        type: integer
+    type: object
+  services.ProductSalesData:
+    properties:
+      average_price:
+        type: number
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      quantity_sold:
+        type: integer
+      total_amount:
+        type: number
+      transaction_count:
+        type: integer
+    type: object
+  services.ProfitLossData:
+    properties:
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      cost_of_goods_sold:
+        $ref: '#/definitions/services.PLSection'
+      currency:
+        type: string
+      data_quality_score:
+        type: number
+      data_quality_warnings:
+        items:
+          type: string
+        type: array
+      diluted_eps:
+        type: number
+      earnings_per_share:
+        type: number
+      ebit:
+        type: number
+      ebitda:
+        type: number
+      end_date:
+        type: string
+      generated_at:
+        type: string
+      gross_profit:
+        type: number
+      gross_profit_margin:
+        type: number
+      net_income:
+        type: number
+      net_income_before_tax:
+        type: number
+      net_income_margin:
+        type: number
+      operating_expenses:
+        $ref: '#/definitions/services.PLSection'
+      operating_income:
+        type: number
+      other_expenses:
+        $ref: '#/definitions/services.PLSection'
+      other_income:
+        $ref: '#/definitions/services.PLSection'
+      revenue:
+        $ref: '#/definitions/services.PLSection'
+      shares_outstanding:
+        type: number
+      start_date:
+        type: string
+      tax_expense:
+        type: number
+      validation_report:
+        allOf:
+        - $ref: '#/definitions/services.ValidationReport'
+        description: Data Quality and Validation Fields
+    type: object
+  services.ReconciliationData:
+    properties:
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      cashbank_balance:
+        type: number
+      details:
+        items:
+          type: string
+        type: array
+      difference:
+        type: number
+      has_discrepancy:
+        type: boolean
+      last_reconciled_at:
+        type: string
+      recommendations:
+        items:
+          type: string
+        type: array
+      reconciliation_status:
+        type: string
+      ssot_balance:
+        type: number
+    type: object
   services.ReconciliationItemRequest:
     properties:
       is_cleared:
@@ -1877,6 +3541,111 @@ definitions:
     required:
     - date
     - statement_balance
+    type: object
+  services.SalesSummaryData:
+    properties:
+      average_order_value:
+        type: number
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      currency:
+        type: string
+      data_quality_score:
+        type: number
+      debug_info:
+        additionalProperties: true
+        description: Enhanced debugging and monitoring fields
+        type: object
+      end_date:
+        type: string
+      generated_at:
+        type: string
+      growth_analysis:
+        $ref: '#/definitions/services.GrowthAnalysisData'
+      new_customers:
+        type: integer
+      processing_time:
+        type: string
+      returning_customers:
+        type: integer
+      sales_by_customer:
+        items:
+          $ref: '#/definitions/services.CustomerSalesData'
+        type: array
+      sales_by_period:
+        items:
+          $ref: '#/definitions/services.PeriodData'
+        type: array
+      sales_by_product:
+        items:
+          $ref: '#/definitions/services.ProductSalesData'
+        type: array
+      sales_by_status:
+        items:
+          $ref: '#/definitions/services.StatusData'
+        type: array
+      start_date:
+        type: string
+      top_performers:
+        $ref: '#/definitions/services.TopPerformersData'
+      total_customers:
+        type: integer
+      total_revenue:
+        type: number
+      total_transactions:
+        type: integer
+    type: object
+  services.SalespersonData:
+    properties:
+      commission:
+        type: number
+      salesperson_id:
+        type: integer
+      salesperson_name:
+        type: string
+      total_sales:
+        type: number
+      transaction_count:
+        type: integer
+    type: object
+  services.StatusData:
+    properties:
+      amount:
+        type: number
+      count:
+        type: integer
+      percentage:
+        type: number
+      status:
+        type: string
+    type: object
+  services.SyncStatus:
+    properties:
+      last_sync_at:
+        type: string
+      sync_status:
+        type: string
+      synced_accounts:
+        type: integer
+      total_accounts:
+        type: integer
+      variance_accounts:
+        type: integer
+    type: object
+  services.TopPerformersData:
+    properties:
+      top_customers:
+        items:
+          $ref: '#/definitions/services.CustomerSalesData'
+        type: array
+      top_products:
+        items:
+          $ref: '#/definitions/services.ProductSalesData'
+        type: array
+      top_salespeople:
+        items:
+          $ref: '#/definitions/services.SalespersonData'
+        type: array
     type: object
   services.TransactionResult:
     properties:
@@ -1915,6 +3684,195 @@ definitions:
     - date
     - from_account_id
     - to_account_id
+    type: object
+  services.TrialBalanceData:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/services.TrialBalanceItem'
+        type: array
+      as_of_date:
+        type: string
+      asset_summary:
+        $ref: '#/definitions/services.AccountTypeSummary'
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      currency:
+        type: string
+      difference:
+        type: number
+      equity_summary:
+        $ref: '#/definitions/services.AccountTypeSummary'
+      expense_summary:
+        $ref: '#/definitions/services.AccountTypeSummary'
+      generated_at:
+        type: string
+      is_balanced:
+        type: boolean
+      liability_summary:
+        $ref: '#/definitions/services.AccountTypeSummary'
+      revenue_summary:
+        $ref: '#/definitions/services.AccountTypeSummary'
+      total_credits:
+        type: number
+      total_debits:
+        type: number
+    type: object
+  services.TrialBalanceItem:
+    properties:
+      account_code:
+        type: string
+      account_id:
+        type: integer
+      account_name:
+        type: string
+      account_type:
+        type: string
+      category:
+        type: string
+      credit_balance:
+        type: number
+      debit_balance:
+        type: number
+      is_header:
+        type: boolean
+      level:
+        type: integer
+    type: object
+  services.ValidationIssue:
+    properties:
+      account_code:
+        type: string
+      amount:
+        type: number
+      category:
+        description: BALANCE, TRANSACTION, ACCOUNT, PERIOD
+        type: string
+      count:
+        type: integer
+      date:
+        type: string
+      description:
+        type: string
+      impact:
+        description: LOW, MEDIUM, HIGH
+        type: string
+      level:
+        description: INFO, WARNING, ERROR, CRITICAL
+        type: string
+      suggestion:
+        type: string
+      title:
+        type: string
+    type: object
+  services.ValidationReport:
+    properties:
+      health_score:
+        description: 0-100
+        type: number
+      issues:
+        items:
+          $ref: '#/definitions/services.ValidationIssue'
+        type: array
+      issues_by_category:
+        additionalProperties:
+          type: integer
+        type: object
+      issues_by_level:
+        additionalProperties:
+          type: integer
+        type: object
+      overall_health:
+        description: EXCELLENT, GOOD, FAIR, POOR, CRITICAL
+        type: string
+      recommendations:
+        items:
+          type: string
+        type: array
+      total_issues:
+        type: integer
+      validation_date:
+        type: string
+    type: object
+  services.VendorAnalysisData:
+    properties:
+      active_vendors:
+        type: integer
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      currency:
+        type: string
+      end_date:
+        type: string
+      generated_at:
+        type: string
+      outstanding_payables:
+        type: number
+      payment_analysis:
+        $ref: '#/definitions/services.PaymentAnalysisData'
+      start_date:
+        type: string
+      top_vendors_by_spend:
+        items:
+          $ref: '#/definitions/services.VendorSpendData'
+        type: array
+      total_payments:
+        type: number
+      total_purchases:
+        type: number
+      total_vendors:
+        type: integer
+      vendor_payment_history:
+        items:
+          $ref: '#/definitions/services.VendorPaymentHistory'
+        type: array
+      vendors_by_performance:
+        items:
+          $ref: '#/definitions/services.VendorPerformanceData'
+        type: array
+    type: object
+  services.VendorPaymentHistory:
+    properties:
+      month:
+        type: string
+      outstanding:
+        type: number
+      payments:
+        type: number
+      purchases:
+        type: number
+    type: object
+  services.VendorPerformanceData:
+    properties:
+      average_payment_days:
+        type: number
+      outstanding:
+        type: number
+      payment_score:
+        type: number
+      rating:
+        type: string
+      total_payments:
+        type: number
+      total_purchases:
+        type: number
+      vendor_id:
+        type: integer
+      vendor_name:
+        type: string
+    type: object
+  services.VendorSpendData:
+    properties:
+      percentage:
+        type: number
+      total_spend:
+        type: number
+      transactions:
+        type: integer
+      vendor_id:
+        type: integer
+      vendor_name:
+        type: string
     type: object
   services.WithdrawalRequest:
     properties:
@@ -1991,50 +3949,6 @@ info:
   title: Sistema Akuntansi API
   version: "1.0"
 paths:
-  /accounts/{account_id}/journal-entries:
-    get:
-      description: Get journal entries that affect a specific account (General Ledger
-        view)
-      parameters:
-      - description: Account ID
-        in: path
-        name: account_id
-        required: true
-        type: integer
-      - description: Start date (YYYY-MM-DD)
-        in: query
-        name: start_date
-        type: string
-      - description: End date (YYYY-MM-DD)
-        in: query
-        name: end_date
-        type: string
-      - description: 'Page number (default: 1)'
-        in: query
-        name: page
-        type: integer
-      - description: 'Items per page (default: 20)'
-        in: query
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            properties:
-              data:
-                items:
-                  $ref: '#/definitions/models.JournalEntry'
-                type: array
-              total:
-                format: int64
-                type: integer
-            type: object
-      summary: Get account journal entries
-      tags:
-      - journal-entries
   /api/admin/check-cashbank-gl-links:
     get:
       consumes:
@@ -2311,6 +4225,208 @@ paths:
       summary: Get accounts for deposit source (Revenue + Equity)
       tags:
       - CashBank
+  /api/cashbank/integrated/accounts/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get cash/bank account details integrated with SSOT journal data
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.IntegratedAccountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get integrated account details
+      tags:
+      - CashBank Integration
+  /api/cashbank/integrated/accounts/{id}/journal-entries:
+    get:
+      consumes:
+      - application/json
+      description: Get journal entries related to specific cash/bank account with
+        pagination
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get account journal entries
+      tags:
+      - CashBank Integration
+  /api/cashbank/integrated/accounts/{id}/reconciliation:
+    get:
+      consumes:
+      - application/json
+      description: Get balance reconciliation between CashBank and SSOT for specific
+        account
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.ReconciliationData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get account reconciliation
+      tags:
+      - CashBank Integration
+  /api/cashbank/integrated/accounts/{id}/transactions:
+    get:
+      consumes:
+      - application/json
+      description: Get transaction history with journal entry references
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get account transaction history
+      tags:
+      - CashBank Integration
+  /api/cashbank/integrated/summary:
+    get:
+      consumes:
+      - application/json
+      description: Get summary of all cash/bank accounts integrated with SSOT journal
+        data
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.IntegratedSummaryResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Get integrated summary
+      tags:
+      - CashBank Integration
   /api/cashbank/payment-accounts:
     get:
       consumes:
@@ -2494,7 +4610,9 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get paginated list of payments with filters
+      deprecated: true
+      description: 'DEPRECATED: This endpoint may cause double posting. Use SSOT Payment
+        routes instead. Get paginated list of payments with filters'
       parameters:
       - description: Page number
         in: query
@@ -2533,9 +4651,9 @@ paths:
             $ref: '#/definitions/models.APIResponse'
       security:
       - Bearer: []
-      summary: Get payments list
+      summary: '[DEPRECATED] Get payments list'
       tags:
-      - Payments
+      - Deprecated-Payments
   /api/payments/{id}:
     delete:
       consumes:
@@ -2572,7 +4690,9 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get single payment details
+      deprecated: true
+      description: 'DEPRECATED: This endpoint may cause double posting. Use SSOT Payment
+        routes instead. Get single payment details'
       parameters:
       - description: Payment ID
         in: path
@@ -2588,9 +4708,36 @@ paths:
             $ref: '#/definitions/models.Payment'
       security:
       - Bearer: []
-      summary: Get payment by ID
+      summary: '[DEPRECATED] Get payment by ID'
       tags:
-      - Payments
+      - Deprecated-Payments
+  /api/payments/{id}/account-updates:
+    get:
+      description: Retrieves the account balance changes caused by a payment transaction
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/services.AccountBalanceUpdate'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get account balance updates from payment
+      tags:
+      - Payment Integration
   /api/payments/{id}/cancel:
     post:
       consumes:
@@ -2647,6 +4794,120 @@ paths:
       summary: Export payment detail as PDF
       tags:
       - Payments
+  /api/payments/{id}/reverse:
+    post:
+      consumes:
+      - application/json
+      description: Reverses a payment transaction and creates a corresponding reversing
+        journal entry
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Reversal Request
+        in: body
+        name: reversal
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.ReversePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.PaymentWithJournalResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Reverse payment and journal entry
+      tags:
+      - Payment Integration
+  /api/payments/{id}/with-journal:
+    get:
+      description: Retrieves a payment along with its associated journal entry information
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.PaymentWithJournalResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get payment with journal details
+      tags:
+      - Payment Integration
+  /api/payments/account-balances/real-time:
+    get:
+      description: Retrieves current account balances from SSOT materialized view
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.SSOTAccountBalance'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get real-time account balances
+      tags:
+      - Payment Integration
+  /api/payments/account-balances/refresh:
+    post:
+      description: Manually triggers a refresh of the account balances materialized
+        view
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh account balances
+      tags:
+      - Payment Integration
   /api/payments/analytics:
     get:
       consumes:
@@ -2699,6 +4960,41 @@ paths:
       summary: Get recent payments for debugging integration
       tags:
       - Payments
+  /api/payments/enhanced-with-journal:
+    post:
+      consumes:
+      - application/json
+      description: Creates a payment and automatically generates corresponding journal
+        entry
+      parameters:
+      - description: Payment with Journal Request
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.PaymentWithJournalRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/services.PaymentWithJournalResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create payment with journal integration
+      tags:
+      - Payment Integration
   /api/payments/export/excel:
     get:
       consumes:
@@ -2733,11 +5029,52 @@ paths:
       summary: Export payment report as Excel
       tags:
       - Payments
+  /api/payments/integration-metrics:
+    get:
+      description: Provides metrics about payment-journal integration performance
+        and status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controllers.PaymentIntegrationMetrics'
+      summary: Get payment-journal integration metrics
+      tags:
+      - Payment Integration
+  /api/payments/journal-entries:
+    get:
+      description: Retrieves all journal entries related to a specific payment
+      parameters:
+      - description: Payment ID
+        in: query
+        name: payment_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.PaginatedJournalResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get journal entries for payment
+      tags:
+      - Payment Integration
   /api/payments/payable:
     post:
       consumes:
       - application/json
-      description: Create payment to vendor (payable)
+      deprecated: true
+      description: 'DEPRECATED: This endpoint may cause double posting. Use SSOT Payment
+        routes instead. Create payment to vendor (payable)'
       parameters:
       - description: Payment data
         in: body
@@ -2754,14 +5091,45 @@ paths:
             $ref: '#/definitions/models.Payment'
       security:
       - Bearer: []
-      summary: Create payable payment
+      summary: '[DEPRECATED] Create payable payment'
       tags:
-      - Payments
+      - Deprecated-Payments
+  /api/payments/preview-journal:
+    post:
+      consumes:
+      - application/json
+      description: Shows what journal entry would be created for a payment without
+        actually creating it
+      parameters:
+      - description: Payment Preview Request
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.PaymentWithJournalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.PaymentJournalResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Preview journal entry for payment
+      tags:
+      - Payment Integration
   /api/payments/receivable:
     post:
       consumes:
       - application/json
-      description: Create payment from customer (receivable)
+      deprecated: true
+      description: 'DEPRECATED: This endpoint may cause double posting. Use SSOT Payment
+        routes instead. Create payment from customer (receivable)'
       parameters:
       - description: Payment data
         in: body
@@ -2778,9 +5146,9 @@ paths:
             $ref: '#/definitions/models.Payment'
       security:
       - Bearer: []
-      summary: Create receivable payment
+      summary: '[DEPRECATED] Create receivable payment'
       tags:
-      - Payments
+      - Deprecated-Payments
   /api/payments/report/pdf:
     get:
       consumes:
@@ -2973,133 +5341,6 @@ paths:
       summary: Get purchase payments
       tags:
       - Purchases
-  /api/reports/enhanced/financial-metrics:
-    get:
-      consumes:
-      - application/json
-      description: Get key profitability and performance metrics from P&L data
-      parameters:
-      - description: Start date (YYYY-MM-DD)
-        in: query
-        name: start_date
-        required: true
-        type: string
-      - description: End date (YYYY-MM-DD)
-        in: query
-        name: end_date
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Financial metrics
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get Key Financial Metrics
-      tags:
-      - Enhanced Reports
-  /api/reports/enhanced/profit-loss:
-    get:
-      consumes:
-      - application/json
-      description: Generate a comprehensive P&L statement with proper accounting categorization
-        and financial metrics
-      parameters:
-      - description: Start date (YYYY-MM-DD)
-        in: query
-        name: start_date
-        required: true
-        type: string
-      - description: End date (YYYY-MM-DD)
-        in: query
-        name: end_date
-        required: true
-        type: string
-      - default: json
-        description: Output format (json, pdf)
-        in: query
-        name: format
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Enhanced P&L data
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Generate Enhanced Profit & Loss Statement
-      tags:
-      - Enhanced Reports
-  /api/reports/enhanced/profit-loss-comparison:
-    get:
-      consumes:
-      - application/json
-      description: Compare P&L metrics between current period and previous period
-      parameters:
-      - description: Current period start date (YYYY-MM-DD)
-        in: query
-        name: current_start
-        required: true
-        type: string
-      - description: Current period end date (YYYY-MM-DD)
-        in: query
-        name: current_end
-        required: true
-        type: string
-      - description: Previous period start date (YYYY-MM-DD)
-        in: query
-        name: previous_start
-        required: true
-        type: string
-      - description: Previous period end date (YYYY-MM-DD)
-        in: query
-        name: previous_end
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: P&L comparison data
-          schema:
-            additionalProperties: true
-            type: object
-        "400":
-          description: Bad request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Compare P&L Between Periods
-      tags:
-      - Enhanced Reports
   /api/v1/admin/security/alerts:
     get:
       consumes:
@@ -3443,6 +5684,923 @@ paths:
       summary: Get security metrics
       tags:
       - Security
+  /api/v1/journals:
+    get:
+      description: Get journal entries with filtering, pagination, and sorting
+      parameters:
+      - description: Source type filter
+        in: query
+        name: source_type
+        type: string
+      - description: Status filter
+        in: query
+        name: status
+        type: string
+      - description: Date from filter (YYYY-MM-DD)
+        in: query
+        name: date_from
+        type: string
+      - description: Date to filter (YYYY-MM-DD)
+        in: query
+        name: date_to
+        type: string
+      - description: Reference search
+        in: query
+        name: reference
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.PaginatedJournalResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get journal entries list
+      tags:
+      - Journal
+    post:
+      consumes:
+      - application/json
+      description: Create a new journal entry with validation and optional auto-posting
+      parameters:
+      - description: Journal Entry Request
+        in: body
+        name: journal
+        required: true
+        schema:
+          $ref: '#/definitions/services.JournalEntryRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/services.JournalResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a new journal entry
+      tags:
+      - Journal
+  /api/v1/journals/{id}:
+    get:
+      description: Get a specific journal entry with its lines
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.JournalResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get journal entry by ID
+      tags:
+      - Journal
+  /api/v1/journals/{id}/post:
+    put:
+      description: Change journal entry status from draft to posted
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Post a journal entry
+      tags:
+      - Journal
+  /api/v1/journals/{id}/reverse:
+    post:
+      consumes:
+      - application/json
+      description: Create a reversing journal entry for a posted entry
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Reversal Request
+        in: body
+        name: reversal
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.ReverseJournalRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/services.JournalResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Reverse a journal entry
+      tags:
+      - Journal
+  /api/v1/journals/account-balances:
+    get:
+      description: Get account balances from materialized view
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.SSOTAccountBalance'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get account balances
+      tags:
+      - Journal
+  /api/v1/journals/account-balances/refresh:
+    post:
+      description: Manually refresh the materialized view for account balances
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh account balances
+      tags:
+      - Journal
+  /api/v1/journals/summary:
+    get:
+      description: Get summary statistics for journal entries
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controllers.JournalSummary'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get journal summary
+      tags:
+      - Journal
+  /api/v1/payments/fast/health:
+    get:
+      description: Returns health status of the fast payment service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Health status
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health check for fast payment service
+      tags:
+      - fast-payments
+  /api/v1/payments/fast/record:
+    post:
+      consumes:
+      - application/json
+      description: Records a payment with minimal database operations for fast response
+      parameters:
+      - description: Payment details
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.LightweightPaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.LightweightPaymentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Record payment with fast processing
+      tags:
+      - fast-payments
+  /api/v1/payments/fast/record-async:
+    post:
+      consumes:
+      - application/json
+      description: Records payment immediately and creates journal entry in background
+      parameters:
+      - description: Payment details
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.LightweightPaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.LightweightPaymentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Record payment with async journal processing
+      tags:
+      - fast-payments
+  /api/v1/payments/fast/status/{id}:
+    get:
+      description: Gets real-time payment processing status
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Payment status
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Payment not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get payment status
+      tags:
+      - fast-payments
+  /api/v1/payments/fast/validate:
+    post:
+      consumes:
+      - application/json
+      description: Validates payment data quickly for frontend feedback
+      parameters:
+      - description: Payment details
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.LightweightPaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Validation result
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Validation errors
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Validate payment data
+      tags:
+      - fast-payments
+  /api/v1/reports/psak/balance-sheet:
+    post:
+      consumes:
+      - application/json
+      description: Generate Balance Sheet sesuai PSAK 1 (Penyajian Laporan Keuangan)
+      parameters:
+      - description: Balance Sheet Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.PSAKBalanceSheetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/controllers.PSAKReportResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.PSAKBalanceSheetData'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate PSAK-compliant Balance Sheet
+      tags:
+      - PSAK Reports
+  /api/v1/reports/psak/cash-flow:
+    post:
+      consumes:
+      - application/json
+      description: Generate Cash Flow Statement sesuai PSAK 2 (Laporan Arus Kas)
+      parameters:
+      - description: Cash Flow Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.PSAKCashFlowRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/controllers.PSAKReportResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.PSAKCashFlowData'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate PSAK-compliant Cash Flow Statement
+      tags:
+      - PSAK Reports
+  /api/v1/reports/psak/check-compliance:
+    post:
+      consumes:
+      - application/json
+      description: Check compliance terhadap standar PSAK untuk laporan tertentu
+      parameters:
+      - description: Compliance Check Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.PSAKComplianceCheckRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/controllers.PSAKReportResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.PSAKComplianceInfo'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+      security:
+      - BearerAuth: []
+      summary: Check PSAK compliance for specific report
+      tags:
+      - PSAK Reports
+  /api/v1/reports/psak/compliance-summary:
+    get:
+      consumes:
+      - application/json
+      description: Generate compliance summary untuk semua laporan keuangan terhadap
+        standar PSAK
+      parameters:
+      - description: As of date for balance sheet (YYYY-MM-DD)
+        example: "2024-12-31"
+        in: query
+        name: as_of_date
+        type: string
+      - description: Start date for P&L and cash flow (YYYY-MM-DD)
+        example: "2024-01-01"
+        in: query
+        name: start_date
+        type: string
+      - description: End date for P&L and cash flow (YYYY-MM-DD)
+        example: "2024-12-31"
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/controllers.PSAKReportResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/controllers.PSAKComplianceSummaryResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+      security:
+      - BearerAuth: []
+      summary: Get PSAK Compliance Summary for all reports
+      tags:
+      - PSAK Reports
+  /api/v1/reports/psak/profit-loss:
+    post:
+      consumes:
+      - application/json
+      description: Generate P&L Statement sesuai PSAK 1 (Laporan Laba Rugi dan Penghasilan
+        Komprehensif Lain)
+      parameters:
+      - description: Profit & Loss Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.PSAKProfitLossRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/controllers.PSAKReportResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.PSAKProfitLossData'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/controllers.PSAKReportResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate PSAK-compliant Profit & Loss Statement
+      tags:
+      - PSAK Reports
+  /api/v1/reports/psak/standards:
+    get:
+      consumes:
+      - application/json
+      description: Get daftar standar PSAK yang didukung dalam sistem
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/controllers.PSAKReportResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/controllers.PSAKStandardsListResponse'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get list of supported PSAK standards
+      tags:
+      - PSAK Reports
+  /api/v1/ssot-reports/general-ledger:
+    get:
+      description: Generate general ledger using SSOT journal data
+      parameters:
+      - description: Account ID (specific account or 'all' for all accounts)
+        in: query
+        name: account_id
+        type: string
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format (json, pdf, excel)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.GeneralLedgerData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get general ledger integrated with SSOT journal
+      tags:
+      - SSOT Reports
+  /api/v1/ssot-reports/integrated:
+    get:
+      description: Generate all financial reports (P&L, Balance Sheet, Cash Flow,
+        etc.) integrated with SSOT journal system
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.IntegratedFinancialReports'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get all integrated financial reports
+      tags:
+      - SSOT Reports
+  /api/v1/ssot-reports/journal-analysis:
+    get:
+      description: Generate comprehensive journal entry analysis using SSOT data
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format (json, pdf)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.JournalAnalysisData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get journal entry analysis integrated with SSOT
+      tags:
+      - SSOT Reports
+  /api/v1/ssot-reports/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Manually trigger report refresh and broadcast updates via websocket
+      parameters:
+      - description: Refresh request parameters
+        in: body
+        name: refresh_request
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Trigger manual report refresh
+      tags:
+      - SSOT Reports
+  /api/v1/ssot-reports/sales-summary:
+    get:
+      description: Generate comprehensive sales summary using SSOT journal data
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format (json, pdf, excel)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.SalesSummaryData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get sales summary integrated with SSOT journal
+      tags:
+      - SSOT Reports
+  /api/v1/ssot-reports/status:
+    get:
+      description: Get status information about SSOT journal integration and report
+        generation
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get SSOT report integration status
+      tags:
+      - SSOT Reports
+  /api/v1/ssot-reports/trial-balance:
+    get:
+      description: Generate trial balance using SSOT journal data
+      parameters:
+      - default: today
+        description: As of date (YYYY-MM-DD)
+        in: query
+        name: as_of_date
+        type: string
+      - default: json
+        description: Output format (json, pdf, excel)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.TrialBalanceData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get trial balance integrated with SSOT journal
+      tags:
+      - SSOT Reports
+  /api/v1/ssot-reports/vendor-analysis:
+    get:
+      description: Generate comprehensive vendor analysis using SSOT journal data
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format (json, pdf)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.VendorAnalysisData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get vendor analysis integrated with SSOT journal
+      tags:
+      - SSOT Reports
   /auth/login:
     post:
       consumes:
@@ -3596,6 +6754,36 @@ paths:
       security:
       - BearerAuth: []
       summary: Get analytics data
+      tags:
+      - Dashboard
+  /dashboard/finance:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve finance-specific dashboard metrics including invoices,
+        journals, and reconciliation status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Finance dashboard data retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Forbidden - not finance role
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get finance dashboard data
       tags:
       - Dashboard
   /dashboard/quick-stats:
@@ -3802,39 +6990,62 @@ paths:
       summary: Get Journal Entry Detail
       tags:
       - journal-drilldown
-  /journal-entries:
+  /monitoring/api-usage/analytics:
     get:
-      description: Get paginated list of journal entries with optional filtering
+      consumes:
+      - application/json
+      description: Get detailed analytics and insights about API usage patterns
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get API usage analytics
+      tags:
+      - monitoring
+  /monitoring/api-usage/reset:
+    post:
+      consumes:
+      - application/json
+      description: Reset all API usage tracking statistics (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Reset API usage statistics
+      tags:
+      - monitoring
+  /monitoring/api-usage/stats:
+    get:
+      consumes:
+      - application/json
+      description: Get comprehensive API endpoint usage statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get API usage statistics
+      tags:
+      - monitoring
+  /monitoring/api-usage/top:
+    get:
+      consumes:
+      - application/json
+      description: Get list of most frequently used API endpoints
       parameters:
-      - description: Filter by status (DRAFT, POSTED, REVERSED)
-        in: query
-        name: status
-        type: string
-      - description: Filter by reference type
-        in: query
-        name: reference_type
-        type: string
-      - description: Filter by account ID
-        in: query
-        name: account_id
-        type: string
-      - description: Filter by start date (YYYY-MM-DD)
-        in: query
-        name: start_date
-        type: string
-      - description: Filter by end date (YYYY-MM-DD)
-        in: query
-        name: end_date
-        type: string
-      - description: Search in description, reference, or code
-        in: query
-        name: search
-        type: string
-      - description: 'Page number (default: 1)'
-        in: query
-        name: page
-        type: integer
-      - description: 'Items per page (default: 20)'
+      - default: 10
+        description: Number of top endpoints to return
         in: query
         name: limit
         type: integer
@@ -3844,250 +7055,33 @@ paths:
         "200":
           description: OK
           schema:
-            properties:
-              data:
-                items:
-                  $ref: '#/definitions/models.JournalEntry'
-                type: array
-              total:
-                format: int64
-                type: integer
+            additionalProperties: true
             type: object
-      summary: List journal entries
+      summary: Get top used endpoints
       tags:
-      - journal-entries
-    post:
-      consumes:
-      - application/json
-      description: Create a new journal entry with balanced debit and credit lines
-      parameters:
-      - description: Journal entry data
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.JournalEntryCreateRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.JournalEntry'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/utils.ErrorResponse'
-      summary: Create journal entry
-      tags:
-      - journal-entries
-  /journal-entries/{id}:
-    delete:
-      description: Delete a journal entry (only draft entries can be deleted)
-      parameters:
-      - description: Journal Entry ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      responses:
-        "200":
-          description: OK
-          schema:
-            properties:
-              message:
-                type: string
-            type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/utils.ErrorResponse'
-      summary: Delete journal entry
-      tags:
-      - journal-entries
+      - monitoring
+  /monitoring/api-usage/unused:
     get:
-      description: Get journal entry details by ID
-      parameters:
-      - description: Journal Entry ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.JournalEntry'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/utils.ErrorResponse'
-      summary: Get journal entry
-      tags:
-      - journal-entries
-    put:
       consumes:
       - application/json
-      description: Update journal entry details (only draft entries can be updated)
+      description: Get list of potentially unused API endpoints
       parameters:
-      - description: Journal Entry ID
-        in: path
-        name: id
-        required: true
+      - default: 1
+        description: Minimum usage count to consider as used
+        in: query
+        name: min_usage
         type: integer
-      - description: Updated journal entry data
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.JournalEntryUpdateRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.JournalEntry'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/utils.ErrorResponse'
-      summary: Update journal entry
-      tags:
-      - journal-entries
-  /journal-entries/{id}/post:
-    post:
-      description: Post a journal entry to update account balances (changes status
-        to POSTED)
-      parameters:
-      - description: Journal Entry ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      responses:
-        "200":
-          description: OK
-          schema:
-            properties:
-              message:
-                type: string
+            additionalProperties: true
             type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/utils.ErrorResponse'
-      summary: Post journal entry
+      summary: Get unused endpoints
       tags:
-      - journal-entries
-  /journal-entries/{id}/reverse:
-    post:
-      consumes:
-      - application/json
-      description: Create a reversing journal entry to undo the effects of a posted
-        entry
-      parameters:
-      - description: Journal Entry ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Reversal reason
-        in: body
-        name: request
-        required: true
-        schema:
-          properties:
-            reason:
-              type: string
-          type: object
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.JournalEntry'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/utils.ErrorResponse'
-      summary: Reverse journal entry
-      tags:
-      - journal-entries
-  /journal-entries/auto-generate/purchase:
-    post:
-      consumes:
-      - application/json
-      description: Automatically generate journal entry from a purchase transaction
-      parameters:
-      - description: Purchase ID
-        in: body
-        name: request
-        required: true
-        schema:
-          properties:
-            purchase_id:
-              type: integer
-          type: object
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.JournalEntry'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/utils.ErrorResponse'
-      summary: Auto-generate from purchase
-      tags:
-      - journal-entries
-  /journal-entries/auto-generate/sale:
-    post:
-      consumes:
-      - application/json
-      description: Automatically generate journal entry from a sale transaction
-      parameters:
-      - description: Sale ID
-        in: body
-        name: request
-        required: true
-        schema:
-          properties:
-            sale_id:
-              type: integer
-          type: object
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.JournalEntry'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/utils.ErrorResponse'
-      summary: Auto-generate from sale
-      tags:
-      - journal-entries
-  /journal-entries/summary:
-    get:
-      description: Get summary statistics for journal entries
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.JournalEntrySummary'
-      summary: Get journal entry summary
-      tags:
-      - journal-entries
+      - monitoring
   /profile:
     get:
       consumes:
@@ -4118,6 +7112,197 @@ paths:
       summary: Get user profile
       tags:
       - Authentication
+  /reports/ssot-profit-loss:
+    get:
+      consumes:
+      - application/json
+      description: Generate a comprehensive Profit & Loss statement using Single Source
+        of Truth (SSOT) journal system with real-time data integration
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        example: "2025-01-01"
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        example: "2025-12-31"
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format
+        enum:
+        - json
+        - pdf
+        - excel
+        - csv
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: P&L report generated successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate SSOT Profit & Loss Report
+      tags:
+      - SSOT Reports
+  /reports/ssot/balance-sheet:
+    get:
+      consumes:
+      - application/json
+      description: Generate a comprehensive Balance Sheet using Single Source of Truth
+        (SSOT) journal system with real-time data integration and automatic balance
+        validation
+      parameters:
+      - description: As of date (YYYY-MM-DD)
+        example: "2025-12-31"
+        in: query
+        name: as_of_date
+        type: string
+      - default: json
+        description: Output format
+        enum:
+        - json
+        - summary
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Balance Sheet generated successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate SSOT Balance Sheet
+      tags:
+      - SSOT Reports
+  /reports/ssot/balance-sheet/account-details:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed account information for Balance Sheet drilldown analysis
+      parameters:
+      - description: As of date (YYYY-MM-DD)
+        example: "2025-12-31"
+        in: query
+        name: as_of_date
+        type: string
+      - description: Filter by account type
+        enum:
+        - ASSET
+        - LIABILITY
+        - EQUITY
+        in: query
+        name: account_type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Account details retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get SSOT Balance Sheet Account Details
+      tags:
+      - SSOT Reports
+  /reports/ssot/cash-flow:
+    get:
+      consumes:
+      - application/json
+      description: Generate a comprehensive Cash Flow statement using Single Source
+        of Truth (SSOT) journal system with operating, investing, and financing activities
+        analysis
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        example: "2025-01-01"
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        example: "2025-12-31"
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format
+        enum:
+        - json
+        - pdf
+        - excel
+        - csv
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cash Flow statement generated successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate SSOT Cash Flow Statement
+      tags:
+      - SSOT Reports
 schemes:
 - http
 - https

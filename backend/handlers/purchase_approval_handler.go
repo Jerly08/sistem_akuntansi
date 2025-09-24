@@ -81,6 +81,17 @@ func (h *PurchaseApprovalHandler) ApprovePurchase(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Purchase not found"})
 		return
 	}
+	
+	// SAFETY CHECK: Prevent direct approval of DRAFT purchases
+	if purchase.Status == models.PurchaseStatusDraft {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cannot approve DRAFT purchase - please submit for approval first",
+			"current_status": purchase.Status,
+			"required_action": "Use 'Submit for Approval' endpoint first",
+		})
+		return
+	}
+	
 	if purchase.ApprovalRequestID == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No approval request associated with this purchase"})
 		return

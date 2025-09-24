@@ -24,29 +24,16 @@ func ProductImageFixMigration(db *gorm.DB) {
 		return
 	}
 
-	// Start transaction
-	tx := db.Begin()
-	if tx.Error != nil {
-		log.Printf("❌ Failed to start product image fix migration transaction: %v", tx.Error)
-		return
-	}
-
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			log.Printf("❌ Product image fix migration rolled back due to panic: %v", r)
-		}
-	}()
-
+	// Use separate transactions for each fix to avoid rollback cascades
 	var fixesApplied []string
 
 	// Fix 1: Ensure image_path column has correct type and size
-	if err := ensureImagePathColumn(tx); err == nil {
+	if err := ensureImagePathColumn(db); err == nil {
 		fixesApplied = append(fixesApplied, "Image path column validation")
 	}
 
 	// Fix 2: Clean up invalid image paths
-	if err := cleanupInvalidImagePaths(tx); err == nil {
+	if err := cleanupInvalidImagePaths(db); err == nil {
 		fixesApplied = append(fixesApplied, "Invalid image paths cleanup")
 	}
 
@@ -55,7 +42,7 @@ func ProductImageFixMigration(db *gorm.DB) {
 		fixesApplied = append(fixesApplied, "Uploads directory structure")
 	}
 
-	// Record this migration as completed
+	// Record this migration as completed in a separate transaction
 	migrationRecord := models.MigrationRecord{
 		MigrationID: migrationID,
 		Description: fmt.Sprintf("Product image fix migration applied: %v", fixesApplied),
@@ -63,15 +50,8 @@ func ProductImageFixMigration(db *gorm.DB) {
 		AppliedAt:   time.Now(),
 	}
 
-	if err := tx.Create(&migrationRecord).Error; err != nil {
+	if err := db.Create(&migrationRecord).Error; err != nil {
 		log.Printf("❌ Failed to record product image fix migration: %v", err)
-		tx.Rollback()
-		return
-	}
-
-	// Commit transaction
-	if err := tx.Commit().Error; err != nil {
-		log.Printf("❌ Failed to commit product image fix migration: %v", err)
 		return
 	}
 
@@ -79,18 +59,18 @@ func ProductImageFixMigration(db *gorm.DB) {
 }
 
 // ensureImagePathColumn ensures the image_path column has the correct specifications
-func ensureImagePathColumn(tx *gorm.DB) error {
+func ensureImagePathColumn(db *gorm.DB) error {
 	log.Println("  🔧 Ensuring image_path column specifications...")
 	
 	// Check current column specification
 	var columnInfo struct {
-		ColumnType   string `json:"column_type"`
-		IsNullable   string `json:"is_nullable"`
+		DataType      string `json:"data_type"`
+		IsNullable    string `json:"is_nullable"`
 		ColumnDefault string `json:"column_default"`
 	}
 	
-	err := tx.Raw(`
-		SELECT column_type, is_nullable, column_default 
+	err := db.Raw(`
+		SELECT data_type, is_nullable, column_default 
 		FROM information_schema.columns 
 		WHERE table_name = 'products' AND column_name = 'image_path'
 	`).Scan(&columnInfo).Error
@@ -101,19 +81,30 @@ func ensureImagePathColumn(tx *gorm.DB) error {
 	}
 
 	log.Printf("    📊 Current image_path column: type=%s, nullable=%s, default=%s", 
-		columnInfo.ColumnType, columnInfo.IsNullable, columnInfo.ColumnDefault)
+		columnInfo.DataType, columnInfo.IsNullable, columnInfo.ColumnDefault)
 
 	// Ensure column is adequately sized (VARCHAR(255) should be sufficient)
-	if columnInfo.ColumnType != "varchar(255)" {
+	if !strings.Contains(strings.ToLower(columnInfo.DataType), "varchar") {
 		log.Println("    🔧 Adjusting image_path column specifications...")
 		
-		// Modify column to ensure proper size
-		err = tx.Exec("ALTER TABLE products MODIFY COLUMN image_path VARCHAR(255) DEFAULT ''").Error
+		// Modify column to ensure proper size (PostgreSQL syntax)
+		// Use separate statements to avoid transaction issues
+		err = db.Exec("ALTER TABLE products ALTER COLUMN image_path TYPE VARCHAR(255)").Error
 		if err != nil {
-			log.Printf("    ❌ Failed to modify image_path column: %v", err)
-			return err
+			log.Printf("    ❌ Failed to modify image_path column type: %v", err)
+			// Continue with migration even if column type change fails
+		} else {
+			log.Println("    ✅ Modified image_path column type to VARCHAR(255)")
 		}
-		log.Println("    ✅ Modified image_path column to VARCHAR(255)")
+		
+		// Set default value in separate statement
+		err = db.Exec("ALTER TABLE products ALTER COLUMN image_path SET DEFAULT ''").Error
+		if err != nil {
+			log.Printf("    ⚠️  Failed to set default value for image_path column: %v", err)
+			// This is non-critical, continue
+		} else {
+			log.Println("    ✅ Set default value for image_path column")
+		}
 	} else {
 		log.Println("    ✅ image_path column specifications are correct")
 	}
@@ -122,7 +113,7 @@ func ensureImagePathColumn(tx *gorm.DB) error {
 }
 
 // cleanupInvalidImagePaths cleans up any invalid or malformed image paths
-func cleanupInvalidImagePaths(tx *gorm.DB) error {
+func cleanupInvalidImagePaths(db *gorm.DB) error {
 	log.Println("  🔧 Cleaning up invalid image paths...")
 
 	// Find products with potentially problematic image paths
@@ -133,7 +124,7 @@ func cleanupInvalidImagePaths(tx *gorm.DB) error {
 		ImagePath string `json:"image_path"`
 	}
 
-	err := tx.Raw(`
+	err := db.Raw(`
 		SELECT id, code, name, image_path
 		FROM products 
 		WHERE image_path IS NOT NULL 
@@ -198,7 +189,7 @@ func cleanupInvalidImagePaths(tx *gorm.DB) error {
 		
 		// Update the product if the path changed
 		if newImagePath != product.ImagePath {
-			err := tx.Model(&models.Product{}).
+			err := db.Model(&models.Product{}).
 				Where("id = ?", product.ID).
 				Update("image_path", newImagePath).Error
 			

@@ -1,32 +1,22 @@
-package main
+package migrations
 
 import (
 	"fmt"
-	"log"
-	"os"
 
-	"app-sistem-akuntansi/config"
 	"app-sistem-akuntansi/models"
 
 	"gorm.io/gorm"
 )
 
-func main() {
-	// Load configuration
-	cfg := config.LoadConfig()
-
-	// Connect to database
-	db, err := config.InitDatabase(cfg)
-	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
-	}
+// MigrateWarehouseLocations adds warehouse location support to the database
+func MigrateWarehouseLocations(db *gorm.DB) error {
 
 	fmt.Println("Starting warehouse locations migration...")
 
 	// Create warehouse locations table
-	err = db.AutoMigrate(&models.WarehouseLocation{})
+	err := db.AutoMigrate(&models.WarehouseLocation{})
 	if err != nil {
-		log.Fatal("Failed to create warehouse_locations table:", err)
+		return fmt.Errorf("failed to create warehouse_locations table: %v", err)
 	}
 	fmt.Println("✓ Created warehouse_locations table")
 
@@ -34,7 +24,7 @@ func main() {
 	if !db.Migrator().HasColumn(&models.Product{}, "warehouse_location_id") {
 		err = db.Migrator().AddColumn(&models.Product{}, "warehouse_location_id")
 		if err != nil {
-			log.Fatal("Failed to add warehouse_location_id column to products table:", err)
+			return fmt.Errorf("failed to add warehouse_location_id column to products table: %v", err)
 		}
 		fmt.Println("✓ Added warehouse_location_id column to products table")
 	} else {
@@ -42,12 +32,15 @@ func main() {
 	}
 
 	// Create default warehouse locations
-	createDefaultWarehouseLocations(db)
+	if err := createDefaultWarehouseLocations(db); err != nil {
+		return fmt.Errorf("failed to create default warehouse locations: %v", err)
+	}
 
 	fmt.Println("Migration completed successfully!")
+	return nil
 }
 
-func createDefaultWarehouseLocations(db *gorm.DB) {
+func createDefaultWarehouseLocations(db *gorm.DB) error {
 	defaultLocations := []models.WarehouseLocation{
 		{
 			Code:        "WH-001",
@@ -78,7 +71,7 @@ func createDefaultWarehouseLocations(db *gorm.DB) {
 		if err := db.Where("code = ?", location.Code).First(&existing).Error; err == gorm.ErrRecordNotFound {
 			// Create new location
 			if err := db.Create(&location).Error; err != nil {
-				log.Printf("Failed to create warehouse location %s: %v", location.Code, err)
+				return fmt.Errorf("failed to create warehouse location %s: %v", location.Code, err)
 			} else {
 				fmt.Printf("✓ Created warehouse location: %s - %s\n", location.Code, location.Name)
 			}
@@ -86,4 +79,5 @@ func createDefaultWarehouseLocations(db *gorm.DB) {
 			fmt.Printf("✓ Warehouse location already exists: %s - %s\n", location.Code, location.Name)
 		}
 	}
+	return nil
 }

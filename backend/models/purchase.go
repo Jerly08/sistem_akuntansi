@@ -182,13 +182,13 @@ type PurchaseCreateRequest struct {
 	// Legacy tax field (for backward compatibility - ignored in calculation)
 	Tax          float64                  `json:"tax"`
 	
-	// Tax additions (Penambahan)
-	PPNRate              float64          `json:"ppn_rate"`
+	// Tax additions (Penambahan) - using pointers to distinguish null vs zero
+	PPNRate              *float64         `json:"ppn_rate"`              // nil = default to 11%, 0 = no VAT
 	OtherTaxAdditions    float64          `json:"other_tax_additions"`
 	
-	// Tax deductions (Pemotongan) 
-	PPh21Rate            float64          `json:"pph21_rate"`
-	PPh23Rate            float64          `json:"pph23_rate"`
+	// Tax deductions (Pemotongan) - using pointers to distinguish null vs zero
+	PPh21Rate            *float64         `json:"pph21_rate"`            // nil = 0%, explicit value otherwise
+	PPh23Rate            *float64         `json:"pph23_rate"`            // nil = 0%, explicit value otherwise
 	OtherTaxDeductions   float64          `json:"other_tax_deductions"`
 	
 	Notes        string                   `json:"notes"`
@@ -210,13 +210,13 @@ type PurchaseUpdateRequest struct {
 	// Legacy tax field (for backward compatibility - ignored in calculation)
 	Tax          *float64                 `json:"tax"`
 	
-	// Tax additions (Penambahan)
-	PPNRate              *float64         `json:"ppn_rate"`
+	// Tax additions (Penambahan) - pointers to distinguish null vs zero
+	PPNRate              **float64        `json:"ppn_rate"`              // double pointer for update operations
 	OtherTaxAdditions    *float64         `json:"other_tax_additions"`
 	
-	// Tax deductions (Pemotongan)
-	PPh21Rate            *float64         `json:"pph21_rate"`
-	PPh23Rate            *float64         `json:"pph23_rate"`
+	// Tax deductions (Pemotongan) - pointers to distinguish null vs zero  
+	PPh21Rate            **float64        `json:"pph21_rate"`            // double pointer for update operations
+	PPh23Rate            **float64        `json:"pph23_rate"`            // double pointer for update operations
 	OtherTaxDeductions   *float64         `json:"other_tax_deductions"`
 	
 	Notes        *string                  `json:"notes"`

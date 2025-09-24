@@ -2,8 +2,10 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
 	
 	"github.com/gin-gonic/gin"
+	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
 )
 
@@ -295,5 +297,119 @@ func (sc *SettingsController) UpdateSystemConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "System configuration updated successfully",
+	})
+}
+
+// ResetToDefaults handles POST /api/v1/settings/reset
+func (sc *SettingsController) ResetToDefaults(c *gin.Context) {
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+		})
+		return
+	}
+	
+	// Check if user has admin role
+	userRole, _ := c.Get("role")
+	if userRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Only administrators can reset settings",
+		})
+		return
+	}
+	
+	// Convert userID to uint
+	uid, ok := userID.(uint)
+	if !ok {
+		if floatID, ok := userID.(float64); ok {
+			uid = uint(floatID)
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Invalid user ID format",
+			})
+			return
+		}
+	}
+	
+	// Reset settings to defaults
+	if err := sc.settingsService.ResetToDefaults(uid); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to reset settings to defaults",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Get updated settings
+	settings, err := sc.settingsService.GetSettings()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve updated settings",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Settings reset to defaults successfully",
+		"data": settings.ToResponse(),
+	})
+}
+
+// GetValidationRules handles GET /api/v1/settings/validation-rules
+func (sc *SettingsController) GetValidationRules(c *gin.Context) {
+	rules := sc.settingsService.GetValidationRules()
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": rules,
+	})
+}
+
+// GetSettingsHistory handles GET /api/v1/settings/history
+func (sc *SettingsController) GetSettingsHistory(c *gin.Context) {
+	// Check if user has admin role
+	userRole, _ := c.Get("role")
+	if userRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Only administrators can view settings history",
+		})
+		return
+	}
+	
+	// Parse query parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	field := c.Query("field")
+	action := c.Query("action")
+	changedBy := c.Query("changed_by")
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	
+	filter := models.SettingsHistoryFilter{
+		Field:     field,
+		Action:    action,
+		ChangedBy: changedBy,
+		StartDate: startDate,
+		EndDate:   endDate,
+		Page:      page,
+		Limit:     limit,
+	}
+	
+	result, err := sc.settingsService.GetSettingsHistory(filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve settings history",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": result,
 	})
 }

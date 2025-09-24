@@ -22,9 +22,9 @@ func NewPaymentController(paymentService *services.PaymentService) *PaymentContr
 }
 
 // GetPayments godoc
-// @Summary Get payments list
-// @Description Get paginated list of payments with filters
-// @Tags Payments
+// @Summary [DEPRECATED] Get payments list
+// @Description DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Get paginated list of payments with filters
+// @Tags Deprecated-Payments
 // @Accept json
 // @Produce json
 // @Security Bearer
@@ -37,6 +37,7 @@ func NewPaymentController(paymentService *services.PaymentService) *PaymentContr
 // @Param end_date query string false "End date (YYYY-MM-DD)"
 // @Success 200 {object} models.APIResponse
 // @Router /api/payments [get]
+// @deprecated
 func (c *PaymentController) GetPayments(ctx *gin.Context) {
 	// Parse query parameters
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
@@ -74,15 +75,16 @@ func (c *PaymentController) GetPayments(ctx *gin.Context) {
 }
 
 // GetPaymentByID godoc
-// @Summary Get payment by ID
-// @Description Get single payment details
-// @Tags Payments
+// @Summary [DEPRECATED] Get payment by ID
+// @Description DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Get single payment details
+// @Tags Deprecated-Payments
 // @Accept json
 // @Produce json
 // @Security Bearer
 // @Param id path int true "Payment ID"
 // @Success 200 {object} models.Payment
 // @Router /api/payments/{id} [get]
+// @deprecated
 func (c *PaymentController) GetPaymentByID(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -104,15 +106,16 @@ func (c *PaymentController) GetPaymentByID(ctx *gin.Context) {
 }
 
 // CreateReceivablePayment godoc
-// @Summary Create receivable payment
-// @Description Create payment from customer (receivable)
-// @Tags Payments
+// @Summary [DEPRECATED] Create receivable payment
+// @Description DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Create payment from customer (receivable)
+// @Tags Deprecated-Payments
 // @Accept json
 // @Produce json
 // @Security Bearer
 // @Param payment body services.PaymentCreateRequest true "Payment data"
 // @Success 201 {object} models.Payment
 // @Router /api/payments/receivable [post]
+// @deprecated
 func (c *PaymentController) CreateReceivablePayment(ctx *gin.Context) {
 	var request services.PaymentCreateRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -145,15 +148,16 @@ func (c *PaymentController) CreateReceivablePayment(ctx *gin.Context) {
 }
 
 // CreatePayablePayment godoc
-// @Summary Create payable payment
-// @Description Create payment to vendor (payable)
-// @Tags Payments
+// @Summary [DEPRECATED] Create payable payment
+// @Description DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Create payment to vendor (payable)
+// @Tags Deprecated-Payments
 // @Accept json
 // @Produce json
 // @Security Bearer
 // @Param payment body services.PaymentCreateRequest true "Payment data"
 // @Success 201 {object} models.Payment
 // @Router /api/payments/payable [post]
+// @deprecated
 func (c *PaymentController) CreatePayablePayment(ctx *gin.Context) {
 	var request services.PaymentCreateRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
