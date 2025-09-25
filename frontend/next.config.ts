@@ -33,10 +33,12 @@ const nextConfig: NextConfig = {
 		},
 	}),
 	async rewrites() {
+		// Use environment variable for API destination, fallback to localhost for development
+		const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 		return [
 			{
 				source: '/api/:path*',
-				destination: 'http://localhost:8080/api/:path*',
+				destination: `${apiBaseUrl}/api/:path*`,
 			},
 		];
 	},

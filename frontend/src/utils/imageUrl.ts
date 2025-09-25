@@ -9,7 +9,7 @@ const getApiBaseUrl = (): string => {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 
                 process.env.NEXT_PUBLIC_API_BASE_URL || 
                 process.env.API_URL ||
-                'http://localhost:8080'; // Fallback to default backend URL
+                ''; // Fallback to relative URLs
 
   // Remove /api/v1 suffix if present since we're accessing static files directly
   return apiUrl.replace(/\/api\/v1\/?$/, '');
