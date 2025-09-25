@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 	"app-sistem-akuntansi/models"
@@ -719,10 +720,126 @@ func (s *CashBankService) generateCashBankCode(accountType string) string {
 }
 
 func (s *CashBankService) generateAccountCode(accountType string) string {
+	// Use proper PSAK compliant account codes with sequential numbering
+	var parentCode string
 	if accountType == models.CashBankTypeCash {
-		return fmt.Sprintf("1100-%03d", time.Now().Unix()%1000)
+		parentCode = "1101" // Cash accounts
+	} else {
+		// Bank accounts - default to 1102 for generic banks
+		// This could be enhanced later to detect specific banks from account name
+		parentCode = "1102" // Bank BCA, Mandiri, etc.
 	}
-	return fmt.Sprintf("1110-%03d", time.Now().Unix()%1000)
+	
+	// Find the highest existing child account code for this parent
+	childCode := s.generateSequentialChildCode(parentCode)
+	return childCode
+}
+
+// generateSequentialChildCode generates the next sequential child code for a parent account
+func (s *CashBankService) generateSequentialChildCode(parentCode string) string {
+	// Ensure parent account exists and is properly configured
+	if err := s.ensureParentAccountExists(parentCode); err != nil {
+		log.Printf("Warning: Failed to ensure parent account %s exists: %v", parentCode, err)
+	}
+	
+	// Get all existing accounts to find existing child codes
+	allAccounts, err := s.accountRepo.FindAll(context.Background())
+	if err != nil {
+		log.Printf("Warning: Failed to get accounts for sequential numbering: %v", err)
+		// Fallback to timestamp-based approach
+		return fmt.Sprintf("%s-%03d", parentCode, time.Now().Unix()%1000)
+	}
+	
+	// Find the highest existing child number for this parent
+	maxChildNumber := 0
+	childPrefix := parentCode + "-"
+	
+	for _, account := range allAccounts {
+		if strings.HasPrefix(account.Code, childPrefix) {
+			// Extract child number (e.g., "001" from "1101-001")
+			childPart := strings.TrimPrefix(account.Code, childPrefix)
+			if len(childPart) == 3 {
+				if num, err := strconv.Atoi(childPart); err == nil && num > maxChildNumber {
+					maxChildNumber = num
+				}
+			}
+		}
+	}
+	
+	// Generate next child code with 3-digit format
+	nextChildNumber := maxChildNumber + 1
+	if nextChildNumber > 999 {
+		log.Printf("Warning: Child account limit reached for parent %s, using fallback", parentCode)
+		// Fallback to timestamp-based approach if we've exhausted 999 accounts
+		return fmt.Sprintf("%s-%03d", parentCode, time.Now().Unix()%1000)
+	}
+	
+	return fmt.Sprintf("%s-%03d", parentCode, nextChildNumber)
+}
+
+// ensureParentAccountExists creates parent account if it doesn't exist
+func (s *CashBankService) ensureParentAccountExists(parentCode string) error {
+	// Check if parent exists
+	_, err := s.accountRepo.FindByCode(context.Background(), parentCode)
+	if err == nil {
+		return nil // Parent already exists
+	}
+	
+	// Create parent account based on code
+	var parentAccount *models.Account
+	
+	switch parentCode {
+	case "1101":
+		// Cash parent
+		parentAccount = &models.Account{
+			Code:        "1101",
+			Name:        "KAS",
+			Type:        models.AccountTypeAsset,
+			Category:    models.CategoryCurrentAsset,
+			Level:       3,
+			IsHeader:    true, // Set as header since we'll create children
+			IsActive:    true,
+			Description: "Parent account for all cash accounts",
+		}
+		// Set parent to 1100 (CURRENT ASSETS) if exists
+		if currentAssetsParent, err := s.accountRepo.FindByCode(context.Background(), "1100"); err == nil {
+			parentAccount.ParentID = &currentAssetsParent.ID
+		}
+		
+	case "1102":
+		// Bank parent
+		parentAccount = &models.Account{
+			Code:        "1102",
+			Name:        "BANK BCA", // Default name, could be changed later
+			Type:        models.AccountTypeAsset,
+			Category:    models.CategoryCurrentAsset,
+			Level:       3,
+			IsHeader:    true, // Set as header since we'll create children
+			IsActive:    true,
+			Description: "Parent account for bank accounts",
+		}
+		// Set parent to 1100 (CURRENT ASSETS) if exists
+		if currentAssetsParent, err := s.accountRepo.FindByCode(context.Background(), "1100"); err == nil {
+			parentAccount.ParentID = &currentAssetsParent.ID
+		}
+		
+	default:
+		return fmt.Errorf("unsupported parent code: %s", parentCode)
+	}
+	
+	// Create parent account
+	tx := s.db.Begin()
+	if err := tx.Create(parentAccount).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to create parent account %s: %w", parentCode, err)
+	}
+	
+	if err := tx.Commit().Error; err != nil {
+		return fmt.Errorf("failed to commit parent account creation: %w", err)
+	}
+	
+	log.Printf("✅ Created parent account: %s - %s", parentAccount.Code, parentAccount.Name)
+	return nil
 }
 
 func (s *CashBankService) getAccountCategory(cashBankType string) string {

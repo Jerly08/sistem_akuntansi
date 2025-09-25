@@ -35,6 +35,7 @@ type JournalServiceInterface interface {
 
 type PDFServiceInterface interface {
 	GenerateInvoicePDF(sale *models.Sale) ([]byte, error)
+	GenerateInvoicePDFWithType(sale *models.Sale, documentType string) ([]byte, error)
 	GenerateSalesReportPDF(sales []models.Sale, startDate, endDate string) ([]byte, error)
 	GeneratePaymentReportPDF(payments []models.Payment, startDate, endDate string) ([]byte, error)
 	GeneratePaymentDetailPDF(payment *models.Payment) ([]byte, error)
@@ -690,16 +691,45 @@ func (s *SalesService) ExportInvoicePDF(saleID uint) ([]byte, string, error) {
 		return nil, "", err
 	}
 
-	if sale.InvoiceNumber == "" {
-		return nil, "", errors.New("sale does not have an invoice number")
+	// Handle different sale statuses for PDF generation
+	var filename string
+	var documentType string
+	
+	switch sale.Status {
+	case models.SaleStatusDraft:
+		// For draft sales, generate as quotation
+		filename = fmt.Sprintf("Quotation_%s.pdf", sale.Code)
+		documentType = "Quotation"
+	case models.SaleStatusConfirmed:
+		// For confirmed sales without invoice number, generate as sales order
+		filename = fmt.Sprintf("SalesOrder_%s.pdf", sale.Code)
+		documentType = "Sales Order"
+	case models.SaleStatusInvoiced, models.SaleStatusPaid, models.SaleStatusOverdue:
+		// For invoiced sales, use invoice number if available
+		if sale.InvoiceNumber != "" {
+			filename = fmt.Sprintf("Invoice_%s.pdf", sale.InvoiceNumber)
+			documentType = "Invoice"
+		} else {
+			// Fallback for invoiced sales without invoice number
+			filename = fmt.Sprintf("Invoice_%s.pdf", sale.Code)
+			documentType = "Invoice"
+		}
+	default:
+		// Generic fallback
+		filename = fmt.Sprintf("Sale_%s.pdf", sale.Code)
+		documentType = "Sale Document"
 	}
 
-	pdfData, err := s.pdfService.GenerateInvoicePDF(sale)
+	// Generate PDF with appropriate document type
+	pdfData, err := s.pdfService.GenerateInvoicePDFWithType(sale, documentType)
 	if err != nil {
-		return nil, "", err
+		// Fallback to original method if the new method doesn't exist
+		pdfData, err = s.pdfService.GenerateInvoicePDF(sale)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to generate PDF: %v", err)
+		}
 	}
 
-	filename := fmt.Sprintf("Invoice_%s.pdf", sale.InvoiceNumber)
 	return pdfData, filename, nil
 }
 
