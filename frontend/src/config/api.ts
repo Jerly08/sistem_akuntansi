@@ -6,12 +6,12 @@ export const API_V1_BASE = `/api/v1`;
 
 // COMPREHENSIVE API Endpoints - Based on Backend Routes Analysis
 export const API_ENDPOINTS = {
-  // Authentication (no /api/v1 prefix based on Swagger)
-  LOGIN: '/auth/login',
-  REGISTER: '/auth/register', 
-  REFRESH: '/auth/refresh',
-  VALIDATE_TOKEN: '/auth/validate-token',
-  PROFILE: '/profile',
+  // Authentication (with /api/v1 prefix - corrected based on actual backend routes)
+  LOGIN: '/api/v1/auth/login',
+  REGISTER: '/api/v1/auth/register', 
+  REFRESH: '/api/v1/auth/refresh',
+  VALIDATE_TOKEN: '/api/v1/auth/validate-token',
+  PROFILE: '/api/v1/profile',
   
   // Products (with /api/v1 prefix)
   PRODUCTS: '/api/v1/products',
