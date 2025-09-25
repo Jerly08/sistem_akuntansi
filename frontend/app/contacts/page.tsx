@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import api from '@/services/api';
+import { API_ENDPOINTS } from '@/config/api';
 import Layout from '@/components/layout/Layout';
 import GroupedTable from '@/components/common/GroupedTable';
 import {
@@ -98,22 +100,10 @@ const ContactsPage = () => {
   // Fetch contacts from API
   const fetchContacts = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contacts`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch contacts');
-      }
-
-      const data = await response.json();
+      const response = await api.get(API_ENDPOINTS.CONTACTS);
       // Backend returns direct array, not wrapped in data field
-      setContacts(Array.isArray(data) ? data : data.data || []);
-    } catch (err) {
+      setContacts(Array.isArray(response.data) ? response.data : response.data.data || []);
+    } catch (err: any) {
       setError('Failed to fetch contacts. Please try again.');
       console.error('Error fetching contacts:', err);
     } finally {
@@ -135,23 +125,11 @@ const ContactsPage = () => {
     setError(null);
     
     try {
-      const url = formData.id
-        ? `${process.env.NEXT_PUBLIC_API_URL}/contacts/${formData.id}`
-        : `${process.env.NEXT_PUBLIC_API_URL}/contacts`;
-        
-      const method = formData.id ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to ${formData.id ? 'update' : 'create'} contact`);
+      let response;
+      if (formData.id) {
+        response = await api.put(`${API_ENDPOINTS.CONTACTS}/${formData.id}`, formData);
+      } else {
+        response = await api.post(API_ENDPOINTS.CONTACTS, formData);
       }
       
       // Refresh contacts list
@@ -199,18 +177,9 @@ const ContactsPage = () => {
     setError(null);
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/contacts/${id}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      await api.delete(`${API_ENDPOINTS.CONTACTS}/${id}`);
       
-      if (!response.ok) {
-        throw new Error('Failed to delete contact');
-      }
-      
-      // Refresh contacts list
+      // Refresh contacts list after successful deletion
       fetchContacts();
       
       // Show success message

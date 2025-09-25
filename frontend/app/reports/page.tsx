@@ -3373,15 +3373,13 @@ leftIcon={<FiList />}
                   </Box>
                 )}
 
-                {/* Raw Data Fallback */}
+                {/* Empty state when no account data */}
                 {(!ssotTBData.accounts || ssotTBData.accounts.length === 0) && !ssotTBData.account_type_summary && (
-                  <Box>
-                    <Heading size="sm" mb={2} color={headingColor}>Report Data:</Heading>
-                    <Box p={4} bg="gray.50" borderRadius="md" border="1px solid" borderColor="gray.200">
-                      <Text fontSize="sm" color="gray.700" whiteSpace="pre-wrap" fontFamily="mono">
-                        {JSON.stringify(ssotTBData, null, 2)}
-                      </Text>
-                    </Box>
+                  <Box bg="yellow.50" p={4} borderRadius="md" border="1px solid" borderColor="yellow.200" textAlign="center">
+                    <Text fontSize="md" fontWeight="semibold" color="yellow.800">No account data</Text>
+                    <Text fontSize="sm" color="yellow.700">
+                      Tidak ada saldo akun untuk tanggal ini. Coba ganti tanggal atau pastikan jurnal sudah berstatus POSTED.
+                    </Text>
                   </Box>
                 )}
               </VStack>

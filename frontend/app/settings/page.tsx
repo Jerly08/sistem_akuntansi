@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import SimpleLayout from '@/components/layout/SimpleLayout';
 import api from '@/services/api';
+import { API_ENDPOINTS } from '@/config/api';
 import { getImageUrl } from '@/utils/imageUrl';
 import {
   Box,
@@ -94,7 +95,7 @@ const SettingsPage: React.FC = () => {
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/settings');
+      const response = await api.get(API_ENDPOINTS.SETTINGS);
       if (response.data.success) {
         setSettings(response.data.data);
         setFormData(response.data.data);
@@ -121,7 +122,7 @@ const SettingsPage: React.FC = () => {
       setLanguage(newLanguage);
       // Update language in backend
       try {
-        await api.put('/settings', { language: newLanguage });
+        await api.put(API_ENDPOINTS.SETTINGS_UPDATE, { language: newLanguage });
         toast({
           title: t('settings.languageChanged'),
           status: 'success',
@@ -156,7 +157,7 @@ const SettingsPage: React.FC = () => {
     
     setSaving(true);
     try {
-      const response = await api.put('/settings', formData);
+      const response = await api.put(API_ENDPOINTS.SETTINGS_UPDATE, formData);
       if (response.data.success) {
         setSettings(response.data.data);
         setFormData(response.data.data);

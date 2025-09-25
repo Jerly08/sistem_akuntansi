@@ -200,7 +200,12 @@ export const API_ENDPOINTS = {
   // Alternative: Use CASH_BANK prefix for consistency with other endpoints
   CASH_BANK: {
     ACCOUNTS: '/api/v1/cash-bank/accounts',
+    GET_BY_ID: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
     ACCOUNT_BY_ID: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
+    CREATE: '/api/v1/cash-bank/accounts',
+    UPDATE: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
+    DELETE: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
+    TRANSACTIONS: (id: number) => `/api/v1/cash-bank/accounts/${id}/transactions`,
     ACCOUNT_TRANSACTIONS: (id: number) => `/api/v1/cash-bank/accounts/${id}/transactions`,
     PAYMENT_ACCOUNTS: '/api/v1/cash-bank/payment-accounts',
     REVENUE_ACCOUNTS: '/api/v1/cash-bank/revenue-accounts',
@@ -209,6 +214,9 @@ export const API_ENDPOINTS = {
     TRANSFER: '/api/v1/cash-bank/transfer',
     DEPOSIT: '/api/v1/cash-bank/deposit',
     WITHDRAWAL: '/api/v1/cash-bank/withdrawal',
+    RECONCILE: (id: number) => `/api/v1/cash-bank/accounts/${id}/reconcile`,
+    CHECK_GL_LINKS: '/api/v1/cash-bank/check-gl-links',
+    FIX_GL_LINKS: '/api/v1/cash-bank/fix-gl-links',
   },
   // Legacy flat endpoints for backward compatibility - updated with /api/v1 prefix
   CASHBANK_ACCOUNTS: '/api/v1/cashbank/accounts',
