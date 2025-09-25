@@ -478,6 +478,76 @@ func (erc *EnhancedReportController) GetReportPreview(c *gin.Context) {
 	})
 }
 
+// GetAccountsReceivable returns safe empty accounts receivable data
+func (erc *EnhancedReportController) GetAccountsReceivable(c *gin.Context) {
+	emptyARData := gin.H{
+		"report_date":        time.Now().Format("2006-01-02"),
+		"company_name":       "Sistema Akuntansi",
+		"total_receivables":  0,
+		"customer_balances":  []gin.H{},
+		"aging_summary":      gin.H{"current": 0, "30_days": 0, "60_days": 0, "90_days_plus": 0},
+		"message":            "Report module is in safe mode - no data integration",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyARData,
+	})
+}
+
+// GetAccountsPayable returns safe empty accounts payable data
+func (erc *EnhancedReportController) GetAccountsPayable(c *gin.Context) {
+	emptyAPData := gin.H{
+		"report_date":      time.Now().Format("2006-01-02"),
+		"company_name":     "Sistema Akuntansi",
+		"total_payables":   0,
+		"vendor_balances":  []gin.H{},
+		"aging_summary":    gin.H{"current": 0, "30_days": 0, "60_days": 0, "90_days_plus": 0},
+		"message":          "Report module is in safe mode - no data integration",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyAPData,
+	})
+}
+
+// GetInventoryReport returns safe empty inventory report data
+func (erc *EnhancedReportController) GetInventoryReport(c *gin.Context) {
+	emptyInventoryData := gin.H{
+		"report_date":       time.Now().Format("2006-01-02"),
+		"company_name":      "Sistema Akuntansi",
+		"total_inventory_value": 0,
+		"products":          []gin.H{},
+		"categories":        []gin.H{},
+		"low_stock_items":   []gin.H{},
+		"message":           "Report module is in safe mode - no data integration",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyInventoryData,
+	})
+}
+
+// GetFinancialRatios returns safe empty financial ratios data
+func (erc *EnhancedReportController) GetFinancialRatios(c *gin.Context) {
+	emptyRatiosData := gin.H{
+		"report_date":     time.Now().Format("2006-01-02"),
+		"company_name":    "Sistema Akuntansi",
+		"liquidity_ratios": gin.H{"current_ratio": 0, "quick_ratio": 0, "cash_ratio": 0},
+		"leverage_ratios":  gin.H{"debt_to_equity": 0, "debt_to_assets": 0, "interest_coverage": 0},
+		"efficiency_ratios": gin.H{"inventory_turnover": 0, "receivables_turnover": 0, "asset_turnover": 0},
+		"profitability_ratios": gin.H{"gross_margin": 0, "net_margin": 0, "roa": 0, "roe": 0},
+		"message":         "Report module is in safe mode - no data integration",
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"data":   emptyRatiosData,
+	})
+}
+
 // GetReportValidation returns safe validation data
 func (erc *EnhancedReportController) GetReportValidation(c *gin.Context) {
 	validationReport := gin.H{

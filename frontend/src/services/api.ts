@@ -1,6 +1,7 @@
 import axios from 'axios';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { API_ENDPOINTS } from '@/config/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -138,7 +139,7 @@ api.interceptors.response.use(
                 setTimeout(() => reject(new Error('Request timeout')), 10000);
               });
               
-              const fetchPromise = fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+              const fetchPromise = fetch(`${API_BASE_URL}${API_ENDPOINTS.REFRESH}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ refresh_token: storedRefresh }),

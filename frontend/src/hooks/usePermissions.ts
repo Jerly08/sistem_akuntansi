@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import api from '@/services/api';
 import { handleApiError } from '@/utils/authErrorHandler';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface ModulePermission {
   can_view: boolean;
@@ -56,7 +57,7 @@ export const usePermissions = (): UsePermissionsReturn => {
       setError(null);
 
       // Use the configured API instance which has auth interceptors
-      const response = await api.get('/permissions/me');
+      const response = await api.get(API_ENDPOINTS.PERMISSIONS_ME);
       
       setPermissions(response.data.permissions || {});
     } catch (err: any) {

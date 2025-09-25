@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { API_ENDPOINTS } from '@/config/api';
 
 // Define user type - backend sends lowercase roles
 export type UserRole = 'admin' | 'finance' | 'inventory_manager' | 'director' | 'employee' | 'auditor' | 'operational_user';
@@ -72,7 +73,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (userData && userData.id && userData.email && storedToken.length > 20) {
               // Try to validate the token by making a quick API call
               try {
-                const response = await fetch(`${API_URL}/api/v1/auth/validate-token`, {
+                const response = await fetch(`${API_URL}${API_ENDPOINTS.VALIDATE_TOKEN}`, {
                   method: 'GET',
                   headers: {
                     'Authorization': `Bearer ${storedToken}`,
@@ -134,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       
-      const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.LOGIN}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -178,7 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       
-      const response = await fetch(`${API_URL}/api/v1/auth/register`, {
+      const response = await fetch(`${API_URL}${API_ENDPOINTS.REGISTER}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -268,7 +269,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Try to refresh the token if it's about to expire
       if (refreshToken) {
-        const response = await fetch(`${API_URL}/api/v1/auth/refresh`, {
+        const response = await fetch(`${API_URL}${API_ENDPOINTS.REFRESH}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

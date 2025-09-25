@@ -193,19 +193,13 @@ func (p *PDFService) GenerateInvoicePDF(sale *models.Sale) ([]byte, error) {
 	// Try adding company letterhead/logo
 	p.addCompanyLetterhead(pdf)
 
-	// Set font and place document title to the right of the logo
+	// Get margins and page size for positioning
 	lm, tm, rm, _ := pdf.GetMargins()
 	pageW, _ := pdf.GetPageSize()
 	logoW := 35.0
 	if pageW > 250 { // landscape width threshold
 		logoW = 40.0
 	}
-	xStart := lm + logoW + 6
-	textW := pageW - rm - xStart
-	pdf.SetXY(xStart, tm+2)
-pdf.SetFont("Arial", "B", 16)
-// Title will be drawn below the logo area to avoid overlap
-pdf.Ln(0)
 
 	// Get company info from settings
 	companyInfo, err := p.getCompanyInfo()
@@ -213,27 +207,48 @@ pdf.Ln(0)
 		return nil, fmt.Errorf("failed to get company info: %v", err)
 	}
 	
-// Company info from settings – align to the right of the logo area
-	// Reuse xStart/textW from above (avoid redeclaration in the same scope)
-	pdf.SetXY(xStart, tm+2)
-	pdf.SetFont("Arial", "B", 12)
-	pdf.Cell(textW, 8, companyInfo.CompanyName)
-	pdf.SetFont("Arial", "", 10)
-	pdf.Ln(6); pdf.SetX(xStart)
-	pdf.Cell(textW, 5, companyInfo.CompanyAddress)
-	pdf.Ln(5); pdf.SetX(xStart)
-	pdf.Cell(textW, 5, fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone))
-	pdf.Ln(5); pdf.SetX(xStart)
-	pdf.Cell(textW, 5, fmt.Sprintf("Email: %s", companyInfo.CompanyEmail))
+	// Position company info at extreme right corner like BORCELLE example
+	// Calculate position to align text to the right margin
+	companyYStart := tm + 2  // Same vertical position as logo
 	
-// Ensure following content starts below the logo+info block
-minY := tm + logoW + 6
-if pdf.GetY() < minY { pdf.SetY(minY) }
-// Draw title below the logo
-pdf.SetX(lm)
-pdf.SetFont("Arial", "B", 16)
-pdf.Cell(pageW-lm-rm, 10, "INVOICE")
-pdf.Ln(10)
+	// Position each line individually at right margin for perfect right alignment
+	pdf.SetXY(0, companyYStart)  // Start from left to calculate properly
+	pdf.SetFont("Arial", "B", 12)
+	// Get text width to position it exactly at right edge
+	companyNameWidth := pdf.GetStringWidth(companyInfo.CompanyName)
+	companyXStart := pageW - rm - companyNameWidth
+	pdf.SetXY(companyXStart, companyYStart)
+	pdf.Cell(companyNameWidth, 8, companyInfo.CompanyName)
+	
+	// Address line
+	pdf.SetFont("Arial", "", 10)
+	addressWidth := pdf.GetStringWidth(companyInfo.CompanyAddress)
+	addressXStart := pageW - rm - addressWidth
+	pdf.SetXY(addressXStart, companyYStart + 6)
+	pdf.Cell(addressWidth, 5, companyInfo.CompanyAddress)
+	
+	// Phone line
+	phoneText := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
+	phoneWidth := pdf.GetStringWidth(phoneText)
+	phoneXStart := pageW - rm - phoneWidth
+	pdf.SetXY(phoneXStart, companyYStart + 11)
+	pdf.Cell(phoneWidth, 5, phoneText)
+	
+	// Email line
+	emailText := fmt.Sprintf("Email: %s", companyInfo.CompanyEmail)
+	emailWidth := pdf.GetStringWidth(emailText)
+	emailXStart := pageW - rm - emailWidth
+	pdf.SetXY(emailXStart, companyYStart + 16)
+	pdf.Cell(emailWidth, 5, emailText)
+	
+	// Ensure following content starts below the logo+info block
+	minY := tm + logoW + 6
+	if pdf.GetY() < minY { pdf.SetY(minY) }
+	// Draw title below the logo area, left-aligned
+	pdf.SetX(lm)
+	pdf.SetFont("Arial", "B", 16)
+	pdf.Cell(pageW-lm-rm, 10, "INVOICE")
+	pdf.Ln(10)
 
 	// Invoice details
 	pdf.SetFont("Arial", "B", 10)
@@ -411,19 +426,13 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	// Try adding company letterhead/logo
 	p.addCompanyLetterhead(pdf)
 
-	// Set font and place document title to the right of the logo
+	// Get margins and page size for positioning
 	lm, tm, rm, _ := pdf.GetMargins()
 	pageW, _ := pdf.GetPageSize()
 	logoW := 35.0
 	if pageW > 250 { // landscape width threshold
 		logoW = 40.0
 	}
-	xStart := lm + logoW + 6
-	textW := pageW - rm - xStart
-	pdf.SetXY(xStart, tm+2)
-	pdf.SetFont("Arial", "B", 16)
-	// Title will be drawn below the logo area to avoid overlap
-	pdf.Ln(0)
 
 	// Get company info from settings
 	companyInfo, err := p.getCompanyInfo()
@@ -431,23 +440,44 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 		return nil, fmt.Errorf("failed to get company info: %v", err)
 	}
 	
-	// Company info from settings – align to the right of the logo area
-	// Reuse xStart/textW from above (avoid redeclaration in the same scope)
-	pdf.SetXY(xStart, tm+2)
-	pdf.SetFont("Arial", "B", 12)
-	pdf.Cell(textW, 8, companyInfo.CompanyName)
-	pdf.SetFont("Arial", "", 10)
-	pdf.Ln(6); pdf.SetX(xStart)
-	pdf.Cell(textW, 5, companyInfo.CompanyAddress)
-	pdf.Ln(5); pdf.SetX(xStart)
-	pdf.Cell(textW, 5, fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone))
-	pdf.Ln(5); pdf.SetX(xStart)
-	pdf.Cell(textW, 5, fmt.Sprintf("Email: %s", companyInfo.CompanyEmail))
+	// Position company info at extreme right corner like BORCELLE example
+	// Calculate position to align text to the right margin
+	companyYStart := tm + 2  // Same vertical position as logo
 	
+	// Position each line individually at right margin for perfect right alignment
+	pdf.SetXY(0, companyYStart)  // Start from left to calculate properly
+	pdf.SetFont("Arial", "B", 12)
+	// Get text width to position it exactly at right edge
+	companyNameWidth := pdf.GetStringWidth(companyInfo.CompanyName)
+	companyXStart := pageW - rm - companyNameWidth
+	pdf.SetXY(companyXStart, companyYStart)
+	pdf.Cell(companyNameWidth, 8, companyInfo.CompanyName)
+	
+	// Address line
+	pdf.SetFont("Arial", "", 10)
+	addressWidth := pdf.GetStringWidth(companyInfo.CompanyAddress)
+	addressXStart := pageW - rm - addressWidth
+	pdf.SetXY(addressXStart, companyYStart + 6)
+	pdf.Cell(addressWidth, 5, companyInfo.CompanyAddress)
+	
+	// Phone line
+	phoneText := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
+	phoneWidth := pdf.GetStringWidth(phoneText)
+	phoneXStart := pageW - rm - phoneWidth
+	pdf.SetXY(phoneXStart, companyYStart + 11)
+	pdf.Cell(phoneWidth, 5, phoneText)
+	
+	// Email line
+	emailText := fmt.Sprintf("Email: %s", companyInfo.CompanyEmail)
+	emailWidth := pdf.GetStringWidth(emailText)
+	emailXStart := pageW - rm - emailWidth
+	pdf.SetXY(emailXStart, companyYStart + 16)
+	pdf.Cell(emailWidth, 5, emailText)
+
 	// Ensure following content starts below the logo+info block
 	minY := tm + logoW + 6
 	if pdf.GetY() < minY { pdf.SetY(minY) }
-	// Draw title below the logo
+	// Draw title below the logo area, left-aligned
 	pdf.SetX(lm)
 	pdf.SetFont("Arial", "B", 16)
 	pdf.Cell(pageW-lm-rm, 10, strings.ToUpper(documentType))

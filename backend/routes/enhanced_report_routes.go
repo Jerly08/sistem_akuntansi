@@ -24,6 +24,12 @@ func RegisterEnhancedReportRoutes(router gin.IRouter, enhancedReportController *
 	reportsGroup.GET("/trial-balance", enhancedReportController.GetTrialBalance)
 	reportsGroup.GET("/general-ledger", enhancedReportController.GetGeneralLedger)
 	reportsGroup.GET("/journal-entry-analysis", enhancedReportController.GetJournalEntryAnalysis)
+	
+	// Additional report endpoints
+	reportsGroup.GET("/accounts-receivable", enhancedReportController.GetAccountsReceivable)
+	reportsGroup.GET("/accounts-payable", enhancedReportController.GetAccountsPayable)
+	reportsGroup.GET("/inventory-report", enhancedReportController.GetInventoryReport)
+	reportsGroup.GET("/financial-ratios", enhancedReportController.GetFinancialRatios)
 
 	// Dashboard and metadata endpoints
 	reportsGroup.GET("/financial-dashboard", enhancedReportController.GetFinancialDashboard)

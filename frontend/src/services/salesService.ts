@@ -1,5 +1,6 @@
 import api from './api';
 import { formatDateWithIndonesianMonth } from '../utils/dataFormatters';
+import { API_ENDPOINTS } from '@/config/api';
 
 export interface Sale {
   id: number;
@@ -307,48 +308,48 @@ class SalesService {
       }
     });
     
-    const response = await api.get(`/sales?${params}`);
+    const response = await api.get(`${API_ENDPOINTS.SALES}?${params}`);
     return response.data;
   }
 
   async getSale(id: number): Promise<Sale> {
-    const response = await api.get(`/sales/${id}`);
+    const response = await api.get(API_ENDPOINTS.SALES_BY_ID(id));
     return response.data;
   }
 
   async createSale(data: SaleCreateRequest): Promise<Sale> {
-    const response = await api.post('/sales', data);
+    const response = await api.post(API_ENDPOINTS.SALES, data);
     return response.data;
   }
 
   async updateSale(id: number, data: SaleUpdateRequest): Promise<Sale> {
-    const response = await api.put(`/sales/${id}`, data);
+    const response = await api.put(API_ENDPOINTS.SALES_BY_ID(id), data);
     return response.data;
   }
 
   async deleteSale(id: number): Promise<void> {
-    await api.delete(`/sales/${id}`);
+    await api.delete(API_ENDPOINTS.SALES_BY_ID(id));
   }
 
   // Status Management
   
   async confirmSale(id: number): Promise<void> {
-    await api.post(`/sales/${id}/confirm`);
+    await api.post(API_ENDPOINTS.SALES_CONFIRM(id));
   }
 
   async createInvoiceFromSale(id: number): Promise<Sale> {
-    const response = await api.post(`/sales/${id}/invoice`);
+    const response = await api.post(API_ENDPOINTS.SALES_INVOICE(id));
     return response.data;
   }
 
   async cancelSale(id: number, reason: string): Promise<void> {
-    await api.post(`/sales/${id}/cancel`, { reason });
+    await api.post(API_ENDPOINTS.SALES_CANCEL(id), { reason });
   }
 
   // Payment Management
   
   async getSalePayments(saleId: number): Promise<SalePayment[]> {
-    const response = await api.get(`/sales/${saleId}/payments`);
+    const response = await api.get(API_ENDPOINTS.SALES_PAYMENTS(saleId));
     return response.data;
   }
 
@@ -364,7 +365,7 @@ class SalesService {
       cash_bank_id: data.cash_bank_id,
       account_id: data.account_id
     };
-    const response = await api.post(`/sales/${saleId}/payments`, backendData);
+    const response = await api.post(API_ENDPOINTS.SALES_PAYMENTS(saleId), backendData);
     return response.data;
   }
 
@@ -380,7 +381,7 @@ class SalesService {
       reference: data.reference || '',       // ✅ Correct
       notes: data.notes || ''               // ✅ Correct
     };
-    const response = await api.post(`/sales/${saleId}/integrated-payment`, backendData);
+    const response = await api.post(API_ENDPOINTS.SALES_INTEGRATED_PAYMENT(saleId), backendData);
     return response.data;
   }
 
@@ -395,12 +396,12 @@ class SalesService {
       notes: data.notes,
       return_items: data.return_items || data.items || []
     };
-    const response = await api.post(`/sales/${saleId}/returns`, backendData);
+    const response = await api.post(API_ENDPOINTS.SALES_RETURNS(saleId), backendData);
     return response.data;
   }
 
   async getSaleReturns(page: number = 1, limit: number = 10): Promise<SaleReturn[]> {
-    const response = await api.get(`/sales/returns?page=${page}&limit=${limit}`);
+    const response = await api.get(`${API_ENDPOINTS.SALES_ALL_RETURNS}?page=${page}&limit=${limit}`);
     return response.data;
   }
 
@@ -411,36 +412,36 @@ class SalesService {
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
     
-    const response = await api.get(`/sales/summary?${params}`);
+    const response = await api.get(`${API_ENDPOINTS.SALES_SUMMARY}?${params}`);
     return response.data;
   }
 
   async getSalesAnalytics(period: string = 'monthly', year: string = '2024'): Promise<SalesAnalytics> {
-    const response = await api.get(`/sales/analytics?period=${period}&year=${year}`);
+    const response = await api.get(`${API_ENDPOINTS.SALES_ANALYTICS}?period=${period}&year=${year}`);
     return response.data;
   }
 
   async getReceivablesReport(): Promise<ReceivablesReport> {
-    const response = await api.get('/sales/receivables');
+    const response = await api.get(API_ENDPOINTS.SALES_RECEIVABLES);
     return response.data;
   }
 
   // Customer Portal
   
   async getCustomerSales(customerId: number, page: number = 1, limit: number = 10): Promise<Sale[]> {
-    const response = await api.get(`/sales/customer/${customerId}?page=${page}&limit=${limit}`);
+    const response = await api.get(`${API_ENDPOINTS.SALES_CUSTOMER(customerId)}?page=${page}&limit=${limit}`);
     return response.data;
   }
 
   async getCustomerInvoices(customerId: number): Promise<Sale[]> {
-    const response = await api.get(`/sales/customer/${customerId}/invoices`);
+    const response = await api.get(API_ENDPOINTS.SALES_CUSTOMER_INVOICES(customerId));
     return response.data;
   }
 
   // PDF Export
   
   async exportInvoicePDF(saleId: number): Promise<Blob> {
-    const response = await api.get(`/sales/${saleId}/invoice/pdf`, {
+    const response = await api.get(API_ENDPOINTS.SALES_INVOICE_PDF(saleId), {
       responseType: 'blob'
     });
     return response.data;
@@ -451,7 +452,7 @@ class SalesService {
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
     
-    const response = await api.get(`/sales/report/pdf?${params}`, {
+    const response = await api.get(`${API_ENDPOINTS.SALES_REPORT_PDF}?${params}`, {
       responseType: 'blob'
     });
     return response.data;

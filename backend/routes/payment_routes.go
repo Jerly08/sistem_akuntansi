@@ -38,9 +38,6 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 		// Deprecated: POST endpoints replaced by SSOT routes
 		payment.POST("/:id/cancel", permissionMiddleware.CanEdit("payments"), paymentController.CancelPayment)
 		payment.DELETE("/:id", middleware.RoleRequired("admin"), paymentController.DeletePayment)
-		payment.GET("/unpaid-invoices/:customer_id", permissionMiddleware.CanView("payments"), paymentController.GetUnpaidInvoices)
-		payment.GET("/unpaid-bills/:vendor_id", permissionMiddleware.CanView("payments"), paymentController.GetUnpaidBills)
-		payment.GET("/summary", permissionMiddleware.CanView("payments"), paymentController.GetPaymentSummary)
 		payment.GET("/analytics", permissionMiddleware.CanView("payments"), paymentController.GetPaymentAnalytics)
 		
 		// Sales integration routes
@@ -64,16 +61,16 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 		// Payment accounts endpoint - specifically for payment form dropdowns
 		cashbank.GET("/payment-accounts", permissionMiddleware.CanView("cash_bank"), cashBankController.GetPaymentAccounts)
 		
-		// Revenue accounts endpoint - for deposit form source account dropdown
+		// Revenue accounts endpoint - for deposit source selection
 		cashbank.GET("/revenue-accounts", permissionMiddleware.CanView("cash_bank"), cashBankController.GetRevenueAccounts)
 		
-		// Deposit source accounts endpoint - for deposit form with both revenue and equity accounts
+		// Deposit source accounts endpoint - for deposit form (revenue + equity)
 		cashbank.GET("/deposit-source-accounts", permissionMiddleware.CanView("cash_bank"), cashBankController.GetDepositSourceAccounts)
+		
 		
 		cashbank.GET("/accounts/:id", permissionMiddleware.CanView("cash_bank"), cashBankController.GetAccountByID)
 cashbank.POST("/accounts", permissionMiddleware.CanCreate("cash_bank"), cashBankController.CreateAccount)
 cashbank.PUT("/accounts/:id", permissionMiddleware.CanEdit("cash_bank"), cashBankController.UpdateAccount)
-cashbank.DELETE("/accounts/:id", permissionMiddleware.CanDelete("cash_bank"), cashBankController.DeleteAccount)
 		
 		// Transactions
 		cashbank.POST("/transfer", permissionMiddleware.CanCreate("cash_bank"), cashBankController.ProcessTransfer)
@@ -83,7 +80,6 @@ cashbank.DELETE("/accounts/:id", permissionMiddleware.CanDelete("cash_bank"), ca
 		
 		// Reports
 		cashbank.GET("/balance-summary", permissionMiddleware.CanView("cash_bank"), cashBankController.GetBalanceSummary)
-		cashbank.POST("/accounts/:id/reconcile", permissionMiddleware.CanEdit("cash_bank"), cashBankController.ReconcileAccount)
 		
 		// Admin operations removed - deprecated maintenance endpoints
 	}

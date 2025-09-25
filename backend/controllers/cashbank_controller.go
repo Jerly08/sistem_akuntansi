@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"app-sistem-akuntansi/services"
-	"app-sistem-akuntansi/models"
 	"net/http"
 	"strconv"
 	"time"
@@ -155,39 +154,6 @@ func (c *CashBankController) UpdateAccount(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, account)
 }
 
-// DeleteAccount godoc
-// @Summary Delete cash/bank account
-// @Description Delete cash or bank account (soft delete)
-// @Tags CashBank
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param id path int true "Account ID"
-// @Success 200 {object} models.APIResponse
-// @Router /api/cashbank/accounts/{id} [delete]
-func (c *CashBankController) DeleteAccount(ctx *gin.Context) {
-	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid account ID",
-		})
-		return
-	}
-	
-	err = c.cashBankService.DeleteCashBankAccount(uint(id))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Failed to delete account",
-			"details": err.Error(),
-		})
-		return
-	}
-	
-	ctx.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Account deleted successfully",
-	})
-}
 
 // ProcessTransfer godoc
 // @Summary Process transfer between accounts
@@ -375,8 +341,8 @@ func (c *CashBankController) GetBalanceSummary(ctx *gin.Context) {
 }
 
 // GetRevenueAccounts godoc
-// @Summary Get revenue accounts for deposits
-// @Description Get active revenue accounts that can be used for deposit source
+// @Summary Get revenue accounts
+// @Description Get active revenue accounts for deposit source selection
 // @Tags CashBank
 // @Accept json
 // @Produce json
@@ -384,7 +350,7 @@ func (c *CashBankController) GetBalanceSummary(ctx *gin.Context) {
 // @Success 200 {array} models.Account
 // @Router /api/cashbank/revenue-accounts [get]
 func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
-	accounts, err := c.accountService.GetRevenueAccounts(ctx.Request.Context())
+	accounts, err := c.accountService.GetRevenueAccounts(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to retrieve revenue accounts",
@@ -393,29 +359,31 @@ func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
 		return
 	}
 	
-	// Filter only active accounts
-	var activeAccounts []models.Account
-	for _, account := range accounts {
-		if account.IsActive {
-			activeAccounts = append(activeAccounts, account)
-		}
-	}
-	
-	ctx.JSON(http.StatusOK, activeAccounts)
+	ctx.JSON(http.StatusOK, accounts)
 }
 
 // GetDepositSourceAccounts godoc
-// @Summary Get equity accounts for deposit source
-// @Description Get active equity accounts for deposit source selection (proper accounting treatment)
+// @Summary Get deposit source accounts
+// @Description Get revenue and equity accounts for deposit source selection
 // @Tags CashBank
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Success 200 {object} models.APIResponse
+// @Success 200 {object} map[string]interface{}
 // @Router /api/cashbank/deposit-source-accounts [get]
 func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
-	// Get Equity accounts only - deposits should be treated as capital contributions
-	equityAccounts, err := c.accountService.GetEquityAccounts(ctx.Request.Context())
+	// Get revenue accounts
+	revenueAccounts, err := c.accountService.GetRevenueAccounts(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to retrieve revenue accounts",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Get equity accounts
+	equityAccounts, err := c.accountService.GetEquityAccounts(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to retrieve equity accounts",
@@ -424,23 +392,15 @@ func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
 		return
 	}
 	
-	// Filter active equity accounts
-	var activeEquityAccounts []models.Account
-	for _, account := range equityAccounts {
-		if account.IsActive && !account.IsHeader {
-			activeEquityAccounts = append(activeEquityAccounts, account)
-		}
+	// Return both revenue and equity accounts in the expected format
+	response := gin.H{
+		"data": gin.H{
+			"revenue": revenueAccounts,
+			"equity":  equityAccounts,
+		},
 	}
 	
-	// Return only equity accounts for proper balance sheet treatment
-	ctx.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data": gin.H{
-			"revenue": []models.Account{}, // Empty - no revenue accounts for deposits
-			"equity":  activeEquityAccounts,
-		},
-		"message": "Deposit source accounts retrieved successfully - equity accounts only for proper accounting",
-	})
+	ctx.JSON(http.StatusOK, response)
 }
 
 // GetPaymentAccounts godoc
@@ -468,45 +428,3 @@ func (c *CashBankController) GetPaymentAccounts(ctx *gin.Context) {
 	})
 }
 
-// ReconcileAccount godoc
-// @Summary Reconcile bank account
-// @Description Reconcile bank account with statement
-// @Tags CashBank
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param id path int true "Account ID"
-// @Param reconciliation body services.ReconciliationRequest true "Reconciliation data"
-// @Success 201 {object} services.BankReconciliation
-// @Router /api/cashbank/accounts/{id}/reconcile [post]
-func (c *CashBankController) ReconcileAccount(ctx *gin.Context) {
-	accountID, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid account ID",
-		})
-		return
-	}
-	
-	var request services.ReconciliationRequest
-	if err := ctx.ShouldBindJSON(&request); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request data",
-			"details": err.Error(),
-		})
-		return
-	}
-	
-	userID := ctx.GetUint("user_id")
-	
-	reconciliation, err := c.cashBankService.ReconcileAccount(uint(accountID), request, userID)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Failed to reconcile account",
-			"details": err.Error(),
-		})
-		return
-	}
-	
-	ctx.JSON(http.StatusCreated, reconciliation)
-}

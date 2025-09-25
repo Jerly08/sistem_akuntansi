@@ -194,7 +194,7 @@ class SSOTCashFlowReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_V1_BASE}/reports/ssot/cash-flow${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/ssot-reports/cash-flow${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -214,7 +214,7 @@ class SSOTCashFlowReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_V1_BASE}/reports/ssot/cash-flow/summary${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/ssot-reports/cash-flow/summary${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -234,7 +234,7 @@ class SSOTCashFlowReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_V1_BASE}/reports/ssot/cash-flow/validate${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/ssot-reports/cash-flow/validate${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),

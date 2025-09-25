@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '@/config/api';
 
 export interface Product {
   id?: number;
@@ -118,7 +119,7 @@ class ProductService {
   }, token?: string) {
     try {
       // Always use axios api instance which handles auth automatically
-      const response = await api.get('/products', { params });
+      const response = await api.get(API_ENDPOINTS.PRODUCTS, { params });
       return response.data;
     } catch (error: any) {
       console.warn('ProductService: Failed to load products:', error.message);
@@ -128,22 +129,22 @@ class ProductService {
   }
 
   async getProduct(id: number) {
-    const response = await api.get(`/products/${id}`);
+    const response = await api.get(API_ENDPOINTS.PRODUCTS_BY_ID(id));
     return response.data;
   }
 
   async createProduct(product: Product) {
-    const response = await api.post('/products', product);
+    const response = await api.post(API_ENDPOINTS.PRODUCTS, product);
     return response.data;
   }
 
   async updateProduct(id: number, product: Partial<Product>) {
-    const response = await api.put(`/products/${id}`, product);
+    const response = await api.put(API_ENDPOINTS.PRODUCTS_BY_ID(id), product);
     return response.data;
   }
 
   async deleteProduct(id: number) {
-    const response = await api.delete(`/products/${id}`);
+    const response = await api.delete(API_ENDPOINTS.PRODUCTS_BY_ID(id));
     return response.data;
   }
 
@@ -152,37 +153,37 @@ class ProductService {
     include_relations?: boolean;
     parent_id?: string;
   }) {
-    const response = await api.get('/categories', { params });
+    const response = await api.get(API_ENDPOINTS.CATEGORIES, { params });
     return response.data;
   }
 
   async getCategory(id: number) {
-    const response = await api.get(`/categories/${id}`);
+    const response = await api.get(API_ENDPOINTS.CATEGORIES_BY_ID(id));
     return response.data;
   }
 
   async createCategory(category: Category) {
-    const response = await api.post('/categories', category);
+    const response = await api.post(API_ENDPOINTS.CATEGORIES, category);
     return response.data;
   }
 
   async updateCategory(id: number, category: Partial<Category>) {
-    const response = await api.put(`/categories/${id}`, category);
+    const response = await api.put(API_ENDPOINTS.CATEGORIES_BY_ID(id), category);
     return response.data;
   }
 
   async deleteCategory(id: number) {
-    const response = await api.delete(`/categories/${id}`);
+    const response = await api.delete(API_ENDPOINTS.CATEGORIES_BY_ID(id));
     return response.data;
   }
 
   async getCategoryTree() {
-    const response = await api.get('/categories/tree');
+    const response = await api.get(API_ENDPOINTS.CATEGORIES_TREE);
     return response.data;
   }
 
   async getCategoryProducts(id: number, search?: string) {
-    const response = await api.get(`/categories/${id}/products`, {
+    const response = await api.get(API_ENDPOINTS.CATEGORIES_PRODUCTS(id), {
       params: { search }
     });
     return response.data;
@@ -193,27 +194,27 @@ class ProductService {
     search?: string;
     type?: string;
   }) {
-    const response = await api.get('/product-units', { params });
+    const response = await api.get(API_ENDPOINTS.PRODUCT_UNITS, { params });
     return response.data;
   }
 
   async getProductUnit(id: number) {
-    const response = await api.get(`/product-units/${id}`);
+    const response = await api.get(API_ENDPOINTS.PRODUCT_UNITS_BY_ID(id));
     return response.data;
   }
 
   async createProductUnit(unit: ProductUnit) {
-    const response = await api.post('/product-units', unit);
+    const response = await api.post(API_ENDPOINTS.PRODUCT_UNITS, unit);
     return response.data;
   }
 
   async updateProductUnit(id: number, unit: Partial<ProductUnit>) {
-    const response = await api.put(`/product-units/${id}`, unit);
+    const response = await api.put(API_ENDPOINTS.PRODUCT_UNITS_BY_ID(id), unit);
     return response.data;
   }
 
   async deleteProductUnit(id: number) {
-    const response = await api.delete(`/product-units/${id}`);
+    const response = await api.delete(API_ENDPOINTS.PRODUCT_UNITS_BY_ID(id));
     return response.data;
   }
 
@@ -223,7 +224,7 @@ class ProductService {
     is_active?: boolean;
   }) {
     try {
-      const response = await api.get('/warehouse-locations', { params });
+      const response = await api.get(API_ENDPOINTS.WAREHOUSE_LOCATIONS, { params });
       return response.data;
     } catch (error: any) {
       console.warn('ProductService: Warehouse locations API not implemented yet, using mock data');
@@ -261,13 +262,13 @@ class ProductService {
   }
 
   async getWarehouseLocation(id: number) {
-    const response = await api.get(`/warehouse-locations/${id}`);
+    const response = await api.get(API_ENDPOINTS.WAREHOUSE_LOCATIONS_BY_ID(id));
     return response.data;
   }
 
   async createWarehouseLocation(location: WarehouseLocation) {
     try {
-      const response = await api.post('/warehouse-locations', location);
+      const response = await api.post(API_ENDPOINTS.WAREHOUSE_LOCATIONS, location);
       return response.data;
     } catch (error: any) {
       console.warn('ProductService: Warehouse location create API not implemented yet');
@@ -286,7 +287,7 @@ class ProductService {
 
   async updateWarehouseLocation(id: number, location: Partial<WarehouseLocation>) {
     try {
-      const response = await api.put(`/warehouse-locations/${id}`, location);
+      const response = await api.put(API_ENDPOINTS.WAREHOUSE_LOCATIONS_BY_ID(id), location);
       return response.data;
     } catch (error: any) {
       console.warn('ProductService: Warehouse location update API not implemented yet');
@@ -303,7 +304,7 @@ class ProductService {
 
   async deleteWarehouseLocation(id: number) {
     try {
-      const response = await api.delete(`/warehouse-locations/${id}`);
+      const response = await api.delete(API_ENDPOINTS.WAREHOUSE_LOCATIONS_BY_ID(id));
       return response.data;
     } catch (error: any) {
       console.warn('ProductService: Warehouse location delete API not implemented yet');
@@ -320,12 +321,12 @@ class ProductService {
     end_date?: string;
     type?: 'IN' | 'OUT';
   }) {
-    const response = await api.get('/inventory/movements', { params });
+    const response = await api.get(API_ENDPOINTS.INVENTORY_MOVEMENTS, { params });
     return response.data;
   }
 
   async getLowStockProducts() {
-    const response = await api.get('/inventory/low-stock');
+    const response = await api.get(API_ENDPOINTS.INVENTORY_LOW_STOCK);
     return response.data;
   }
 
@@ -333,30 +334,30 @@ class ProductService {
     method?: 'FIFO' | 'LIFO' | 'Average';
     product_id?: number;
   }) {
-    const response = await api.get('/inventory/valuation', { params });
+    const response = await api.get(API_ENDPOINTS.INVENTORY_VALUATION, { params });
     return response.data;
   }
 
   async getStockReport(params?: {
     category_id?: number;
   }) {
-    const response = await api.get('/inventory/report', { params });
+    const response = await api.get(API_ENDPOINTS.INVENTORY_REPORT, { params });
     return response.data;
   }
 
   async bulkPriceUpdate(data: BulkPriceUpdate) {
-    const response = await api.post('/inventory/bulk-price-update', data);
+    const response = await api.post(API_ENDPOINTS.INVENTORY_BULK_PRICE_UPDATE, data);
     return response.data;
   }
 
   // Stock Operations
   async adjustStock(data: StockAdjustment) {
-    const response = await api.post('/products/adjust-stock', data);
+    const response = await api.post(API_ENDPOINTS.PRODUCTS_ADJUST_STOCK, data);
     return response.data;
   }
 
   async stockOpname(data: StockOpname) {
-    const response = await api.post('/products/opname', data);
+    const response = await api.post(API_ENDPOINTS.PRODUCTS_OPNAME, data);
     return response.data;
   }
 
@@ -366,7 +367,7 @@ class ProductService {
     formData.append('image', file);
     formData.append('product_id', productId.toString());
     
-    const response = await api.post('/products/upload-image', formData, {
+    const response = await api.post(API_ENDPOINTS.PRODUCTS_UPLOAD_IMAGE, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

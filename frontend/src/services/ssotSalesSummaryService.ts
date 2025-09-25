@@ -64,7 +64,8 @@ class SSOTSalesSummaryService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+    // Use relative path to work with Next.js rewrites
+    this.baseURL = '/api/v1';
   }
 
   async generateSSOTSalesSummary(params: SSOTSalesSummaryParams): Promise<SSOTSalesSummaryData> {

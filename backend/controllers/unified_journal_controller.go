@@ -137,76 +137,7 @@ func (c *UnifiedJournalController) GetJournalEntries(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, response)
 }
 
-// PostJournalEntry posts a draft journal entry
-// @Summary Post a journal entry
-// @Description Change journal entry status from draft to posted
-// @Tags Journal
-// @Produce json
-// @Param id path int true "Journal Entry ID"
-// @Success 200 {object} map[string]string
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /api/v1/journals/{id}/post [put]
-func (c *UnifiedJournalController) PostJournalEntry(ctx *gin.Context) {
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid journal entry ID"})
-		return
-	}
 
-	err = c.journalService.PostJournalEntry(id)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{"message": "Journal entry posted successfully"})
-}
-
-// ReverseJournalEntry creates a reversing entry
-// @Summary Reverse a journal entry
-// @Description Create a reversing journal entry for a posted entry
-// @Tags Journal
-// @Accept json
-// @Produce json
-// @Param id path int true "Journal Entry ID"
-// @Param reversal body ReverseJournalRequest true "Reversal Request"
-// @Success 201 {object} services.JournalResponse
-// @Failure 400 {object} map[string]string
-// @Failure 404 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /api/v1/journals/{id}/reverse [post]
-func (c *UnifiedJournalController) ReverseJournalEntry(ctx *gin.Context) {
-	idStr := ctx.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 64)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid journal entry ID"})
-		return
-	}
-
-	var req ReverseJournalRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format: " + err.Error()})
-		return
-	}
-
-	// Get user ID from context (assuming it's set by auth middleware)
-	createdBy := getJournalUserIDFromContext(ctx)
-	if createdBy == 0 {
-		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "User authentication required"})
-		return
-	}
-
-	response, err := c.journalService.ReverseJournalEntry(id, req.Description, createdBy)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx.JSON(http.StatusCreated, response)
-}
 
 // GetAccountBalances retrieves account balances
 // @Summary Get account balances
@@ -313,8 +244,6 @@ func (c *UnifiedJournalController) RegisterRoutes(router *gin.Engine) {
 			journals.POST("", c.CreateJournalEntry)
 			journals.GET("", c.GetJournalEntries)
 			journals.GET("/:id", c.GetJournalEntry)
-			journals.PUT("/:id/post", c.PostJournalEntry)
-			journals.POST("/:id/reverse", c.ReverseJournalEntry)
 			journals.GET("/account-balances", c.GetAccountBalances)
 			journals.POST("/account-balances/refresh", c.RefreshAccountBalances)
 			journals.GET("/summary", c.GetJournalSummary)

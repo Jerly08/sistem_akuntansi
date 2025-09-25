@@ -36,7 +36,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import approvalService from '../../services/approvalService';
 import axios from 'axios';
-import { API_BASE_URL, API_V1_BASE } from '@/config/api';
+import { API_BASE_URL, API_ENDPOINTS } from '@/config/api';
 import { formatIDR } from '@/utils/currency';
 
 interface NotificationItem {
@@ -92,7 +92,7 @@ const UnifiedNotifications: React.FC = () => {
   const fetchApprovalNotifications = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/notifications/approvals`, {
+      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS_APPROVALS}`, {
         params: { limit: 10 },
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -116,11 +116,11 @@ const UnifiedNotifications: React.FC = () => {
       
       // Get both MIN_STOCK and REORDER_ALERT notifications
       const [minStockResponse, reorderResponse] = await Promise.all([
-        axios.get(`${API_BASE_URL}/notifications/type/MIN_STOCK`, {
+        axios.get(`${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS_BY_TYPE('MIN_STOCK')}`, {
           params: { limit: 5 },
           headers: { Authorization: `Bearer ${token}` }
         }),
-        axios.get(`${API_BASE_URL}/notifications/type/REORDER_ALERT`, {
+        axios.get(`${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS_BY_TYPE('REORDER_ALERT')}`, {
           params: { limit: 5 },
           headers: { Authorization: `Bearer ${token}` }
         })
@@ -149,7 +149,7 @@ const UnifiedNotifications: React.FC = () => {
   const fetchStockAlerts = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/dashboard/stock-alerts`, {
+      const response = await axios.get(`${API_BASE_URL}${API_ENDPOINTS.DASHBOARD_STOCK_ALERTS}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -188,7 +188,7 @@ const UnifiedNotifications: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `${API_BASE_URL}/notifications/${notificationId}/read`,
+        `${API_BASE_URL}${API_ENDPOINTS.NOTIFICATIONS_MARK_READ(notificationId)}`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );

@@ -227,87 +227,6 @@ const docTemplate = `{
                         }
                     }
                 }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Delete cash or bank account (soft delete)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "CashBank"
-                ],
-                "summary": "Delete cash/bank account",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Account ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.APIResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/cashbank/accounts/{id}/reconcile": {
-            "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Reconcile bank account with statement",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "CashBank"
-                ],
-                "summary": "Reconcile bank account",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Account ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Reconciliation data",
-                        "name": "reconciliation",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/services.ReconciliationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/services.BankReconciliation"
-                        }
-                    }
-                }
             }
         },
         "/api/cashbank/accounts/{id}/transactions": {
@@ -433,34 +352,6 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/models.CashBankTransaction"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/cashbank/deposit-source-accounts": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get active revenue and equity accounts for deposit source selection",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "CashBank"
-                ],
-                "summary": "Get accounts for deposit source (Revenue + Equity)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.APIResponse"
                         }
                     }
                 }
@@ -802,37 +693,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/cashbank/revenue-accounts": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get active revenue accounts that can be used for deposit source",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "CashBank"
-                ],
-                "summary": "Get revenue accounts for deposits",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.Account"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/cashbank/transfer": {
             "post": {
                 "security": [
@@ -1053,6 +913,79 @@ const docTemplate = `{
                     "Balance Monitoring"
                 ],
                 "summary": "Get synchronization status summary",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Get paginated list of payments with filters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deprecated-Payments"
+                ],
+                "summary": "[DEPRECATED] Get payments list",
+                "deprecated": true,
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Filter by contact ID",
+                        "name": "contact_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by payment method",
+                        "name": "method",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1373,6 +1306,46 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/payments/payable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Create payment to vendor (payable)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deprecated-Payments"
+                ],
+                "summary": "[DEPRECATED] Create payable payment",
+                "deprecated": true,
+                "parameters": [
+                    {
+                        "description": "Payment data",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.PaymentCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Payment"
+                        }
+                    }
+                }
+            }
+        },
         "/api/payments/preview-journal": {
             "post": {
                 "description": "Shows what journal entry would be created for a payment without actually creating it",
@@ -1411,6 +1384,46 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/payments/receivable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Create payment from customer (receivable)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deprecated-Payments"
+                ],
+                "summary": "[DEPRECATED] Create receivable payment",
+                "deprecated": true,
+                "parameters": [
+                    {
+                        "description": "Payment data",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.PaymentCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Payment"
                         }
                     }
                 }
@@ -1596,6 +1609,42 @@ const docTemplate = `{
             }
         },
         "/api/payments/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "DEPRECATED: This endpoint may cause double posting. Use SSOT Payment routes instead. Get single payment details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deprecated-Payments"
+                ],
+                "summary": "[DEPRECATED] Get payment by ID",
+                "deprecated": true,
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Payment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Payment"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "security": [
                     {
@@ -2814,157 +2863,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/journals/{id}/post": {
-            "put": {
-                "description": "Change journal entry status from draft to posted",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Journal"
-                ],
-                "summary": "Post a journal entry",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Journal Entry ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/journals/{id}/reverse": {
-            "post": {
-                "description": "Create a reversing journal entry for a posted entry",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Journal"
-                ],
-                "summary": "Reverse a journal entry",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Journal Entry ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Reversal Request",
-                        "name": "reversal",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/controllers.ReverseJournalRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/services.JournalResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/payments/fast/health": {
+        "/api/v1/reports/optimized/balance-sheet": {
             "get": {
-                "description": "Returns health status of the fast payment service",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "fast-payments"
-                ],
-                "summary": "Health check for fast payment service",
-                "responses": {
-                    "200": {
-                        "description": "Health status",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/payments/fast/record": {
-            "post": {
-                "description": "Records a payment with minimal database operations for fast response",
+                "description": "Generate balance sheet using materialized view for optimal performance",
                 "consumes": [
                     "application/json"
                 ],
@@ -2972,139 +2873,69 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "fast-payments"
+                    "Optimized Reports"
                 ],
-                "summary": "Record payment with fast processing",
+                "summary": "Generate Optimized Balance Sheet",
                 "parameters": [
                     {
-                        "description": "Payment details",
-                        "name": "payment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/services.LightweightPaymentRequest"
-                        }
+                        "type": "string",
+                        "description": "As of date (YYYY-MM-DD)",
+                        "name": "as_of_date",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/services.LightweightPaymentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/controllers.StandardReportResponse"
                         }
                     }
                 }
             }
         },
-        "/api/v1/payments/fast/record-async": {
-            "post": {
-                "description": "Records payment immediately and creates journal entry in background",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "fast-payments"
-                ],
-                "summary": "Record payment with async journal processing",
-                "parameters": [
-                    {
-                        "description": "Payment details",
-                        "name": "payment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/services.LightweightPaymentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/services.LightweightPaymentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/payments/fast/status/{id}": {
+        "/api/v1/reports/optimized/profit-loss": {
             "get": {
-                "description": "Gets real-time payment processing status",
+                "description": "Generate P\u0026L using materialized view for optimal performance",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "fast-payments"
+                    "Optimized Reports"
                 ],
-                "summary": "Get payment status",
+                "summary": "Generate Optimized Profit \u0026 Loss",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "description": "Payment ID",
-                        "name": "id",
-                        "in": "path",
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Payment status",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Payment not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/controllers.StandardReportResponse"
                         }
                     }
                 }
             }
         },
-        "/api/v1/payments/fast/validate": {
+        "/api/v1/reports/optimized/refresh-balances": {
             "post": {
-                "description": "Validates payment data quickly for frontend feedback",
+                "description": "Manually refresh the materialized view for updated data",
                 "consumes": [
                     "application/json"
                 ],
@@ -3112,33 +2943,45 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "fast-payments"
+                    "Optimized Reports"
                 ],
-                "summary": "Validate payment data",
+                "summary": "Refresh Account Balances Materialized View",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.StandardReportResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reports/optimized/trial-balance": {
+            "get": {
+                "description": "Generate trial balance using materialized view for optimal performance",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Optimized Reports"
+                ],
+                "summary": "Generate Optimized Trial Balance",
                 "parameters": [
                     {
-                        "description": "Payment details",
-                        "name": "payment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/services.LightweightPaymentRequest"
-                        }
+                        "type": "string",
+                        "description": "As of date (YYYY-MM-DD)",
+                        "name": "as_of_date",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Validation result",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "400": {
-                        "description": "Validation errors",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/controllers.StandardReportResponse"
                         }
                     }
                 }
@@ -3545,7 +3388,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "default": "json",
-                        "description": "Output format (json, pdf, excel)",
+                        "description": "Output format (json, pdf, csv)",
                         "name": "format",
                         "in": "query"
                     }
@@ -3660,7 +3503,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "default": "json",
-                        "description": "Output format (json, pdf)",
+                        "description": "Output format (json, pdf, csv)",
                         "name": "format",
                         "in": "query"
                     }
@@ -3688,6 +3531,171 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/purchase-report": {
+            "get": {
+                "description": "Generate comprehensive purchase analysis using SSOT journal data",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SSOT Reports"
+                ],
+                "summary": "Get purchase report integrated with SSOT journal",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format (json, pdf)",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.PurchaseReportData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/purchase-report/validate": {
+            "get": {
+                "description": "Validate the integrity and accuracy of purchase report data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchase Reports"
+                ],
+                "summary": "Validate Purchase Report Data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD format)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD format)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Validation results",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.GetPurchaseReportResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.GetPurchaseReportResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/ssot-reports/purchase-summary": {
+            "get": {
+                "description": "Get a quick summary of purchase report data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchase Reports"
+                ],
+                "summary": "Get Purchase Report Summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD format)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD format)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Purchase summary data",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.GetPurchaseReportResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.GetPurchaseReportResponse"
                         }
                     }
                 }
@@ -3776,7 +3784,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "default": "json",
-                        "description": "Output format (json, pdf, excel)",
+                        "description": "Output format (json, pdf, csv)",
                         "name": "format",
                         "in": "query"
                     }
@@ -3860,7 +3868,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "default": "json",
-                        "description": "Output format (json, pdf, excel)",
+                        "description": "Output format (json, pdf, csv)",
                         "name": "format",
                         "in": "query"
                     }
@@ -4242,14 +4250,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/dashboard/quick-stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve quick statistics data for dashboard widgets",
+        "/journal-drilldown": {
+            "post": {
+                "description": "Get detailed journal entries for a specific line item from financial reports",
                 "consumes": [
                     "application/json"
                 ],
@@ -4257,72 +4260,218 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Dashboard"
+                    "journal-drilldown"
                 ],
-                "summary": "Get quick statistics",
+                "summary": "Journal Entry Drill-down",
+                "parameters": [
+                    {
+                        "description": "Drill-down request parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.JournalDrilldownRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "Quick stats retrieved successfully",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.APIResponse"
+                            "$ref": "#/definitions/services.JournalDrilldownResponse"
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/utils.ErrorResponse"
                         }
                     }
                 }
             }
         },
-        "/dashboard/summary": {
+        "/journal-drilldown/accounts": {
             "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve comprehensive dashboard data including statistics, recent activities, and alerts",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Get all accounts that have journal entries in a specific date range",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "Dashboard"
+                    "journal-drilldown"
                 ],
-                "summary": "Get dashboard summary",
+                "summary": "Get Active Accounts for Period",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "Dashboard summary retrieved successfully",
+                        "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/models.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.DashboardResponse"
-                                        }
+                            "type": "object",
+                            "properties": {
+                                "data": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/definitions/models.Account"
                                     }
                                 }
-                            ]
+                            }
                         }
                     },
-                    "401": {
-                        "description": "Unauthorized",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/journal-drilldown/entries": {
+            "get": {
+                "description": "Get journal entries using URL parameters for drill-down",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "journal-drilldown"
+                ],
+                "summary": "Journal Entry Drill-down (GET)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Comma-separated account codes",
+                        "name": "account_codes",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated account IDs",
+                        "name": "account_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Report type (BALANCE_SHEET, PROFIT_LOSS, CASH_FLOW)",
+                        "name": "report_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name of the line item",
+                        "name": "line_item_name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Minimum amount filter",
+                        "name": "min_amount",
+                        "in": "query"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Maximum amount filter",
+                        "name": "max_amount",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated transaction types",
+                        "name": "transaction_types",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default: 20)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.JournalDrilldownResponse"
                         }
                     },
-                    "500": {
-                        "description": "Internal server error",
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/models.ErrorResponse"
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/journal-drilldown/entries/{id}": {
+            "get": {
+                "description": "Get detailed information for a specific journal entry including all lines",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "journal-drilldown"
+                ],
+                "summary": "Get Journal Entry Detail",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Journal Entry ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.JournalEntry"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
                         }
                     }
                 }
@@ -4621,7 +4770,9 @@ const docTemplate = `{
                     {
                         "enum": [
                             "json",
-                            "summary"
+                            "summary",
+                            "pdf",
+                            "csv"
                         ],
                         "type": "string",
                         "default": "json",
@@ -4794,6 +4945,26 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "controllers.GetPurchaseReportResponse": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/services.PurchaseReportData"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
         "controllers.JournalSummary": {
             "type": "object",
             "properties": {
@@ -5006,14 +5177,23 @@ const docTemplate = `{
                 }
             }
         },
-        "controllers.ReverseJournalRequest": {
+        "controllers.ReportMetadata": {
             "type": "object",
-            "required": [
-                "description"
-            ],
             "properties": {
-                "description": {
+                "data_freshness": {
                     "type": "string"
+                },
+                "generation_time_ms": {
+                    "type": "integer"
+                },
+                "record_count": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "uses_materialized_view": {
+                    "type": "boolean"
                 }
             }
         },
@@ -5024,6 +5204,24 @@ const docTemplate = `{
             ],
             "properties": {
                 "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.StandardReportResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "generated_at": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/controllers.ReportMetadata"
+                },
+                "status": {
                     "type": "string"
                 }
             }
@@ -5609,31 +5807,6 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
-                }
-            }
-        },
-        "models.DashboardResponse": {
-            "type": "object",
-            "properties": {
-                "low_stock_count": {
-                    "type": "integer",
-                    "example": 5
-                },
-                "pending_approvals": {
-                    "type": "integer",
-                    "example": 3
-                },
-                "total_payments": {
-                    "type": "number",
-                    "example": 95000000
-                },
-                "total_purchases": {
-                    "type": "number",
-                    "example": 80000000
-                },
-                "total_sales": {
-                    "type": "number",
-                    "example": 125000000
                 }
             }
         },
@@ -7589,41 +7762,6 @@ const docTemplate = `{
                 }
             }
         },
-        "services.BankReconciliation": {
-            "type": "object",
-            "properties": {
-                "cashBankID": {
-                    "type": "integer"
-                },
-                "createdAt": {
-                    "type": "string"
-                },
-                "difference": {
-                    "type": "number"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "reconcileDate": {
-                    "type": "string"
-                },
-                "statementBalance": {
-                    "type": "number"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "systemBalance": {
-                    "type": "number"
-                },
-                "updatedAt": {
-                    "type": "string"
-                },
-                "userID": {
-                    "type": "integer"
-                }
-            }
-        },
         "services.BillAllocation": {
             "type": "object",
             "properties": {
@@ -7808,6 +7946,29 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "number"
+                }
+            }
+        },
+        "services.CategoryPurchaseSummary": {
+            "type": "object",
+            "properties": {
+                "account_code": {
+                    "type": "string"
+                },
+                "account_name": {
+                    "type": "string"
+                },
+                "category_name": {
+                    "type": "string"
+                },
+                "percentage": {
+                    "type": "number"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "total_purchases": {
+                    "type": "integer"
                 }
             }
         },
@@ -8052,6 +8213,12 @@ const docTemplate = `{
                 "account": {
                     "$ref": "#/definitions/models.Account"
                 },
+                "cash_impact": {
+                    "type": "number"
+                },
+                "cash_impact_status": {
+                    "type": "string"
+                },
                 "closing_balance": {
                     "type": "number"
                 },
@@ -8067,11 +8234,21 @@ const docTemplate = `{
                 "generated_at": {
                     "type": "string"
                 },
+                "is_balanced": {
+                    "type": "boolean"
+                },
                 "monthly_summary": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/services.MonthlyLedgerSummary"
                     }
+                },
+                "net_position_change": {
+                    "description": "Enhanced UI fields",
+                    "type": "number"
+                },
+                "net_position_status": {
+                    "type": "string"
                 },
                 "opening_balance": {
                     "type": "number"
@@ -8083,6 +8260,9 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "total_debits": {
+                    "type": "number"
+                },
+                "total_transaction_volume": {
                     "type": "number"
                 },
                 "transactions": {
@@ -8735,68 +8915,6 @@ const docTemplate = `{
                 }
             }
         },
-        "services.LightweightPaymentRequest": {
-            "type": "object",
-            "required": [
-                "amount",
-                "cash_bank_id",
-                "method",
-                "payment_date",
-                "sale_id"
-            ],
-            "properties": {
-                "amount": {
-                    "type": "number"
-                },
-                "cash_bank_id": {
-                    "type": "integer"
-                },
-                "method": {
-                    "type": "string"
-                },
-                "notes": {
-                    "type": "string"
-                },
-                "payment_date": {
-                    "type": "string"
-                },
-                "reference": {
-                    "type": "string"
-                },
-                "sale_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "services.LightweightPaymentResponse": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "number"
-                },
-                "message": {
-                    "type": "string"
-                },
-                "new_status": {
-                    "type": "string"
-                },
-                "outstanding_amount": {
-                    "type": "number"
-                },
-                "payment_code": {
-                    "type": "string"
-                },
-                "payment_id": {
-                    "type": "integer"
-                },
-                "processing_time": {
-                    "type": "string"
-                },
-                "success": {
-                    "type": "boolean"
-                }
-            }
-        },
         "services.MonthlyLedgerSummary": {
             "type": "object",
             "properties": {
@@ -8813,6 +8931,49 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "net_movement": {
+                    "type": "number"
+                },
+                "year": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.MonthlyPurchaseSummary": {
+            "type": "object",
+            "properties": {
+                "average_amount": {
+                    "type": "number"
+                },
+                "month": {
+                    "type": "integer"
+                },
+                "month_name": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "total_paid": {
+                    "type": "number"
+                },
+                "total_purchases": {
+                    "type": "integer"
+                },
+                "year": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.MonthlyTaxSummary": {
+            "type": "object",
+            "properties": {
+                "month": {
+                    "type": "integer"
+                },
+                "month_name": {
+                    "type": "string"
+                },
+                "tax_amount": {
                     "type": "number"
                 },
                 "year": {
@@ -10051,6 +10212,114 @@ const docTemplate = `{
                 }
             }
         },
+        "services.PurchasePaymentAnalysis": {
+            "type": "object",
+            "properties": {
+                "average_order_value": {
+                    "type": "number"
+                },
+                "cash_amount": {
+                    "type": "number"
+                },
+                "cash_percentage": {
+                    "type": "number"
+                },
+                "cash_purchases": {
+                    "type": "integer"
+                },
+                "credit_amount": {
+                    "type": "number"
+                },
+                "credit_percentage": {
+                    "type": "number"
+                },
+                "credit_purchases": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.PurchaseReportData": {
+            "type": "object",
+            "properties": {
+                "company": {
+                    "$ref": "#/definitions/services.CompanyInfo"
+                },
+                "completed_purchases": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "outstanding_payables": {
+                    "type": "number"
+                },
+                "payment_analysis": {
+                    "$ref": "#/definitions/services.PurchasePaymentAnalysis"
+                },
+                "purchases_by_category": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.CategoryPurchaseSummary"
+                    }
+                },
+                "purchases_by_month": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.MonthlyPurchaseSummary"
+                    }
+                },
+                "purchases_by_vendor": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.VendorPurchaseSummary"
+                    }
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "tax_analysis": {
+                    "$ref": "#/definitions/services.PurchaseTaxAnalysis"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "total_paid": {
+                    "type": "number"
+                },
+                "total_purchases": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.PurchaseTaxAnalysis": {
+            "type": "object",
+            "properties": {
+                "average_tax_rate": {
+                    "type": "number"
+                },
+                "tax_by_month": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.MonthlyTaxSummary"
+                    }
+                },
+                "tax_reclaimable_amount": {
+                    "type": "number"
+                },
+                "total_tax_amount": {
+                    "type": "number"
+                },
+                "total_taxable_amount": {
+                    "type": "number"
+                }
+            }
+        },
         "services.ReconciliationData": {
             "type": "object",
             "properties": {
@@ -10088,41 +10357,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "ssot_balance": {
-                    "type": "number"
-                }
-            }
-        },
-        "services.ReconciliationItemRequest": {
-            "type": "object",
-            "properties": {
-                "is_cleared": {
-                    "type": "boolean"
-                },
-                "notes": {
-                    "type": "string"
-                },
-                "transaction_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "services.ReconciliationRequest": {
-            "type": "object",
-            "required": [
-                "date",
-                "statement_balance"
-            ],
-            "properties": {
-                "date": {
-                    "type": "string"
-                },
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/services.ReconciliationItemRequest"
-                    }
-                },
-                "statement_balance": {
                     "type": "number"
                 }
             }
@@ -10598,6 +10832,38 @@ const docTemplate = `{
                 },
                 "total_purchases": {
                     "type": "number"
+                },
+                "vendor_id": {
+                    "type": "integer"
+                },
+                "vendor_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.VendorPurchaseSummary": {
+            "type": "object",
+            "properties": {
+                "last_purchase_date": {
+                    "type": "string"
+                },
+                "outstanding": {
+                    "type": "number"
+                },
+                "payment_method": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "total_paid": {
+                    "type": "number"
+                },
+                "total_purchases": {
+                    "type": "integer"
                 },
                 "vendor_id": {
                     "type": "integer"

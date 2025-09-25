@@ -152,6 +152,64 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([
 		return nil, fmt.Errorf("error executing account balances query: %v", err)
 	}
 	
+	// Debug logging
+	fmt.Printf("[DEBUG] Balance Sheet Service: Found %d account balances for date %s\n", len(balances), asOfDate)
+	
+	// Check if we have any actual journal activity (non-zero balances)
+	hasJournalActivity := false
+	for _, balance := range balances {
+		if balance.DebitTotal != 0 || balance.CreditTotal != 0 {
+			hasJournalActivity = true
+			break
+		}
+	}
+	
+	for i, balance := range balances {
+		if i < 5 { // Log first 5 accounts
+			fmt.Printf("[DEBUG] Account %s (%s): Debit=%.2f, Credit=%.2f, Net=%.2f\n", 
+				balance.AccountCode, balance.AccountName, balance.DebitTotal, balance.CreditTotal, balance.NetBalance)
+		}
+	}
+	
+	// If no journal activity found for this date, fall back to account balances
+	if !hasJournalActivity {
+		fmt.Printf("[DEBUG] No journal activity found for date %s, falling back to account.balance\n", asOfDate)
+		return s.getAccountBalancesFromAccountTable()
+	}
+	
+	return balances, nil
+}
+
+// getAccountBalancesFromAccountTable gets account balances directly from accounts.balance when SSOT data is not available
+func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAccountBalance, error) {
+	var balances []SSOTAccountBalance
+	
+	query := `
+		SELECT 
+			a.id as account_id,
+			a.code as account_code,
+			a.name as account_name,
+			a.type as account_type,
+			0 as debit_total,
+			0 as credit_total,
+			a.balance as net_balance
+		FROM accounts a
+		WHERE a.type IN ('ASSET', 'LIABILITY', 'EQUITY')
+		ORDER BY a.code
+	`
+	
+	if err := s.db.Raw(query).Scan(&balances).Error; err != nil {
+		return nil, fmt.Errorf("error executing fallback account balances query: %v", err)
+	}
+	
+	fmt.Printf("[DEBUG] Fallback method: Found %d accounts with direct balances\n", len(balances))
+	for i, balance := range balances {
+		if i < 5 && balance.NetBalance != 0 { // Log first 5 non-zero accounts
+			fmt.Printf("[DEBUG] Fallback Account %s (%s): Balance=%.2f\n", 
+				balance.AccountCode, balance.AccountName, balance.NetBalance)
+		}
+	}
+	
 	return balances, nil
 }
 
@@ -219,10 +277,11 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 		code := balance.AccountCode
 		amount := balance.NetBalance
 		
-		// Skip if amount is zero
-		if amount == 0 {
-			continue
-		}
+		// Show all accounts including zero balances for debugging
+		// TODO: Re-enable this skip logic after debugging
+		// if amount == 0 {
+		//	continue
+		// }
 		
 		item := BSAccountItem{
 			AccountCode: balance.AccountCode,

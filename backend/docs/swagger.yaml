@@ -1,5 +1,18 @@
 basePath: /api/v1
 definitions:
+  controllers.GetPurchaseReportResponse:
+    properties:
+      data:
+        $ref: '#/definitions/services.PurchaseReportData'
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+      timestamp:
+        type: string
+    type: object
   controllers.JournalSummary:
     properties:
       message:
@@ -8,7 +21,7 @@ definitions:
   controllers.PSAKBalanceSheetRequest:
     properties:
       as_of_date:
-        example: '2024-12-31'
+        example: "2024-12-31"
         type: string
     required:
     - as_of_date
@@ -16,14 +29,14 @@ definitions:
   controllers.PSAKCashFlowRequest:
     properties:
       end_date:
-        example: '2024-12-31'
+        example: "2024-12-31"
         type: string
       method:
         description: DIRECT or INDIRECT
         example: INDIRECT
         type: string
       start_date:
-        example: '2024-01-01'
+        example: "2024-01-01"
         type: string
     required:
     - end_date
@@ -32,17 +45,17 @@ definitions:
   controllers.PSAKComplianceCheckRequest:
     properties:
       as_of_date:
-        example: '2024-12-31'
+        example: "2024-12-31"
         type: string
       end_date:
-        example: '2024-12-31'
+        example: "2024-12-31"
         type: string
       report_type:
         description: BALANCE_SHEET, PROFIT_LOSS, CASH_FLOW
         example: BALANCE_SHEET
         type: string
       start_date:
-        example: '2024-01-01'
+        example: "2024-01-01"
         type: string
     required:
     - report_type
@@ -82,10 +95,10 @@ definitions:
   controllers.PSAKProfitLossRequest:
     properties:
       end_date:
-        example: '2024-12-31'
+        example: "2024-12-31"
         type: string
       start_date:
-        example: '2024-01-01'
+        example: "2024-01-01"
         type: string
     required:
     - end_date
@@ -144,12 +157,18 @@ definitions:
       total_payments:
         type: integer
     type: object
-  controllers.ReverseJournalRequest:
+  controllers.ReportMetadata:
     properties:
-      description:
+      data_freshness:
         type: string
-    required:
-    - description
+      generation_time_ms:
+        type: integer
+      record_count:
+        type: integer
+      source:
+        type: string
+      uses_materialized_view:
+        type: boolean
     type: object
   controllers.ReversePaymentRequest:
     properties:
@@ -157,6 +176,18 @@ definitions:
         type: string
     required:
     - reason
+    type: object
+  controllers.StandardReportResponse:
+    properties:
+      data: {}
+      generated_at:
+        type: string
+      message:
+        type: string
+      metadata:
+        $ref: '#/definitions/controllers.ReportMetadata'
+      status:
+        type: string
     type: object
   models.APIResponse:
     properties:
@@ -543,24 +574,6 @@ definitions:
         type: string
       updated_at:
         type: string
-    type: object
-  models.DashboardResponse:
-    properties:
-      low_stock_count:
-        example: 5
-        type: integer
-      pending_approvals:
-        example: 3
-        type: integer
-      total_payments:
-        example: 95000000
-        type: number
-      total_purchases:
-        example: 80000000
-        type: number
-      total_sales:
-        example: 125000000
-        type: number
     type: object
   models.ErrorResponse:
     properties:
@@ -1632,7 +1645,7 @@ definitions:
   models.UserResponse:
     properties:
       created_at:
-        example: '2024-01-15T09:30:00Z'
+        example: "2024-01-15T09:30:00Z"
         type: string
       email:
         example: john@example.com
@@ -1650,7 +1663,7 @@ definitions:
         example: admin
         type: string
       updated_at:
-        example: '2024-01-15T09:30:00Z'
+        example: "2024-01-15T09:30:00Z"
         type: string
       username:
         example: john_doe
@@ -1859,29 +1872,6 @@ definitions:
       total_cash:
         type: number
     type: object
-  services.BankReconciliation:
-    properties:
-      cashBankID:
-        type: integer
-      createdAt:
-        type: string
-      difference:
-        type: number
-      id:
-        type: integer
-      reconcileDate:
-        type: string
-      statementBalance:
-        type: number
-      status:
-        type: string
-      systemBalance:
-        type: number
-      updatedAt:
-        type: string
-      userID:
-        type: integer
-    type: object
   services.BillAllocation:
     properties:
       amount:
@@ -2004,6 +1994,21 @@ definitions:
         type: string
       total:
         type: number
+    type: object
+  services.CategoryPurchaseSummary:
+    properties:
+      account_code:
+        type: string
+      account_name:
+        type: string
+      category_name:
+        type: string
+      percentage:
+        type: number
+      total_amount:
+        type: number
+      total_purchases:
+        type: integer
     type: object
   services.CompanyInfo:
     properties:
@@ -2164,6 +2169,10 @@ definitions:
     properties:
       account:
         $ref: '#/definitions/models.Account'
+      cash_impact:
+        type: number
+      cash_impact_status:
+        type: string
       closing_balance:
         type: number
       company:
@@ -2174,10 +2183,17 @@ definitions:
         type: string
       generated_at:
         type: string
+      is_balanced:
+        type: boolean
       monthly_summary:
         items:
           $ref: '#/definitions/services.MonthlyLedgerSummary'
         type: array
+      net_position_change:
+        description: Enhanced UI fields
+        type: number
+      net_position_status:
+        type: string
       opening_balance:
         type: number
       start_date:
@@ -2185,6 +2201,8 @@ definitions:
       total_credits:
         type: number
       total_debits:
+        type: number
+      total_transaction_volume:
         type: number
       transactions:
         items:
@@ -2615,48 +2633,6 @@ definitions:
       updated_at:
         type: string
     type: object
-  services.LightweightPaymentRequest:
-    properties:
-      amount:
-        type: number
-      cash_bank_id:
-        type: integer
-      method:
-        type: string
-      notes:
-        type: string
-      payment_date:
-        type: string
-      reference:
-        type: string
-      sale_id:
-        type: integer
-    required:
-    - amount
-    - cash_bank_id
-    - method
-    - payment_date
-    - sale_id
-    type: object
-  services.LightweightPaymentResponse:
-    properties:
-      amount:
-        type: number
-      message:
-        type: string
-      new_status:
-        type: string
-      outstanding_amount:
-        type: number
-      payment_code:
-        type: string
-      payment_id:
-        type: integer
-      processing_time:
-        type: string
-      success:
-        type: boolean
-    type: object
   services.MonthlyLedgerSummary:
     properties:
       credits:
@@ -2668,6 +2644,34 @@ definitions:
       month:
         type: string
       net_movement:
+        type: number
+      year:
+        type: integer
+    type: object
+  services.MonthlyPurchaseSummary:
+    properties:
+      average_amount:
+        type: number
+      month:
+        type: integer
+      month_name:
+        type: string
+      total_amount:
+        type: number
+      total_paid:
+        type: number
+      total_purchases:
+        type: integer
+      year:
+        type: integer
+    type: object
+  services.MonthlyTaxSummary:
+    properties:
+      month:
+        type: integer
+      month_name:
+        type: string
+      tax_amount:
         type: number
       year:
         type: integer
@@ -3492,6 +3496,77 @@ definitions:
         - $ref: '#/definitions/services.ValidationReport'
         description: Data Quality and Validation Fields
     type: object
+  services.PurchasePaymentAnalysis:
+    properties:
+      average_order_value:
+        type: number
+      cash_amount:
+        type: number
+      cash_percentage:
+        type: number
+      cash_purchases:
+        type: integer
+      credit_amount:
+        type: number
+      credit_percentage:
+        type: number
+      credit_purchases:
+        type: integer
+    type: object
+  services.PurchaseReportData:
+    properties:
+      company:
+        $ref: '#/definitions/services.CompanyInfo'
+      completed_purchases:
+        type: integer
+      currency:
+        type: string
+      end_date:
+        type: string
+      generated_at:
+        type: string
+      outstanding_payables:
+        type: number
+      payment_analysis:
+        $ref: '#/definitions/services.PurchasePaymentAnalysis'
+      purchases_by_category:
+        items:
+          $ref: '#/definitions/services.CategoryPurchaseSummary'
+        type: array
+      purchases_by_month:
+        items:
+          $ref: '#/definitions/services.MonthlyPurchaseSummary'
+        type: array
+      purchases_by_vendor:
+        items:
+          $ref: '#/definitions/services.VendorPurchaseSummary'
+        type: array
+      start_date:
+        type: string
+      tax_analysis:
+        $ref: '#/definitions/services.PurchaseTaxAnalysis'
+      total_amount:
+        type: number
+      total_paid:
+        type: number
+      total_purchases:
+        type: integer
+    type: object
+  services.PurchaseTaxAnalysis:
+    properties:
+      average_tax_rate:
+        type: number
+      tax_by_month:
+        items:
+          $ref: '#/definitions/services.MonthlyTaxSummary'
+        type: array
+      tax_reclaimable_amount:
+        type: number
+      total_tax_amount:
+        type: number
+      total_taxable_amount:
+        type: number
+    type: object
   services.ReconciliationData:
     properties:
       account_id:
@@ -3518,29 +3593,6 @@ definitions:
         type: string
       ssot_balance:
         type: number
-    type: object
-  services.ReconciliationItemRequest:
-    properties:
-      is_cleared:
-        type: boolean
-      notes:
-        type: string
-      transaction_id:
-        type: integer
-    type: object
-  services.ReconciliationRequest:
-    properties:
-      date:
-        type: string
-      items:
-        items:
-          $ref: '#/definitions/services.ReconciliationItemRequest'
-        type: array
-      statement_balance:
-        type: number
-    required:
-    - date
-    - statement_balance
     type: object
   services.SalesSummaryData:
     properties:
@@ -3861,6 +3913,27 @@ definitions:
       vendor_name:
         type: string
     type: object
+  services.VendorPurchaseSummary:
+    properties:
+      last_purchase_date:
+        type: string
+      outstanding:
+        type: number
+      payment_method:
+        type: string
+      status:
+        type: string
+      total_amount:
+        type: number
+      total_paid:
+        type: number
+      total_purchases:
+        type: integer
+      vendor_id:
+        type: integer
+      vendor_name:
+        type: string
+    type: object
   services.VendorSpendData:
     properties:
       percentage:
@@ -3940,27 +4013,50 @@ info:
     email: support@swagger.io
     name: API Support
     url: http://www.swagger.io/support
-  description: 'API untuk aplikasi sistem akuntansi yang komprehensif dengan fitur
+  description: API untuk aplikasi sistem akuntansi yang komprehensif dengan fitur
     lengkap manajemen keuangan, inventory, sales, purchases, dan reporting.
-
-
-    NOTE: Internal/unused endpoints have been removed based on frontend usage analysis
-    performed on 2025-09-25 .
-
-
-    NOTE: Internal/unused endpoints have been removed based on frontend usage analysis
-    performed on 2025-09-25 .
-
-
-    NOTE: Internal/unused endpoints have been removed based on frontend usage analysis
-    performed on 2025-09-25 .'
   license:
     name: Apache 2.0
     url: http://www.apache.org/licenses/LICENSE-2.0.html
   termsOfService: http://swagger.io/terms/
   title: Sistema Akuntansi API
-  version: '1.0'
+  version: "1.0"
 paths:
+  /api/admin/check-cashbank-gl-links:
+    get:
+      consumes:
+      - application/json
+      description: Check which cash/bank accounts are missing GL account connections
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Check cash bank GL account links status
+      tags:
+      - Admin
+  /api/admin/fix-cashbank-gl-links:
+    post:
+      consumes:
+      - application/json
+      description: Create GL accounts and link them to cash/bank accounts that are
+        missing GL account connections
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Fix cash bank GL account links
+      tags:
+      - Admin
   /api/cashbank/accounts:
     get:
       consumes:
@@ -3969,7 +4065,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             items:
@@ -3994,7 +4090,7 @@ paths:
       produces:
       - application/json
       responses:
-        '201':
+        "201":
           description: Created
           schema:
             $ref: '#/definitions/models.CashBank'
@@ -4004,28 +4100,6 @@ paths:
       tags:
       - CashBank
   /api/cashbank/accounts/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Delete cash or bank account (soft delete)
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        '200':
-          description: OK
-          schema:
-            $ref: '#/definitions/models.APIResponse'
-      security:
-      - Bearer: []
-      summary: Delete cash/bank account
-      tags:
-      - CashBank
     get:
       consumes:
       - application/json
@@ -4039,7 +4113,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/models.CashBank'
@@ -4067,42 +4141,13 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/models.CashBank'
       security:
       - Bearer: []
       summary: Update cash/bank account
-      tags:
-      - CashBank
-  /api/cashbank/accounts/{id}/reconcile:
-    post:
-      consumes:
-      - application/json
-      description: Reconcile bank account with statement
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Reconciliation data
-        in: body
-        name: reconciliation
-        required: true
-        schema:
-          $ref: '#/definitions/services.ReconciliationRequest'
-      produces:
-      - application/json
-      responses:
-        '201':
-          description: Created
-          schema:
-            $ref: '#/definitions/services.BankReconciliation'
-      security:
-      - Bearer: []
-      summary: Reconcile bank account
       tags:
       - CashBank
   /api/cashbank/accounts/{id}/transactions:
@@ -4135,7 +4180,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.TransactionResult'
@@ -4152,7 +4197,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.BalanceSummary'
@@ -4176,30 +4221,13 @@ paths:
       produces:
       - application/json
       responses:
-        '201':
+        "201":
           description: Created
           schema:
             $ref: '#/definitions/models.CashBankTransaction'
       security:
       - Bearer: []
       summary: Process deposit
-      tags:
-      - CashBank
-  /api/cashbank/deposit-source-accounts:
-    get:
-      consumes:
-      - application/json
-      description: Get active revenue and equity accounts for deposit source selection
-      produces:
-      - application/json
-      responses:
-        '200':
-          description: OK
-          schema:
-            $ref: '#/definitions/models.APIResponse'
-      security:
-      - Bearer: []
-      summary: Get accounts for deposit source (Revenue + Equity)
       tags:
       - CashBank
   /api/cashbank/integrated/accounts/{id}:
@@ -4216,23 +4244,23 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.IntegratedAccountResponse'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '404':
+        "404":
           description: Not Found
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4276,18 +4304,18 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties: true
             type: object
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4313,17 +4341,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.ReconciliationData'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4358,18 +4386,18 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties: true
             type: object
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4389,11 +4417,11 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.IntegratedSummaryResponse'
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4412,32 +4440,13 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/models.APIResponse'
       security:
       - Bearer: []
       summary: Get payment accounts
-      tags:
-      - CashBank
-  /api/cashbank/revenue-accounts:
-    get:
-      consumes:
-      - application/json
-      description: Get active revenue accounts that can be used for deposit source
-      produces:
-      - application/json
-      responses:
-        '200':
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/models.Account'
-            type: array
-      security:
-      - Bearer: []
-      summary: Get revenue accounts for deposits
       tags:
       - CashBank
   /api/cashbank/transfer:
@@ -4455,7 +4464,7 @@ paths:
       produces:
       - application/json
       responses:
-        '201':
+        "201":
           description: Created
           schema:
             $ref: '#/definitions/services.CashBankTransfer'
@@ -4479,7 +4488,7 @@ paths:
       produces:
       - application/json
       responses:
-        '201':
+        "201":
           description: Created
           schema:
             $ref: '#/definitions/models.CashBankTransaction'
@@ -4488,6 +4497,206 @@ paths:
       summary: Process withdrawal
       tags:
       - CashBank
+  /api/monitoring/balance-health:
+    get:
+      consumes:
+      - application/json
+      description: Get comprehensive balance health metrics and synchronization status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get balance health metrics
+      tags:
+      - Balance Monitoring
+  /api/monitoring/balance-sync:
+    get:
+      consumes:
+      - application/json
+      description: Check synchronization between cash/bank accounts and GL accounts
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.BalanceMonitoringResult'
+      security:
+      - Bearer: []
+      summary: Check balance synchronization
+      tags:
+      - Balance Monitoring
+  /api/monitoring/discrepancies:
+    get:
+      consumes:
+      - application/json
+      description: Get list of current balance discrepancies between cash/bank and
+        GL accounts
+      parameters:
+      - default: 50
+        description: Limit number of results
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/services.BalanceDiscrepancy'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get current balance discrepancies
+      tags:
+      - Balance Monitoring
+  /api/monitoring/fix-discrepancies:
+    post:
+      consumes:
+      - application/json
+      description: Automatically fix balance discrepancies by updating GL account
+        balances
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Fix balance discrepancies
+      tags:
+      - Balance Monitoring
+  /api/monitoring/sync-status:
+    get:
+      consumes:
+      - application/json
+      description: Get a quick summary of balance synchronization status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get synchronization status summary
+      tags:
+      - Balance Monitoring
+  /api/payments:
+    get:
+      consumes:
+      - application/json
+      deprecated: true
+      description: 'DEPRECATED: This endpoint may cause double posting. Use SSOT Payment
+        routes instead. Get paginated list of payments with filters'
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by contact ID
+        in: query
+        name: contact_id
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by payment method
+        in: query
+        name: method
+        type: string
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - Bearer: []
+      summary: '[DEPRECATED] Get payments list'
+      tags:
+      - Deprecated-Payments
+  /api/payments/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete payment and reverse if needed (Admin Only)
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Deletion reason
+        in: body
+        name: reason
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - Bearer: []
+      summary: Delete payment
+      tags:
+      - Payments
+    get:
+      consumes:
+      - application/json
+      deprecated: true
+      description: 'DEPRECATED: This endpoint may cause double posting. Use SSOT Payment
+        routes instead. Get single payment details'
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Payment'
+      security:
+      - Bearer: []
+      summary: '[DEPRECATED] Get payment by ID'
+      tags:
+      - Deprecated-Payments
   /api/payments/{id}/account-updates:
     get:
       description: Retrieves the account balance changes caused by a payment transaction
@@ -4500,13 +4709,13 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             items:
               $ref: '#/definitions/services.AccountBalanceUpdate'
             type: array
-        '404':
+        "404":
           description: Not Found
           schema:
             additionalProperties:
@@ -4537,7 +4746,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties:
@@ -4546,6 +4755,29 @@ paths:
       security:
       - Bearer: []
       summary: Cancel payment
+      tags:
+      - Payments
+  /api/payments/{id}/pdf:
+    get:
+      consumes:
+      - application/json
+      description: Export single payment details in PDF format
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - Bearer: []
+      summary: Export payment detail as PDF
       tags:
       - Payments
   /api/payments/{id}/reverse:
@@ -4569,17 +4801,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.PaymentWithJournalResponse'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '404':
+        "404":
           description: Not Found
           schema:
             additionalProperties:
@@ -4600,17 +4832,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.PaymentWithJournalResponse'
-        '404':
+        "404":
           description: Not Found
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4625,13 +4857,13 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             items:
               $ref: '#/definitions/models.SSOTAccountBalance'
             type: array
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4647,13 +4879,13 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4662,6 +4894,58 @@ paths:
       summary: Refresh account balances
       tags:
       - Payment Integration
+  /api/payments/analytics:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed payment analytics for dashboard
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get payment analytics
+      tags:
+      - Payments
+  /api/payments/debug/recent:
+    get:
+      consumes:
+      - application/json
+      description: Get recent payments to verify Sales-Payment integration
+      parameters:
+      - description: 'Hours back to check (default: 24)'
+        in: query
+        name: hours
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get recent payments for debugging integration
+      tags:
+      - Payments
   /api/payments/enhanced-with-journal:
     post:
       consumes:
@@ -4678,17 +4962,17 @@ paths:
       produces:
       - application/json
       responses:
-        '201':
+        "201":
           description: Created
           schema:
             $ref: '#/definitions/services.PaymentWithJournalResponse'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4697,6 +4981,40 @@ paths:
       summary: Create payment with journal integration
       tags:
       - Payment Integration
+  /api/payments/export/excel:
+    get:
+      consumes:
+      - application/json
+      description: Export payments report in Excel format with filters
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by payment method
+        in: query
+        name: method
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - Bearer: []
+      summary: Export payment report as Excel
+      tags:
+      - Payments
   /api/payments/integration-metrics:
     get:
       description: Provides metrics about payment-journal integration performance
@@ -4704,7 +5022,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/controllers.PaymentIntegrationMetrics'
@@ -4723,11 +5041,11 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.PaginatedJournalResponse'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
@@ -4736,6 +5054,32 @@ paths:
       summary: Get journal entries for payment
       tags:
       - Payment Integration
+  /api/payments/payable:
+    post:
+      consumes:
+      - application/json
+      deprecated: true
+      description: 'DEPRECATED: This endpoint may cause double posting. Use SSOT Payment
+        routes instead. Create payment to vendor (payable)'
+      parameters:
+      - description: Payment data
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.PaymentCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Payment'
+      security:
+      - Bearer: []
+      summary: '[DEPRECATED] Create payable payment'
+      tags:
+      - Deprecated-Payments
   /api/payments/preview-journal:
     post:
       consumes:
@@ -4752,11 +5096,11 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.PaymentJournalResult'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
@@ -4765,6 +5109,66 @@ paths:
       summary: Preview journal entry for payment
       tags:
       - Payment Integration
+  /api/payments/receivable:
+    post:
+      consumes:
+      - application/json
+      deprecated: true
+      description: 'DEPRECATED: This endpoint may cause double posting. Use SSOT Payment
+        routes instead. Create payment from customer (receivable)'
+      parameters:
+      - description: Payment data
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/services.PaymentCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Payment'
+      security:
+      - Bearer: []
+      summary: '[DEPRECATED] Create receivable payment'
+      tags:
+      - Deprecated-Payments
+  /api/payments/report/pdf:
+    get:
+      consumes:
+      - application/json
+      description: Export payments report in PDF format with filters
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by payment method
+        in: query
+        name: method
+        type: string
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - Bearer: []
+      summary: Export payment report as PDF
+      tags:
+      - Payments
   /api/payments/summary:
     get:
       consumes:
@@ -4784,7 +5188,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties: true
@@ -4808,7 +5212,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             items:
@@ -4833,7 +5237,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             items:
@@ -4858,7 +5262,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties: true
@@ -4888,7 +5292,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties: true
@@ -4912,7 +5316,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             items:
@@ -4923,6 +5327,349 @@ paths:
       summary: Get purchase payments
       tags:
       - Purchases
+  /api/v1/admin/security/alerts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve system security alerts with pagination and filters
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by alert level
+        in: query
+        name: level
+        type: string
+      - description: Filter by acknowledgment status
+        in: query
+        name: acknowledged
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get system alerts
+      tags:
+      - Security
+  /api/v1/admin/security/alerts/{id}/acknowledge:
+    put:
+      consumes:
+      - application/json
+      description: Mark a system alert as acknowledged
+      parameters:
+      - description: Alert ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SystemAlert'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Acknowledge system alert
+      tags:
+      - Security
+  /api/v1/admin/security/cleanup:
+    post:
+      consumes:
+      - application/json
+      description: Trigger cleanup of old security logs and incidents
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cleanup old security logs
+      tags:
+      - Security
+  /api/v1/admin/security/config:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve security configuration settings
+      parameters:
+      - description: Filter by environment
+        in: query
+        name: environment
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get security configuration
+      tags:
+      - Security
+  /api/v1/admin/security/incidents:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve security incidents with pagination and filters
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by severity (low, medium, high, critical)
+        in: query
+        name: severity
+        type: string
+      - description: Filter by incident type
+        in: query
+        name: incident_type
+        type: string
+      - description: Filter by resolution status
+        in: query
+        name: resolved
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get security incidents
+      tags:
+      - Security
+  /api/v1/admin/security/incidents/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed information about a specific security incident
+      parameters:
+      - description: Incident ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SecurityIncident'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get security incident details
+      tags:
+      - Security
+  /api/v1/admin/security/incidents/{id}/resolve:
+    put:
+      consumes:
+      - application/json
+      description: Mark a security incident as resolved with notes
+      parameters:
+      - description: Incident ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Resolution notes
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SecurityIncident'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Resolve security incident
+      tags:
+      - Security
+  /api/v1/admin/security/ip-whitelist:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve IP whitelist entries with pagination
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by environment
+        in: query
+        name: environment
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get IP whitelist
+      tags:
+      - Security
+    post:
+      consumes:
+      - application/json
+      description: Add a new IP address or range to the whitelist
+      parameters:
+      - description: IP whitelist entry
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.IpWhitelist'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.IpWhitelist'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add IP to whitelist
+      tags:
+      - Security
+  /api/v1/admin/security/metrics:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve security metrics for a specific date range
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get security metrics
+      tags:
+      - Security
   /api/v1/journals:
     get:
       description: Get journal entries with filtering, pagination, and sorting
@@ -4960,17 +5707,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.PaginatedJournalResponse'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -4993,17 +5740,17 @@ paths:
       produces:
       - application/json
       responses:
-        '201':
+        "201":
           description: Created
           schema:
             $ref: '#/definitions/services.JournalResponse'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5024,17 +5771,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.JournalResponse'
-        '404':
+        "404":
           description: Not Found
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5043,103 +5790,19 @@ paths:
       summary: Get journal entry by ID
       tags:
       - Journal
-  /api/v1/journals/{id}/post:
-    put:
-      description: Change journal entry status from draft to posted
-      parameters:
-      - description: Journal Entry ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        '200':
-          description: OK
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        '400':
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        '404':
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        '500':
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Post a journal entry
-      tags:
-      - Journal
-  /api/v1/journals/{id}/reverse:
-    post:
-      consumes:
-      - application/json
-      description: Create a reversing journal entry for a posted entry
-      parameters:
-      - description: Journal Entry ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Reversal Request
-        in: body
-        name: reversal
-        required: true
-        schema:
-          $ref: '#/definitions/controllers.ReverseJournalRequest'
-      produces:
-      - application/json
-      responses:
-        '201':
-          description: Created
-          schema:
-            $ref: '#/definitions/services.JournalResponse'
-        '400':
-          description: Bad Request
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        '404':
-          description: Not Found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        '500':
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Reverse a journal entry
-      tags:
-      - Journal
   /api/v1/journals/account-balances:
     get:
       description: Get account balances from materialized view
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             items:
               $ref: '#/definitions/models.SSOTAccountBalance'
             type: array
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5154,13 +5817,13 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5175,11 +5838,11 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/controllers.JournalSummary'
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5188,142 +5851,87 @@ paths:
       summary: Get journal summary
       tags:
       - Journal
-  /api/v1/payments/fast/health:
+  /api/v1/reports/optimized/balance-sheet:
     get:
-      description: Returns health status of the fast payment service
-      produces:
-      - application/json
-      responses:
-        '200':
-          description: Health status
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Health check for fast payment service
-      tags:
-      - fast-payments
-  /api/v1/payments/fast/record:
-    post:
       consumes:
       - application/json
-      description: Records a payment with minimal database operations for fast response
+      description: Generate balance sheet using materialized view for optimal performance
       parameters:
-      - description: Payment details
-        in: body
-        name: payment
-        required: true
-        schema:
-          $ref: '#/definitions/services.LightweightPaymentRequest'
+      - description: As of date (YYYY-MM-DD)
+        in: query
+        name: as_of_date
+        type: string
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
-            $ref: '#/definitions/services.LightweightPaymentResponse'
-        '400':
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        '500':
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Record payment with fast processing
+            $ref: '#/definitions/controllers.StandardReportResponse'
+      summary: Generate Optimized Balance Sheet
       tags:
-      - fast-payments
-  /api/v1/payments/fast/record-async:
-    post:
+      - Optimized Reports
+  /api/v1/reports/optimized/profit-loss:
+    get:
       consumes:
       - application/json
-      description: Records payment immediately and creates journal entry in background
+      description: Generate P&L using materialized view for optimal performance
       parameters:
-      - description: Payment details
-        in: body
-        name: payment
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
         required: true
-        schema:
-          $ref: '#/definitions/services.LightweightPaymentRequest'
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
-            $ref: '#/definitions/services.LightweightPaymentResponse'
-        '400':
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        '500':
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Record payment with async journal processing
+            $ref: '#/definitions/controllers.StandardReportResponse'
+      summary: Generate Optimized Profit & Loss
       tags:
-      - fast-payments
-  /api/v1/payments/fast/status/{id}:
-    get:
-      description: Gets real-time payment processing status
-      parameters:
-      - description: Payment ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        '200':
-          description: Payment status
-          schema:
-            additionalProperties: true
-            type: object
-        '400':
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        '404':
-          description: Payment not found
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get payment status
-      tags:
-      - fast-payments
-  /api/v1/payments/fast/validate:
+      - Optimized Reports
+  /api/v1/reports/optimized/refresh-balances:
     post:
       consumes:
       - application/json
-      description: Validates payment data quickly for frontend feedback
-      parameters:
-      - description: Payment details
-        in: body
-        name: payment
-        required: true
-        schema:
-          $ref: '#/definitions/services.LightweightPaymentRequest'
+      description: Manually refresh the materialized view for updated data
       produces:
       - application/json
       responses:
-        '200':
-          description: Validation result
+        "200":
+          description: OK
           schema:
-            additionalProperties: true
-            type: object
-        '400':
-          description: Validation errors
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Validate payment data
+            $ref: '#/definitions/controllers.StandardReportResponse'
+      summary: Refresh Account Balances Materialized View
       tags:
-      - fast-payments
+      - Optimized Reports
+  /api/v1/reports/optimized/trial-balance:
+    get:
+      consumes:
+      - application/json
+      description: Generate trial balance using materialized view for optimal performance
+      parameters:
+      - description: As of date (YYYY-MM-DD)
+        in: query
+        name: as_of_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controllers.StandardReportResponse'
+      summary: Generate Optimized Trial Balance
+      tags:
+      - Optimized Reports
   /api/v1/reports/psak/balance-sheet:
     post:
       consumes:
@@ -5339,7 +5947,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             allOf:
@@ -5348,11 +5956,11 @@ paths:
                 data:
                   $ref: '#/definitions/services.PSAKBalanceSheetData'
               type: object
-        '400':
+        "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
@@ -5376,7 +5984,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             allOf:
@@ -5385,11 +5993,11 @@ paths:
                 data:
                   $ref: '#/definitions/services.PSAKCashFlowData'
               type: object
-        '400':
+        "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
@@ -5413,7 +6021,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             allOf:
@@ -5422,11 +6030,11 @@ paths:
                 data:
                   $ref: '#/definitions/services.PSAKComplianceInfo'
               type: object
-        '400':
+        "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
@@ -5443,24 +6051,24 @@ paths:
         standar PSAK
       parameters:
       - description: As of date for balance sheet (YYYY-MM-DD)
-        example: '2024-12-31'
+        example: "2024-12-31"
         in: query
         name: as_of_date
         type: string
       - description: Start date for P&L and cash flow (YYYY-MM-DD)
-        example: '2024-01-01'
+        example: "2024-01-01"
         in: query
         name: start_date
         type: string
       - description: End date for P&L and cash flow (YYYY-MM-DD)
-        example: '2024-12-31'
+        example: "2024-12-31"
         in: query
         name: end_date
         type: string
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             allOf:
@@ -5469,11 +6077,11 @@ paths:
                 data:
                   $ref: '#/definitions/controllers.PSAKComplianceSummaryResponse'
               type: object
-        '400':
+        "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
@@ -5498,7 +6106,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             allOf:
@@ -5507,11 +6115,11 @@ paths:
                 data:
                   $ref: '#/definitions/services.PSAKProfitLossData'
               type: object
-        '400':
+        "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/controllers.PSAKReportResponse'
@@ -5528,7 +6136,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             allOf:
@@ -5561,24 +6169,24 @@ paths:
         required: true
         type: string
       - default: json
-        description: Output format (json, pdf, excel)
+        description: Output format (json, pdf, csv)
         in: query
         name: format
         type: string
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.GeneralLedgerData'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5605,17 +6213,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.IntegratedFinancialReports'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5639,24 +6247,24 @@ paths:
         required: true
         type: string
       - default: json
-        description: Output format (json, pdf)
+        description: Output format (json, pdf, csv)
         in: query
         name: format
         type: string
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.JournalAnalysisData'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5665,6 +6273,117 @@ paths:
       summary: Get journal entry analysis integrated with SSOT
       tags:
       - SSOT Reports
+  /api/v1/ssot-reports/purchase-report:
+    get:
+      description: Generate comprehensive purchase analysis using SSOT journal data
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format (json, pdf)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.PurchaseReportData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get purchase report integrated with SSOT journal
+      tags:
+      - SSOT Reports
+  /api/v1/ssot-reports/purchase-report/validate:
+    get:
+      consumes:
+      - application/json
+      description: Validate the integrity and accuracy of purchase report data
+      parameters:
+      - description: Start date (YYYY-MM-DD format)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD format)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Validation results
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/controllers.GetPurchaseReportResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/controllers.GetPurchaseReportResponse'
+      summary: Validate Purchase Report Data
+      tags:
+      - Purchase Reports
+  /api/v1/ssot-reports/purchase-summary:
+    get:
+      consumes:
+      - application/json
+      description: Get a quick summary of purchase report data
+      parameters:
+      - description: Start date (YYYY-MM-DD format)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD format)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Purchase summary data
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/controllers.GetPurchaseReportResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/controllers.GetPurchaseReportResponse'
+      summary: Get Purchase Report Summary
+      tags:
+      - Purchase Reports
   /api/v1/ssot-reports/refresh:
     post:
       consumes:
@@ -5680,19 +6399,19 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties:
               type: string
             type: object
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5716,24 +6435,24 @@ paths:
         required: true
         type: string
       - default: json
-        description: Output format (json, pdf, excel)
+        description: Output format (json, pdf, csv)
         in: query
         name: format
         type: string
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.SalesSummaryData'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5749,12 +6468,12 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             additionalProperties: true
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5773,24 +6492,24 @@ paths:
         name: as_of_date
         type: string
       - default: json
-        description: Output format (json, pdf, excel)
+        description: Output format (json, pdf, csv)
         in: query
         name: format
         type: string
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.TrialBalanceData'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5821,17 +6540,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: OK
           schema:
             $ref: '#/definitions/services.VendorAnalysisData'
-        '400':
+        "400":
           description: Bad Request
           schema:
             additionalProperties:
               type: string
             type: object
-        '500':
+        "500":
           description: Internal Server Error
           schema:
             additionalProperties:
@@ -5855,19 +6574,19 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Successful login
           schema:
             $ref: '#/definitions/models.LoginResponse'
-        '400':
+        "400":
           description: Invalid request format
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '401':
+        "401":
           description: Invalid credentials or account disabled
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '500':
+        "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
@@ -5889,15 +6608,15 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Token refreshed successfully
           schema:
             $ref: '#/definitions/models.LoginResponse'
-        '400':
+        "400":
           description: Invalid request format
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '401':
+        "401":
           description: Invalid or expired refresh token
           schema:
             $ref: '#/definitions/models.ErrorResponse'
@@ -5920,19 +6639,19 @@ paths:
       produces:
       - application/json
       responses:
-        '201':
+        "201":
           description: User created successfully
           schema:
             $ref: '#/definitions/models.LoginResponse'
-        '400':
+        "400":
           description: Invalid request data
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '409':
+        "409":
           description: User already exists
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '500':
+        "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
@@ -5947,7 +6666,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Token is valid
           schema:
             allOf:
@@ -5956,7 +6675,7 @@ paths:
                 data:
                   $ref: '#/definitions/models.UserResponse'
               type: object
-        '401':
+        "401":
           description: Invalid token or account disabled
           schema:
             $ref: '#/definitions/models.ErrorResponse'
@@ -5974,19 +6693,19 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Analytics data retrieved successfully
           schema:
             $ref: '#/definitions/models.APIResponse'
-        '401':
+        "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '403':
+        "403":
           description: Forbidden - insufficient privileges
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '500':
+        "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
@@ -6004,19 +6723,19 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Finance dashboard data retrieved successfully
           schema:
             $ref: '#/definitions/models.APIResponse'
-        '401':
+        "401":
           description: Unauthorized
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '403':
+        "403":
           description: Forbidden - not finance role
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '500':
+        "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/models.ErrorResponse'
@@ -6025,58 +6744,250 @@ paths:
       summary: Get finance dashboard data
       tags:
       - Dashboard
-  /dashboard/quick-stats:
-    get:
+  /journal-drilldown:
+    post:
       consumes:
       - application/json
-      description: Retrieve quick statistics data for dashboard widgets
+      description: Get detailed journal entries for a specific line item from financial
+        reports
+      parameters:
+      - description: Drill-down request parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.JournalDrilldownRequest'
       produces:
       - application/json
       responses:
-        '200':
-          description: Quick stats retrieved successfully
+        "200":
+          description: OK
           schema:
-            $ref: '#/definitions/models.APIResponse'
-        '401':
-          description: Unauthorized
+            $ref: '#/definitions/services.JournalDrilldownResponse'
+        "400":
+          description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get quick statistics
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Journal Entry Drill-down
       tags:
-      - Dashboard
-  /dashboard/summary:
+      - journal-drilldown
+  /journal-drilldown/accounts:
     get:
-      consumes:
-      - application/json
-      description: Retrieve comprehensive dashboard data including statistics, recent
-        activities, and alerts
+      description: Get all accounts that have journal entries in a specific date range
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
       produces:
       - application/json
       responses:
-        '200':
-          description: Dashboard summary retrieved successfully
+        "200":
+          description: OK
           schema:
-            allOf:
-            - $ref: '#/definitions/models.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/models.DashboardResponse'
-              type: object
-        '401':
-          description: Unauthorized
+            properties:
+              data:
+                items:
+                  $ref: '#/definitions/models.Account'
+                type: array
+            type: object
+        "400":
+          description: Bad Request
           schema:
-            $ref: '#/definitions/models.ErrorResponse'
-        '500':
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get dashboard summary
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get Active Accounts for Period
       tags:
-      - Dashboard
+      - journal-drilldown
+  /journal-drilldown/entries:
+    get:
+      description: Get journal entries using URL parameters for drill-down
+      parameters:
+      - description: Comma-separated account codes
+        in: query
+        name: account_codes
+        type: string
+      - description: Comma-separated account IDs
+        in: query
+        name: account_ids
+        type: string
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - description: Report type (BALANCE_SHEET, PROFIT_LOSS, CASH_FLOW)
+        in: query
+        name: report_type
+        type: string
+      - description: Name of the line item
+        in: query
+        name: line_item_name
+        type: string
+      - description: Minimum amount filter
+        in: query
+        name: min_amount
+        type: number
+      - description: Maximum amount filter
+        in: query
+        name: max_amount
+        type: number
+      - description: Comma-separated transaction types
+        in: query
+        name: transaction_types
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.JournalDrilldownResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Journal Entry Drill-down (GET)
+      tags:
+      - journal-drilldown
+  /journal-drilldown/entries/{id}:
+    get:
+      description: Get detailed information for a specific journal entry including
+        all lines
+      parameters:
+      - description: Journal Entry ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.JournalEntry'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get Journal Entry Detail
+      tags:
+      - journal-drilldown
+  /monitoring/api-usage/analytics:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed analytics and insights about API usage patterns
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get API usage analytics
+      tags:
+      - monitoring
+  /monitoring/api-usage/reset:
+    post:
+      consumes:
+      - application/json
+      description: Reset all API usage tracking statistics (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Reset API usage statistics
+      tags:
+      - monitoring
+  /monitoring/api-usage/stats:
+    get:
+      consumes:
+      - application/json
+      description: Get comprehensive API endpoint usage statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get API usage statistics
+      tags:
+      - monitoring
+  /monitoring/api-usage/top:
+    get:
+      consumes:
+      - application/json
+      description: Get list of most frequently used API endpoints
+      parameters:
+      - default: 10
+        description: Number of top endpoints to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get top used endpoints
+      tags:
+      - monitoring
+  /monitoring/api-usage/unused:
+    get:
+      consumes:
+      - application/json
+      description: Get list of potentially unused API endpoints
+      parameters:
+      - default: 1
+        description: Minimum usage count to consider as used
+        in: query
+        name: min_usage
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get unused endpoints
+      tags:
+      - monitoring
   /profile:
     get:
       consumes:
@@ -6085,7 +6996,7 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Profile retrieved successfully
           schema:
             allOf:
@@ -6094,11 +7005,11 @@ paths:
                 data:
                   $ref: '#/definitions/models.UserResponse'
               type: object
-        '401':
+        "401":
           description: Unauthorized - invalid token
           schema:
             $ref: '#/definitions/models.ErrorResponse'
-        '404':
+        "404":
           description: User not found
           schema:
             $ref: '#/definitions/models.ErrorResponse'
@@ -6115,13 +7026,13 @@ paths:
         of Truth (SSOT) journal system with real-time data integration
       parameters:
       - description: Start date (YYYY-MM-DD)
-        example: '2025-01-01'
+        example: "2025-01-01"
         in: query
         name: start_date
         required: true
         type: string
       - description: End date (YYYY-MM-DD)
-        example: '2025-12-31'
+        example: "2025-12-31"
         in: query
         name: end_date
         required: true
@@ -6139,17 +7050,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: P&L report generated successfully
           schema:
             additionalProperties: true
             type: object
-        '400':
+        "400":
           description: Invalid request parameters
           schema:
             additionalProperties: true
             type: object
-        '500':
+        "500":
           description: Internal server error
           schema:
             additionalProperties: true
@@ -6168,7 +7079,7 @@ paths:
         validation
       parameters:
       - description: As of date (YYYY-MM-DD)
-        example: '2025-12-31'
+        example: "2025-12-31"
         in: query
         name: as_of_date
         type: string
@@ -6177,23 +7088,25 @@ paths:
         enum:
         - json
         - summary
+        - pdf
+        - csv
         in: query
         name: format
         type: string
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Balance Sheet generated successfully
           schema:
             additionalProperties: true
             type: object
-        '400':
+        "400":
           description: Invalid request parameters
           schema:
             additionalProperties: true
             type: object
-        '500':
+        "500":
           description: Internal server error
           schema:
             additionalProperties: true
@@ -6210,7 +7123,7 @@ paths:
       description: Get detailed account information for Balance Sheet drilldown analysis
       parameters:
       - description: As of date (YYYY-MM-DD)
-        example: '2025-12-31'
+        example: "2025-12-31"
         in: query
         name: as_of_date
         type: string
@@ -6225,17 +7138,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Account details retrieved successfully
           schema:
             additionalProperties: true
             type: object
-        '400':
+        "400":
           description: Invalid request parameters
           schema:
             additionalProperties: true
             type: object
-        '500':
+        "500":
           description: Internal server error
           schema:
             additionalProperties: true
@@ -6254,13 +7167,13 @@ paths:
         analysis
       parameters:
       - description: Start date (YYYY-MM-DD)
-        example: '2025-01-01'
+        example: "2025-01-01"
         in: query
         name: start_date
         required: true
         type: string
       - description: End date (YYYY-MM-DD)
-        example: '2025-12-31'
+        example: "2025-12-31"
         in: query
         name: end_date
         required: true
@@ -6278,17 +7191,17 @@ paths:
       produces:
       - application/json
       responses:
-        '200':
+        "200":
           description: Cash Flow statement generated successfully
           schema:
             additionalProperties: true
             type: object
-        '400':
+        "400":
           description: Invalid request parameters
           schema:
             additionalProperties: true
             type: object
-        '500':
+        "500":
           description: Internal server error
           schema:
             additionalProperties: true
@@ -6307,4 +7220,4 @@ securityDefinitions:
     in: header
     name: Authorization
     type: apiKey
-swagger: '2.0'
+swagger: "2.0"

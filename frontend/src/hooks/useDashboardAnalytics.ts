@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '@/services/api';
+import { API_ENDPOINTS } from '@/config/api';
 
 // Define the structure of the analytics data
 interface DashboardAnalytics {
@@ -77,8 +78,8 @@ export const useDashboardAnalytics = (user: any, token: string | null) => {
         console.log('User role:', user.role);
         console.log('User role normalized:', user.role?.toString().toLowerCase());
         
-        console.log('🌐 Making API request to /dashboard/analytics');
-        const response = await api.get('/dashboard/analytics');
+        console.log('🌐 Making API request to', API_ENDPOINTS.DASHBOARD_ANALYTICS);
+        const response = await api.get(API_ENDPOINTS.DASHBOARD_ANALYTICS);
         
         console.log('✅ Dashboard analytics response received:', Object.keys(response.data));
         

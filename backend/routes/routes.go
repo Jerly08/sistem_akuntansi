@@ -191,9 +191,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			unifiedJournals.GET("", permMiddleware.CanView("reports"), unifiedJournalController.GetJournalEntries)
 			unifiedJournals.GET("/:id", permMiddleware.CanView("reports"), unifiedJournalController.GetJournalEntry)
 			
-			// Status operations
-			unifiedJournals.PUT("/:id/post", permMiddleware.CanEdit("reports"), unifiedJournalController.PostJournalEntry)
-			unifiedJournals.POST("/:id/reverse", permMiddleware.CanEdit("reports"), unifiedJournalController.ReverseJournalEntry)
+			// Status operations - removed unused endpoints
 			
 			// Balance management
 			unifiedJournals.GET("/account-balances", permMiddleware.CanView("reports"), unifiedJournalController.GetAccountBalances)
@@ -268,8 +266,6 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			dashboard := protected.Group("/dashboard")
 			{
 				dashboard.GET("/analytics", middleware.RoleRequired("admin", "finance", "director"), dashboardController.GetAnalytics)
-				dashboard.GET("/summary", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), dashboardController.GetDashboardSummary)
-				dashboard.GET("/quick-stats", middleware.RoleRequired("admin", "finance", "director", "inventory_manager", "employee"), dashboardController.GetQuickStats)
 				dashboard.GET("/finance", middleware.RoleRequired("admin", "finance"), dashboardController.GetFinanceDashboardData)
 				dashboard.GET("/stock-alerts", middleware.RoleRequired("admin", "inventory_manager", "director"), dashboardController.GetStockAlertsBanner)
 				dashboard.POST("/stock-alerts/:id/dismiss", middleware.RoleRequired("admin", "inventory_manager"), dashboardController.DismissStockAlert)
@@ -479,9 +475,6 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			// ✅ NEW: Setup SSOT Payment routes with journal integration (prevents double posting)
 			SetupSSOTPaymentRoutes(protected, db, jwtManager)
 			
-			// 🚀 NEW: Setup Fast Payment routes with lightweight processing
-			SetupFastPaymentRoutes(protected, db, jwtManager)
-			
 			// ⚡ ULTRA-FAST: Setup Ultra-Fast Payment routes with minimal operations
 			ultraFastRoutes := NewUltraFastPaymentRoutes(db)
 			ultraFastRoutes.SetupUltraFastPaymentRoutes(r)
@@ -615,6 +608,53 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 
 			// ⚡ OPTIMIZED FINANCIAL REPORTS: Ultra-fast reports using materialized view
 			SetupOptimizedReportsRoutes(r, db)
+			
+			// 🔧 COMPATIBILITY ROUTES: Add root-level aliases for SSOT reports
+			// This provides backward compatibility for frontend requests to /ssot-reports/*
+			// These routes redirect to the proper /api/v1/ssot-reports/* endpoints
+			ssotAliasGroup := r.Group("/ssot-reports")
+			ssotAliasGroup.Use(jwtManager.AuthRequired())
+			ssotAliasGroup.Use(middleware.RoleRequired("finance", "admin", "director", "auditor"))
+			{
+				// Initialize SSOT controllers for direct access using existing services
+				ssotAliasReportIntegrationService := services.NewSSOTReportIntegrationService(
+					db,
+					unifiedJournalService,
+					enhancedReportService,
+				)
+				ssotAliasReportController := controllers.NewSSOTReportIntegrationController(ssotAliasReportIntegrationService, db)
+				
+				// Route aliases that mirror the v1 endpoints
+				ssotAliasGroup.GET("/trial-balance", ssotAliasReportController.GetSSOTTrialBalance)
+				ssotAliasGroup.GET("/general-ledger", ssotAliasReportController.GetSSOTGeneralLedger)
+				ssotAliasGroup.GET("/journal-analysis", ssotAliasReportController.GetSSOTJournalAnalysis)
+				
+				// Purchase report alias (already working, but add for consistency)
+				purchaseReportController := controllers.NewSSOTPurchaseReportController(db)
+				ssotAliasGroup.GET("/purchase-report", purchaseReportController.GetPurchaseReport)
+				
+				// Info endpoint explaining the alias routes
+				ssotAliasGroup.GET("/info", func(c *gin.Context) {
+					c.JSON(200, gin.H{
+						"status":  "success",
+						"message": "SSOT Reports Compatibility Routes",
+						"note":    "These are alias routes for backward compatibility",
+						"recommendation": "Use /api/v1/ssot-reports/* for new implementations",
+						"available_endpoints": []string{
+							"/ssot-reports/trial-balance",
+							"/ssot-reports/general-ledger", 
+							"/ssot-reports/journal-analysis",
+							"/ssot-reports/purchase-report",
+						},
+						"proper_api_endpoints": []string{
+							"/api/v1/ssot-reports/trial-balance",
+							"/api/v1/ssot-reports/general-ledger",
+							"/api/v1/ssot-reports/journal-analysis", 
+							"/api/v1/ssot-reports/purchase-report",
+						},
+					})
+				})
+			}
 
 			// 📊 SSOT Profit & Loss Controller - Direct P&L endpoint for frontend
 			ssotPLController := controllers.NewSSOTProfitLossController(db)

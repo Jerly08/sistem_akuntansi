@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '@/config/api';
 
 export interface PurchaseItemRequest {
   product_id: number;
@@ -181,7 +182,7 @@ export interface PurchaseForPayment {
 class PurchaseService {
   async list(params: PurchaseFilterParams): Promise<PurchaseListResponse> {
     const toUpper = (v?: string) => (v ? v.toUpperCase() : undefined);
-    const response = await api.get('/purchases', { params: {
+    const response = await api.get(API_ENDPOINTS.PURCHASES, { params: {
       status: toUpper(params.status),
       vendor_id: params.vendor_id,
       start_date: params.start_date,
@@ -196,27 +197,27 @@ class PurchaseService {
   }
 
   async create(payload: PurchaseCreateRequest): Promise<Purchase> {
-    const response = await api.post('/purchases', payload);
+    const response = await api.post(API_ENDPOINTS.PURCHASES, payload);
     return response.data;
   }
 
   async submitForApproval(id: number): Promise<{ message: string }> {
-    const response = await api.post(`/purchases/${id}/submit-approval`);
+    const response = await api.post(API_ENDPOINTS.PURCHASES_SUBMIT_APPROVAL(id));
     return response.data;
   }
 
   async getById(id: number): Promise<Purchase> {
-    const response = await api.get(`/purchases/${id}`);
+    const response = await api.get(API_ENDPOINTS.PURCHASES_BY_ID(id));
     return response.data;
   }
 
   async update(id: number, payload: Partial<PurchaseCreateRequest>): Promise<Purchase> {
-    const response = await api.put(`/purchases/${id}`, payload);
+    const response = await api.put(API_ENDPOINTS.PURCHASES_BY_ID(id), payload);
     return response.data;
   }
 
   async delete(id: number): Promise<{ message: string }> {
-    const response = await api.delete(`/purchases/${id}`);
+    const response = await api.delete(API_ENDPOINTS.PURCHASES_BY_ID(id));
     return response.data;
   }
 
@@ -229,7 +230,7 @@ class PurchaseService {
   }
 
   async getSummary(startDate?: string, endDate?: string): Promise<PurchaseSummary> {
-    const response = await api.get('/purchases/summary', {
+    const response = await api.get(API_ENDPOINTS.PURCHASES_SUMMARY, {
       params: {
         start_date: startDate,
         end_date: endDate,
@@ -241,7 +242,7 @@ class PurchaseService {
   // Purchase Payment Integration Methods
 
   async getPurchaseForPayment(id: number): Promise<PurchaseForPayment> {
-    const response = await api.get(`/purchases/${id}/for-payment`);
+    const response = await api.get(API_ENDPOINTS.PURCHASES_FOR_PAYMENT(id));
     return response.data;
   }
 
@@ -255,7 +256,7 @@ class PurchaseService {
       reference: data.reference || '',       // ✅ Correct
       notes: data.notes || ''               // ✅ Correct
     };
-    const response = await api.post(`/purchases/${purchaseId}/integrated-payment`, backendData);
+    const response = await api.post(API_ENDPOINTS.PURCHASES_INTEGRATED_PAYMENT(purchaseId), backendData);
     return response.data;
   }
 
@@ -281,14 +282,14 @@ class PurchaseService {
     
     console.log('Sending payment data to backend:', backendData);
     // Use extended timeout for payment operations (30 seconds)
-    const response = await api.post(`/purchases/${purchaseId}/payments`, backendData, {
+    const response = await api.post(API_ENDPOINTS.PURCHASES_PAYMENTS(purchaseId), backendData, {
       timeout: 30000 // 30 seconds timeout for payment operations
     });
     return response.data;
   }
 
   async getPurchasePayments(purchaseId: number): Promise<PurchasePayment[]> {
-    const response = await api.get(`/purchases/${purchaseId}/payments`);
+    const response = await api.get(API_ENDPOINTS.PURCHASES_PAYMENTS(purchaseId));
     return response.data;
   }
 

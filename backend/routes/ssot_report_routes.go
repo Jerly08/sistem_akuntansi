@@ -78,6 +78,19 @@ ssotReportController := controllers.NewSSOTReportIntegrationController(ssotRepor
 	// 🔍 Journal Entry Analysis (integrated with SSOT journal)
 	ssotReportsGroup.GET("/journal-analysis", ssotReportController.GetSSOTJournalAnalysis)
 
+	// 📊 Balance Sheet (integrated with SSOT journal)
+	ssotBalanceSheetController := controllers.NewSSOTBalanceSheetController(db)
+	ssotReportsGroup.GET("/balance-sheet", ssotBalanceSheetController.GenerateSSOTBalanceSheet)
+	ssotReportsGroup.GET("/balance-sheet/account-details", ssotBalanceSheetController.GetSSOTBalanceSheetAccountDetails)
+	ssotReportsGroup.GET("/balance-sheet/validate", ssotBalanceSheetController.ValidateSSOTBalanceSheet)
+	ssotReportsGroup.GET("/balance-sheet/comparison", ssotBalanceSheetController.GetSSOTBalanceSheetComparison)
+
+	// 💰 Cash Flow (integrated with SSOT journal)
+	ssotCashFlowController := controllers.NewSSOTCashFlowController(db)
+	ssotReportsGroup.GET("/cash-flow", ssotCashFlowController.GetSSOTCashFlow)
+	ssotReportsGroup.GET("/cash-flow/summary", ssotCashFlowController.GetSSOTCashFlowSummary)
+	ssotReportsGroup.GET("/cash-flow/validate", ssotCashFlowController.ValidateSSOTCashFlow)
+
 	// ✨ ENHANCED REPORT ENDPOINTS (with SSOT integration)
 	
 	// Create enhanced reports group for better organization

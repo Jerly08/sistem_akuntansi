@@ -266,7 +266,7 @@ class ReportService {
 
     const queryString = this.buildQueryString(params);
     // Use SSOT Cash Flow endpoint for real-time data from journal system
-    const url = `${API_V1_BASE}/reports/ssot/cash-flow${queryString ? '?' + queryString : ''}`;
+    const url = `${API_V1_BASE}/ssot-reports/cash-flow${queryString ? '?' + queryString : ''}`;
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -469,11 +469,11 @@ class ReportService {
     // are treated as absolute under API_V1_BASE (e.g. '/ssot-reports/...').
     // Otherwise they are appended under '/reports/'.
     const endpointMap: { [key: string]: string } = {
-      // SSOT Balance Sheet lives under /api/v1/reports/ssot/balance-sheet
-      'balance-sheet': 'ssot/balance-sheet',
-      // SSOT P&L under /api/v1/reports/ssot-profit-loss
+      // All SSOT reports now live under /api/v1/ssot-reports/* for consistency
+      'balance-sheet': '/ssot-reports/balance-sheet',
+      // SSOT P&L under /api/v1/reports/ssot-profit-loss (separate endpoint)
       'profit-loss': 'ssot-profit-loss',
-      // These SSOT reports live under /api/v1/ssot-reports/*
+      // Other SSOT reports under /api/v1/ssot-reports/*
       'trial-balance': '/ssot-reports/trial-balance',
       'general-ledger': '/ssot-reports/general-ledger',
       'purchase-report': '/ssot-reports/purchase-report',
