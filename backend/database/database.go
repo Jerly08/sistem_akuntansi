@@ -569,6 +569,7 @@ func ConnectDB() *gorm.DB {
 		PrepareStmt: true,
 	}
 	
+	log.Printf("Connecting to PostgreSQL database with URL: %s", cfg.DatabaseURL)
 	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), gormConfig)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
@@ -965,7 +966,16 @@ func createIndexes(db *gorm.DB) {
 	
 	// Product and inventory management indexes
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_products_active_stock ON products(stock, is_active) WHERE deleted_at IS NULL`)
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_product_type ON inventories(product_id, transaction_type)`)
+	
+	// Check if transaction_type column exists in inventories table before creating index
+	var transactionTypeExists bool
+	db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'inventories' AND column_name = 'transaction_type')`).Scan(&transactionTypeExists)
+	if transactionTypeExists {
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_product_type ON inventories(product_id, transaction_type)`)
+	} else {
+		// Create a safe fallback index
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_inventory_product_safe ON inventories(product_id) WHERE product_id IS NOT NULL`)
+	}
 	
 	// Contact and customer management indexes
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_contacts_type_active ON contacts(type, is_active) WHERE deleted_at IS NULL`)
@@ -974,16 +984,37 @@ func createIndexes(db *gorm.DB) {
 	// Accounting Period indexes
 	if db.Raw(`SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'accounting_periods'`).Scan(&count); count > 0 {
 		db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounting_periods_date_range ON accounting_periods(start_date, end_date)`)
-		db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounting_periods_status ON accounting_periods(is_open, is_closed)`)
+		
+		// Check if is_open and is_closed columns exist
+		var isOpenExists, isClosedExists bool
+		db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'accounting_periods' AND column_name = 'is_open')`).Scan(&isOpenExists)
+		db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'accounting_periods' AND column_name = 'is_closed')`).Scan(&isClosedExists)
+		if isOpenExists && isClosedExists {
+			db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounting_periods_status ON accounting_periods(is_open, is_closed)`)
+		}
 	}
 	
 	// Audit and security indexes
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_audit_logs_important ON audit_logs(table_name, action, created_at) WHERE action IN ('DELETE', 'UPDATE')`)
 	db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_incidents_severity ON security_incidents(severity, created_at)`)
 	
-	// Report generation indexes
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_account_balances_period_account ON account_balances(period, account_id) WHERE deleted_at IS NULL`)
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_financial_ratios_date ON financial_ratios(calculation_date)`)
+	// Report generation indexes - check if columns exist first
+	var periodExists, deletedAtExists bool
+	db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_balances' AND column_name = 'period')`).Scan(&periodExists)
+	db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'account_balances' AND column_name = 'deleted_at')`).Scan(&deletedAtExists)
+	if periodExists && deletedAtExists {
+		db.Exec(`CREATE INDEX IF NOT EXISTS idx_account_balances_period_account ON account_balances(period, account_id) WHERE deleted_at IS NULL`)
+	}
+	
+	// Check if financial_ratios table and calculation_date column exist
+	var financialRatiosExists, calculationDateExists bool
+	db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'financial_ratios')`).Scan(&financialRatiosExists)
+	if financialRatiosExists {
+		db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'financial_ratios' AND column_name = 'calculation_date')`).Scan(&calculationDateExists)
+		if calculationDateExists {
+			db.Exec(`CREATE INDEX IF NOT EXISTS idx_financial_ratios_date ON financial_ratios(calculation_date)`)
+		}
+	}
 	
 	log.Println("Database indexes created successfully")
 }

@@ -4,7 +4,7 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 // This prevents duplication of /api/v1 in the URL
 export const API_V1_BASE = `/api/v1`;
 
-// API Endpoints - All use relative paths, Next.js rewrites handle the routing
+// API Endpoints - All use full paths with /api/v1 prefix
 export const API_ENDPOINTS = {
   // Auth
   LOGIN: '/api/v1/auth/login',

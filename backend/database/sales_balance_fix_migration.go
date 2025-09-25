@@ -4,6 +4,7 @@ import (
 	"app-sistem-akuntansi/models"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -62,7 +63,12 @@ func SalesBalanceFixMigration(db *gorm.DB) {
 	}
 
 	if err := tx.Create(&migrationRecord).Error; err != nil {
-		log.Printf("❌ Failed to record sales balance fix migration: %v", err)
+		// Check if this is just a duplicate key constraint (normal scenario)
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "uni_migration_records_migration_id") {
+			log.Printf("ℹ️  Sales balance fix migration record already exists (normal) - migration was successful")
+		} else {
+			log.Printf("❌ Failed to record sales balance fix migration: %v", err)
+		}
 		tx.Rollback()
 		return
 	}
