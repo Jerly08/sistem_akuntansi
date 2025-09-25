@@ -1,57 +1,57 @@
 // API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080') + '/api/v1';
 // For local development, we use relative URLs since Next.js handles rewrites
 // This prevents duplication of /api/v1 in the URL
 export const API_V1_BASE = `/api/v1`;
 
-// API Endpoints - All use relative paths, Next.js rewrites handle the routing
+// API Endpoints - Base URL already includes /api/v1, so these are relative to that
 export const API_ENDPOINTS = {
   // Auth
-  LOGIN: '/api/v1/auth/login',
-  REGISTER: '/api/v1/auth/register',
-  REFRESH: '/api/v1/auth/refresh',
-  PROFILE: '/api/v1/profile',
+  LOGIN: '/auth/login',
+  REGISTER: '/auth/register',
+  REFRESH: '/auth/refresh',
+  PROFILE: '/profile',
   
   // Products
-  PRODUCTS: '/api/v1/products',
-  CATEGORIES: '/api/v1/categories',
+  PRODUCTS: '/products',
+  CATEGORIES: '/categories',
   
   // Notifications
-  NOTIFICATIONS: '/api/v1/notifications',
-  NOTIFICATIONS_UNREAD_COUNT: '/api/v1/notifications/unread-count',
-  NOTIFICATIONS_MARK_READ: (id: number) => `/api/v1/notifications/${id}/read`,
+  NOTIFICATIONS: '/notifications',
+  NOTIFICATIONS_UNREAD_COUNT: '/notifications/unread-count',
+  NOTIFICATIONS_MARK_READ: (id: number) => `/notifications/${id}/read`,
   
   // Dashboard
-  DASHBOARD_ANALYTICS: '/api/v1/dashboard/analytics',
-  DASHBOARD_STOCK_ALERTS: '/api/v1/dashboard/stock-alerts',
+  DASHBOARD_ANALYTICS: '/dashboard/analytics',
+  DASHBOARD_STOCK_ALERTS: '/dashboard/stock-alerts',
   
   // Purchases
-  PURCHASES: '/api/v1/purchases',
-  PURCHASE_APPROVAL: (id: number) => `/api/v1/purchases/${id}/approve`,
-  PURCHASE_REJECT: (id: number) => `/api/v1/purchases/${id}/reject`,
+  PURCHASES: '/purchases',
+  PURCHASE_APPROVAL: (id: number) => `/purchases/${id}/approve`,
+  PURCHASE_REJECT: (id: number) => `/purchases/${id}/reject`,
   
   // Contacts
-  CONTACTS: '/api/v1/contacts',
+  CONTACTS: '/contacts',
   
   // Accounts
-  ACCOUNTS: '/api/v1/accounts',
-  ACCOUNTS_HIERARCHY: '/api/v1/accounts/hierarchy',
+  ACCOUNTS: '/accounts',
+  ACCOUNTS_HIERARCHY: '/accounts/hierarchy',
   
   // Cash & Bank
-  CASHBANK: '/api/v1/cashbank',
-  CASHBANK_ACCOUNTS: '/api/v1/cashbank/accounts',
-  CASHBANK_PAYMENT_ACCOUNTS: '/api/v1/cashbank/payment-accounts',
-  CASHBANK_BALANCE_SUMMARY: '/api/v1/cashbank/balance-summary',
-  CASHBANK_TRANSFER: '/api/v1/cashbank/transfer',
-  CASHBANK_DEPOSIT: '/api/v1/cashbank/deposit',
-  CASHBANK_WITHDRAWAL: '/api/v1/cashbank/withdrawal',
+  CASHBANK: '/cashbank',
+  CASHBANK_ACCOUNTS: '/cashbank/accounts',
+  CASHBANK_PAYMENT_ACCOUNTS: '/cashbank/payment-accounts',
+  CASHBANK_BALANCE_SUMMARY: '/cashbank/balance-summary',
+  CASHBANK_TRANSFER: '/cashbank/transfer',
+  CASHBANK_DEPOSIT: '/cashbank/deposit',
+  CASHBANK_WITHDRAWAL: '/cashbank/withdrawal',
   
-  // Documentation - Standardized to /api/v1
-  SWAGGER: '/api/v1/swagger/index.html',
-  DOCS: '/api/v1/docs/index.html',
+  // Documentation
+  SWAGGER: '/swagger/index.html',
+  DOCS: '/docs/index.html',
   
   // Health Check
-  HEALTH: '/api/v1/health',
+  HEALTH: '/health',
 };
 
 export default API_BASE_URL;

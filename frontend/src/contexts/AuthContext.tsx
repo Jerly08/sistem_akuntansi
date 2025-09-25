@@ -30,8 +30,8 @@ interface AuthContextType {
 // Create context
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// API URL - ensure this is correctly defined
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+// API URL - use environment variable with fallback and correct API path
+const API_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080') + '/api/v1';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

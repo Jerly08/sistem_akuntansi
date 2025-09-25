@@ -36,7 +36,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import approvalService from '../../services/approvalService';
 import axios from 'axios';
-import { API_BASE_URL } from '@/config/api';
+import { API_BASE_URL, API_V1_BASE } from '@/config/api';
 import { formatIDR } from '@/utils/currency';
 
 interface NotificationItem {
