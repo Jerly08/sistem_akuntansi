@@ -58,8 +58,24 @@ export const API_ENDPOINTS = {
   PURCHASES_VALIDATE_MATCHING: (id: number) => `/api/v1/purchases/${id}/validate-matching`,
   PURCHASES_JOURNAL_ENTRIES: (id: number) => `/api/v1/purchases/${id}/journal-entries`,
   
-  // Assets (with /api/v1 prefix)
-  ASSETS: '/api/v1/assets',
+  // Assets (with /api/v1 prefix) - with nested structure
+  ASSETS: {
+    LIST: '/api/v1/assets',
+    CREATE: '/api/v1/assets',
+    GET_BY_ID: (id: number) => `/api/v1/assets/${id}`,
+    UPDATE: (id: number) => `/api/v1/assets/${id}`,
+    DELETE: (id: number) => `/api/v1/assets/${id}`,
+    SUMMARY: '/api/v1/assets/summary',
+    DEPRECIATION_REPORT: '/api/v1/assets/depreciation-report',
+    DEPRECIATION_SCHEDULE: (id: number) => `/api/v1/assets/${id}/depreciation-schedule`,
+    CALCULATE_DEPRECIATION: (id: number) => `/api/v1/assets/${id}/calculate-depreciation`,
+    UPLOAD_IMAGE: '/api/v1/assets/upload-image',
+    CATEGORIES: {
+      LIST: '/api/v1/assets/categories',
+      CREATE: '/api/v1/assets/categories',
+    }
+  },
+  // Legacy flat endpoints for backward compatibility
   ASSETS_BY_ID: (id: number) => `/api/v1/assets/${id}`,
   ASSETS_UPLOAD_IMAGE: '/api/v1/assets/upload-image',
   ASSETS_CATEGORIES: '/api/v1/assets/categories',
@@ -146,8 +162,20 @@ export const API_ENDPOINTS = {
   PERMISSIONS_ME: '/api/v1/permissions/me',
   PERMISSIONS_CHECK: '/api/v1/permissions/check',
   
-  // Cash & Bank (no /api/v1 prefix based on analysis)
-  CASHBANK: '/api/cashbank',
+  // Cash & Bank (no /api/v1 prefix based on analysis) - with nested structure
+  CASHBANK: {
+    ACCOUNTS: '/api/cashbank/accounts',
+    ACCOUNT_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
+    ACCOUNT_TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
+    PAYMENT_ACCOUNTS: '/api/cashbank/payment-accounts',
+    REVENUE_ACCOUNTS: '/api/cashbank/revenue-accounts',
+    DEPOSIT_SOURCE_ACCOUNTS: '/api/cashbank/deposit-source-accounts',
+    BALANCE_SUMMARY: '/api/cashbank/balance-summary',
+    TRANSFER: '/api/cashbank/transfer',
+    DEPOSIT: '/api/cashbank/deposit',
+    WITHDRAWAL: '/api/cashbank/withdrawal',
+  },
+  // Legacy flat endpoints for backward compatibility
   CASHBANK_ACCOUNTS: '/api/cashbank/accounts',
   CASHBANK_ACCOUNT_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
   CASHBANK_ACCOUNT_TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
@@ -190,8 +218,21 @@ export const API_ENDPOINTS = {
   MONITORING_API_UNUSED: '/monitoring/api-usage/unused',
   MONITORING_API_RESET: '/monitoring/api-usage/reset',
   
-  // Payments (no /api/v1 prefix based on Swagger)
-  PAYMENTS: '/api/payments',
+  // Payments (no /api/v1 prefix based on Swagger) - with nested structure
+  PAYMENTS: {
+    LIST: '/api/payments',
+    CREATE: '/api/payments',
+    BY_ID: (id: number) => `/api/payments/${id}`,
+    CANCEL: (id: number) => `/api/payments/${id}/cancel`,
+    PDF: (id: number) => `/api/payments/${id}/pdf`,
+    ANALYTICS: '/api/payments/analytics',
+    SUMMARY: '/api/payments/summary',
+    UNPAID_BILLS: (vendorId: number) => `/api/payments/unpaid-bills/${vendorId}`,
+    UNPAID_INVOICES: (customerId: number) => `/api/payments/unpaid-invoices/${customerId}`,
+    EXPORT_EXCEL: '/api/payments/export/excel',
+    REPORT_PDF: '/api/payments/report/pdf',
+  },
+  // Legacy flat endpoints for backward compatibility
   PAYMENTS_ANALYTICS: '/api/payments/analytics', 
   PAYMENTS_SUMMARY: '/api/payments/summary',
   PAYMENTS_UNPAID_BILLS: (vendorId: number) => `/api/payments/unpaid-bills/${vendorId}`,
@@ -231,12 +272,6 @@ export const API_ENDPOINTS = {
   JOURNALS_SUMMARY: '/api/v1/journals/summary',
   JOURNALS_BY_ID: (id: number) => `/api/v1/journals/${id}`,
   
-  // Journal Drilldown (no /api/v1 prefix based on Swagger)
-  JOURNAL_DRILLDOWN: '/journal-drilldown',
-  JOURNAL_DRILLDOWN_ACCOUNTS: '/journal-drilldown/accounts',
-  JOURNAL_DRILLDOWN_ENTRIES: '/journal-drilldown/entries',
-  JOURNAL_DRILLDOWN_ENTRY_BY_ID: (id: number) => `/journal-drilldown/entries/${id}`,
-  
   // Optimized Reports (with /api/v1 prefix)
   REPORTS_OPTIMIZED_BALANCE_SHEET: '/api/v1/reports/optimized/balance-sheet',
   REPORTS_OPTIMIZED_PROFIT_LOSS: '/api/v1/reports/optimized/profit-loss',
@@ -262,7 +297,7 @@ export const API_ENDPOINTS = {
   REPORTS_SSOT_BALANCE_SHEET_DETAILS: '/reports/ssot/balance-sheet/account-details',
   REPORTS_SSOT_CASH_FLOW: '/reports/ssot/cash-flow',
   
-  // Journal Drilldown (with /api/v1 prefix)
+  // Journal Drilldown (with /api/v1 prefix - unified)
   JOURNAL_DRILLDOWN: '/api/v1/journal-drilldown',
   JOURNAL_DRILLDOWN_ENTRIES: '/api/v1/journal-drilldown/entries',
   JOURNAL_DRILLDOWN_ENTRY_BY_ID: (id: number) => `/api/v1/journal-drilldown/entries/${id}`,
@@ -312,6 +347,10 @@ export const API_ENDPOINTS = {
   SWAGGER: '/swagger/index.html',
   DOCS: '/docs/index.html',
   OPENAPI_DOC: '/openapi/doc.json',
+  
+  // Settings (with /api/v1 prefix)
+  SETTINGS: '/api/v1/settings',
+  SETTINGS_UPDATE: '/api/v1/settings',
   
   // Health Check
   HEALTH: '/api/v1/health',
