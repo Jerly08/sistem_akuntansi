@@ -1,5 +1,5 @@
 // API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 // For local development, we use relative URLs since Next.js handles rewrites
 // This prevents duplication of /api/v1 in the URL
 export const API_V1_BASE = `/api/v1`;

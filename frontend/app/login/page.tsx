@@ -61,6 +61,12 @@ const LoginContent = () => {
   const featureCardBg = useColorModeValue('white', 'gray.700');
   const iconColor = useColorModeValue('blue.500', 'blue.300');
   const accentColor = useColorModeValue('blue.500', 'blue.400');
+  const inputHoverBorderColor = useColorModeValue('blue.300', 'blue.500');
+  const inputPlaceholderColor = useColorModeValue('gray.400', 'gray.500');
+  const buttonHoverBg = useColorModeValue('blue.600', 'blue.300');
+  const decorativeElementBg1 = useColorModeValue('blue.100', 'blue.800');
+  const decorativeElementBg2 = useColorModeValue('purple.100', 'purple.800');
+  const passwordToggleHoverBg = useColorModeValue('gray.100', 'gray.600');
   
   useEffect(() => {
     if (isAuthenticated) {
@@ -123,7 +129,7 @@ const LoginContent = () => {
         right="-50px"
         w="200px"
         h="200px"
-        bg={useColorModeValue('blue.100', 'blue.800')}
+        bg={decorativeElementBg1}
         borderRadius="full"
         opacity={0.3}
       />
@@ -133,7 +139,7 @@ const LoginContent = () => {
         left="-100px"
         w="300px"
         h="300px"
-        bg={useColorModeValue('purple.100', 'purple.800')}
+        bg={decorativeElementBg2}
         borderRadius="full"
         opacity={0.2}
       />
@@ -464,7 +470,7 @@ const LoginContent = () => {
                             py={6}
                             fontSize="md"
                             _hover={{
-                              borderColor: useColorModeValue('blue.300', 'blue.500')
+                              borderColor: inputHoverBorderColor
                             }}
                             _focus={{
                               borderColor: accentColor,
@@ -472,14 +478,14 @@ const LoginContent = () => {
                               bg: inputBg
                             }}
                             _placeholder={{
-                              color: useColorModeValue('gray.400', 'gray.500')
+                              color: inputPlaceholderColor
                             }}
                           />
                           <InputRightElement top={2} right={2}>
                             <Center 
                               w={8} 
                               h={8} 
-                              bg={useColorModeValue('gray.100', 'gray.600')} 
+                              bg={passwordToggleHoverBg}
                               borderRadius="lg"
                             >
                               <FiMail color={iconColor} size={16} />
@@ -511,7 +517,7 @@ const LoginContent = () => {
                             py={6}
                             fontSize="md"
                             _hover={{
-                              borderColor: useColorModeValue('blue.300', 'blue.500')
+                              borderColor: inputHoverBorderColor
                             }}
                             _focus={{
                               borderColor: accentColor,
@@ -519,7 +525,7 @@ const LoginContent = () => {
                               bg: inputBg
                             }}
                             _placeholder={{
-                              color: useColorModeValue('gray.400', 'gray.500')
+                              color: inputPlaceholderColor
                             }}
                           />
                           <InputRightElement top={2} right={2}>
@@ -531,7 +537,7 @@ const LoginContent = () => {
                               onClick={() => setShowPassword(!showPassword)}
                               borderRadius="lg"
                               _hover={{
-                                bg: useColorModeValue('gray.100', 'gray.600')
+                                bg: passwordToggleHoverBg
                               }}
                             />
                           </InputRightElement>
@@ -552,7 +558,7 @@ const LoginContent = () => {
                         py={6}
                         leftIcon={<FiLogIn />}
                         _hover={{
-                          bg: useColorModeValue('blue.600', 'blue.300'),
+                          bg: buttonHoverBg,
                           transform: 'translateY(-1px)',
                           boxShadow: 'lg'
                         }}

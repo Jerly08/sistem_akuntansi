@@ -2,7 +2,7 @@ import axios from 'axios';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -138,7 +138,7 @@ api.interceptors.response.use(
                 setTimeout(() => reject(new Error('Request timeout')), 10000);
               });
               
-              const fetchPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+              const fetchPromise = fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ refresh_token: storedRefresh }),
