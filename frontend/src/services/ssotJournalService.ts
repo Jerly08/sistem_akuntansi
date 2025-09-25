@@ -1,4 +1,4 @@
-import { API_V1_BASE } from '@/config/api';
+import { API_ENDPOINTS } from '@/config/api';
 import { getAuthHeaders } from '../utils/authTokenUtils';
 
 // SSOT Journal Entry Structure (aligned with backend)
@@ -99,7 +99,7 @@ class SSOTJournalService {
     totalPages: number;
   }> {
     const queryString = this.buildQueryString(params);
-    const url = `${API_V1_BASE}/journals${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.JOURNALS.LIST + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -114,7 +114,7 @@ class SSOTJournalService {
 
   // Get specific journal entry
   async getJournalEntry(id: number): Promise<SSOTJournalEntry> {
-    const response = await fetch(`${API_V1_BASE}/journals/${id}`, {
+    const response = await fetch(API_ENDPOINTS.JOURNALS.GET_BY_ID(id), {
       headers: this.getAuthHeaders(),
     });
 
@@ -128,7 +128,7 @@ class SSOTJournalService {
 
   // Create new journal entry
   async createJournalEntry(data: CreateJournalRequest): Promise<SSOTJournalEntry> {
-    const response = await fetch(`${API_V1_BASE}/journals`, {
+    const response = await fetch(API_ENDPOINTS.JOURNALS.CREATE, {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data),
@@ -145,7 +145,7 @@ class SSOTJournalService {
 
   // Update journal entry
   async updateJournalEntry(id: number, data: UpdateJournalRequest): Promise<SSOTJournalEntry> {
-    const response = await fetch(`${API_V1_BASE}/journals/${id}`, {
+    const response = await fetch(API_ENDPOINTS.JOURNALS.UPDATE(id), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data),
@@ -162,7 +162,7 @@ class SSOTJournalService {
 
   // Delete journal entry
   async deleteJournalEntry(id: number): Promise<void> {
-    const response = await fetch(`${API_V1_BASE}/journals/${id}`, {
+    const response = await fetch(API_ENDPOINTS.JOURNALS.DELETE(id), {
       method: 'DELETE',
       headers: this.getAuthHeaders(),
     });
@@ -175,7 +175,7 @@ class SSOTJournalService {
 
   // Post journal entry
   async postJournalEntry(id: number): Promise<SSOTJournalEntry> {
-    const response = await fetch(`${API_V1_BASE}/journals/${id}/post`, {
+    const response = await fetch(API_ENDPOINTS.JOURNALS.POST(id), {
       method: 'PUT',
       headers: this.getAuthHeaders(),
     });
@@ -191,7 +191,7 @@ class SSOTJournalService {
 
   // Reverse journal entry
   async reverseJournalEntry(id: number, reason?: string): Promise<SSOTJournalEntry> {
-    const response = await fetch(`${API_V1_BASE}/journals/${id}/reverse`, {
+    const response = await fetch(API_ENDPOINTS.JOURNALS.REVERSE(id), {
       method: 'POST',
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ description: reason }),
@@ -220,7 +220,7 @@ class SSOTJournalService {
     reversed_entries: number;
   }> {
     const queryString = this.buildQueryString(params);
-    const url = `${API_V1_BASE}/journals/summary${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.JOURNALS.SUMMARY + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -244,7 +244,7 @@ class SSOTJournalService {
     balance: number;
     last_updated: string;
   }>> {
-    const response = await fetch(`${API_V1_BASE}/journals/account-balances`, {
+    const response = await fetch(API_ENDPOINTS.JOURNALS.ACCOUNT_BALANCES, {
       headers: this.getAuthHeaders(),
     });
 
@@ -258,7 +258,7 @@ class SSOTJournalService {
 
   // Refresh materialized view for account balances
   async refreshAccountBalances(): Promise<{ message: string; updated_at: string }> {
-    const response = await fetch(`${API_V1_BASE}/journals/account-balances/refresh`, {
+    const response = await fetch(API_ENDPOINTS.JOURNALS.REFRESH_ACCOUNT_BALANCES, {
       method: 'POST',
       headers: this.getAuthHeaders(),
     });

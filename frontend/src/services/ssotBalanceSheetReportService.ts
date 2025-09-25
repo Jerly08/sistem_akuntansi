@@ -1,4 +1,4 @@
-import { API_V1_BASE } from '@/config/api';
+import { API_ENDPOINTS } from '@/config/api';
 import { getAuthHeaders } from '../utils/authTokenUtils';
 
 // SSOT Balance Sheet data structures (aligned with backend)
@@ -150,7 +150,7 @@ class SSOTBalanceSheetReportService {
       format: params.format || 'json'
     });
     
-    const url = `${API_V1_BASE}/ssot-reports/balance-sheet${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.SSOT_REPORTS.BALANCE_SHEET + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -180,7 +180,7 @@ class SSOTBalanceSheetReportService {
       account_type: params.account_type
     });
     
-    const url = `${API_V1_BASE}/ssot-reports/balance-sheet/account-details${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.SSOT_REPORTS.BALANCE_SHEET_DETAILS + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -203,7 +203,7 @@ class SSOTBalanceSheetReportService {
       as_of_date: params.as_of_date || new Date().toISOString().split('T')[0]
     });
     
-    const url = `${API_V1_BASE}/ssot-reports/balance-sheet/validate${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.SSOT_REPORTS.BALANCE_SHEET_VALIDATE + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -228,7 +228,7 @@ class SSOTBalanceSheetReportService {
       to_date: params.to_date || new Date().toISOString().split('T')[0]
     });
     
-    const url = `${API_V1_BASE}/ssot-reports/balance-sheet/comparison${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.SSOT_REPORTS.BALANCE_SHEET_COMPARISON + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),

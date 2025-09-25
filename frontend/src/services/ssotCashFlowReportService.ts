@@ -1,4 +1,4 @@
-import { API_V1_BASE } from '../config/api';
+import { API_ENDPOINTS } from '../config/api';
 import { getAuthHeaders } from '../utils/authTokenUtils';
 
 export interface SSOTCashFlowData {
@@ -194,7 +194,7 @@ class SSOTCashFlowReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_V1_BASE}/ssot-reports/cash-flow${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.SSOT_REPORTS.CASH_FLOW + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -214,7 +214,7 @@ class SSOTCashFlowReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_V1_BASE}/ssot-reports/cash-flow/summary${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.SSOT_REPORTS.CASH_FLOW_SUMMARY + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -234,7 +234,7 @@ class SSOTCashFlowReportService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_V1_BASE}/ssot-reports/cash-flow/validate${queryString ? '?' + queryString : ''}`;
+    const url = API_ENDPOINTS.SSOT_REPORTS.CASH_FLOW_VALIDATE + (queryString ? '?' + queryString : '');
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
