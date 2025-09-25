@@ -17,6 +17,11 @@ go run scripts/maintenance/create_account_balances_materialized_view.go
 go run scripts/maintenance/reset_transaction_data_gorm.go
 ```
 
+### 3. 🆘 Fix Fresh Database (Complete Migration)
+```bash
+go run scripts/maintenance/fix_fresh_database.go
+```
+
 ### 3. 💾 Backup Database (Manual)
 ```bash
 # Windows PowerShell
@@ -63,12 +68,14 @@ go run scripts/maintenance/reset_transaction_data_gorm.go
 
 ## 🔧 Common Issues & Solutions
 
-| Error | Command |
-|-------|---------|
-| `account_balances does not exist` | `go run scripts/maintenance/create_account_balances_materialized_view.go` |
-| `database connection failed` | Check `.env` file and PostgreSQL service |
-| `package not found` | `go mod tidy && go mod download` |
-| `permission denied` | Run terminal as Administrator |
+|| Error | Command |
+||-------|---------||
+|| `column "debit_amount" does not exist` | `go run scripts/maintenance/fix_fresh_database.go` |
+|| `account_balances does not exist` | `go run scripts/maintenance/create_account_balances_materialized_view.go` |
+|| Fresh database after DROP/CREATE | `go run scripts/maintenance/fix_fresh_database.go` |
+|| `database connection failed` | Check `.env` file and PostgreSQL service |
+|| `package not found` | `go mod tidy && go mod download` |
+|| `permission denied` | Run terminal as Administrator |
 
 ---
 

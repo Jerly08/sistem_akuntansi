@@ -10,6 +10,9 @@ Repository ini berisi script-script untuk maintenance dan reset database sistem 
 ### 2. 🔄 `reset_transaction_data_gorm.go` 
 **Fungsi:** Reset data transaksi dengan berbagai mode (hard delete, soft delete, recovery).
 
+### 3. 🆘 `fix_fresh_database.go`
+**Fungsi:** Fix database setelah fresh install - complete migration dan setup semua tabel.
+
 ---
 
 ## 🚀 Cara Menjalankan Script
@@ -75,7 +78,63 @@ go run scripts/maintenance/create_account_balances_materialized_view.go
 
 ---
 
-### B. Script Reset Database
+### B. Script Fresh Database Fix
+
+#### **Kapan perlu dijalankan:**
+- ✅ Setelah client drop dan create ulang database
+- ✅ Ketika error: `"column debit_amount does not exist"`
+- ✅ Fresh install yang migration belum lengkap
+- ✅ Database struktur tidak sesuai dengan code
+
+#### **Cara menjalankan:**
+```bash
+go run scripts/maintenance/fix_fresh_database.go
+```
+
+#### **Output yang diharapkan:**
+```
+🔧 DATABASE FRESH INSTALL FIX
+============================
+
+⚠️  PERINGATAN: Script ini akan memperbaiki database yang baru dibuat.
+✅ Yang akan dilakukan:
+   - Jalankan complete database migrations
+   - Buat SSOT journal system tables
+   - Setup materialized views
+   - Seed initial data
+
+Lanjutkan? (ketik 'ya' untuk konfirmasi): ya
+
+🔗 Berhasil terhubung ke database
+
+📋 Step 1: Menjalankan database initialization...
+   ✅ Database initialization selesai
+
+🔄 Step 2: Menjalankan SSOT migration...
+   ✅ SSOT migration berhasil
+
+🏩️ Step 3: Membuat materialized view...
+   ✅ Materialized view berhasil dibuat
+
+📊 Step 4: Membuat additional indexes...
+   ✅ Indexes berhasil dibuat
+
+🧪 Step 5: Verifikasi struktur database...
+   🔧 Adding missing columns to transactions table...
+   ✅ Kolom debit_amount dan credit_amount berhasil ditambahkan
+   ✅ Materialized view account_balances: 34 records
+   ✅ SSOT journal system: 0 entries
+   ✅ Verifikasi berhasil - Database siap digunakan
+
+🎉 DATABASE FRESH INSTALL FIX SELESAI!
+✅ Database sudah lengkap dan siap digunakan
+✅ Semua tabel dan views sudah tersedia
+✅ Error 'column does not exist' sudah teratasi
+```
+
+---
+
+### C. Script Reset Database
 
 #### **⚠️ PERINGATAN PENTING:**
 - Script ini akan **MENGHAPUS DATA TRANSAKSI**
