@@ -109,8 +109,30 @@ export const API_ENDPOINTS = {
   SALES_CUSTOMER: (customerId: number) => `/api/v1/sales/customer/${customerId}`,
   SALES_CUSTOMER_INVOICES: (customerId: number) => `/api/v1/sales/customer/${customerId}/invoices`,
   
-  // Accounts (with /api/v1 prefix)
-  ACCOUNTS: '/api/v1/accounts',
+  // Accounts (with /api/v1 prefix) - with nested structure
+  ACCOUNTS: {
+    LIST: '/api/v1/accounts',
+    CREATE: '/api/v1/accounts',
+    HIERARCHY: '/api/v1/accounts/hierarchy',
+    BALANCE_SUMMARY: '/api/v1/accounts/balance-summary',
+    VALIDATE_CODE: '/api/v1/accounts/validate-code',
+    FIX_HEADER_STATUS: '/api/v1/accounts/fix-header-status',
+    GET_BY_CODE: (code: string) => `/api/v1/accounts/${code}`,
+    UPDATE: (code: string) => `/api/v1/accounts/${code}`,
+    DELETE: (code: string) => `/api/v1/accounts/${code}`,
+    ADMIN_DELETE: (code: string) => `/api/v1/accounts/admin/${code}`,
+    IMPORT: '/api/v1/accounts/import',
+    TEMPLATE: '/api/v1/accounts/template',
+    EXPORT: {
+      PDF: '/api/v1/accounts/export/pdf',
+      EXCEL: '/api/v1/accounts/export/excel',
+    },
+    CATALOG: '/api/v1/accounts/catalog', // Public
+    CREDIT: '/api/v1/accounts/credit', // Public
+  },
+  // Legacy flat endpoints for backward compatibility
+  ACCOUNTS_LIST: '/api/v1/accounts',
+  ACCOUNTS_CREATE: '/api/v1/accounts',
   ACCOUNTS_HIERARCHY: '/api/v1/accounts/hierarchy',
   ACCOUNTS_BALANCE_SUMMARY: '/api/v1/accounts/balance-summary',
   ACCOUNTS_VALIDATE_CODE: '/api/v1/accounts/validate-code',
@@ -162,30 +184,43 @@ export const API_ENDPOINTS = {
   PERMISSIONS_ME: '/api/v1/permissions/me',
   PERMISSIONS_CHECK: '/api/v1/permissions/check',
   
-  // Cash & Bank (no /api/v1 prefix based on analysis) - with nested structure
+  // Cash & Bank (with /api/v1 prefix for consistency) - with nested structure
   CASHBANK: {
-    ACCOUNTS: '/api/cashbank/accounts',
-    ACCOUNT_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
-    ACCOUNT_TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
-    PAYMENT_ACCOUNTS: '/api/cashbank/payment-accounts',
-    REVENUE_ACCOUNTS: '/api/cashbank/revenue-accounts',
-    DEPOSIT_SOURCE_ACCOUNTS: '/api/cashbank/deposit-source-accounts',
-    BALANCE_SUMMARY: '/api/cashbank/balance-summary',
-    TRANSFER: '/api/cashbank/transfer',
-    DEPOSIT: '/api/cashbank/deposit',
-    WITHDRAWAL: '/api/cashbank/withdrawal',
+    ACCOUNTS: '/api/v1/cashbank/accounts',
+    ACCOUNT_BY_ID: (id: number) => `/api/v1/cashbank/accounts/${id}`,
+    ACCOUNT_TRANSACTIONS: (id: number) => `/api/v1/cashbank/accounts/${id}/transactions`,
+    PAYMENT_ACCOUNTS: '/api/v1/cashbank/payment-accounts',
+    REVENUE_ACCOUNTS: '/api/v1/cashbank/revenue-accounts',
+    DEPOSIT_SOURCE_ACCOUNTS: '/api/v1/cashbank/deposit-source-accounts',
+    BALANCE_SUMMARY: '/api/v1/cashbank/balance-summary',
+    TRANSFER: '/api/v1/cashbank/transfer',
+    DEPOSIT: '/api/v1/cashbank/deposit',
+    WITHDRAWAL: '/api/v1/cashbank/withdrawal',
   },
-  // Legacy flat endpoints for backward compatibility
-  CASHBANK_ACCOUNTS: '/api/cashbank/accounts',
-  CASHBANK_ACCOUNT_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
-  CASHBANK_ACCOUNT_TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
-  CASHBANK_PAYMENT_ACCOUNTS: '/api/cashbank/payment-accounts',
-  CASHBANK_REVENUE_ACCOUNTS: '/api/cashbank/revenue-accounts',
-  CASHBANK_DEPOSIT_SOURCE_ACCOUNTS: '/api/cashbank/deposit-source-accounts',
-  CASHBANK_BALANCE_SUMMARY: '/api/cashbank/balance-summary',
-  CASHBANK_TRANSFER: '/api/cashbank/transfer',
-  CASHBANK_DEPOSIT: '/api/cashbank/deposit',
-  CASHBANK_WITHDRAWAL: '/api/cashbank/withdrawal',
+  // Alternative: Use CASH_BANK prefix for consistency with other endpoints
+  CASH_BANK: {
+    ACCOUNTS: '/api/v1/cash-bank/accounts',
+    ACCOUNT_BY_ID: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
+    ACCOUNT_TRANSACTIONS: (id: number) => `/api/v1/cash-bank/accounts/${id}/transactions`,
+    PAYMENT_ACCOUNTS: '/api/v1/cash-bank/payment-accounts',
+    REVENUE_ACCOUNTS: '/api/v1/cash-bank/revenue-accounts',
+    DEPOSIT_SOURCE_ACCOUNTS: '/api/v1/cash-bank/deposit-source-accounts',
+    BALANCE_SUMMARY: '/api/v1/cash-bank/balance-summary',
+    TRANSFER: '/api/v1/cash-bank/transfer',
+    DEPOSIT: '/api/v1/cash-bank/deposit',
+    WITHDRAWAL: '/api/v1/cash-bank/withdrawal',
+  },
+  // Legacy flat endpoints for backward compatibility - updated with /api/v1 prefix
+  CASHBANK_ACCOUNTS: '/api/v1/cashbank/accounts',
+  CASHBANK_ACCOUNT_BY_ID: (id: number) => `/api/v1/cashbank/accounts/${id}`,
+  CASHBANK_ACCOUNT_TRANSACTIONS: (id: number) => `/api/v1/cashbank/accounts/${id}/transactions`,
+  CASHBANK_PAYMENT_ACCOUNTS: '/api/v1/cashbank/payment-accounts',
+  CASHBANK_REVENUE_ACCOUNTS: '/api/v1/cashbank/revenue-accounts',
+  CASHBANK_DEPOSIT_SOURCE_ACCOUNTS: '/api/v1/cashbank/deposit-source-accounts',
+  CASHBANK_BALANCE_SUMMARY: '/api/v1/cashbank/balance-summary',
+  CASHBANK_TRANSFER: '/api/v1/cashbank/transfer',
+  CASHBANK_DEPOSIT: '/api/v1/cashbank/deposit',
+  CASHBANK_WITHDRAWAL: '/api/v1/cashbank/withdrawal',
   
   // Cash Bank SSOT Routes (with /api/v1 prefix)
   CASH_BANK_SSOT_ACCOUNTS: '/api/v1/cash-bank/accounts',
@@ -218,41 +253,47 @@ export const API_ENDPOINTS = {
   MONITORING_API_UNUSED: '/monitoring/api-usage/unused',
   MONITORING_API_RESET: '/monitoring/api-usage/reset',
   
-  // Payments (no /api/v1 prefix based on Swagger) - with nested structure
+  // Payments (with /api/v1 prefix based on error analysis) - with nested structure
   PAYMENTS: {
-    LIST: '/api/payments',
-    CREATE: '/api/payments',
-    BY_ID: (id: number) => `/api/payments/${id}`,
-    CANCEL: (id: number) => `/api/payments/${id}/cancel`,
-    PDF: (id: number) => `/api/payments/${id}/pdf`,
-    ANALYTICS: '/api/payments/analytics',
-    SUMMARY: '/api/payments/summary',
-    UNPAID_BILLS: (vendorId: number) => `/api/payments/unpaid-bills/${vendorId}`,
-    UNPAID_INVOICES: (customerId: number) => `/api/payments/unpaid-invoices/${customerId}`,
-    EXPORT_EXCEL: '/api/payments/export/excel',
-    REPORT_PDF: '/api/payments/report/pdf',
+    LIST: '/api/v1/payments',
+    CREATE: '/api/v1/payments',
+    BY_ID: (id: number) => `/api/v1/payments/${id}`,
+    GET_BY_ID: (id: number) => `/api/v1/payments/${id}`,
+    CANCEL: (id: number) => `/api/v1/payments/${id}/cancel`,
+    PDF: (id: number) => `/api/v1/payments/${id}/pdf`,
+    ANALYTICS: '/api/v1/payments/analytics',
+    SUMMARY: '/api/v1/payments/summary',
+    UNPAID_BILLS: (vendorId: number) => `/api/v1/payments/unpaid-bills/${vendorId}`,
+    UNPAID_INVOICES: (customerId: number) => `/api/v1/payments/unpaid-invoices/${customerId}`,
+    EXPORT_EXCEL: '/api/v1/payments/export/excel',
+    REPORT_PDF: '/api/v1/payments/report/pdf',
+    // SSOT endpoints (these might use different prefix if they exist)
+    SSOT: {
+      RECEIVABLE: '/api/v1/payments/ssot/receivable',
+      PAYABLE: '/api/v1/payments/ssot/payable',
+    }
   },
   // Legacy flat endpoints for backward compatibility
-  PAYMENTS_ANALYTICS: '/api/payments/analytics', 
-  PAYMENTS_SUMMARY: '/api/payments/summary',
-  PAYMENTS_UNPAID_BILLS: (vendorId: number) => `/api/payments/unpaid-bills/${vendorId}`,
-  PAYMENTS_UNPAID_INVOICES: (customerId: number) => `/api/payments/unpaid-invoices/${customerId}`,
-  PAYMENTS_EXPORT_EXCEL: '/api/payments/export/excel',
-  PAYMENTS_REPORT_PDF: '/api/payments/report/pdf',
-  PAYMENTS_BY_ID: (id: number) => `/api/payments/${id}`,
-  PAYMENTS_CANCEL: (id: number) => `/api/payments/${id}/cancel`,
-  PAYMENTS_PDF: (id: number) => `/api/payments/${id}/pdf`,
+  PAYMENTS_ANALYTICS: '/api/v1/payments/analytics', 
+  PAYMENTS_SUMMARY: '/api/v1/payments/summary',
+  PAYMENTS_UNPAID_BILLS: (vendorId: number) => `/api/v1/payments/unpaid-bills/${vendorId}`,
+  PAYMENTS_UNPAID_INVOICES: (customerId: number) => `/api/v1/payments/unpaid-invoices/${customerId}`,
+  PAYMENTS_EXPORT_EXCEL: '/api/v1/payments/export/excel',
+  PAYMENTS_REPORT_PDF: '/api/v1/payments/report/pdf',
+  PAYMENTS_BY_ID: (id: number) => `/api/v1/payments/${id}`,
+  PAYMENTS_CANCEL: (id: number) => `/api/v1/payments/${id}/cancel`,
+  PAYMENTS_PDF: (id: number) => `/api/v1/payments/${id}/pdf`,
   
-  // Payment Integration
-  PAYMENTS_ACCOUNT_BALANCES: '/api/payments/account-balances/real-time',
-  PAYMENTS_REFRESH_BALANCES: '/api/payments/account-balances/refresh',
-  PAYMENTS_ENHANCED: '/api/payments/enhanced-with-journal',
-  PAYMENTS_INTEGRATION_METRICS: '/api/payments/integration-metrics',
-  PAYMENTS_JOURNAL_ENTRIES: '/api/payments/journal-entries',
-  PAYMENTS_PREVIEW_JOURNAL: '/api/payments/preview-journal',
-  PAYMENTS_ACCOUNT_UPDATES: (id: number) => `/api/payments/${id}/account-updates`,
-  PAYMENTS_REVERSE: (id: number) => `/api/payments/${id}/reverse`,
-  PAYMENTS_WITH_JOURNAL: (id: number) => `/api/payments/${id}/with-journal`,
+  // Payment Integration (with /api/v1 prefix)
+  PAYMENTS_ACCOUNT_BALANCES: '/api/v1/payments/account-balances/real-time',
+  PAYMENTS_REFRESH_BALANCES: '/api/v1/payments/account-balances/refresh',
+  PAYMENTS_ENHANCED: '/api/v1/payments/enhanced-with-journal',
+  PAYMENTS_INTEGRATION_METRICS: '/api/v1/payments/integration-metrics',
+  PAYMENTS_JOURNAL_ENTRIES: '/api/v1/payments/journal-entries',
+  PAYMENTS_PREVIEW_JOURNAL: '/api/v1/payments/preview-journal',
+  PAYMENTS_ACCOUNT_UPDATES: (id: number) => `/api/v1/payments/${id}/account-updates`,
+  PAYMENTS_REVERSE: (id: number) => `/api/v1/payments/${id}/reverse`,
+  PAYMENTS_WITH_JOURNAL: (id: number) => `/api/v1/payments/${id}/with-journal`,
   
   // Security (with /api/v1 prefix)
   SECURITY_ALERTS: '/api/v1/admin/security/alerts',
@@ -279,6 +320,7 @@ export const API_ENDPOINTS = {
   REPORTS_OPTIMIZED_REFRESH_BALANCES: '/api/v1/reports/optimized/refresh-balances',
   
   // SSOT Reports (with /api/v1 prefix)
+  // Keep flat keys for backward compatibility
   SSOT_REPORTS_GENERAL_LEDGER: '/api/v1/ssot-reports/general-ledger',
   SSOT_REPORTS_INTEGRATED: '/api/v1/ssot-reports/integrated',
   SSOT_REPORTS_JOURNAL_ANALYSIS: '/api/v1/ssot-reports/journal-analysis',
@@ -290,6 +332,36 @@ export const API_ENDPOINTS = {
   SSOT_REPORTS_STATUS: '/api/v1/ssot-reports/status',
   SSOT_REPORTS_TRIAL_BALANCE: '/api/v1/ssot-reports/trial-balance',
   SSOT_REPORTS_VENDOR_ANALYSIS: '/api/v1/ssot-reports/vendor-analysis',
+
+  // NEW: Nested SSOT_REPORTS object to match service usage
+  SSOT_REPORTS: {
+    INTEGRATED: '/api/v1/ssot-reports/integrated',
+    REFRESH: '/api/v1/ssot-reports/refresh',
+    STATUS: '/api/v1/ssot-reports/status',
+
+    // Financial reports
+    SALES_SUMMARY: '/api/v1/ssot-reports/sales-summary',
+    SALES_SUMMARY_EXPORT: '/api/v1/ssot-reports/sales-summary/export',
+    PURCHASE_REPORT: '/api/v1/ssot-reports/purchase-report',
+    PURCHASE_SUMMARY: '/api/v1/ssot-reports/purchase-summary',
+    PURCHASE_VALIDATE: '/api/v1/ssot-reports/purchase-report/validate',
+
+    TRIAL_BALANCE: '/api/v1/ssot-reports/trial-balance',
+    GENERAL_LEDGER: '/api/v1/ssot-reports/general-ledger',
+    JOURNAL_ANALYSIS: '/api/v1/ssot-reports/journal-analysis',
+    VENDOR_ANALYSIS: '/api/v1/ssot-reports/vendor-analysis',
+
+    // Balance Sheet
+    BALANCE_SHEET: '/api/v1/ssot-reports/balance-sheet',
+    BALANCE_SHEET_DETAILS: '/api/v1/ssot-reports/balance-sheet/account-details',
+    BALANCE_SHEET_VALIDATE: '/api/v1/ssot-reports/balance-sheet/validate',
+    BALANCE_SHEET_COMPARISON: '/api/v1/ssot-reports/balance-sheet/comparison',
+
+    // Cash Flow
+    CASH_FLOW: '/api/v1/ssot-reports/cash-flow',
+    CASH_FLOW_SUMMARY: '/api/v1/ssot-reports/cash-flow/summary',
+    CASH_FLOW_VALIDATE: '/api/v1/ssot-reports/cash-flow/validate',
+  },
   
   // SSOT Balance Sheet & Cash Flow (no /api/v1 prefix based on Swagger)
   REPORTS_SSOT_PROFIT_LOSS: '/reports/ssot-profit-loss',
