@@ -376,13 +376,13 @@ const SaleDetailPage: React.FC = () => {
                         {item.product?.name || 'N/A'}
                       </Td>
                       <Td>{item.description || '-'}</Td>
-                      <Td isNumeric>{item.quantity}</Td>
-                      <Td isNumeric>{salesService.formatCurrency(item.unit_price)}</Td>
+                      <Td isNumeric>{item.quantity || 0}</Td>
+                      <Td isNumeric>{salesService.formatCurrency(item.unit_price || 0)}</Td>
                       <Td isNumeric>
                         {item.discount_percent ? `${item.discount_percent}%` : '-'}
                       </Td>
                       <Td isNumeric fontWeight="medium">
-                        {salesService.formatCurrency(item.total_price)}
+                        {salesService.formatCurrency(item.line_total || item.total_price)}
                       </Td>
                     </Tr>
                   ))}
@@ -402,13 +402,13 @@ const SaleDetailPage: React.FC = () => {
               <Flex justify="space-between">
                 <Text>Subtotal:</Text>
                 <Text fontWeight="medium">
-                  {salesService.formatCurrency(sale.total_amount - (sale.ppn_percent || 0) * sale.total_amount / 100)}
+                  {salesService.formatCurrency(sale.subtotal || 0)}
                 </Text>
               </Flex>
               <Flex justify="space-between">
-                <Text>Discount ({sale.discount_percent}%):</Text>
+                <Text>Discount ({sale.discount_percent || 0}%):</Text>
                 <Text fontWeight="medium">
-                  {salesService.formatCurrency((sale.discount_percent || 0) * sale.total_amount / 100)}
+                  {salesService.formatCurrency(sale.discount_amount || 0)}
                 </Text>
               </Flex>
               <Flex justify="space-between">
@@ -418,28 +418,28 @@ const SaleDetailPage: React.FC = () => {
                 </Text>
               </Flex>
               <Flex justify="space-between">
-                <Text>PPN ({sale.ppn_percent}%):</Text>
+                <Text>PPN ({sale.ppn_percent || 0}%):</Text>
                 <Text fontWeight="medium">
-                  {salesService.formatCurrency((sale.ppn_percent || 0) * sale.total_amount / 100)}
+                  {salesService.formatCurrency(sale.ppn_amount || sale.ppn || 0)}
                 </Text>
               </Flex>
               <Divider />
               <Flex justify="space-between" fontSize="lg">
                 <Text fontWeight="bold">Total Amount:</Text>
                 <Text fontWeight="bold" color="blue.600">
-                  {salesService.formatCurrency(sale.total_amount)}
+                  {salesService.formatCurrency(sale.total_amount || 0)}
                 </Text>
               </Flex>
               <Flex justify="space-between">
                 <Text color="green.600">Paid Amount:</Text>
                 <Text fontWeight="medium" color="green.600">
-                  {salesService.formatCurrency(sale.paid_amount)}
+                  {salesService.formatCurrency(sale.paid_amount || 0)}
                 </Text>
               </Flex>
               <Flex justify="space-between" fontSize="lg">
                 <Text fontWeight="bold" color="orange.600">Outstanding:</Text>
                 <Text fontWeight="bold" color="orange.600">
-                  {salesService.formatCurrency(sale.outstanding_amount)}
+                  {salesService.formatCurrency(sale.outstanding_amount || 0)}
                 </Text>
               </Flex>
             </VStack>

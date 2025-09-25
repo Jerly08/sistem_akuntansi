@@ -1,5 +1,5 @@
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { Payment, PaymentFilters } from '../services/paymentService';
 
 // Interface for PDF export options
@@ -167,7 +167,7 @@ export const exportPaymentsToPDF = (
     ]);
     
     // Add table
-    autoTable(doc, {
+    (doc as any).autoTable({
       startY: yPos,
       head: [['No', 'Kode', 'Kontak', 'Tanggal', 'Jumlah', 'Metode', 'Status', 'Catatan']],
       body: tableData,

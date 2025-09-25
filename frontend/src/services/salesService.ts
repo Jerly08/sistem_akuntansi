@@ -506,6 +506,11 @@ class SalesService {
   }
 
   formatCurrency(amount: number, currency: string = 'IDR'): string {
+    // Handle null, undefined, NaN or invalid values
+    if (amount === null || amount === undefined || isNaN(amount) || !isFinite(amount)) {
+      amount = 0;
+    }
+    
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: currency,

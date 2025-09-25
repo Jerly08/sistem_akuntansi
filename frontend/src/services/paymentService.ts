@@ -90,6 +90,7 @@ export interface PaymentAnalytics {
 
 class PaymentService {
   private readonly baseUrl = '/payments';
+  private readonly ssotBaseUrl = '/payments/ssot';
 
   // Get all payments with filters
   async getPayments(filters: PaymentFilters = {}): Promise<PaymentResult> {
@@ -126,16 +127,28 @@ class PaymentService {
   // Create receivable payment (from customer)
   async createReceivablePayment(data: PaymentCreateRequest): Promise<Payment> {
     try {
-      // Convert date to RFC3339 format (ISO 8601 with timezone)
-      const formattedData = {
-        ...data,
-        date: this.formatDateForAPI(data.date)
+      // Convert to SSOT format
+      const ssotData = {
+        contact_id: data.contact_id,
+        cash_bank_id: data.cash_bank_id,
+        date: this.formatDateForAPI(data.date),
+        amount: data.amount,
+        method: data.method,
+        reference: data.reference || '',
+        notes: data.notes || '',
+        auto_create_journal: true,
+        preview_journal: false,
+        // Add allocations if provided
+        ...(data.allocations && data.allocations.length > 0 && {
+          target_invoice_id: data.allocations[0].invoice_id
+        })
       };
       
-      const response = await api.post(`${this.baseUrl}/receivable`, formattedData, {
+      const response = await api.post(`${this.ssotBaseUrl}/receivable`, ssotData, {
         timeout: 30000 // 30 seconds timeout for payment operations
       });
-      return response.data;
+      // SSOT returns data in response.data.data format
+      return response.data.data?.payment || response.data;
     } catch (error: any) {
       console.error('PaymentService - Error creating receivable payment:', error);
       console.log('PaymentService - Error details:', {
@@ -175,16 +188,28 @@ class PaymentService {
   // Create payable payment (to vendor)
   async createPayablePayment(data: PaymentCreateRequest): Promise<Payment> {
     try {
-      // Convert date to RFC3339 format (ISO 8601 with timezone)
-      const formattedData = {
-        ...data,
-        date: this.formatDateForAPI(data.date)
+      // Convert to SSOT format
+      const ssotData = {
+        contact_id: data.contact_id,
+        cash_bank_id: data.cash_bank_id,
+        date: this.formatDateForAPI(data.date),
+        amount: data.amount,
+        method: data.method,
+        reference: data.reference || '',
+        notes: data.notes || '',
+        auto_create_journal: true,
+        preview_journal: false,
+        // Add allocations if provided
+        ...(data.bill_allocations && data.bill_allocations.length > 0 && {
+          target_bill_id: data.bill_allocations[0].bill_id
+        })
       };
       
-      const response = await api.post(`${this.baseUrl}/payable`, formattedData, {
+      const response = await api.post(`${this.ssotBaseUrl}/payable`, ssotData, {
         timeout: 30000 // 30 seconds timeout for payment operations
       });
-      return response.data;
+      // SSOT returns data in response.data.data format
+      return response.data.data?.payment || response.data;
     } catch (error: any) {
       console.error('PaymentService - Error creating payable payment:', error);
       console.log('PaymentService - Error details:', {

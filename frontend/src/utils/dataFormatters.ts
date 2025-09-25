@@ -214,6 +214,11 @@ export const mapSaleFromBackend = (backendData: any): any => {
 
 // Number formatting utilities
 export const formatCurrency = (amount: number, currency: string = 'IDR'): string => {
+  // Handle null, undefined, NaN or invalid values
+  if (amount === null || amount === undefined || isNaN(amount) || !isFinite(amount)) {
+    amount = 0;
+  }
+  
   const formatter = new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: currency === 'IDR' ? 'IDR' : 'USD',
