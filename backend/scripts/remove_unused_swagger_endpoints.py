@@ -20,7 +20,8 @@ def remove_unused_endpoints():
     print(f"Creating backup at: {backup_file}")
     shutil.copy2(swagger_file, backup_file)
     
-    # List of unused endpoints to remove
+    # List of endpoints to remove from public Swagger docs
+    # These are either unused by the frontend or intended for internal/admin use only
     unused_endpoints = [
         # Journal Entry Auto-generation
         "/journal-entries/auto-generate/purchase",
@@ -45,12 +46,31 @@ def remove_unused_endpoints():
         "/api/monitoring/fix-discrepancies",
         "/api/monitoring/sync-status",
         
+        # Monitoring - API Usage (Hide from public docs)
+        "/monitoring/api-usage/analytics",
+        "/monitoring/api-usage/reset",
+        "/monitoring/api-usage/stats",
+        "/monitoring/api-usage/top",
+        "/monitoring/api-usage/unused",
+
+        # Journal Drilldown (Hide from public docs by request)
+        "/journal-drilldown",
+        "/journal-drilldown/accounts",
+        "/journal-drilldown/entries",
+        "/journal-drilldown/entries/{id}",
+        
         # Payment Debug/Analytics
         "/api/payments/debug/recent",
         "/api/payments/analytics",
         "/api/payments/export/excel",
         "/api/payments/report/pdf",
         "/api/payments/{id}/pdf",
+
+        # Deprecated Payments (Hide from public docs)
+        "/api/payments",  # GET (deprecated list)
+        "/api/payments/payable",  # POST (deprecated)
+        "/api/payments/receivable",  # POST (deprecated)
+        "/api/payments/{id}",  # GET (deprecated) — note will also match DELETE but JSON/YAML removal is by exact path, methods remain for others
         
         # Enhanced Reports (All endpoints)
         "/api/reports/enhanced/financial-metrics",
@@ -75,46 +95,67 @@ def remove_unused_endpoints():
         with open(swagger_file, 'r', encoding='utf-8') as f:
             swagger_data = yaml.safe_load(f)
         
-        # Remove unused endpoints
-        removed_count = 0
+        # Remove unused endpoints from YAML
+        removed_count_yaml = 0
         if 'paths' in swagger_data:
             original_count = len(swagger_data['paths'])
             
             for endpoint in unused_endpoints:
                 if endpoint in swagger_data['paths']:
-                    print(f"Removing unused endpoint: {endpoint}")
+                    print(f"Removing from YAML: {endpoint}")
                     del swagger_data['paths'][endpoint]
-                    removed_count += 1
-                else:
-                    print(f"Endpoint not found: {endpoint}")
+                    removed_count_yaml += 1
             
             new_count = len(swagger_data['paths'])
-            print(f"Removed {removed_count} unused endpoints ({original_count} -> {new_count})")
+            print(f"YAML: removed {removed_count_yaml} endpoints ({original_count} -> {new_count})")
         
         # Add comment about the cleanup
         if 'info' not in swagger_data:
             swagger_data['info'] = {}
         
         original_description = swagger_data['info'].get('description', '')
-        swagger_data['info']['description'] = f"{original_description}\n\nNOTE: Unused endpoints have been removed based on frontend usage analysis performed on {datetime.now().strftime('%Y-%m-%d')}."
+        swagger_data['info']['description'] = f"{original_description}\n\nNOTE: Internal/unused endpoints have been removed based on frontend usage analysis performed on {datetime.now().strftime('%Y-%m-%d')} ."
         
         # Write updated YAML
         print(f"Writing cleaned swagger.yaml...")
         with open(swagger_file, 'w', encoding='utf-8') as f:
             yaml.dump(swagger_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+        # Also clean swagger.json if present
+        json_file = Path("D:/Project/app_sistem_akuntansi/backend/docs/swagger.json")
+        removed_count_json = 0
+        if json_file.exists():
+            print("Loading swagger.json...")
+            with open(json_file, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+            if 'paths' in json_data:
+                original_json_count = len(json_data['paths'])
+                for endpoint in unused_endpoints:
+                    if endpoint in json_data['paths']:
+                        print(f"Removing from JSON: {endpoint}")
+                        del json_data['paths'][endpoint]
+                        removed_count_json += 1
+                new_json_count = len(json_data['paths'])
+                print(f"JSON: removed {removed_count_json} endpoints ({original_json_count} -> {new_json_count})")
+            print("Writing cleaned swagger.json...")
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(json_data, f, indent=2, ensure_ascii=False)
+        else:
+            print("swagger.json not found; skipped JSON cleanup")
         
-        print(f"✅ Successfully removed {removed_count} unused endpoints from Swagger documentation")
+        total_removed = removed_count_yaml + removed_count_json
+        print(f"✅ Successfully removed {total_removed} endpoints from Swagger documentation (YAML+JSON)")
         print(f"✅ Backup saved to: {backup_file}")
         
         # Generate summary report
-        generate_cleanup_report(unused_endpoints, removed_count, backup_file)
+        generate_cleanup_report(unused_endpoints, total_removed, backup_file)
         
     except Exception as e:
-        print(f"❌ Error processing swagger.yaml: {e}")
+        print(f"❌ Error processing swagger files: {e}")
         # Restore backup if something went wrong
         if backup_file.exists():
             shutil.copy2(backup_file, swagger_file)
-            print(f"🔄 Restored original file from backup")
+            print(f"🔄 Restored original swagger.yaml from backup")
         raise
 
 def generate_cleanup_report(unused_endpoints, removed_count, backup_file):

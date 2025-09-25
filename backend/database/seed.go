@@ -2,6 +2,7 @@ package database
 
 import (
 	"log"
+	"strings"
 	"app-sistem-akuntansi/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -360,10 +361,11 @@ func seedReportTemplates(db *gorm.DB) {
 }
 
 func seedPermissions(db *gorm.DB) {
-	// Check if permissions already exist
-	var count int64
-	db.Model(&models.Permission{}).Count(&count)
-	if count > 0 {
+	// Check if specific seed permissions already exist
+	var seedPermissionExists int64
+	db.Model(&models.Permission{}).Where("name IN ?", []string{"users:read", "accounts:read", "transactions:read"}).Count(&seedPermissionExists)
+	if seedPermissionExists > 0 {
+		log.Printf("Seed permissions already exist (%d records), skipping seed", seedPermissionExists)
 		return
 	}
 
@@ -430,9 +432,29 @@ func seedPermissions(db *gorm.DB) {
 		{Name: "budgets:delete", Resource: "budgets", Action: "delete", Description: "Delete budgets"},
 	}
 
+	// Create permissions one by one, checking for existing records first
+	successCount := 0
 	for _, permission := range permissions {
-		db.Create(&permission)
+		// Check if permission already exists by name
+		var existingPermission models.Permission
+		if err := db.Where("name = ?", permission.Name).First(&existingPermission).Error; err == nil {
+			log.Printf("Permission %s already exists, skipping", permission.Name)
+			continue
+		}
+		
+		// Permission doesn't exist, create it
+		if err := db.Create(&permission).Error; err != nil {
+			if strings.Contains(err.Error(), "duplicate key") {
+				log.Printf("Permission %s already exists (duplicate key), skipping", permission.Name)
+			} else {
+				log.Printf("Error seeding permission %s: %v", permission.Name, err)
+			}
+		} else {
+			successCount++
+			log.Printf("Successfully created permission %s", permission.Name)
+		}
 	}
+	log.Printf("Successfully seeded %d out of %d permissions", successCount, len(permissions))
 }
 
 func seedRolePermissions(db *gorm.DB) {

@@ -721,9 +721,18 @@ func (sc *SalesController) ExportSalesReportPDF(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
 
+	// If no dates provided, default to last 30 days to keep report size reasonable
+	if startDate == "" && endDate == "" {
+		end := time.Now()
+		start := end.AddDate(0, 0, -30)
+		startDate = start.Format("2006-01-02")
+		endDate = end.Format("2006-01-02")
+	}
+
 	pdfData, filename, err := sc.salesService.ExportSalesReportPDF(startDate, endDate)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("❌ Error generating sales report PDF (start=%s, end=%s): %v", startDate, endDate, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate sales report PDF", "details": err.Error()})
 		return
 	}
 

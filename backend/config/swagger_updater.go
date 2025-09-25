@@ -37,6 +37,11 @@ func UpdateSwaggerDocs() {
 		return
 	}
 	
+	// Remove deprecated/unused sections (PSAK)
+	filterDeprecatedPSAK(swaggerDoc)
+	// Hide CashBank Integration endpoints from public docs
+	filterCashBankIntegration(swaggerDoc)
+	
 	// Update the dynamic fields
 	swaggerDoc["host"] = swaggerConfig.Host
 	swaggerDoc["schemes"] = []string{swaggerConfig.Scheme}
@@ -63,10 +68,78 @@ func UpdateSwaggerDocs() {
 		return
 	}
 	
-	// Also update the go docs if they exist
+	// Also update the go docs if they exist (host/schemes only)
 	updateSwaggerGoDocs(swaggerConfig)
 	
 	log.Printf("✅ Swagger docs updated dynamically: %s", swaggerConfig.GetSwaggerURL())
+}
+
+// filterDeprecatedPSAK removes PSAK endpoints and tags from swaggerDoc in-place
+func filterDeprecatedPSAK(swaggerDoc map[string]interface{}) {
+	const psakPrefix = "/api/v1/reports/psak"
+
+	// Remove PSAK paths
+	if paths, ok := swaggerDoc["paths"].(map[string]interface{}); ok {
+		removed := 0
+		for p := range paths {
+			if strings.HasPrefix(p, psakPrefix) {
+				delete(paths, p)
+				removed++
+			}
+		}
+		if removed > 0 {
+			log.Printf("🧹 Removed %d PSAK path(s) from Swagger", removed)
+		}
+	}
+
+	// Remove PSAK tag from top-level tags array
+	if tags, ok := swaggerDoc["tags"].([]interface{}); ok {
+		filtered := make([]interface{}, 0, len(tags))
+		for _, t := range tags {
+			m, _ := t.(map[string]interface{})
+			if m != nil {
+				if name, _ := m["name"].(string); strings.EqualFold(name, "PSAK Reports") {
+					continue // skip PSAK tag
+				}
+			}
+			filtered = append(filtered, t)
+		}
+		swaggerDoc["tags"] = filtered
+	}
+}
+
+// filterCashBankIntegration removes CashBank Integration endpoints and tag from swaggerDoc in-place
+func filterCashBankIntegration(swaggerDoc map[string]interface{}) {
+	// We hide all endpoints under /api/cashbank/integrated from public docs
+	const integratedPrefix = "/api/cashbank/integrated"
+
+	// Remove paths for CashBank Integration
+	if paths, ok := swaggerDoc["paths"].(map[string]interface{}); ok {
+		removed := 0
+		for p := range paths {
+			if strings.HasPrefix(p, integratedPrefix) || strings.Contains(p, "/cashbank/integrated") {
+				delete(paths, p)
+				removed++
+			}
+		}
+		if removed > 0 {
+			log.Printf("🧹 Removed %d CashBank Integration path(s) from Swagger", removed)
+		}
+	}
+
+	// Remove the "CashBank Integration" tag from top-level tags array
+	if tags, ok := swaggerDoc["tags"].([]interface{}); ok {
+		filtered := make([]interface{}, 0, len(tags))
+		for _, t := range tags {
+			if m, ok := t.(map[string]interface{}); ok {
+				if name, _ := m["name"].(string); strings.EqualFold(name, "CashBank Integration") {
+					continue // skip this tag to hide from UI
+				}
+			}
+			filtered = append(filtered, t)
+		}
+		swaggerDoc["tags"] = filtered
+	}
 }
 
 // updateSwaggerGoDocs updates the generated docs.go file with dynamic values
@@ -98,7 +171,7 @@ func updateSwaggerGoDocs(config *SwaggerConfig) {
 
 // replaceInSwaggerDoc replaces a field in the swagger doc string
 func replaceInSwaggerDoc(content, field, replacement string) string {
-	lines := strings.Split(content, "\\n")
+	lines := strings.Split(content, "\n")
 	for i, line := range lines {
 		if strings.Contains(line, field) {
 			// Find the start and end of the field value
@@ -117,7 +190,7 @@ func replaceInSwaggerDoc(content, field, replacement string) string {
 			break
 		}
 	}
-	return strings.Join(lines, "\\n")
+	return strings.Join(lines, "\n")
 }
 
 // PrintSwaggerInfo prints helpful Swagger configuration information

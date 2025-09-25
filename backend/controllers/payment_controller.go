@@ -3,12 +3,14 @@ package controllers
 import (
 	"app-sistem-akuntansi/services"
 	"app-sistem-akuntansi/repositories"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 	
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type PaymentController struct {
@@ -471,7 +473,11 @@ func (c *PaymentController) ExportPaymentDetailPDF(ctx *gin.Context) {
 
 	pdfData, filename, err := c.paymentService.ExportPaymentDetailPDF(uint(id))
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "Payment not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF", "details": err.Error()})
 		return
 	}
 

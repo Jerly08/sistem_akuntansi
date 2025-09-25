@@ -121,25 +121,65 @@ func getMigrationFiles() ([]string, error) {
 func findMigrationDir() (string, error) {
 	candidates := []string{}
 
-	// 1) Current working directory ./migrations
-	candidates = append(candidates, filepath.Clean("./migrations"))
+	// 0) Explicit environment override
+	if envDir := strings.TrimSpace(os.Getenv("MIGRATIONS_DIR")); envDir != "" {
+		candidates = append(candidates, filepath.Clean(envDir))
+	}
 
-	// 2) backend/migrations when running from repo root
-	candidates = append(candidates, filepath.Clean("backend/migrations"))
+	// 1) Current working directory and its parents
+	cwd, _ := os.Getwd()
+	if cwd != "" {
+		candidates = append(candidates,
+			filepath.Clean(filepath.Join(cwd, "migrations")),
+			filepath.Clean(filepath.Join(cwd, "backend", "migrations")),
+			filepath.Clean(filepath.Join(cwd, "..", "migrations")),
+			filepath.Clean(filepath.Join(cwd, "..", "backend", "migrations")),
+			filepath.Clean(filepath.Join(cwd, "..", "..", "migrations")),
+			filepath.Clean(filepath.Join(cwd, "..", "..", "backend", "migrations")),
+		)
+	}
 
-	// 3) Directory next to the executable
+	// 2) Relative to process (works when running from repo root or backend dir)
+	candidates = append(candidates,
+		filepath.Clean("./migrations"),
+		filepath.Clean("backend/migrations"),
+		filepath.Clean("../migrations"),
+		filepath.Clean("../backend/migrations"),
+		filepath.Clean("../../migrations"),
+		filepath.Clean("../../backend/migrations"),
+	)
+
+	// 3) Directory next to the executable and its parents
 	exePath, err := os.Executable()
 	if err == nil {
 		exeDir := filepath.Dir(exePath)
-		candidates = append(candidates, filepath.Join(exeDir, "migrations"))
+		candidates = append(candidates,
+			filepath.Join(exeDir, "migrations"),
+			filepath.Join(exeDir, "backend", "migrations"),
+			filepath.Join(exeDir, "..", "migrations"),
+			filepath.Join(exeDir, "..", "backend", "migrations"),
+			filepath.Join(exeDir, "..", "..", "migrations"),
+			filepath.Join(exeDir, "..", "..", "backend", "migrations"),
+		)
 	}
 
+	// Deduplicate while preserving order
+	seen := map[string]struct{}{}
+	unique := make([]string, 0, len(candidates))
 	for _, dir := range candidates {
+		if _, ok := seen[dir]; ok {
+			continue
+		}
+		seen[dir] = struct{}{}
+		unique = append(unique, dir)
+	}
+
+	for _, dir := range unique {
 		if info, err := os.Stat(dir); err == nil && info.IsDir() {
 			return dir, nil
 		}
 	}
-	return "", fmt.Errorf("migrations directory not found. Tried: %v", candidates)
+	return "", fmt.Errorf("migrations directory not found. Tried: %v", unique)
 }
 
 // runMigration runs a single migration file

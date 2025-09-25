@@ -456,7 +456,21 @@ func (s *SSOTReportIntegrationService) GetDB() *gorm.DB {
 
 // getCompanyInfo returns company information for reports
 func (s *SSOTReportIntegrationService) getCompanyInfo() CompanyInfo {
-	// TODO: Load from database or configuration
+	// Prefer Settings table (admin-configured company information)
+	var settings models.Settings
+	if err := s.db.First(&settings).Error; err == nil {
+		return CompanyInfo{
+			Name:      settings.CompanyName,
+			Address:   settings.CompanyAddress,
+			City:      "", // City can be part of address; keep separate empty if not structured
+			State:     "",
+			Phone:     settings.CompanyPhone,
+			Email:     settings.CompanyEmail,
+			Website:   settings.CompanyWebsite,
+			TaxNumber: settings.TaxNumber,
+		}
+	}
+	// Fallback defaults
 	return CompanyInfo{
 		Name:      "PT. Default Company",
 		Address:   "Jalan Default No. 1",
@@ -468,14 +482,23 @@ func (s *SSOTReportIntegrationService) getCompanyInfo() CompanyInfo {
 	}
 }
 
+// getCurrencyFromSettings returns Settings.Currency or IDR
+func (s *SSOTReportIntegrationService) getCurrencyFromSettings() string {
+	var settings models.Settings
+	if err := s.db.First(&settings).Error; err == nil && settings.Currency != "" {
+		return settings.Currency
+	}
+	return "IDR"
+}
+
 // Implementation of report generation methods
 func (s *SSOTReportIntegrationService) generateVendorAnalysis(ctx context.Context, startDate, endDate time.Time) (*VendorAnalysisData, error) {
 	var result VendorAnalysisData
-	result.Company = s.getCompanyInfo()
-	result.StartDate = startDate
-	result.EndDate = endDate
-	result.Currency = "IDR"
-	result.GeneratedAt = time.Now()
+result.Company = s.getCompanyInfo()
+result.StartDate = startDate
+result.EndDate = endDate
+result.Currency = s.getCurrencyFromSettings()
+result.GeneratedAt = time.Now()
 
 	// Get vendor analysis from SSOT journal data
 	vendorStats := make(map[uint64]*VendorDetail)
@@ -928,9 +951,11 @@ func (s *SSOTReportIntegrationService) generateJournalAnalysis(ctx context.Conte
 		}
 	}
 
-	return &JournalAnalysisData{
+return &JournalAnalysisData{
+		Company:            s.getCompanyInfo(),
 		StartDate:          startDate,
 		EndDate:            endDate,
+		Currency:           s.getCurrencyFromSettings(),
 		TotalEntries:       stats.TotalEntries,
 		PostedEntries:      stats.PostedEntries,
 		DraftEntries:       stats.DraftEntries,

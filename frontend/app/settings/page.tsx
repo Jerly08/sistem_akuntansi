@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import SimpleLayout from '@/components/layout/SimpleLayout';
 import api from '@/services/api';
+import { getImageUrl } from '@/utils/imageUrl';
 import {
   Box,
   VStack,
@@ -36,7 +37,9 @@ import {
   FormErrorMessage,
   useToast,
   Button,
-  ButtonGroup
+  ButtonGroup,
+  Image,
+  Stack
 } from '@chakra-ui/react';
 import { FiHome, FiSettings, FiGlobe, FiCalendar, FiDollarSign, FiSave, FiX } from 'react-icons/fi';
 
@@ -47,6 +50,7 @@ interface SystemSettings {
   company_phone: string;
   company_email: string;
   company_website?: string;
+  company_logo?: string;
   tax_number?: string;
   currency: string;
   date_format: string;
@@ -80,6 +84,7 @@ const SettingsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   
   // Move useColorModeValue to top level to fix hooks order
   const blueColor = useColorModeValue('blue.500', 'blue.300');
@@ -187,6 +192,30 @@ const SettingsPage: React.FC = () => {
     setHasChanges(false);
   };
 
+  const handleLogoUpload = async (file: File) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const resp = await api.post('/settings/company/logo', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const newPath: string | undefined = resp.data?.path;
+      if (newPath) {
+        setSettings(prev => prev ? { ...prev, company_logo: newPath } : prev);
+        setFormData(prev => prev ? { ...prev, company_logo: newPath } : prev);
+        toast({ title: 'Logo updated', status: 'success', duration: 2500, isClosable: true });
+      } else {
+        toast({ title: 'Upload succeeded but no path returned', status: 'warning', duration: 3000, isClosable: true });
+      }
+    } catch (err: any) {
+      toast({ title: 'Failed to upload logo', description: err.response?.data?.error || err.message, status: 'error', duration: 5000, isClosable: true });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
 
   // Add safety check for formData initialization
   useEffect(() => {
@@ -268,6 +297,34 @@ const SettingsPage: React.FC = () => {
               </CardHeader>
               <CardBody>
                 <VStack spacing={4} alignItems="start">
+                  {/* Company Logo */}
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      Company Logo
+                    </FormLabel>
+                    <Stack direction={{ base: 'column', md: 'row' }} spacing={4} align="center">
+                      <Image
+                        src={getImageUrl(formData?.company_logo || settings?.company_logo || '') || undefined}
+                        alt="Company Logo"
+                        boxSize="80px"
+                        objectFit="contain"
+                        borderRadius="md"
+                        fallbackStrategy="onError"
+                      />
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) handleLogoUpload(f);
+                        }}
+                        isDisabled={uploadingLogo}
+                      />
+                      {uploadingLogo && <Spinner size="sm" />}
+                    </Stack>
+                  </FormControl>
+                  <Divider />
+                  
                   <FormControl>
                     <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
                       {t('settings.companyName')}

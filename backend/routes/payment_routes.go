@@ -10,8 +10,7 @@ import (
 )
 
 func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.PaymentController, cashBankController *controllers.CashBankController, cashBankService *services.CashBankService, jwtManager *middleware.JWTManager, db *gorm.DB) {
-	// Initialize fix controller for GL account linking
-	fixCashBankController := controllers.NewFixCashBankController(db, cashBankService)
+	// Note: FixCashBankController removed - deprecated admin endpoints
 	// Initialize permission middleware
 	permissionMiddleware := middleware.NewPermissionMiddleware(db)
 	
@@ -32,10 +31,11 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 	}
 	{
 		// Payment routes with permission-based restrictions
+		// Re-enable legacy GET endpoints for frontend compatibility (deprecated but safe as read-only)
 		payment.GET("", permissionMiddleware.CanView("payments"), paymentController.GetPayments)
-		payment.GET("/:id", permissionMiddleware.CanView("payments"), paymentController.GetPaymentByID)
-		payment.POST("/receivable", permissionMiddleware.CanCreate("payments"), paymentController.CreateReceivablePayment)
-		payment.POST("/payable", permissionMiddleware.CanCreate("payments"), paymentController.CreatePayablePayment)
+		// Optionally keep detail endpoint if frontend needs it (still read-only)
+		// payment.GET("/:id", permissionMiddleware.CanView("payments"), paymentController.GetPaymentByID)
+		// Deprecated: POST endpoints replaced by SSOT routes
 		payment.POST("/:id/cancel", permissionMiddleware.CanEdit("payments"), paymentController.CancelPayment)
 		payment.DELETE("/:id", middleware.RoleRequired("admin"), paymentController.DeletePayment)
 		payment.GET("/unpaid-invoices/:customer_id", permissionMiddleware.CanView("payments"), paymentController.GetUnpaidInvoices)
@@ -47,8 +47,7 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 		payment.POST("/sales", permissionMiddleware.CanCreate("payments"), paymentController.CreateSalesPayment)
 		payment.GET("/sales/unpaid-invoices/:customer_id", permissionMiddleware.CanView("payments"), paymentController.GetSalesUnpaidInvoices)
 		
-		// Debug routes (admin only)
-		payment.GET("/debug/recent", middleware.RoleRequired("admin"), paymentController.GetRecentPayments)
+		// Debug routes removed - deprecated debug endpoints
 		
 		// Export routes
 		payment.GET("/report/pdf", permissionMiddleware.CanExport("payments"), paymentController.ExportPaymentReportPDF)
@@ -86,9 +85,7 @@ cashbank.DELETE("/accounts/:id", permissionMiddleware.CanDelete("cash_bank"), ca
 		cashbank.GET("/balance-summary", permissionMiddleware.CanView("cash_bank"), cashBankController.GetBalanceSummary)
 		cashbank.POST("/accounts/:id/reconcile", permissionMiddleware.CanEdit("cash_bank"), cashBankController.ReconcileAccount)
 		
-		// Admin operations - GL Account linking fixes (keep role-based for admin-only operations)
-		cashbank.GET("/admin/check-gl-links", middleware.RoleRequired("admin"), fixCashBankController.CheckCashBankGLLinks)
-		cashbank.POST("/admin/fix-gl-links", middleware.RoleRequired("admin"), fixCashBankController.FixCashBankGLLinks)
+		// Admin operations removed - deprecated maintenance endpoints
 	}
 	
 	// 🚀 Phase 1: CashBank-COA Synchronization Routes

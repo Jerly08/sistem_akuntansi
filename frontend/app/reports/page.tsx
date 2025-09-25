@@ -1711,7 +1711,7 @@ const ReportsPage: React.FC = () => {
           <ModalBody pb={6}>
             {/* Date Range Controls */}
             <Box mb={4}>
-              <HStack spacing={4} mb={4}>
+<HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -1732,9 +1732,10 @@ const ReportsPage: React.FC = () => {
                   colorScheme="blue"
                   onClick={fetchSSOTPLReport}
                   isLoading={ssotPLLoading}
-                  leftIcon={<FiTrendingUp />}
+leftIcon={<FiTrendingUp />}
                   size="md"
                   mt={8}
+                  whiteSpace="nowrap"
                 >
                   Generate Report
                 </Button>
@@ -1953,7 +1954,7 @@ const ReportsPage: React.FC = () => {
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-              <HStack spacing={4} mb={4}>
+<HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>As Of Date</FormLabel>
                   <Input 
@@ -1966,9 +1967,10 @@ const ReportsPage: React.FC = () => {
                   colorScheme="blue"
                   onClick={fetchSSOTBalanceSheetReport}
                   isLoading={ssotBSLoading}
-                  leftIcon={<FiBarChart />}
+leftIcon={<FiBarChart />}
                   size="md"
                   mt={8}
+                  whiteSpace="nowrap"
                 >
                   Generate Report
                 </Button>
@@ -2212,7 +2214,7 @@ const ReportsPage: React.FC = () => {
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-              <HStack spacing={4} mb={4}>
+<HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -2233,9 +2235,10 @@ const ReportsPage: React.FC = () => {
                   colorScheme="blue"
                   onClick={fetchSSOTCashFlowReport}
                   isLoading={ssotCFLoading}
-                  leftIcon={<FiActivity />}
+leftIcon={<FiActivity />}
                   size="md"
                   mt={8}
+                  whiteSpace="nowrap"
                 >
                   Generate Report
                 </Button>
@@ -2350,7 +2353,7 @@ const ReportsPage: React.FC = () => {
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-              <HStack spacing={4} mb={4}>
+<HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -2371,9 +2374,10 @@ const ReportsPage: React.FC = () => {
                   colorScheme="blue"
                   onClick={fetchSSOTPurchaseReport}
                   isLoading={ssotPRLoading}
-                  leftIcon={<FiShoppingCart />}
+leftIcon={<FiShoppingCart />}
                   size="md"
                   mt={8}
+                  whiteSpace="nowrap"
                 >
                   Generate Report
                 </Button>
@@ -2752,7 +2756,7 @@ const ReportsPage: React.FC = () => {
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-              <HStack spacing={4} mb={4}>
+<HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -2773,9 +2777,10 @@ const ReportsPage: React.FC = () => {
                   colorScheme="blue"
                   onClick={fetchSSOTPurchaseReport}
                   isLoading={ssotPRLoading}
-                  leftIcon={<FiShoppingCart />}
+leftIcon={<FiShoppingCart />}
                   size="md"
                   mt={8}
+                  whiteSpace="nowrap"
                 >
                   Generate Report
                 </Button>
@@ -2824,10 +2829,9 @@ const ReportsPage: React.FC = () => {
                           {ssotPRData.company.name || 'Company Name Not Available'}
                         </Text>
                         <Text fontSize="sm" color="orange.600">
-                          {ssotPRData.company.address && ssotPRData.company.city ? 
-                            `${ssotPRData.company.address}, ${ssotPRData.company.city}` : 
-                            'Address not available'
-                          }
+{ssotPRData.company.address ? (
+                            ssotPRData.company.city ? `${ssotPRData.company.address}, ${ssotPRData.company.city}` : ssotPRData.company.address
+                          ) : 'Address not available'}
                         </Text>
                         {ssotPRData.company.phone && (
                           <Text fontSize="sm" color="orange.600">
@@ -3141,7 +3145,7 @@ const ReportsPage: React.FC = () => {
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-              <HStack spacing={4} mb={4}>
+<HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>As Of Date</FormLabel>
                   <Input 
@@ -3154,9 +3158,10 @@ const ReportsPage: React.FC = () => {
                   colorScheme="blue"
                   onClick={fetchSSOTTrialBalanceReport}
                   isLoading={ssotTBLoading}
-                  leftIcon={<FiList />}
+leftIcon={<FiList />}
                   size="md"
                   mt={8}
+                  whiteSpace="nowrap"
                 >
                   Generate Report
                 </Button>
@@ -3205,10 +3210,9 @@ const ReportsPage: React.FC = () => {
                           {ssotTBData.company.name || 'Company Name Not Available'}
                         </Text>
                         <Text fontSize="sm" color="purple.600">
-                          {ssotTBData.company.address && ssotTBData.company.city ? 
-                            `${ssotTBData.company.address}, ${ssotTBData.company.city}` : 
-                            'Address not available'
-                          }
+{ssotTBData.company.address ? (
+                            ssotTBData.company.city ? `${ssotTBData.company.address}, ${ssotTBData.company.city}` : ssotTBData.company.address
+                          ) : 'Address not available'}
                         </Text>
                         {ssotTBData.company.phone && (
                           <Text fontSize="sm" color="purple.600">
@@ -3435,7 +3439,7 @@ const ReportsPage: React.FC = () => {
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-              <HStack spacing={4} mb={4}>
+<HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -3465,9 +3469,10 @@ const ReportsPage: React.FC = () => {
                   colorScheme="blue"
                   onClick={fetchSSOTGeneralLedgerReport}
                   isLoading={ssotGLLoading}
-                  leftIcon={<FiBook />}
+leftIcon={<FiBook />}
                   size="md"
                   mt={8}
+                  whiteSpace="nowrap"
                 >
                   Generate Report
                 </Button>
@@ -3756,7 +3761,7 @@ const ReportsPage: React.FC = () => {
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-              <HStack spacing={4} mb={4}>
+<HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -3777,9 +3782,10 @@ const ReportsPage: React.FC = () => {
                   colorScheme="blue"
                   onClick={fetchSSOTJournalAnalysisReport}
                   isLoading={ssotJALoading}
-                  leftIcon={<FiDatabase />}
+leftIcon={<FiDatabase />}
                   size="md"
                   mt={8}
+                  whiteSpace="nowrap"
                 >
                   Generate Report
                 </Button>

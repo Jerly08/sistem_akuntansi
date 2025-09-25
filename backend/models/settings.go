@@ -21,27 +21,31 @@ type Settings struct {
 	CompanyWebsite string `json:"company_website"`
 	
 	// Financial Settings
-	Currency         string `json:"currency" gorm:"default:'IDR'"`
-	DateFormat       string `json:"date_format" gorm:"default:'DD/MM/YYYY'"`
-	FiscalYearStart  string `json:"fiscal_year_start" gorm:"default:'January 1'"`
-	TaxNumber        string `json:"tax_number"`
+	Currency         string  `json:"currency" gorm:"default:'IDR'"`
+	DateFormat       string  `json:"date_format" gorm:"default:'DD/MM/YYYY'"`
+	FiscalYearStart  string  `json:"fiscal_year_start" gorm:"default:'January 1'"`
+	TaxNumber        string  `json:"tax_number"`
 	DefaultTaxRate   float64 `json:"default_tax_rate" gorm:"default:11"`
 	
 	// System Configuration
-	Language         string `json:"language" gorm:"default:'id'"`
-	Timezone         string `json:"timezone" gorm:"default:'Asia/Jakarta'"`
+	Language          string `json:"language" gorm:"default:'id'"`
+	Timezone          string `json:"timezone" gorm:"default:'Asia/Jakarta'"`
 	ThousandSeparator string `json:"thousand_separator" gorm:"default:'.'"`
 	DecimalSeparator  string `json:"decimal_separator" gorm:"default:','"`
 	DecimalPlaces     int    `json:"decimal_places" gorm:"default:2"`
 	
 	// Invoice Settings
-	InvoicePrefix     string `json:"invoice_prefix" gorm:"default:'INV'"`
-	InvoiceNextNumber int    `json:"invoice_next_number" gorm:"default:1"`
-	QuotePrefix       string `json:"quote_prefix" gorm:"default:'QT'"`
-	QuoteNextNumber   int    `json:"quote_next_number" gorm:"default:1"`
-	PurchasePrefix    string `json:"purchase_prefix" gorm:"default:'PO'"`
-	PurchaseNextNumber int   `json:"purchase_next_number" gorm:"default:1"`
-	
+	InvoicePrefix      string `json:"invoice_prefix" gorm:"default:'INV'"`
+	InvoiceNextNumber  int    `json:"invoice_next_number" gorm:"default:1"`
+	QuotePrefix        string `json:"quote_prefix" gorm:"default:'QT'"`
+	QuoteNextNumber    int    `json:"quote_next_number" gorm:"default:1"`
+	PurchasePrefix     string `json:"purchase_prefix" gorm:"default:'PO'"`
+	PurchaseNextNumber int    `json:"purchase_next_number" gorm:"default:1"`
+
+	// Journal Settings (Unified with static config)
+	JournalPrefix         string `json:"journal_prefix" gorm:"default:'JE'"`
+	JournalNextNumber     int    `json:"journal_next_number" gorm:"default:1"`
+	RequireJournalApproval bool  `json:"require_journal_approval" gorm:"default:false"`
 	
 	// Additional Settings
 	UpdatedBy uint `json:"updated_by"` // User ID who last updated
@@ -87,6 +91,11 @@ type SettingsResponse struct {
 	QuoteNextNumber    int    `json:"quote_next_number"`
 	PurchasePrefix     string `json:"purchase_prefix"`
 	PurchaseNextNumber int    `json:"purchase_next_number"`
+
+	// Journal Settings
+	JournalPrefix          string `json:"journal_prefix"`
+	JournalNextNumber      int    `json:"journal_next_number"`
+	RequireJournalApproval bool   `json:"require_journal_approval"`
 	
 }
 
@@ -118,5 +127,8 @@ func (s *Settings) ToResponse() SettingsResponse {
 		QuoteNextNumber:    s.QuoteNextNumber,
 		PurchasePrefix:     s.PurchasePrefix,
 		PurchaseNextNumber: s.PurchaseNextNumber,
+		JournalPrefix:          s.JournalPrefix,
+		JournalNextNumber:      s.JournalNextNumber,
+		RequireJournalApproval: s.RequireJournalApproval,
 	}
 }

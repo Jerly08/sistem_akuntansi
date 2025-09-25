@@ -91,7 +91,20 @@ func (ers *EnhancedReportService) getDefaultCurrency() string {
 	if currency := os.Getenv("DEFAULT_CURRENCY"); currency != "" {
 		return currency
 	}
-	return "IDR"
+return "IDR"
+}
+
+// getCurrencyFromSettings returns configured currency (Settings),
+// falling back to CompanyProfile then environment default
+func (ers *EnhancedReportService) getCurrencyFromSettings() string {
+	var settings models.Settings
+	if err := ers.db.First(&settings).Error; err == nil && settings.Currency != "" {
+		return settings.Currency
+	}
+	if ers.companyProfile != nil && ers.companyProfile.Currency != "" {
+		return ers.companyProfile.Currency
+	}
+	return ers.getDefaultCurrency()
 }
 
 // getDefaultTaxNumber gets company tax number from environment or returns default

@@ -613,16 +613,46 @@ func (ers *EnhancedReportService) loadCompanyProfile() {
 
 // getCompanyInfo returns company information structure
 func (ers *EnhancedReportService) getCompanyInfo() CompanyInfo {
+	// Prefer admin-configured Settings if available so all reports are consistent
+	var settings models.Settings
+	if err := ers.db.First(&settings).Error; err == nil && settings.CompanyName != "" {
+		return CompanyInfo{
+			Name:       settings.CompanyName,
+			Address:    settings.CompanyAddress,
+			City:       "", // Address may already include city; keep empty if not structured
+			State:      "",
+			PostalCode: "",
+			Phone:      settings.CompanyPhone,
+			Email:      settings.CompanyEmail,
+			Website:    settings.CompanyWebsite,
+			TaxNumber:  settings.TaxNumber,
+		}
+	}
+	// Fallback to CompanyProfile if Settings is not set
+	if ers.companyProfile != nil {
+		return CompanyInfo{
+			Name:       ers.companyProfile.Name,
+			Address:    ers.companyProfile.Address,
+			City:       ers.companyProfile.City,
+			State:      ers.companyProfile.State,
+			PostalCode: ers.companyProfile.PostalCode,
+			Phone:      ers.companyProfile.Phone,
+			Email:      ers.companyProfile.Email,
+			Website:    ers.companyProfile.Website,
+			TaxNumber:  ers.companyProfile.TaxNumber,
+		}
+	}
+	// Ultimate fallback to sensible defaults
 	return CompanyInfo{
-		Name:       ers.companyProfile.Name,
-		Address:    ers.companyProfile.Address,
-		City:       ers.companyProfile.City,
-		State:      ers.companyProfile.State,
-		PostalCode: ers.companyProfile.PostalCode,
-		Phone:      ers.companyProfile.Phone,
-		Email:      ers.companyProfile.Email,
-		Website:    ers.companyProfile.Website,
-		TaxNumber:  ers.companyProfile.TaxNumber,
+		Name:       ers.getDefaultCompanyName(),
+		Address:    ers.getDefaultCompanyAddress(),
+		City:       ers.getDefaultCompanyCity(),
+		State:      ers.getDefaultState(),
+		PostalCode: ers.getDefaultPostalCode(),
+		Phone:      ers.getDefaultCompanyPhone(),
+		Email:      ers.getDefaultCompanyEmail(),
+		Website:    ers.getDefaultCompanyWebsite(),
+		TaxNumber:  ers.getDefaultTaxNumber(),
 	}
 }
 
@@ -1053,7 +1083,7 @@ func (ers *EnhancedReportService) GenerateSalesSummary(startDate, endDate time.T
 			Company:           ers.getCompanyInfo(),
 			StartDate:         startDate,
 			EndDate:           endDate,
-			Currency:          ers.companyProfile.Currency,
+			Currency:          ers.getCurrencyFromSettings(),
 			TotalTransactions: 0,
 			TotalRevenue:      0,
 			TotalCustomers:    0,
@@ -1107,7 +1137,7 @@ func (ers *EnhancedReportService) GenerateSalesSummary(startDate, endDate time.T
 		Company:           ers.getCompanyInfo(),
 		StartDate:         startDate,
 		EndDate:           endDate,
-		Currency:          ers.companyProfile.Currency,
+		Currency:          ers.getCurrencyFromSettings(),
 		TotalTransactions: int64(len(sales)),
 		GeneratedAt:       time.Now().In(utils.JakartaTZ),
 	}

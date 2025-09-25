@@ -231,7 +231,7 @@ func SeedContacts(db *gorm.DB) {
 	// Create contacts one by one, checking for existing records first
 	successCount := 0
 	for _, contact := range contacts {
-		// Check if contact already exists by code
+	// Check if contact already exists by code
 		var existingContact models.Contact
 		if err := db.Where("code = ?", contact.Code).First(&existingContact).Error; err == nil {
 			log.Printf("Contact %s already exists, skipping", contact.Code)
@@ -240,7 +240,11 @@ func SeedContacts(db *gorm.DB) {
 		
 		// Contact doesn't exist, create it
 		if err := db.Create(&contact).Error; err != nil {
-			log.Printf("Error seeding contact %s: %v", contact.Code, err)
+			if strings.Contains(err.Error(), "duplicate key") {
+				log.Printf("Contact %s already exists (duplicate key), skipping", contact.Code)
+			} else {
+				log.Printf("Error seeding contact %s: %v", contact.Code, err)
+			}
 		} else {
 			successCount++
 			log.Printf("Successfully created contact %s", contact.Code)

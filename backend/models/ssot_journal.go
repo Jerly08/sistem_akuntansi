@@ -238,9 +238,12 @@ type SSOTJournalEntryFilter struct {
 // GORM Hook to generate EntryNumber before create
 // SIMPLIFIED: Use simple timestamp-based entry number for instant processing
 func (j *SSOTJournalEntry) BeforeCreate(tx *gorm.DB) error {
-	// Always generate simple timestamp-based entry number
+	// If EntryNumber already set by service (from Settings sequence), do not override
+	if j.EntryNumber != "" {
+		return nil
+	}
+	// Fallback: generate timestamp-based entry number to ensure non-empty value
 	now := time.Now()
-	// Format: JE-YYYYMMDD-HHMMSS-NNNNNNNNN (nanoseconds for uniqueness)
 	j.EntryNumber = fmt.Sprintf("JE-%s-%d", now.Format("20060102-150405"), now.UnixNano()%1000000000)
 	return nil
 }

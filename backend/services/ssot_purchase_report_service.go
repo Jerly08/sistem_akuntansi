@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"app-sistem-akuntansi/models"
 	"gorm.io/gorm"
 )
 
@@ -104,11 +105,11 @@ type MonthlyTaxSummary struct {
 
 // GeneratePurchaseReport generates comprehensive purchase report from SSOT data
 func (s *SSOTPurchaseReportService) GeneratePurchaseReport(ctx context.Context, startDate, endDate time.Time) (*PurchaseReportData, error) {
-	result := &PurchaseReportData{
+result := &PurchaseReportData{
 		Company:     s.getCompanyInfo(),
 		StartDate:   startDate,
 		EndDate:     endDate,
-		Currency:    "IDR",
+		Currency:    s.getCurrencyFromSettings(),
 		GeneratedAt: time.Now(),
 	}
 
@@ -638,13 +639,37 @@ func (s *SSOTPurchaseReportService) getTaxAnalysis(ctx context.Context, startDat
 
 // getCompanyInfo returns company information for reports
 func (s *SSOTPurchaseReportService) getCompanyInfo() CompanyInfo {
+	// Prefer Settings table (admin-configured company information)
+	var settings models.Settings
+	if err := s.db.First(&settings).Error; err == nil {
+		return CompanyInfo{
+			Name:      settings.CompanyName,
+			Address:   settings.CompanyAddress,
+			City:      "", // City may be embedded in the address field
+			State:     "",
+			Phone:     settings.CompanyPhone,
+			Email:     settings.CompanyEmail,
+			Website:   settings.CompanyWebsite,
+			TaxNumber: settings.TaxNumber,
+		}
+	}
+	// Fallback defaults
 	return CompanyInfo{
 		Name:      "PT. Default Company",
 		Address:   "Jalan Default No. 1",
 		City:      "Jakarta",
-		State:     "DKI Jakarta", 
+		State:     "DKI Jakarta",
 		Phone:     "+62-21-12345678",
 		Email:     "info@defaultcompany.com",
 		TaxNumber: "01.234.567.8-901.000",
 	}
+}
+
+// getCurrencyFromSettings returns the configured currency or IDR as fallback
+func (s *SSOTPurchaseReportService) getCurrencyFromSettings() string {
+	var settings models.Settings
+	if err := s.db.First(&settings).Error; err == nil && settings.Currency != "" {
+		return settings.Currency
+	}
+	return "IDR"
 }

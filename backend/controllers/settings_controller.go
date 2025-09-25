@@ -1,8 +1,12 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
+	"time"
 	
 	"github.com/gin-gonic/gin"
 	"app-sistem-akuntansi/models"
@@ -411,5 +415,85 @@ func (sc *SettingsController) GetSettingsHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": result,
+	})
+}
+
+// UploadCompanyLogo handles POST /api/v1/settings/company/logo to upload and set the company logo
+func (sc *SettingsController) UploadCompanyLogo(c *gin.Context) {
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Ensure admin (route also protected by middleware, this is an extra check)
+	userRole, _ := c.Get("role")
+	if userRole != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Only administrators can upload company logo"})
+		return
+	}
+
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get uploaded file"})
+		return
+	}
+
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/jpg":  true,
+		"image/png":  true,
+		"image/gif":  true,
+		"image/webp": true,
+	}
+	if !allowedTypes[file.Header.Get("Content-Type")] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed"})
+		return
+	}
+
+	// Max 5MB
+	if file.Size > int64(5*1024*1024) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File size too large. Maximum 5MB allowed"})
+		return
+	}
+
+	uploadPath := "./uploads/company/"
+	if err := os.MkdirAll(uploadPath, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
+		return
+	}
+
+	filename := fmt.Sprintf("%d_%d_%s", time.Now().Unix(), time.Now().UnixNano()%1000, file.Filename)
+	filePath := filepath.Join(uploadPath, filename)
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
+		return
+	}
+
+	// Update settings with relative web path
+	relativePath := "/uploads/company/" + filename
+
+	// Convert userID to uint
+	uid, ok := userID.(uint)
+	if !ok {
+		if floatID, ok := userID.(float64); ok {
+			uid = uint(floatID)
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format"})
+			return
+		}
+	}
+
+	if err := sc.settingsService.UpdateSettings(map[string]interface{}{"company_logo": relativePath}, uid); err != nil {
+		// Cleanup file on failure
+		_ = os.Remove(filePath)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update company logo", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Company logo uploaded successfully",
+		"path":    relativePath,
 	})
 }

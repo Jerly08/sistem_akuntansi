@@ -745,15 +745,16 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 
 	// Swagger documentation endpoint (accessible in development or when ENABLE_SWAGGER=true)
 	if isDevelopmentMode() || os.Getenv("ENABLE_SWAGGER") == "true" {
-		// Swagger UI endpoint - standardized to use /api/v1 prefix
-		v1.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-		// Alternative endpoint - standardized to use /api/v1 prefix
-		v1.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		// Serve filtered swagger.json from a neutral path to avoid wildcard conflicts
+		r.StaticFile("/openapi/doc.json", "./docs/swagger.json")
+		
+		// Swagger UI endpoints pointing to the filtered doc.json
+		v1.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/openapi/doc.json")))
+		v1.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/openapi/doc.json")))
 		
 		// ROOT-LEVEL SWAGGER ROUTES: Add root-level routes for browser compatibility
-		// Many users expect Swagger to be available at /swagger/ not /api/v1/swagger/
-		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
-		r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/openapi/doc.json")))
+		r.GET("/docs/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/openapi/doc.json")))
 	}
 
 	// Debug routes for development only

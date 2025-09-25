@@ -58,12 +58,13 @@ type JournalLineResponse struct {
 
 // UnifiedJournalService handles all journal operations using the SSOT schema
 type UnifiedJournalService struct {
-	db *gorm.DB
+	db              *gorm.DB
+	settingsService *SettingsService
 }
 
 // NewUnifiedJournalService creates a new instance of UnifiedJournalService
 func NewUnifiedJournalService(db *gorm.DB) *UnifiedJournalService {
-	return &UnifiedJournalService{db: db}
+	return &UnifiedJournalService{db: db, settingsService: NewSettingsService(db)}
 }
 
 // CreateJournalEntry creates a new journal entry with validation (starts its own transaction)
@@ -127,7 +128,14 @@ func (s *UnifiedJournalService) createJournalEntryWithTx(tx *gorm.DB, req *Journ
 		sourceType = models.SSOTSourceTypeManual
 	}
 	
+// Generate entry number from settings sequence (within the same transaction)
+	journalNumber, err := s.settingsService.GetNextJournalNumberTx(tx)
+	if err != nil {
+		return fmt.Errorf("failed to generate journal number: %w", err)
+	}
+
 	*entry = &models.SSOTJournalEntry{
+		EntryNumber:     journalNumber,
 		SourceType:      sourceType,
 		SourceID:        req.SourceID,
 		Reference:       req.Reference,
