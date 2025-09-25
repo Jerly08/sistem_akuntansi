@@ -569,6 +569,7 @@ func ConnectDB() *gorm.DB {
 		PrepareStmt: true,
 	}
 	
+	log.Printf("Connecting to PostgreSQL database with URL: %s", cfg.DatabaseURL)
 	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), gormConfig)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
