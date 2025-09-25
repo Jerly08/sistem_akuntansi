@@ -22,6 +22,11 @@ go run scripts/maintenance/reset_transaction_data_gorm.go
 go run scripts/maintenance/fix_fresh_database.go
 ```
 
+### 4. 🔧 Fix Migration Issues (Clean Error Logs)
+```bash
+go run scripts/maintenance/fix_migration_issues.go
+```
+
 ### 3. 💾 Backup Database (Manual)
 ```bash
 # Windows PowerShell
@@ -69,10 +74,13 @@ go run scripts/maintenance/reset_transaction_data_gorm.go
 ## 🔧 Common Issues & Solutions
 
 || Error | Command |
-||-------|---------||
+||-------|---------|
 || `column "debit_amount" does not exist` | `go run scripts/maintenance/fix_fresh_database.go` |
+|| `relation "unified_journal_ledger" already exists` | `go run scripts/maintenance/fix_migration_issues.go` |
+|| `current transaction is aborted` | `go run scripts/maintenance/fix_migration_issues.go` |
 || `account_balances does not exist` | `go run scripts/maintenance/create_account_balances_materialized_view.go` |
 || Fresh database after DROP/CREATE | `go run scripts/maintenance/fix_fresh_database.go` |
+|| Migration errors in logs | `go run scripts/maintenance/fix_migration_issues.go` |
 || `database connection failed` | Check `.env` file and PostgreSQL service |
 || `package not found` | `go mod tidy && go mod download` |
 || `permission denied` | Run terminal as Administrator |
