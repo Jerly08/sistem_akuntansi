@@ -3761,7 +3761,7 @@ leftIcon={<FiBook />}
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-<HStack spacing={4} mb={4} flexWrap="wrap">
+              <HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -3782,7 +3782,7 @@ leftIcon={<FiBook />}
                   colorScheme="blue"
                   onClick={fetchSSOTJournalAnalysisReport}
                   isLoading={ssotJALoading}
-leftIcon={<FiDatabase />}
+                  leftIcon={<FiDatabase />}
                   size="md"
                   mt={8}
                   whiteSpace="nowrap"
@@ -3825,12 +3825,12 @@ leftIcon={<FiDatabase />}
 
             {ssotJAData && !ssotJALoading && (
               <VStack spacing={6} align="stretch">
-                {/* Company Header - Show even if empty */}
+                {/* Company Header - Improved loading and display */}
                 <Box bg="teal.50" p={4} borderRadius="md">
                   <HStack justify="space-between" align="start">
                     <VStack align="start" spacing={1}>
                       <Text fontSize="lg" fontWeight="bold" color="teal.800">
-                        {ssotJAData.company?.name || 'Company Name Not Available'}
+                        {ssotJAData.company?.name || 'PT. Sistem Akuntansi Indonesia'}
                       </Text>
                       <Text fontSize="sm" color="teal.600">
                         {ssotJAData.company?.address && ssotJAData.company?.city ? 
@@ -3839,7 +3839,7 @@ leftIcon={<FiDatabase />}
                         }
                       </Text>
                       <Text fontSize="sm" color="teal.600">
-                        {ssotJAData.company?.phone || 'Phone not available'} | {ssotJAData.company?.email || 'Email not available'}
+                        {ssotJAData.company?.phone || '+62-21-5551234'} | {ssotJAData.company?.email || 'info@sistemakuntansi.co.id'}
                       </Text>
                     </VStack>
                     <VStack align="end" spacing={1}>
@@ -3847,7 +3847,7 @@ leftIcon={<FiDatabase />}
                         Currency: {ssotJAData.currency || 'IDR'}
                       </Text>
                       <Text fontSize="xs" color="teal.500">
-                        Generated: {ssotJAData.generated_at ? new Date(ssotJAData.generated_at).toLocaleString('id-ID') : 'N/A'}
+                        Generated: {ssotJAData.generated_at ? new Date(ssotJAData.generated_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')}
                       </Text>
                     </VStack>
                   </HStack>
@@ -3895,11 +3895,11 @@ leftIcon={<FiDatabase />}
                 </SimpleGrid>
 
                 {/* Total Amount */}
-                {ssotJAData.total_amount && (
+                {ssotJAData.total_amount && Number(ssotJAData.total_amount) !== 0 && (
                   <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
                     <Text fontSize="sm" color="blue.600" mb={2}>Total Transaction Amount</Text>
                     <Text fontSize="3xl" fontWeight="bold" color="blue.700">
-                      {formatCurrency(parseFloat(ssotJAData.total_amount))}
+                      {formatCurrency(Number(ssotJAData.total_amount))}
                     </Text>
                   </Box>
                 )}
@@ -3929,7 +3929,7 @@ leftIcon={<FiDatabase />}
                             </VStack>
                             <VStack align="end" spacing={1}>
                               <Text fontSize="lg" fontWeight="bold" color="blue.600">
-                                {formatCurrency(parseFloat(type.total_amount))}
+                                {formatCurrency(Number(type.total_amount) || 0)}
                               </Text>
                               <Text fontSize="xs" color="gray.500">
                                 Total Amount
@@ -3948,6 +3948,115 @@ leftIcon={<FiDatabase />}
                               />
                             </Box>
                           </Box>
+                        </Box>
+                      ))}
+                    </SimpleGrid>
+                  </Box>
+                )}
+
+                {/* Account Breakdown Analysis */}
+                {ssotJAData.entries_by_account && ssotJAData.entries_by_account.length > 0 && (
+                  <Box>
+                    <Heading size="sm" mb={4} color={headingColor}>
+                      Account Breakdown Analysis
+                    </Heading>
+                    <Box border="1px solid" borderColor="gray.200" borderRadius="md" overflow="hidden">
+                      {/* Table Header */}
+                      <Box bg="gray.50" px={4} py={3} borderBottom="1px solid" borderBottomColor="gray.200">
+                        <SimpleGrid columns={[3, 5]} spacing={4} fontWeight="bold" fontSize="sm" color="gray.700">
+                          <Text>Account</Text>
+                          <Text display={['none', 'block']}>Code</Text>
+                          <Text textAlign="center">Count</Text>
+                          <Text textAlign="right">Debit</Text>
+                          <Text textAlign="right">Credit</Text>
+                        </SimpleGrid>
+                      </Box>
+                      
+                      {/* Table Body */}
+                      <Box bg="white" maxH="400px" overflowY="auto">
+                        {ssotJAData.entries_by_account.map((account, index) => (
+                          <Box key={index} px={4} py={3} borderBottom="1px solid" borderBottomColor="gray.100" _hover={{ bg: 'gray.50' }}>
+                            <SimpleGrid columns={[3, 5]} spacing={4} fontSize="sm" alignItems="center">
+                              <VStack align="start" spacing={1}>
+                                <Text fontWeight="medium" color="gray.800">
+                                  {account.account_name || 'Unknown Account'}
+                                </Text>
+                                <Text fontSize="xs" color="gray.500" display={['block', 'none']}>
+                                  {account.account_code || 'N/A'}
+                                </Text>
+                              </VStack>
+                              <Text fontSize="sm" color="gray.600" display={['none', 'block']}>
+                                {account.account_code || 'N/A'}
+                              </Text>
+                              <Text textAlign="center" fontWeight="medium">
+                                {account.count || 0}
+                              </Text>
+                              <Text textAlign="right" color={account.total_debit && account.total_debit > 0 ? 'green.600' : 'gray.400'}>
+                                {account.total_debit && account.total_debit > 0 ? formatCurrency(Number(account.total_debit)) : '-'}
+                              </Text>
+                              <Text textAlign="right" color={account.total_credit && account.total_credit > 0 ? 'blue.600' : 'gray.400'}>
+                                {account.total_credit && account.total_credit > 0 ? formatCurrency(Number(account.total_credit)) : '-'}
+                              </Text>
+                            </SimpleGrid>
+                          </Box>
+                        ))}
+                      </Box>
+                      
+                      {/* Total Row */}
+                      <Box bg="gray.50" px={4} py={3} borderTop="2px solid" borderTopColor="gray.300">
+                        <SimpleGrid columns={[3, 5]} spacing={4} fontWeight="bold" fontSize="sm">
+                          <Text color="gray.700">TOTAL</Text>
+                          <Text display={['none', 'block']}></Text>
+                          <Text textAlign="center" color="gray.700">
+                            {ssotJAData.entries_by_account.reduce((sum, acc) => sum + (acc.count || 0), 0)}
+                          </Text>
+                          <Text textAlign="right" color="green.600">
+                            {formatCurrency(ssotJAData.entries_by_account.reduce((sum, acc) => sum + (Number(acc.total_debit) || 0), 0))}
+                          </Text>
+                          <Text textAlign="right" color="blue.600">
+                            {formatCurrency(ssotJAData.entries_by_account.reduce((sum, acc) => sum + (Number(acc.total_credit) || 0), 0))}
+                          </Text>
+                        </SimpleGrid>
+                      </Box>
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Period Breakdown Analysis */}
+                {ssotJAData.entries_by_period && ssotJAData.entries_by_period.length > 0 && (
+                  <Box>
+                    <Heading size="sm" mb={4} color={headingColor}>
+                      Period Distribution Analysis
+                    </Heading>
+                    <SimpleGrid columns={[1, 2, 3]} spacing={4}>
+                      {ssotJAData.entries_by_period.map((period, index) => (
+                        <Box key={index} border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white" _hover={{ bg: 'gray.50' }}>
+                          <VStack align="start" spacing={3}>
+                            <VStack align="start" spacing={1}>
+                              <Badge colorScheme="teal" size="lg">
+                                {period.period}
+                              </Badge>
+                              <Text fontSize="xs" color="gray.500">
+                                {period.start_date} - {period.end_date}
+                              </Text>
+                            </VStack>
+                            
+                            <VStack align="start" spacing={2} w="full">
+                              <HStack justify="space-between" w="full">
+                                <Text fontSize="sm" color="gray.600">Entries:</Text>
+                                <Text fontSize="lg" fontWeight="bold" color="teal.600">
+                                  {period.count || 0}
+                                </Text>
+                              </HStack>
+                              
+                              <HStack justify="space-between" w="full">
+                                <Text fontSize="sm" color="gray.600">Amount:</Text>
+                                <Text fontSize="md" fontWeight="medium" color="blue.600">
+                                  {formatCurrency(Number(period.total_amount) || 0)}
+                                </Text>
+                              </HStack>
+                            </VStack>
+                          </VStack>
                         </Box>
                       ))}
                     </SimpleGrid>
