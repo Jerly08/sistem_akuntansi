@@ -24,10 +24,10 @@ export const API_ENDPOINTS = {
   NOTIFICATIONS_APPROVALS: '/api/v1/notifications/approvals',
   NOTIFICATIONS_BY_TYPE: (type: string) => `/api/v1/notifications/type/${type}`,
   
-  // Dashboard (no /api/v1 prefix based on Swagger)
-  DASHBOARD_ANALYTICS: '/dashboard/analytics',
-  DASHBOARD_FINANCE: '/dashboard/finance',
-  DASHBOARD_STOCK_ALERTS: '/api/v1/dashboard/stock-alerts', // Keep v1 for this one
+  // Dashboard (with /api/v1 prefix - corrected based on actual backend routes)
+  DASHBOARD_ANALYTICS: '/api/v1/dashboard/analytics',
+  DASHBOARD_FINANCE: '/api/v1/dashboard/finance',
+  DASHBOARD_STOCK_ALERTS: '/api/v1/dashboard/stock-alerts',
   
   // Permissions (with /api/v1 prefix)
   PERMISSIONS_ME: '/api/v1/permissions/me',
