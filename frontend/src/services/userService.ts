@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface User {
   id: number;
@@ -62,41 +63,41 @@ class UserService {
       }
     });
     
-    const response = await api.get(`/users?${params}`);
+    const response = await api.get(API_ENDPOINTS.USERS.LIST + `?${params}`);
     return response.data;
   }
 
   async getUser(id: number): Promise<User> {
-    const response = await api.get(`/users/${id}`);
+    const response = await api.get(API_ENDPOINTS.USERS.GET_BY_ID(id));
     return response.data;
   }
 
   async createUser(data: UserCreateRequest): Promise<User> {
-    const response = await api.post('/users', data);
+    const response = await api.post(API_ENDPOINTS.USERS.CREATE, data);
     return response.data;
   }
 
   async updateUser(id: number, data: UserUpdateRequest): Promise<User> {
-    const response = await api.put(`/users/${id}`, data);
+    const response = await api.put(API_ENDPOINTS.USERS.UPDATE(id), data);
     return response.data;
   }
 
   async deleteUser(id: number): Promise<void> {
-    await api.delete(`/users/${id}`);
+    await api.delete(API_ENDPOINTS.USERS.DELETE(id));
   }
 
   async getUserProfile(): Promise<User> {
-    const response = await api.get('/profile');
+    const response = await api.get(API_ENDPOINTS.AUTH.PROFILE);
     return response.data;
   }
 
   async updateProfile(data: Partial<UserUpdateRequest>): Promise<User> {
-    const response = await api.put('/profile', data);
+    const response = await api.put(API_ENDPOINTS.AUTH.PROFILE, data);
     return response.data;
   }
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await api.post('/auth/change-password', {
+    await api.post(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
       current_password: currentPassword,
       new_password: newPassword
     });

@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { getAuthHeaders } from '../utils/authTokenUtils';
+import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface SSOTGeneralLedgerData {
   company?: CompanyInfo;
@@ -55,12 +55,6 @@ export interface SSOTGeneralLedgerParams {
 }
 
 class SSOTGeneralLedgerService {
-  private baseURL: string;
-
-  constructor() {
-    // Use relative path to work with Next.js rewrites
-    this.baseURL = '/api/v1';
-  }
 
   async generateSSOTGeneralLedger(params: SSOTGeneralLedgerParams): Promise<SSOTGeneralLedgerData> {
     try {
@@ -74,9 +68,7 @@ class SSOTGeneralLedgerService {
         queryParams.append('account_id', params.account_id);
       }
 
-      const response = await axios.get(`${this.baseURL}/ssot-reports/general-ledger?${queryParams}`, {
-        headers: getAuthHeaders()
-      });
+      const response = await api.get(API_ENDPOINTS.SSOT_REPORTS.GENERAL_LEDGER + `?${queryParams}`);
 
       if (response.data.status === 'success') {
         return response.data.data;

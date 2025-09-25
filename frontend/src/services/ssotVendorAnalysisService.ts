@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { getAuthHeaders } from '../utils/authTokenUtils';
+import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface SSOTVendorAnalysisData {
   company?: CompanyInfo;
@@ -69,11 +69,6 @@ export interface SSOTVendorAnalysisParams {
 }
 
 class SSOTVendorAnalysisService {
-  private baseURL: string;
-
-  constructor() {
-    this.baseURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1';
-  }
 
   async generateSSOTVendorAnalysis(params: SSOTVendorAnalysisParams): Promise<SSOTVendorAnalysisData> {
     try {
@@ -83,9 +78,7 @@ class SSOTVendorAnalysisService {
         format: params.format || 'json'
       });
 
-      const response = await axios.get(`${this.baseURL}/ssot-reports/vendor-analysis?${queryParams}`, {
-        headers: getAuthHeaders()
-      });
+      const response = await api.get(API_ENDPOINTS.SSOT_REPORTS.VENDOR_ANALYSIS + `?${queryParams}`);
 
       if (response.data.status === 'success') {
         return response.data.data;

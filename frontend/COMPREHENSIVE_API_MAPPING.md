@@ -496,6 +496,38 @@ Dokumentasi lengkap yang memetakan semua API endpoints antara backend dan fronte
 
 ---
 
-**Last Updated:** 2025-09-25
-**Status:** Backend Analysis Complete, Frontend Updates 40% Complete
-**Next Steps:** Continue updating remaining service files
+**Last Updated:** 2025-09-25  
+**Status:** Backend Analysis Complete, Comprehensive Frontend Audit Complete  
+**Progress:** 8/36 service files updated (22% complete)  
+**Next Steps:** Update remaining 28 service files by priority
+
+## Summary Statistics
+
+### Backend Routes Documented: ✅ 175+ endpoints mapped
+- Authentication: 5 endpoints
+- Core API (with /api/v1): 120+ endpoints  
+- Payment & CashBank (no /api/v1): 30+ endpoints
+- Reports & SSOT: 25+ endpoints
+- Monitoring & Admin: 15+ endpoints
+
+### Frontend Service Files Status:
+- **✅ Updated (8):** salesService, purchaseService, productService, useDashboardAnalytics, usePermissions, UnifiedNotifications, AuthContext, api.ts
+- **🔄 Priority 1 (6):** userService, assetService, cashbankService, paymentService, accountService, contactService
+- **📊 Priority 2 (2):** financialReportService, approvalService  
+- **🔍 Priority 3 (9):** SSOT services (trial balance, general ledger, etc.)
+- **🛠️ Priority 4 (11):** Utility services (balance monitor, export services, etc.)
+
+### Issues Resolved:
+- ✅ Sales endpoints: `/sales` → `/api/v1/sales`
+- ✅ Purchase endpoints: `/purchases` → `/api/v1/purchases`
+- ✅ Product endpoints: `/products` → `/api/v1/products`
+- ✅ Dashboard endpoints: `/dashboard/analytics` → `/api/v1/dashboard/analytics`
+- ✅ Auth endpoints: `/api/v1/auth/login` → `/auth/login` (correct removal of prefix)
+- ✅ Permissions: `/permissions/me` → `/api/v1/permissions/me`
+- ✅ Notifications: All endpoints now use `/api/v1/notifications/*`
+
+### Critical Findings:
+1. **28 service files** still need updates (78% remaining)
+2. **Mixed patterns** in report services need standardization
+3. **SSOT services** need endpoint verification against backend
+4. **Some services** use correct endpoints but need centralization to `API_ENDPOINTS`

@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { getAuthHeaders } from '../utils/authTokenUtils';
+import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface SSOTPurchaseReportData {
   company: CompanyInfo;
@@ -92,12 +92,6 @@ export interface SSOTPurchaseReportParams {
 }
 
 class SSOTPurchaseReportService {
-  private baseURL: string;
-
-  constructor() {
-    // Use relative path to work with Next.js rewrites
-    this.baseURL = '/api/v1';
-  }
 
   async generateSSOTPurchaseReport(params: SSOTPurchaseReportParams): Promise<SSOTPurchaseReportData> {
     try {
@@ -107,9 +101,7 @@ class SSOTPurchaseReportService {
         format: params.format || 'json'
       });
 
-      const response = await axios.get(`${this.baseURL}/ssot-reports/purchase-report?${queryParams}`, {
-        headers: getAuthHeaders()
-      });
+      const response = await api.get(API_ENDPOINTS.SSOT_REPORTS.PURCHASE_REPORT + `?${queryParams}`);
 
       if (response.data.status === 'success') {
         return response.data.data;
@@ -270,10 +262,9 @@ class SSOTPurchaseReportService {
         format: pdfParams.format
       });
 
-      const response = await axios.get(
-        `${this.baseURL}/ssot-reports/purchase-report?${queryParams}`,
+      const response = await api.get(
+        API_ENDPOINTS.SSOT_REPORTS.PURCHASE_REPORT + `?${queryParams}`,
         {
-          headers: getAuthHeaders(),
           responseType: 'blob'
         }
       );

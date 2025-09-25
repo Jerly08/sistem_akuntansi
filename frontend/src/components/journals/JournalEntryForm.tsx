@@ -55,7 +55,6 @@ import {
 } from 'react-icons/fi';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { ssotJournalService, CreateJournalRequest, SSOTJournalEntry } from '@/services/ssotJournalService';
-import { useWebSocket, useBalanceMonitor } from '@/contexts/WebSocketContext';
 import { formatCurrency } from '@/utils/formatters';
 
 interface JournalLineFormData {
@@ -129,9 +128,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   
-  // Real-time monitoring hooks
-  const { isConnected, toggleConnection, onBalanceUpdate } = useWebSocket();
-  const { balanceUpdates, lastUpdateTime, updateCount, getAccountBalance } = useBalanceMonitor();
+  // Real-time monitoring removed - using standard refresh instead
   
   // Component state
   const [isLoading, setIsLoading] = useState(false);
@@ -154,34 +151,7 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
   const totalCredit = watchedLines?.reduce((sum, line) => sum + (line.credit_amount || 0), 0) || 0;
   const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
 
-  // Monitor balance updates for used accounts
-  useEffect(() => {
-    if (!showRealTimeMonitor) return;
-
-    const cleanup = onBalanceUpdate((data) => {
-      // Check if this account is used in current journal entry
-      const usedAccountIds = watchedLines?.map(line => line.account_id) || [];
-      if (usedAccountIds.includes(data.account_id)) {
-        setBalanceChanges(prev => new Map(prev).set(data.account_id, data.balance));
-        
-        // Show notification for affected accounts
-        const account = SAMPLE_ACCOUNTS.find(acc => acc.id === data.account_id);
-        if (account) {
-          toast({
-            title: 'Account Balance Updated',
-            description: `${account.code} - ${account.name}: ${formatCurrency(data.balance)}`,
-            status: 'info',
-            duration: 3000,
-            isClosable: true,
-            position: 'top-right',
-            size: 'sm'
-          });
-        }
-      }
-    });
-
-    return cleanup;
-  }, [watchedLines, showRealTimeMonitor, onBalanceUpdate, toast]);
+  // Real-time monitoring removed - balance updates handled by standard refresh
 
   // Validation
   const validateJournalEntry = useCallback((): string[] => {

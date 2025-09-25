@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { getAuthHeaders } from '../utils/authTokenUtils';
+import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface SSOTSalesSummaryData {
   company?: CompanyInfo;
@@ -61,12 +61,6 @@ export interface SSOTSalesSummaryParams {
 }
 
 class SSOTSalesSummaryService {
-  private baseURL: string;
-
-  constructor() {
-    // Use relative path to work with Next.js rewrites
-    this.baseURL = '/api/v1';
-  }
 
   async generateSSOTSalesSummary(params: SSOTSalesSummaryParams): Promise<SSOTSalesSummaryData> {
     try {
@@ -76,9 +70,7 @@ class SSOTSalesSummaryService {
         format: params.format || 'json'
       });
 
-      const response = await axios.get(`${this.baseURL}/ssot-reports/sales-summary?${queryParams}`, {
-        headers: getAuthHeaders()
-      });
+      const response = await api.get(API_ENDPOINTS.SSOT_REPORTS.SALES_SUMMARY + `?${queryParams}`);
 
       if (response.data.status === 'success') {
         return response.data.data;
@@ -96,14 +88,13 @@ class SSOTSalesSummaryService {
 
   async exportSalesSummary(data: SSOTSalesSummaryData, format: 'pdf' | 'excel'): Promise<Blob> {
     try {
-      const response = await axios.post(
-        `${this.baseURL}/ssot-reports/sales-summary/export`,
+      const response = await api.post(
+        API_ENDPOINTS.SSOT_REPORTS.SALES_SUMMARY_EXPORT,
         {
           data,
           format
         },
         {
-          headers: getAuthHeaders(),
           responseType: 'blob'
         }
       );

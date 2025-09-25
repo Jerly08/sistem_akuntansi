@@ -8,11 +8,7 @@ import {
   ApiResponse,
   ApiError
 } from '@/types/account';
-import { API_BASE_URL } from '@/config/api';
-
-// Use relative URLs for frontend calls to work with Next.js proxy
-// This prevents double /api/v1 issues with Next.js rewrites
-const API_BASE = ''; // Empty string for relative URLs
+import { API_ENDPOINTS } from '@/config/api';
 
 class AccountService {
 
@@ -48,7 +44,7 @@ class AccountService {
 
   // Get all accounts
   async getAccounts(token: string, type?: string): Promise<Account[]> {
-    let url = `${API_BASE}/api/v1/accounts`;
+    let url = API_ENDPOINTS.ACCOUNTS.LIST;
     if (type) {
       url += `?type=${encodeURIComponent(type)}`;
     }
@@ -64,7 +60,7 @@ class AccountService {
 
   // Get account catalog (minimal data for accounts) - PUBLIC ENDPOINT (no auth required)
   async getAccountCatalog(token?: string, type?: string): Promise<AccountCatalogItem[]> {
-    let url = `${API_BASE}/api/v1/accounts/catalog`;
+    let url = API_ENDPOINTS.ACCOUNTS.CATALOG;
     if (type) {
       url += `?type=${encodeURIComponent(type)}`;
     }
@@ -87,7 +83,7 @@ class AccountService {
   
   // Get liability accounts for credit payment methods - PUBLIC ENDPOINT (no auth required)
   async getCreditAccounts(token?: string): Promise<AccountCatalogItem[]> {
-    const url = `${API_BASE}/api/v1/accounts/credit?type=LIABILITY`;
+    const url = API_ENDPOINTS.ACCOUNTS.CREDIT + '?type=LIABILITY';
     
     const response = await fetch(url, {
       method: 'GET',
@@ -111,7 +107,7 @@ class AccountService {
     currency: string;
     balance: number;
   }[]> {
-    const response = await fetch(`${API_BASE}/api/v1/cashbank/payment-accounts`, {
+    const response = await fetch(API_ENDPOINTS.CASH_BANK.PAYMENT_ACCOUNTS, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -136,7 +132,7 @@ class AccountService {
 
   // Get single account by code
   async getAccount(token: string, code: string): Promise<Account> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts/${code}`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.GET_BY_CODE(code), {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -147,7 +143,7 @@ class AccountService {
 
   // Create new account
   async createAccount(token: string, accountData: AccountCreateRequest): Promise<Account> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.CREATE, {
       method: 'POST',
       headers: this.getHeaders(token),
       body: JSON.stringify(accountData),
@@ -159,7 +155,7 @@ class AccountService {
 
   // Update existing account
   async updateAccount(token: string, code: string, accountData: AccountUpdateRequest): Promise<Account> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts/${code}`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.UPDATE(code), {
       method: 'PUT',
       headers: this.getHeaders(token),
       body: JSON.stringify(accountData),
@@ -171,7 +167,7 @@ class AccountService {
 
   // Delete account
   async deleteAccount(token: string, code: string): Promise<void> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts/${code}`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.DELETE(code), {
       method: 'DELETE',
       headers: this.getHeaders(token),
     });
@@ -184,7 +180,7 @@ class AccountService {
     cascade_delete?: boolean;
     new_parent_id?: number;
   }): Promise<{ message: string; cascade: boolean }> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts/admin/${code}`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.ADMIN_DELETE(code), {
       method: 'DELETE',
       headers: this.getHeaders(token),
       body: JSON.stringify(options),
@@ -195,7 +191,7 @@ class AccountService {
 
   // Get account hierarchy
   async getAccountHierarchy(token: string): Promise<Account[]> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts/hierarchy`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.HIERARCHY, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -206,7 +202,7 @@ class AccountService {
 
   // Get balance summary
   async getBalanceSummary(token: string): Promise<AccountSummaryResponse[]> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts/balance-summary`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.BALANCE_SUMMARY, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -225,7 +221,7 @@ class AccountService {
       headers.Authorization = `Bearer ${token}`;
     }
     
-    const response = await fetch(`${API_BASE}/api/v1/accounts/import`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.IMPORT, {
       method: 'POST',
       headers,
       body: formData,
@@ -236,7 +232,7 @@ class AccountService {
 
   // Download import template
   async downloadTemplate(): Promise<Blob> {
-    const response = await fetch(`${API_BASE}/api/v1/templates/accounts_import_template.csv`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.TEMPLATE, {
       method: 'GET',
     });
     
@@ -249,7 +245,7 @@ class AccountService {
 
   // Export accounts to PDF
   async exportAccountsPDF(token: string): Promise<Blob> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts/export/pdf`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.EXPORT.PDF, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -274,7 +270,7 @@ class AccountService {
 
   // Export accounts to Excel
   async exportAccountsExcel(token: string): Promise<Blob> {
-    const response = await fetch(`${API_BASE}/api/v1/accounts/export/excel`, {
+    const response = await fetch(API_ENDPOINTS.ACCOUNTS.EXPORT.EXCEL, {
       method: 'GET',
       headers: this.getHeaders(token),
     });
@@ -370,7 +366,7 @@ class AccountService {
       name: string;
     };
   }> {
-    let url = `${API_BASE}/api/v1/accounts/validate-code?code=${encodeURIComponent(code)}`;
+    let url = API_ENDPOINTS.ACCOUNTS.VALIDATE_CODE + `?code=${encodeURIComponent(code)}`;
     if (excludeId) {
       url += `&exclude_id=${excludeId}`;
     }

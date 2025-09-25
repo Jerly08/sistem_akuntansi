@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 // Types - Updated to match backend Go struct
 export interface Payment {
@@ -89,8 +90,7 @@ export interface PaymentAnalytics {
 }
 
 class PaymentService {
-  private readonly baseUrl = '/payments';
-  private readonly ssotBaseUrl = '/payments/ssot';
+  // Use API_ENDPOINTS instead of hardcoded baseUrl
 
   // Get all payments with filters
   async getPayments(filters: PaymentFilters = {}): Promise<PaymentResult> {
@@ -105,7 +105,7 @@ class PaymentService {
       if (filters.start_date) params.append('start_date', filters.start_date);
       if (filters.end_date) params.append('end_date', filters.end_date);
 
-      const response = await api.get(`${this.baseUrl}?${params}`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.LIST + `?${params}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching payments:', error);
@@ -116,7 +116,7 @@ class PaymentService {
   // Get payment by ID
   async getPaymentById(id: number): Promise<Payment> {
     try {
-      const response = await api.get(`${this.baseUrl}/${id}`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.GET_BY_ID(id));
       return response.data;
     } catch (error) {
       console.error('Error fetching payment:', error);
@@ -144,7 +144,7 @@ class PaymentService {
         })
       };
       
-      const response = await api.post(`${this.ssotBaseUrl}/receivable`, ssotData, {
+      const response = await api.post(API_ENDPOINTS.PAYMENTS.SSOT.RECEIVABLE, ssotData, {
         timeout: 30000 // 30 seconds timeout for payment operations
       });
       // SSOT returns data in response.data.data format
@@ -205,7 +205,7 @@ class PaymentService {
         })
       };
       
-      const response = await api.post(`${this.ssotBaseUrl}/payable`, ssotData, {
+      const response = await api.post(API_ENDPOINTS.PAYMENTS.SSOT.PAYABLE, ssotData, {
         timeout: 30000 // 30 seconds timeout for payment operations
       });
       // SSOT returns data in response.data.data format
@@ -249,7 +249,7 @@ class PaymentService {
   // Cancel payment
   async cancelPayment(id: number, reason: string): Promise<void> {
     try {
-      await api.post(`${this.baseUrl}/${id}/cancel`, { reason });
+      await api.post(API_ENDPOINTS.PAYMENTS.CANCEL(id), { reason });
     } catch (error) {
       console.error('Error cancelling payment:', error);
       throw error;
@@ -259,7 +259,7 @@ class PaymentService {
   // Delete payment
   async deletePayment(id: number | string): Promise<void> {
     try {
-      await api.delete(`${this.baseUrl}/${id}`);
+      await api.delete(API_ENDPOINTS.PAYMENTS.DELETE(id));
     } catch (error: any) {
       console.error('Error deleting payment:', error);
       throw new Error(error.response?.data?.error || 'Failed to delete payment');
@@ -279,7 +279,7 @@ class PaymentService {
       if (filters?.start_date) params.append('start_date', filters.start_date);
       if (filters?.end_date) params.append('end_date', filters.end_date);
 
-      const response = await api.get(`${this.baseUrl}/export?${params}`, {
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.EXPORT + `?${params}`, {
         responseType: 'blob',
       });
       
@@ -300,7 +300,7 @@ class PaymentService {
       if (status) params.append('status', status);
       if (method) params.append('method', method);
 
-      const response = await api.get(`${this.baseUrl}/report/pdf?${params}`, {
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.REPORT.PDF + `?${params}`, {
         responseType: 'blob',
       });
       
@@ -321,7 +321,7 @@ class PaymentService {
       if (status) params.append('status', status);
       if (method) params.append('method', method);
 
-      const response = await api.get(`${this.baseUrl}/export/excel?${params}`, {
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.EXPORT_EXCEL + `?${params}`, {
         responseType: 'blob',
       });
       
@@ -335,7 +335,7 @@ class PaymentService {
   // Export payment detail to PDF
   async exportPaymentDetailPDF(paymentId: number): Promise<Blob> {
     try {
-      const response = await api.get(`${this.baseUrl}/${paymentId}/pdf`, {
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.PDF(paymentId), {
         responseType: 'blob',
       });
       
@@ -407,7 +407,7 @@ class PaymentService {
   // Get unpaid invoices for customer
   async getUnpaidInvoices(customerId: number): Promise<any[]> {
     try {
-      const response = await api.get(`${this.baseUrl}/unpaid-invoices/${customerId}`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.UNPAID_INVOICES(customerId));
       return response.data || [];
     } catch (error) {
       console.error('Error fetching unpaid invoices:', error);
@@ -418,7 +418,7 @@ class PaymentService {
   // Get unpaid bills for vendor
   async getUnpaidBills(vendorId: number): Promise<any[]> {
     try {
-      const response = await api.get(`${this.baseUrl}/unpaid-bills/${vendorId}`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.UNPAID_BILLS(vendorId));
       return response.data || [];
     } catch (error) {
       console.error('Error fetching unpaid bills:', error);
@@ -429,7 +429,7 @@ class PaymentService {
   // Get payment summary
   async getPaymentSummary(startDate: string, endDate: string): Promise<PaymentSummary> {
     try {
-      const response = await api.get(`${this.baseUrl}/summary?start_date=${startDate}&end_date=${endDate}`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.SUMMARY + `?start_date=${startDate}&end_date=${endDate}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching payment summary:', error);
@@ -440,7 +440,7 @@ class PaymentService {
   // Get payment analytics
   async getPaymentAnalytics(startDate: string, endDate: string): Promise<PaymentAnalytics> {
     try {
-      const response = await api.get(`${this.baseUrl}/analytics?start_date=${startDate}&end_date=${endDate}`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.ANALYTICS + `?start_date=${startDate}&end_date=${endDate}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching payment analytics:', error);
@@ -451,7 +451,7 @@ class PaymentService {
   // Generate payment report
   async generateReport(reportType: 'cash_flow' | 'aging' | 'method_analysis', params: any): Promise<any> {
     try {
-      const response = await api.post(`${this.baseUrl}/reports/${reportType}`, params);
+      const response = await api.post(API_ENDPOINTS.PAYMENTS.GENERATE_REPORT(reportType), params);
       return response.data;
     } catch (error) {
       console.error('Error generating report:', error);
@@ -462,7 +462,7 @@ class PaymentService {
   // Bulk payment processing
   async processBulkPayments(payments: PaymentCreateRequest[]): Promise<any> {
     try {
-      const response = await api.post(`${this.baseUrl}/bulk`, { payments });
+      const response = await api.post(API_ENDPOINTS.PAYMENTS.BULK, { payments });
       return response.data;
     } catch (error) {
       console.error('Error processing bulk payments:', error);
@@ -591,7 +591,7 @@ class PaymentService {
         auto_create_journal: data.auto_create_journal ?? true
       };
       
-      const response = await api.post('/payments/enhanced-with-journal', formattedData, {
+      const response = await api.post(API_ENDPOINTS.PAYMENTS.ENHANCED_WITH_JOURNAL, formattedData, {
         timeout: 30000 // 30 seconds timeout for journal operations
       });
       return response.data.data;
@@ -616,7 +616,7 @@ class PaymentService {
         date: this.formatDateForAPI(data.date)
       };
       
-      const response = await api.post('/payments/preview-journal', formattedData);
+      const response = await api.post(API_ENDPOINTS.PAYMENTS.PREVIEW_JOURNAL, formattedData);
       return response.data.data;
     } catch (error: any) {
       console.error('PaymentService - Error previewing payment journal:', error);
@@ -627,7 +627,7 @@ class PaymentService {
   // Get payment with journal entry details
   async getPaymentWithJournal(paymentId: number): Promise<PaymentWithJournalResponse> {
     try {
-      const response = await api.get(`/payments/${paymentId}/with-journal`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.WITH_JOURNAL(paymentId));
       return response.data.data;
     } catch (error: any) {
       console.error('PaymentService - Error getting payment with journal:', error);
@@ -638,7 +638,7 @@ class PaymentService {
   // Reverse payment and its journal entry
   async reversePayment(paymentId: number, reason: string): Promise<PaymentWithJournalResponse> {
     try {
-      const response = await api.post(`/payments/${paymentId}/reverse`, { reason });
+      const response = await api.post(API_ENDPOINTS.PAYMENTS.REVERSE(paymentId), { reason });
       return response.data.data;
     } catch (error: any) {
       console.error('PaymentService - Error reversing payment:', error);
@@ -649,7 +649,7 @@ class PaymentService {
   // Get account balance updates from payment
   async getAccountBalanceUpdates(paymentId: number): Promise<AccountBalanceUpdate[]> {
     try {
-      const response = await api.get(`/payments/${paymentId}/account-updates`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.ACCOUNT_UPDATES(paymentId));
       return response.data.data;
     } catch (error: any) {
       console.error('PaymentService - Error getting account updates:', error);
@@ -660,7 +660,7 @@ class PaymentService {
   // Get real-time account balances from SSOT
   async getRealTimeAccountBalances(): Promise<SSOTAccountBalance[]> {
     try {
-      const response = await api.get('/payments/account-balances/real-time');
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.ACCOUNT_BALANCES_REAL_TIME);
       return response.data.data;
     } catch (error: any) {
       console.error('PaymentService - Error getting real-time balances:', error);
@@ -671,7 +671,7 @@ class PaymentService {
   // Refresh account balances materialized view
   async refreshAccountBalances(): Promise<void> {
     try {
-      await api.post('/payments/account-balances/refresh');
+      await api.post(API_ENDPOINTS.PAYMENTS.REFRESH_ACCOUNT_BALANCES);
     } catch (error: any) {
       console.error('PaymentService - Error refreshing account balances:', error);
       throw new Error(error.response?.data?.error || 'Failed to refresh account balances');
@@ -681,7 +681,7 @@ class PaymentService {
   // Get journal entries for a payment
   async getPaymentJournalEntries(paymentId: number): Promise<JournalEntry[]> {
     try {
-      const response = await api.get(`/payments/journal-entries?payment_id=${paymentId}`);
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.JOURNAL_ENTRIES + `?payment_id=${paymentId}`);
       return response.data.data;
     } catch (error: any) {
       console.error('PaymentService - Error getting payment journal entries:', error);
@@ -692,7 +692,7 @@ class PaymentService {
   // Get payment-journal integration metrics
   async getIntegrationMetrics(): Promise<PaymentIntegrationMetrics> {
     try {
-      const response = await api.get('/payments/integration-metrics');
+      const response = await api.get(API_ENDPOINTS.PAYMENTS.INTEGRATION_METRICS);
       return response.data.data;
     } catch (error: any) {
       console.error('PaymentService - Error getting integration metrics:', error);

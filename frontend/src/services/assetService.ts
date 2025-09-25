@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface Asset {
   id: number;
@@ -105,13 +106,13 @@ export interface DepreciationCalculation {
 class AssetService {
   // Get all assets
   async getAssets(): Promise<{ data: Asset[]; message: string; count: number }> {
-    const response = await api.get('/assets');
+    const response = await api.get(API_ENDPOINTS.ASSETS.LIST);
     return response.data;
   }
 
   // ===== Asset Categories Management =====
   async getAssetCategories(): Promise<{ data: { id: number; code: string; name: string; description?: string; parent_id?: number; is_active: boolean }[]; message: string; count: number }> {
-    const response = await api.get('/assets/categories');
+    const response = await api.get(API_ENDPOINTS.ASSETS.CATEGORIES.LIST);
     return response.data;
   }
 
@@ -123,19 +124,19 @@ class AssetService {
       parent_id: category.parent_id,
       is_active: category.is_active !== false,
     };
-    const response = await api.post('/assets/categories', payload);
+    const response = await api.post(API_ENDPOINTS.ASSETS.CATEGORIES.CREATE, payload);
     return response.data;
   }
 
   // Get single asset by ID
   async getAsset(id: number): Promise<{ data: Asset; message: string }> {
-    const response = await api.get(`/assets/${id}`);
+    const response = await api.get(API_ENDPOINTS.ASSETS.GET_BY_ID(id));
     return response.data;
   }
 
   // Create new asset
   async createAsset(asset: AssetCreateRequest): Promise<{ data: Asset; message: string }> {
-    const response = await api.post('/assets', asset);
+    const response = await api.post(API_ENDPOINTS.ASSETS.CREATE, asset);
     return response.data;
   }
 
@@ -146,25 +147,25 @@ class AssetService {
       ...asset,
       purchase_date: asset.purchase_date.includes('T') ? asset.purchase_date : `${asset.purchase_date}T00:00:00Z`
     };
-    const response = await api.put(`/assets/${id}`, formattedAsset);
+    const response = await api.put(API_ENDPOINTS.ASSETS.UPDATE(id), formattedAsset);
     return response.data;
   }
 
   // Delete asset
   async deleteAsset(id: number): Promise<{ message: string }> {
-    const response = await api.delete(`/assets/${id}`);
+    const response = await api.delete(API_ENDPOINTS.ASSETS.DELETE(id));
     return response.data;
   }
 
   // Get assets summary
   async getAssetsSummary(): Promise<{ data: AssetsSummary; message: string }> {
-    const response = await api.get('/assets/summary');
+    const response = await api.get(API_ENDPOINTS.ASSETS.SUMMARY);
     return response.data;
   }
 
   // Get depreciation report
   async getDepreciationReport(): Promise<{ data: AssetDepreciationReport[]; message: string; count: number }> {
-    const response = await api.get('/assets/depreciation-report');
+    const response = await api.get(API_ENDPOINTS.ASSETS.DEPRECIATION_REPORT);
     return response.data;
   }
 
@@ -173,7 +174,7 @@ class AssetService {
     data: { asset: Asset; schedule: DepreciationEntry[] }; 
     message: string 
   }> {
-    const response = await api.get(`/assets/${id}/depreciation-schedule`);
+    const response = await api.get(API_ENDPOINTS.ASSETS.DEPRECIATION_SCHEDULE(id));
     return response.data;
   }
 
@@ -183,7 +184,7 @@ class AssetService {
     message: string 
   }> {
     const params = asOfDate ? { as_of_date: asOfDate } : {};
-    const response = await api.get(`/assets/${id}/calculate-depreciation`, { params });
+    const response = await api.get(API_ENDPOINTS.ASSETS.CALCULATE_DEPRECIATION(id), { params });
     return response.data;
   }
 
@@ -198,7 +199,7 @@ class AssetService {
     formData.append('asset_id', assetId.toString());
     formData.append('image', imageFile);
 
-    const response = await api.post('/assets/upload-image', formData, {
+    const response = await api.post(API_ENDPOINTS.ASSETS.UPLOAD_IMAGE, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -329,7 +330,7 @@ class AssetService {
   // Get integrated cash & bank accounts (from cash_banks table with COA integration)
   async getBankAccounts(): Promise<{ data: any[]; message: string }> {
     // Use cashbank service to get integrated accounts instead of direct COA
-    const response = await api.get('/cashbank/payment-accounts');
+    const response = await api.get(API_ENDPOINTS.CASH_BANK.PAYMENT_ACCOUNTS);
     
     // Transform the response to match expected format for asset form
     if (response.data && response.data.data) {
@@ -366,19 +367,19 @@ class AssetService {
 
   // Get liability accounts for credit purchases
   async getLiabilityAccounts(): Promise<{ data: any[]; message: string }> {
-    const response = await api.get('/accounts?type=LIABILITY');
+    const response = await api.get(API_ENDPOINTS.ACCOUNTS.LIST + '?type=LIABILITY');
     return response.data;
   }
 
   // Get fixed asset accounts
   async getFixedAssetAccounts(): Promise<{ data: any[]; message: string }> {
-    const response = await api.get('/accounts?category=FIXED_ASSET&type=ASSET');
+    const response = await api.get(API_ENDPOINTS.ACCOUNTS.LIST + '?category=FIXED_ASSET&type=ASSET');
     return response.data;
   }
 
   // Get depreciation expense accounts
   async getDepreciationExpenseAccounts(): Promise<{ data: any[]; message: string }> {
-    const response = await api.get('/accounts?category=DEPRECIATION_EXPENSE&type=EXPENSE');
+    const response = await api.get(API_ENDPOINTS.ACCOUNTS.LIST + '?category=DEPRECIATION_EXPENSE&type=EXPENSE');
     return response.data;
   }
 

@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface FinancialReportRequest {
   report_type: string;
@@ -275,22 +276,22 @@ export interface ReportExportRequest {
 class FinancialReportService {
   // Core Financial Reports
   async generateProfitLossStatement(request: FinancialReportRequest): Promise<ProfitLossStatement> {
-    const response = await api.post('/reports/enhanced/profit-loss', request);
+    const response = await api.post(API_ENDPOINTS.REPORTS.ENHANCED.PROFIT_LOSS, request);
     return response.data.data;
   }
 
   async generateBalanceSheet(request: FinancialReportRequest): Promise<BalanceSheet> {
-    const response = await api.post('/reports/enhanced/balance-sheet', request);
+    const response = await api.post(API_ENDPOINTS.REPORTS.ENHANCED.BALANCE_SHEET, request);
     return response.data.data;
   }
 
   async generateCashFlowStatement(request: FinancialReportRequest): Promise<CashFlowStatement> {
-    const response = await api.post('/reports/enhanced/cash-flow', request);
+    const response = await api.post(API_ENDPOINTS.REPORTS.ENHANCED.CASH_FLOW, request);
     return response.data.data;
   }
 
   async generateTrialBalance(request: FinancialReportRequest): Promise<TrialBalance> {
-    const response = await api.post('/reports/enhanced/trial-balance', request);
+    const response = await api.post(API_ENDPOINTS.REPORTS.ENHANCED.TRIAL_BALANCE, request);
     return response.data.data;
   }
 
@@ -299,7 +300,7 @@ class FinancialReportService {
     startDate: string, 
     endDate: string
   ): Promise<GeneralLedger> {
-    const response = await api.get(`/reports/enhanced/general-ledger/${accountId}`, {
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.GENERAL_LEDGER(accountId), {
       params: { start_date: startDate, end_date: endDate }
     });
     return response.data.data;
@@ -307,30 +308,30 @@ class FinancialReportService {
 
   // Advanced Reports and Analytics
   async getFinancialDashboard(): Promise<FinancialDashboard> {
-    const response = await api.get('/reports/enhanced/dashboard');
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.DASHBOARD);
     return response.data.data;
   }
 
   async getRealTimeMetrics(): Promise<RealTimeFinancialMetrics> {
-    const response = await api.get('/reports/enhanced/real-time-metrics');
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.REAL_TIME_METRICS);
     return response.data.data;
   }
 
   async calculateFinancialRatios(startDate: string, endDate: string): Promise<FinancialRatios> {
-    const response = await api.get('/reports/enhanced/financial-ratios', {
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.FINANCIAL_RATIOS, {
       params: { start_date: startDate, end_date: endDate }
     });
     return response.data.data;
   }
 
   async getFinancialHealthScore(): Promise<FinancialHealthScore> {
-    const response = await api.get('/reports/enhanced/health-score');
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.HEALTH_SCORE);
     return response.data.data;
   }
 
   // Utility Functions
   async getReportsList(): Promise<ReportMetadata[]> {
-    const response = await api.get('/reports/enhanced/list');
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.LIST);
     return response.data.data;
   }
 
@@ -339,29 +340,29 @@ class FinancialReportService {
     errors: string[];
     warnings: string[];
   }> {
-    const response = await api.post('/reports/enhanced/validate', request);
+    const response = await api.post(API_ENDPOINTS.REPORTS.ENHANCED.VALIDATE, request);
     return response.data.data;
   }
 
   async getReportFormats(): Promise<string[]> {
-    const response = await api.get('/reports/enhanced/export-formats');
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.EXPORT_FORMATS);
     return response.data.data;
   }
 
   async getReportSummary(limit?: number): Promise<any> {
-    const response = await api.get('/reports/enhanced/summary', {
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.SUMMARY, {
       params: limit ? { limit } : undefined
     });
     return response.data.data;
   }
 
   async getQuickStats(): Promise<QuickFinancialStats> {
-    const response = await api.get('/reports/enhanced/quick-stats');
+    const response = await api.get(API_ENDPOINTS.REPORTS.ENHANCED.QUICK_STATS);
     return response.data.data;
   }
 
   async exportReport(exportRequest: ReportExportRequest): Promise<Blob> {
-    const response = await api.post('/reports/enhanced/export', exportRequest, {
+    const response = await api.post(API_ENDPOINTS.REPORTS.ENHANCED.EXPORT, exportRequest, {
       responseType: 'blob'
     });
     return response.data;

@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 // Types
 export interface CashBank {
@@ -172,12 +173,12 @@ export interface CashBankTransfer {
 }
 
 class CashBankService {
-  private readonly baseUrl = '/cashbank';
+  // Use API_ENDPOINTS instead of hardcoded baseUrl
 
   // Get all cash and bank accounts
   async getCashBankAccounts(): Promise<CashBank[]> {
     try {
-      const response = await api.get(`${this.baseUrl}/accounts`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.ACCOUNTS);
       return response.data;
     } catch (error) {
       console.error('Error fetching cash bank accounts:', error);
@@ -188,7 +189,7 @@ class CashBankService {
   // Get account by ID
   async getCashBankById(id: number): Promise<CashBank> {
     try {
-      const response = await api.get(`${this.baseUrl}/accounts/${id}`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.GET_BY_ID(id));
       return response.data;
     } catch (error) {
       console.error('Error fetching cash bank account:', error);
@@ -199,7 +200,7 @@ class CashBankService {
   // Create new cash/bank account
   async createCashBankAccount(data: CashBankCreateRequest): Promise<CashBank> {
     try {
-      const response = await api.post(`${this.baseUrl}/accounts`, data);
+      const response = await api.post(API_ENDPOINTS.CASH_BANK.CREATE, data);
       return response.data;
     } catch (error) {
       console.error('Error creating cash bank account:', error);
@@ -210,7 +211,7 @@ class CashBankService {
   // Update cash/bank account
   async updateCashBankAccount(id: number, data: CashBankUpdateRequest): Promise<CashBank> {
     try {
-      const response = await api.put(`${this.baseUrl}/accounts/${id}`, data);
+      const response = await api.put(API_ENDPOINTS.CASH_BANK.UPDATE(id), data);
       return response.data;
     } catch (error) {
       console.error('Error updating cash bank account:', error);
@@ -221,7 +222,7 @@ class CashBankService {
   // Delete cash/bank account
   async deleteCashBankAccount(id: number): Promise<void> {
     try {
-      await api.delete(`${this.baseUrl}/accounts/${id}`);
+      await api.delete(API_ENDPOINTS.CASH_BANK.DELETE(id));
     } catch (error) {
       console.error('Error deleting cash bank account:', error);
       throw error;
@@ -231,7 +232,7 @@ class CashBankService {
   // Process transfer
   async processTransfer(data: TransferRequest): Promise<any> {
     try {
-      const response = await api.post(`${this.baseUrl}/transfer`, data);
+      const response = await api.post(API_ENDPOINTS.CASH_BANK.TRANSFER, data);
       return response.data;
     } catch (error) {
       console.error('Error processing transfer:', error);
@@ -242,7 +243,7 @@ class CashBankService {
   // Process deposit
   async processDeposit(data: DepositRequest): Promise<CashBankTransaction> {
     try {
-      const response = await api.post(`${this.baseUrl}/deposit`, data, {
+      const response = await api.post(API_ENDPOINTS.CASH_BANK.DEPOSIT, data, {
         timeout: 60000 // 60 seconds timeout for deposit operations
       });
       return response.data;
@@ -255,7 +256,7 @@ class CashBankService {
   // Process withdrawal
   async processWithdrawal(data: WithdrawalRequest): Promise<CashBankTransaction> {
     try {
-      const response = await api.post(`${this.baseUrl}/withdrawal`, data, {
+      const response = await api.post(API_ENDPOINTS.CASH_BANK.WITHDRAWAL, data, {
         timeout: 60000 // 60 seconds timeout for withdrawal operations
       });
       return response.data;
@@ -274,7 +275,7 @@ class CashBankService {
       if (filter.start_date) params.append('start_date', filter.start_date);
       if (filter.end_date) params.append('end_date', filter.end_date);
 
-      const response = await api.get(`${this.baseUrl}/accounts/${accountId}/transactions?${params}`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.TRANSACTIONS(accountId) + `?${params}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching transactions:', error);
@@ -285,7 +286,7 @@ class CashBankService {
   // Get balance summary
   async getBalanceSummary(): Promise<BalanceSummary> {
     try {
-      const response = await api.get(`${this.baseUrl}/balance-summary`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.BALANCE_SUMMARY);
       return response.data;
     } catch (error) {
       console.error('Error fetching balance summary:', error);
@@ -296,7 +297,7 @@ class CashBankService {
   // Get payment accounts (for dropdowns)
   async getPaymentAccounts(): Promise<CashBank[]> {
     try {
-      const response = await api.get(`${this.baseUrl}/payment-accounts`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.PAYMENT_ACCOUNTS);
       return response.data.data || response.data;
     } catch (error) {
       console.error('Error fetching payment accounts:', error);
@@ -314,7 +315,7 @@ class CashBankService {
       if (filter.start_date) params.append('start_date', filter.start_date);
       if (filter.end_date) params.append('end_date', filter.end_date);
       
-      const response = await api.get(`${this.baseUrl}/accounts/${accountId}/transactions?${params}`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.TRANSACTIONS(accountId) + `?${params}`);
       return response.data;
     } catch (error) {
       console.error(`Error fetching transaction history for account ${accountId}:`, error);
@@ -325,7 +326,7 @@ class CashBankService {
   // Reconcile bank account
   async reconcileAccount(accountId: number, data: ReconciliationRequest): Promise<BankReconciliation> {
     try {
-      const response = await api.post(`${this.baseUrl}/accounts/${accountId}/reconcile`, data);
+      const response = await api.post(API_ENDPOINTS.CASH_BANK.RECONCILE(accountId), data);
       return response.data;
     } catch (error) {
       console.error('Error reconciling account:', error);
@@ -336,7 +337,7 @@ class CashBankService {
   // Check GL account links status
   async checkGLAccountLinks(): Promise<any> {
     try {
-      const response = await api.get(`${this.baseUrl}/admin/check-gl-links`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.CHECK_GL_LINKS);
       return response.data;
     } catch (error) {
       console.error('Error checking GL account links:', error);
@@ -347,7 +348,7 @@ class CashBankService {
   // Fix GL account links
   async fixGLAccountLinks(): Promise<any> {
     try {
-      const response = await api.post(`${this.baseUrl}/admin/fix-gl-links`);
+      const response = await api.post(API_ENDPOINTS.CASH_BANK.FIX_GL_LINKS);
       return response.data;
     } catch (error) {
       console.error('Error fixing GL account links:', error);
@@ -358,7 +359,7 @@ class CashBankService {
   // Get revenue accounts for deposit form
   async getRevenueAccounts(): Promise<any[]> {
     try {
-      const response = await api.get(`${this.baseUrl}/revenue-accounts`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.REVENUE_ACCOUNTS);
       return response.data;
     } catch (error) {
       console.error('Error fetching revenue accounts:', error);
@@ -369,7 +370,7 @@ class CashBankService {
   // Get deposit source accounts (Revenue + Equity) for deposit form
   async getDepositSourceAccounts(): Promise<{revenue: any[], equity: any[]}> {
     try {
-      const response = await api.get(`${this.baseUrl}/deposit-source-accounts`);
+      const response = await api.get(API_ENDPOINTS.CASH_BANK.DEPOSIT_SOURCE_ACCOUNTS);
       return response.data.data;
     } catch (error) {
       console.error('Error fetching deposit source accounts:', error);

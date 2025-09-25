@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { getAuthHeaders } from '../utils/authTokenUtils';
+import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface SSOTTrialBalanceData {
   company?: CompanyInfo;
@@ -40,12 +40,6 @@ export interface SSOTTrialBalanceParams {
 }
 
 class SSOTTrialBalanceService {
-  private baseURL: string;
-
-  constructor() {
-    // Use relative path to work with Next.js rewrites
-    this.baseURL = '/api/v1';
-  }
 
   async generateSSOTTrialBalance(params: SSOTTrialBalanceParams = {}): Promise<SSOTTrialBalanceData> {
     try {
@@ -55,9 +49,7 @@ class SSOTTrialBalanceService {
       }
       queryParams.append('format', params.format || 'json');
 
-      const response = await axios.get(`${this.baseURL}/ssot-reports/trial-balance?${queryParams}`, {
-        headers: getAuthHeaders()
-      });
+      const response = await api.get(API_ENDPOINTS.SSOT_REPORTS.TRIAL_BALANCE + `?${queryParams}`);
 
       if (response.data.status === 'success') {
         return response.data.data;

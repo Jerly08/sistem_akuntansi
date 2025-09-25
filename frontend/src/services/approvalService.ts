@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface ApprovalRequest {
   id: number;
@@ -117,37 +118,37 @@ export interface PendingApprovalsResponse {
 class ApprovalService {
   // Get purchases pending approval for current user
   async getPurchasesForApproval(params: { page?: number; limit?: number } = {}): Promise<PendingApprovalsResponse> {
-    const response = await api.get('/purchases/pending-approval', { params });
+    const response = await api.get(API_ENDPOINTS.PURCHASES.PENDING_APPROVAL, { params });
     return response.data;
   }
 
   // Approve a purchase
   async approvePurchase(purchaseId: number, data: { comments?: string; escalate_to_director?: boolean }): Promise<{ message: string; purchase_id: number; escalated?: boolean; status?: string; approval_status?: string }> {
-    const response = await api.post(`/purchases/${purchaseId}/approve`, data);
+    const response = await api.post(API_ENDPOINTS.PURCHASES.APPROVE(purchaseId), data);
     return response.data;
   }
 
   // Reject a purchase
   async rejectPurchase(purchaseId: number, data: { comments: string }): Promise<{ message: string; purchase_id: number; comments: string }> {
-    const response = await api.post(`/purchases/${purchaseId}/reject`, data);
+    const response = await api.post(API_ENDPOINTS.PURCHASES.REJECT(purchaseId), data);
     return response.data;
   }
 
   // Get approval history for a purchase
   async getApprovalHistory(purchaseId: number): Promise<{ purchase_id: number; approval_history: ApprovalHistory[] }> {
-    const response = await api.get(`/purchases/${purchaseId}/approval-history`);
+    const response = await api.get(API_ENDPOINTS.PURCHASES.APPROVAL_HISTORY(purchaseId));
     return response.data;
   }
 
   // Get approval statistics
   async getApprovalStats(): Promise<ApprovalStats> {
-    const response = await api.get('/purchases/approval-stats');
+    const response = await api.get(API_ENDPOINTS.PURCHASES.APPROVAL_STATS);
     return response.data;
   }
 
   // Submit purchase for approval
   async submitPurchaseForApproval(purchaseId: number): Promise<{ message: string; purchase_id: number }> {
-    const response = await api.post(`/purchases/${purchaseId}/submit-approval`);
+    const response = await api.post(API_ENDPOINTS.PURCHASES.SUBMIT_APPROVAL(purchaseId));
     return response.data;
   }
 
@@ -155,14 +156,14 @@ class ApprovalService {
   
   // Submit sale for approval
   async submitSaleForApproval(saleId: number, data?: { comments?: string; priority?: string }): Promise<ApprovalRequest> {
-    const response = await api.post(`/sales/${saleId}/submit-approval`, data || {});
+    const response = await api.post(API_ENDPOINTS.SALES.SUBMIT_APPROVAL(saleId), data || {});
     return response.data;
   }
 
   // Get approval status for a sale
   async getSaleApprovalStatus(saleId: number): Promise<ApprovalRequest | null> {
     try {
-      const response = await api.get(`/sales/${saleId}/approval`);
+      const response = await api.get(API_ENDPOINTS.SALES.APPROVAL_STATUS(saleId));
       return response.data;
     } catch (error: any) {
       if (error.response?.status === 404) {
@@ -174,23 +175,23 @@ class ApprovalService {
 
   // Get sales pending approval
   async getSalesForApproval(params: { page?: number; limit?: number; status?: string; priority?: string } = {}): Promise<any> {
-    const response = await api.get('/sales/pending-approval', { params });
+    const response = await api.get(API_ENDPOINTS.SALES.PENDING_APPROVAL, { params });
     return response.data;
   }
 
   // Approve a sale step
   async approveSaleStep(approvalId: number, stepId: number, data: { comments?: string }): Promise<void> {
-    await api.post(`/approval-requests/${approvalId}/steps/${stepId}/approve`, data);
+    await api.post(API_ENDPOINTS.APPROVAL.APPROVE_STEP(approvalId, stepId), data);
   }
 
   // Reject a sale step
   async rejectSaleStep(approvalId: number, stepId: number, data: { comments?: string }): Promise<void> {
-    await api.post(`/approval-requests/${approvalId}/steps/${stepId}/reject`, data);
+    await api.post(API_ENDPOINTS.APPROVAL.REJECT_STEP(approvalId, stepId), data);
   }
 
   // Get sale approval history
   async getSaleApprovalHistory(saleId: number): Promise<{ sale_id: number; approval_history: ApprovalHistory[] }> {
-    const response = await api.get(`/sales/${saleId}/approval-history`);
+    const response = await api.get(API_ENDPOINTS.SALES.APPROVAL_HISTORY(saleId));
     return response.data;
   }
 
@@ -206,29 +207,29 @@ class ApprovalService {
     date_from?: string;
     date_to?: string;
   } = {}): Promise<any> {
-    const response = await api.get('/approval-requests', { params });
+    const response = await api.get(API_ENDPOINTS.APPROVAL.REQUESTS, { params });
     return response.data;
   }
 
   // Get approval request by ID
   async getApprovalRequest(requestId: number): Promise<ApprovalRequest> {
-    const response = await api.get(`/approval-requests/${requestId}`);
+    const response = await api.get(API_ENDPOINTS.APPROVAL.GET_REQUEST(requestId));
     return response.data;
   }
 
   // Cancel approval request
   async cancelApprovalRequest(requestId: number, data: { reason?: string } = {}): Promise<void> {
-    await api.post(`/approval-requests/${requestId}/cancel`, data);
+    await api.post(API_ENDPOINTS.APPROVAL.CANCEL_REQUEST(requestId), data);
   }
 
   // Escalate approval step
   async escalateApprovalStep(approvalId: number, stepId: number, data: { comments?: string; escalate_to?: number }): Promise<void> {
-    await api.post(`/approval-requests/${approvalId}/steps/${stepId}/escalate`, data);
+    await api.post(API_ENDPOINTS.APPROVAL.ESCALATE_STEP(approvalId, stepId), data);
   }
 
   // Get pending approvals for current user (any entity type)
   async getMyPendingApprovals(): Promise<ApprovalRequest[]> {
-    const response = await api.get('/approval-requests/my-pending');
+    const response = await api.get(API_ENDPOINTS.APPROVAL.MY_PENDING);
     return response.data.requests || [];
   }
 
@@ -243,41 +244,41 @@ class ApprovalService {
     by_entity_type: Record<string, number>;
     by_status: Record<string, number>;
   }> {
-    const response = await api.get('/approval-requests/summary');
+    const response = await api.get(API_ENDPOINTS.APPROVAL.SUMMARY);
     return response.data;
   }
 
   // Get approval workflows
   async getApprovalWorkflows(module?: string): Promise<any[]> {
-    const response = await api.get('/approval-workflows', { params: { module } });
+    const response = await api.get(API_ENDPOINTS.APPROVAL.WORKFLOWS, { params: { module } });
     return response.data.workflows || [];
   }
 
   // Get notifications
   async getNotifications(params: { page?: number; limit?: number; type?: string } = {}): Promise<any> {
-    const response = await api.get('/notifications', { params });
+    const response = await api.get(API_ENDPOINTS.NOTIFICATIONS.LIST, { params });
     return response.data;
   }
 
   // Mark notification as read
   async markNotificationAsRead(notificationId: number): Promise<void> {
-    await api.put(`/notifications/${notificationId}/read`);
+    await api.put(API_ENDPOINTS.NOTIFICATIONS.MARK_AS_READ(notificationId));
   }
 
   // Get unread notification count
   async getUnreadNotificationCount(): Promise<{ count: number }> {
-    const response = await api.get('/notifications/unread-count');
+    const response = await api.get(API_ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT);
     return response.data;
   }
 
   // Simplified sales approval methods (for compatibility)
   async approveSale(saleId: number, data: { comments?: string }): Promise<{ message: string; sale_id: number }> {
-    const response = await api.post(`/sales/${saleId}/approve`, data);
+    const response = await api.post(API_ENDPOINTS.SALES.APPROVE(saleId), data);
     return response.data;
   }
 
   async rejectSale(saleId: number, data: { comments: string }): Promise<{ message: string; sale_id: number }> {
-    const response = await api.post(`/sales/${saleId}/reject`, data);
+    const response = await api.post(API_ENDPOINTS.SALES.REJECT(saleId), data);
     return response.data;
   }
 }

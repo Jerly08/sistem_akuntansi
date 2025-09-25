@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { getAuthHeaders } from '../utils/authTokenUtils';
+import api from './api';
+import { API_ENDPOINTS } from '../config/api';
 
 export interface SSOTJournalAnalysisData {
   company?: CompanyInfo;
@@ -92,12 +92,6 @@ export interface SSOTJournalAnalysisParams {
 }
 
 class SSOTJournalAnalysisService {
-  private baseURL: string;
-
-  constructor() {
-    // Use relative path to work with Next.js rewrites
-    this.baseURL = '/api/v1';
-  }
 
   async generateSSOTJournalAnalysis(params: SSOTJournalAnalysisParams): Promise<SSOTJournalAnalysisData> {
     try {
@@ -107,9 +101,7 @@ class SSOTJournalAnalysisService {
         format: params.format || 'json'
       });
 
-      const response = await axios.get(`${this.baseURL}/ssot-reports/journal-analysis?${queryParams}`, {
-        headers: getAuthHeaders()
-      });
+      const response = await api.get(API_ENDPOINTS.SSOT_REPORTS.JOURNAL_ANALYSIS + `?${queryParams}`);
 
       if (response.data.status === 'success') {
         return response.data.data;

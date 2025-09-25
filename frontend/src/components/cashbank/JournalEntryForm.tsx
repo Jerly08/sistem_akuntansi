@@ -39,7 +39,7 @@ import { ManualJournalEntry } from '@/services/cashbankService';
 import { Account } from '@/types/account';
 import { accountService } from '@/services/accountService';
 import { useAuth } from '@/contexts/AuthContext';
-import { BalanceWebSocketClient } from '@/services/balanceWebSocketService';
+// Websocket removed - using standard refresh instead
 
 interface JournalEntryFormProps {
   journalEntries: ManualJournalEntry[];
@@ -66,48 +66,14 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
   const toast = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
-  const [isConnectedToBalanceService, setIsConnectedToBalanceService] = useState(false);
-  const balanceClientRef = useRef<BalanceWebSocketClient | null>(null);
 
   useEffect(() => {
     if (isEnabled && token) {
       loadAccounts();
-      initializeBalanceConnection();
     }
-    
-    return () => {
-      if (balanceClientRef.current) {
-        balanceClientRef.current.disconnect();
-      }
-    };
   }, [isEnabled, token]);
   
-  const initializeBalanceConnection = async () => {
-    if (!token || !isEnabled) return;
-    
-    try {
-      balanceClientRef.current = new BalanceWebSocketClient();
-      await balanceClientRef.current.connect(token);
-      
-      balanceClientRef.current.onBalanceUpdate((data) => {
-        // Show toast notification when balance updates occur
-        toast({
-          title: 'Balance Updated',
-          description: `Account ${data.account_code}: ${data.balance.toLocaleString('id-ID')}`,
-          status: 'info',
-          duration: 3000,
-          isClosable: true,
-          position: 'bottom-right',
-          size: 'sm'
-        });
-      });
-      
-      setIsConnectedToBalanceService(true);
-    } catch (error) {
-      console.warn('Failed to connect to balance service:', error);
-      setIsConnectedToBalanceService(false);
-    }
-  };
+  // Websocket connection removed - using standard refresh
 
   const loadAccounts = async () => {
     try {
