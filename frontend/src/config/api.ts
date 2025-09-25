@@ -197,26 +197,39 @@ export const API_ENDPOINTS = {
     DEPOSIT: '/api/cashbank/deposit',
     WITHDRAWAL: '/api/cashbank/withdrawal',
   },
-  // CASH_BANK endpoints that match actual backend routes (use /api/cashbank, not /api/v1/cash-bank)
+  // CASH_BANK endpoints aligned with backend routes under /api/v1
   CASH_BANK: {
-    ACCOUNTS: '/api/cashbank/accounts',
-    GET_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
-    ACCOUNT_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
-    CREATE: '/api/cashbank/accounts',
-    UPDATE: (id: number) => `/api/cashbank/accounts/${id}`,
-    DELETE: (id: number) => `/api/cashbank/accounts/${id}`,
-    TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
-    ACCOUNT_TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
-    PAYMENT_ACCOUNTS: '/api/cashbank/payment-accounts',
-    REVENUE_ACCOUNTS: '/api/cashbank/revenue-accounts',
-    DEPOSIT_SOURCE_ACCOUNTS: '/api/cashbank/deposit-source-accounts',
-    BALANCE_SUMMARY: '/api/cashbank/balance-summary',
-    TRANSFER: '/api/cashbank/transfer',
-    DEPOSIT: '/api/cashbank/deposit',
-    WITHDRAWAL: '/api/cashbank/withdrawal',
-    RECONCILE: (id: number) => `/api/cashbank/accounts/${id}/reconcile`,
-    CHECK_GL_LINKS: '/api/cashbank/check-gl-links',
-    FIX_GL_LINKS: '/api/cashbank/fix-gl-links',
+    // Accounts CRUD
+    ACCOUNTS: '/api/v1/cashbank/accounts',
+    GET_BY_ID: (id: number) => `/api/v1/cashbank/accounts/${id}`,
+    ACCOUNT_BY_ID: (id: number) => `/api/v1/cashbank/accounts/${id}`,
+    CREATE: '/api/v1/cashbank/accounts',
+    UPDATE: (id: number) => `/api/v1/cashbank/accounts/${id}`,
+    DELETE: (id: number) => `/api/v1/cashbank/accounts/${id}`,
+
+    // Transactions & history
+    TRANSACTIONS: (id: number) => `/api/v1/cashbank/accounts/${id}/transactions`,
+    ACCOUNT_TRANSACTIONS: (id: number) => `/api/v1/cashbank/accounts/${id}/transactions`,
+
+    // Dropdowns / Lookups
+    PAYMENT_ACCOUNTS: '/api/v1/cashbank/payment-accounts',
+    REVENUE_ACCOUNTS: '/api/v1/cashbank/revenue-accounts',
+    DEPOSIT_SOURCE_ACCOUNTS: '/api/v1/cashbank/deposit-source-accounts',
+
+    // Summaries & reports
+    BALANCE_SUMMARY: '/api/v1/cashbank/balance-summary',
+
+    // Operations
+    TRANSFER: '/api/v1/cashbank/transfer',
+    DEPOSIT: '/api/v1/cashbank/deposit',
+    WITHDRAWAL: '/api/v1/cashbank/withdrawal',
+
+    // Reconciliation (available under /cash-bank group)
+    RECONCILE: (id: number) => `/api/v1/cash-bank/accounts/${id}/reconcile`,
+
+    // Admin maintenance (kept for compatibility if wired)
+    CHECK_GL_LINKS: '/api/admin/check-cashbank-gl-links',
+    FIX_GL_LINKS: '/api/admin/fix-cashbank-gl-links',
   },
   // Legacy flat endpoints for backward compatibility - matching actual backend routes
   CASHBANK_ACCOUNTS: '/api/cashbank/accounts',
