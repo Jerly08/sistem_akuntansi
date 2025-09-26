@@ -135,7 +135,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       
-      const response = await fetch(`${API_URL}${API_ENDPOINTS.LOGIN}`, {
+      const loginUrl = `${API_URL}${API_ENDPOINTS.LOGIN}`;
+      console.log('Login URL:', loginUrl);
+      
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -144,11 +147,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
+        let errorMessage = 'Login failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (jsonError) {
+          // If response is not JSON, use status text or generic message
+          errorMessage = response.statusText || `HTTP ${response.status}: Login failed`;
+          console.warn('Failed to parse error response as JSON:', jsonError);
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('Failed to parse login response as JSON:', jsonError);
+        throw new Error('Invalid response from server');
+      }
+      
+      // Validate response structure
+      if (!data || !data.user || !data.access_token && !data.token) {
+        console.error('Invalid login response structure:', data);
+        throw new Error('Invalid response from server');
+      }
       
       // Save auth data - ensure role is lowercase
       const userData = {
@@ -188,11 +211,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Registration failed');
+        let errorMessage = 'Registration failed';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (jsonError) {
+          errorMessage = response.statusText || `HTTP ${response.status}: Registration failed`;
+          console.warn('Failed to parse registration error response as JSON:', jsonError);
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('Failed to parse registration response as JSON:', jsonError);
+        throw new Error('Invalid response from server');
+      }
       
       // Save auth data
       setToken(data.token);
