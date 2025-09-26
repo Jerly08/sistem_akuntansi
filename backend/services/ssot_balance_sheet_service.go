@@ -217,15 +217,19 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAc
 
 // calculateNetIncome calculates net income (Revenue - Expenses) from SSOT journal system
 func (s *SSOTBalanceSheetService) calculateNetIncome(asOfDate string) float64 {
+	// NOTE: Scanning a single aggregate value into a basic type with GORM Scan can be unreliable.
+	// To be robust, scan into a struct with a named column and then read the field.
+	type niRow struct{ NetIncome float64 `gorm:"column:net_income"` }
+	var row niRow
 	var netIncome float64
-	
+
 	query := `
 		SELECT 
 			COALESCE(SUM(
 				CASE 
-					WHEN a.type = 'REVENUE' THEN 
+					WHEN UPPER(a.type) = 'REVENUE' THEN 
 						COALESCE(ujl.credit_amount, 0) - COALESCE(ujl.debit_amount, 0)
-					WHEN a.type = 'EXPENSE' THEN 
+					WHEN UPPER(a.type) = 'EXPENSE' THEN 
 						COALESCE(ujl.debit_amount, 0) - COALESCE(ujl.credit_amount, 0)
 					ELSE 0
 				END
@@ -234,18 +238,23 @@ func (s *SSOTBalanceSheetService) calculateNetIncome(asOfDate string) float64 {
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
 		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
 		WHERE ((uje.status = 'POSTED' AND uje.entry_date <= ?) OR uje.status IS NULL)
-		AND a.type IN ('REVENUE', 'EXPENSE')
+		AND UPPER(a.type) IN ('REVENUE', 'EXPENSE')
 		AND COALESCE(a.is_header, false) = false
 	`
-	
-	if err := s.db.Raw(query, asOfDate).Scan(&netIncome).Error; err != nil {
-		// If query fails, try to get from account balances directly
+
+	if err := s.db.Raw(query, asOfDate).Scan(&row).Error; err == nil {
+		netIncome = row.NetIncome
+		fmt.Printf("[DEBUG] Net Income calculated from SSOT: %.2f\n", netIncome)
+	} else {
+		fmt.Printf("[DEBUG] Failed to get net income from SSOT, falling back to accounts.balance: %v\n", err)
+		// If query fails, try to get from account balances directly (fallback for environments without SSOT data)
 		var revenue, expense float64
-		s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE type = 'REVENUE'`).Scan(&revenue)
-		s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE type = 'EXPENSE'`).Scan(&expense)
+		s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'REVENUE'`).Scan(&revenue)
+		s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'EXPENSE'`).Scan(&expense)
 		netIncome = revenue - expense
+		fmt.Printf("[DEBUG] Net Income from fallback - Revenue: %.2f, Expense: %.2f, Net: %.2f\n", revenue, expense, netIncome)
 	}
-	
+
 	// Net Income calculation: Revenue - Expenses
 	// For Revenue accounts: Credit increases balance (positive net income)
 	// For Expense accounts: Debit increases balance (negative net income)
@@ -293,13 +302,19 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 		}
 		
 		// Categorize accounts based on code ranges (following Indonesian chart of accounts)
-		switch balance.AccountType {
-		case "ASSET":
+		// Special handling for PPN Masukan (2102) - should be treated as asset regardless of type in database
+		if code == "2102" || strings.Contains(strings.ToLower(item.AccountName), "ppn masukan") {
+			fmt.Printf("[DEBUG] Special handling for PPN Masukan: %s - %s (%.2f)\n", code, item.AccountName, amount)
 			s.categorizeAssetAccount(bsData, item, code)
-		case "LIABILITY":
-			s.categorizeLiabilityAccount(bsData, item, code)
-		case "EQUITY":
-			s.categorizeEquityAccount(bsData, item, code)
+		} else {
+			switch balance.AccountType {
+			case "ASSET":
+				s.categorizeAssetAccount(bsData, item, code)
+			case "LIABILITY":
+				s.categorizeLiabilityAccount(bsData, item, code)
+			case "EQUITY":
+				s.categorizeEquityAccount(bsData, item, code)
+			}
 		}
 	}
 	

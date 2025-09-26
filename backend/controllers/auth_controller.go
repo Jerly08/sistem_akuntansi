@@ -121,10 +121,13 @@ func (ac *AuthController) Register(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message": "User registered successfully",
-		"access_token":   tokens.AccessToken,
+		"success":       true,
+		"message":       "User registered successfully",
+		"access_token":  tokens.AccessToken,
+		"token":         tokens.AccessToken, // Compatibility field
 		"refresh_token": tokens.RefreshToken,
-		"user":    tokens.User,
+		"refreshToken":  tokens.RefreshToken, // Compatibility field
+		"user":          tokens.User,
 	})
 }
 
@@ -192,8 +195,11 @@ func (ac *AuthController) Login(c *gin.Context) {
 	
 	// Return response in format expected by frontend
 	c.JSON(http.StatusOK, gin.H{
-		"access_token":        tokens.AccessToken,
+		"success":      true,
+		"access_token": tokens.AccessToken,
+		"token":        tokens.AccessToken, // Compatibility field
 		"refresh_token": tokens.RefreshToken,
+		"refreshToken": tokens.RefreshToken, // Compatibility field
 		"user":         tokens.User,
 		"message":      "Login successful",
 	})
@@ -240,10 +246,13 @@ func (ac *AuthController) RefreshToken(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"access_token":        tokens.AccessToken,
+		"success":       true,
+		"access_token":  tokens.AccessToken,
+		"token":         tokens.AccessToken, // Compatibility field
 		"refresh_token": tokens.RefreshToken,
-		"user":         tokens.User,
-		"message":      "Token refreshed successfully",
+		"refreshToken":  tokens.RefreshToken, // Compatibility field
+		"user":          tokens.User,
+		"message":       "Token refreshed successfully",
 	})
 }
 

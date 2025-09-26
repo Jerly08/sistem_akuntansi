@@ -299,6 +299,15 @@ func (s *CashBankService) ProcessTransfer(request TransferRequest, userID uint) 
 	log.Printf("✅ Source account balance updated from %.2f to %.2f (transfer out: %.2f)", 
 		originalSourceBalance, sourceAccount.Balance, request.Amount)
 
+	// Sync linked COA (GL) account balance for source after transfer out
+	if sourceAccount.AccountID > 0 {
+		if err := tx.Exec("UPDATE accounts SET balance = ? , updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL", sourceAccount.Balance, sourceAccount.AccountID).Error; err != nil {
+			log.Printf("⚠️ Warning: Failed to sync COA balance for source GL account %d: %v", sourceAccount.AccountID, err)
+		} else {
+			log.Printf("🔄 Synced COA balance for source GL account %d to %.2f", sourceAccount.AccountID, sourceAccount.Balance)
+		}
+	}
+
 	// Create source transaction record
 	sourceTx := &models.CashBankTransaction{
 		CashBankID:      request.FromAccountID,
@@ -324,6 +333,15 @@ func (s *CashBankService) ProcessTransfer(request TransferRequest, userID uint) 
 	}
 	log.Printf("✅ Destination account balance updated from %.2f to %.2f (transfer in: %.2f)", 
 		originalDestBalance, destAccount.Balance, transferAmount)
+
+	// Sync linked COA (GL) account balance for destination after transfer in
+	if destAccount.AccountID > 0 {
+		if err := tx.Exec("UPDATE accounts SET balance = ? , updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL", destAccount.Balance, destAccount.AccountID).Error; err != nil {
+			log.Printf("⚠️ Warning: Failed to sync COA balance for destination GL account %d: %v", destAccount.AccountID, err)
+		} else {
+			log.Printf("🔄 Synced COA balance for destination GL account %d to %.2f", destAccount.AccountID, destAccount.Balance)
+		}
+	}
 
 	// Create destination transaction record
 	destTx := &models.CashBankTransaction{
@@ -401,6 +419,17 @@ func (s *CashBankService) ProcessDeposit(request DepositRequest, userID uint) (*
 	}
 	log.Printf("✅ Step 2: Updated cash bank balance from %.2f to %.2f (deposit: %.2f)", 
 		originalBalance, account.Balance, request.Amount)
+
+	// Sync linked COA (GL) account balance to maintain COA <> CashBank consistency
+	// UnifiedJournalService intentionally skips cash bank GL balance updates to avoid double posting,
+	// so we ensure COA balance mirrors the cash_banks.balance here.
+	if account.AccountID > 0 {
+		if err := tx.Exec("UPDATE accounts SET balance = ? , updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL", account.Balance, account.AccountID).Error; err != nil {
+			log.Printf("⚠️ Warning: Failed to sync COA balance for GL account %d: %v", account.AccountID, err)
+		} else {
+			log.Printf("🔄 Synced COA balance for GL account %d to %.2f", account.AccountID, account.Balance)
+		}
+	}
 
 	// Create transaction record
 	transaction := &models.CashBankTransaction{
@@ -505,6 +534,15 @@ func (s *CashBankService) ProcessWithdrawal(request WithdrawalRequest, userID ui
 	}
 	log.Printf("✅ Step 3: Updated cash bank balance from %.2f to %.2f (withdrawal: %.2f)", 
 		originalBalance, account.Balance, request.Amount)
+
+	// Sync linked COA (GL) account balance after withdrawal
+	if account.AccountID > 0 {
+		if err := tx.Exec("UPDATE accounts SET balance = ? , updated_at = CURRENT_TIMESTAMP WHERE id = ? AND deleted_at IS NULL", account.Balance, account.AccountID).Error; err != nil {
+			log.Printf("⚠️ Warning: Failed to sync COA balance for GL account %d: %v", account.AccountID, err)
+		} else {
+			log.Printf("🔄 Synced COA balance for GL account %d to %.2f", account.AccountID, account.Balance)
+		}
+	}
 
 	// Create transaction record
 	transaction := &models.CashBankTransaction{

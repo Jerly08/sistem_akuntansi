@@ -191,17 +191,17 @@ func findMigrationDir() (string, error) {
 
 // runMigration runs a single migration file
 func runMigration(db *gorm.DB, filename string) error {
-	// Check if migration already ran
-	var count int64
-	db.Raw("SELECT COUNT(*) FROM migration_logs WHERE migration_name = ?", filename).Scan(&count)
-	if count > 0 {
-		log.Printf("⏭️  Migration already ran: %s", filename)
+	// Check last status from migration_logs; only skip if SUCCESS
+	var lastStatus string
+	statusErr := db.Raw("SELECT status FROM migration_logs WHERE migration_name = ? ORDER BY executed_at DESC LIMIT 1", filename).Scan(&lastStatus).Error
+	if statusErr == nil && strings.EqualFold(lastStatus, "SUCCESS") {
+		log.Printf("⏭️  Migration already ran successfully: %s", filename)
 		return nil
 	}
-	
+
 	startTime := time.Now()
 	log.Printf("🔄 Running migration: %s", filename)
-	
+
 	// Read migration file
 	migrationDir, dirErr := findMigrationDir()
 	if dirErr != nil {
@@ -214,46 +214,46 @@ func runMigration(db *gorm.DB, filename string) error {
 		logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to read file: %v", err), 0)
 		return err
 	}
-	
+
 	// Special handling for SSOT migration (contains complex SQL structures)
 	if strings.Contains(filename, "unified_journal_ssot") {
 		return runComplexMigration(db, filename, string(content), startTime)
 	}
-	
+
 	// Split SQL statements by semicolon (simple approach)
 	sqlStatements := strings.Split(string(content), ";")
-	
+
 	// Execute in transaction
 	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
-			tx.Rollback()
+			_ = tx.Rollback().Error
 		}
 	}()
-	
+
 	for _, stmt := range sqlStatements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" || strings.HasPrefix(stmt, "--") || strings.HasPrefix(stmt, "/*") {
 			continue
 		}
-		
+
 		if err := tx.Exec(stmt).Error; err != nil {
-			tx.Rollback()
+			_ = tx.Rollback().Error
 			executionTime := int(time.Since(startTime).Milliseconds())
 			logMigrationResult(db, filename, "FAILED", fmt.Sprintf("SQL error: %v", err), executionTime)
 			return err
 		}
 	}
-	
+
 	if err := tx.Commit().Error; err != nil {
 		executionTime := int(time.Since(startTime).Milliseconds())
 		logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Commit error: %v", err), executionTime)
 		return err
 	}
-	
+
 	executionTime := int(time.Since(startTime).Milliseconds())
 	logMigrationResult(db, filename, "SUCCESS", "Migration completed successfully", executionTime)
-	
+
 	log.Printf("✅ Migration completed: %s (%dms)", filename, executionTime)
 	return nil
 }
@@ -261,114 +261,175 @@ func runMigration(db *gorm.DB, filename string) error {
 // runComplexMigration runs complex migrations with better SQL parsing
 func runComplexMigration(db *gorm.DB, filename, content string, startTime time.Time) error {
 	log.Printf("🏠 Running complex migration (SSOT): %s", filename)
-	
-	// Parse SQL more intelligently for complex structures
+
+	// Parse SQL with a robust tokenizer that respects dollar-quoted strings
 	statements := parseComplexSQL(content)
-	
+
+	transactionOpen := false
+
 	// Execute each parsed statement
 	for i, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" {
 			continue
 		}
-		
+
 		log.Printf("🔧 Executing statement %d/%d...", i+1, len(statements))
-		
-		// Execute statement (not in transaction for DDL operations)
+
+		upper := strings.ToUpper(strings.TrimSpace(strings.TrimSuffix(stmt, ";")))
+		if upper == "BEGIN" || strings.HasPrefix(upper, "BEGIN TRANSACTION") {
+			transactionOpen = true
+		}
+		if upper == "COMMIT" || upper == "ROLLBACK" {
+			transactionOpen = false
+		}
+
+		// Execute statement (not in transaction at app layer; file may manage its own)
 		if err := db.Exec(stmt).Error; err != nil {
+			// If the file opened a transaction, try to rollback to clear aborted state before logging
+			if transactionOpen {
+				_ = db.Exec("ROLLBACK").Error
+				transactionOpen = false
+			}
 			executionTime := int(time.Since(startTime).Milliseconds())
 			logMigrationResult(db, filename, "FAILED", fmt.Sprintf("SQL error at statement %d: %v", i+1, err), executionTime)
 			return fmt.Errorf("SQL error at statement %d: %v", i+1, err)
 		}
 	}
-	
+
 	executionTime := int(time.Since(startTime).Milliseconds())
 	logMigrationResult(db, filename, "SUCCESS", "Complex migration completed successfully", executionTime)
-	
+
 	log.Printf("✅ Complex migration completed: %s (%dms)", filename, executionTime)
 	return nil
 }
 
-// parseComplexSQL parses SQL with complex structures like functions, triggers, etc.
+// parseComplexSQL parses SQL into executable statements, respecting strings, comments, and dollar-quoted blocks
 func parseComplexSQL(content string) []string {
 	var statements []string
-	current := ""
-	lines := strings.Split(content, "\n")
-	
-	inFunction := false
-	inBlock := false
-	blockDepth := 0
-	
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		
-		// Skip comments and empty lines
-		if line == "" || strings.HasPrefix(line, "--") {
-			continue
+	var b strings.Builder
+
+	inSingle := false   // inside '...'
+	inDouble := false   // inside "..."
+	inLineComment := false // inside -- ... \n
+	inBlockComment := false // inside /* ... */
+	dollarTag := ""       // current $tag$ or $$ if inside a dollar-quoted string
+
+	i := 0
+	for i < len(content) {
+		ch := content[i]
+		var next byte
+		if i+1 < len(content) {
+			next = content[i+1]
 		}
-		
-		// Handle multi-line comments
-		if strings.HasPrefix(line, "/*") {
-			continue
+
+		// Enter/exit line comments
+		if !inSingle && !inDouble && dollarTag == "" && !inBlockComment && !inLineComment && ch == '-' && next == '-' {
+			inLineComment = true
 		}
-		if strings.HasSuffix(line, "*/") {
-			continue
-		}
-		
-		// Handle function/procedure blocks
-		if strings.Contains(strings.ToUpper(line), "CREATE OR REPLACE FUNCTION") || 
-		   strings.Contains(strings.ToUpper(line), "CREATE FUNCTION") ||
-		   strings.Contains(strings.ToUpper(line), "CREATE TRIGGER") ||
-		   strings.Contains(strings.ToUpper(line), "CREATE MATERIALIZED VIEW") {
-			inFunction = true
-		}
-		
-		// Handle DO blocks
-		if strings.HasPrefix(strings.ToUpper(line), "DO $$") {
-			inBlock = true
-			blockDepth = 1
-		}
-		
-		// Count BEGIN/END pairs in functions
-		if inFunction || inBlock {
-			if strings.Contains(strings.ToUpper(line), "BEGIN") {
-				blockDepth++
+		if inLineComment {
+			b.WriteByte(ch)
+			if ch == '\n' {
+				inLineComment = false
 			}
-			if strings.Contains(strings.ToUpper(line), "END") {
-				blockDepth--
-			}
+			i++
+			continue
 		}
-		
-		current += line + "\n"
-		
-		// Check for statement end
-		if strings.HasSuffix(line, ";") {
-			// For functions/triggers, only end when we're back to depth 0
-			if (inFunction || inBlock) && blockDepth > 0 {
+
+		// Enter block comment
+		if !inSingle && !inDouble && dollarTag == "" && !inBlockComment && ch == '/' && next == '*' {
+			inBlockComment = true
+			b.WriteByte(ch)
+			b.WriteByte(next)
+			i += 2
+			continue
+		}
+		// Exit block comment
+		if inBlockComment {
+			b.WriteByte(ch)
+			if ch == '*' && next == '/' {
+				b.WriteByte(next)
+				i += 2
+				inBlockComment = false
 				continue
 			}
-			
-			// Complete statement found
-			stmt := strings.TrimSpace(current)
-			if stmt != "" {
-				statements = append(statements, stmt)
+			i++
+			continue
+		}
+
+		// Dollar-quoted strings: $tag$ ... $tag$
+		if !inSingle && !inDouble {
+			if dollarTag == "" && ch == '$' {
+				// try to read $tag$
+				j := i + 1
+				for j < len(content) {
+					c := content[j]
+					if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
+						j++
+						continue
+					}
+					break
+				}
+				if j < len(content) && content[j] == '$' {
+					dollarTag = content[i : j+1] // includes both $ ... $
+					b.WriteString(dollarTag)
+					i = j + 1
+					continue
+				}
+			} else if dollarTag != "" {
+				// check end tag
+				if strings.HasPrefix(content[i:], dollarTag) {
+					b.WriteString(dollarTag)
+					i += len(dollarTag)
+					dollarTag = ""
+					continue
+				}
 			}
-			
-			current = ""
-			inFunction = false
-			inBlock = false
-			blockDepth = 0
 		}
-	}
-	
-	// Add any remaining content
-	if current != "" {
-		stmt := strings.TrimSpace(current)
-		if stmt != "" {
-			statements = append(statements, stmt)
+
+		// Quoted strings
+		if dollarTag == "" {
+			if !inDouble && ch == '\'' {
+				if inSingle {
+					// handle escaped ''
+					if next == '\'' {
+						b.WriteByte(ch)
+						b.WriteByte(next)
+						i += 2
+						continue
+					}
+					inSingle = false
+				} else {
+					inSingle = true
+				}
+			} else if !inSingle && ch == '"' {
+				if inDouble {
+					inDouble = false
+				} else {
+					inDouble = true
+				}
+			}
 		}
+
+		// Statement terminator
+		if ch == ';' && !inSingle && !inDouble && dollarTag == "" && !inBlockComment && !inLineComment {
+			stmt := strings.TrimSpace(b.String())
+			if stmt != "" {
+				statements = append(statements, stmt+";")
+			}
+			b.Reset()
+			i++
+			continue
+		}
+
+		b.WriteByte(ch)
+		i++
 	}
-	
+
+	rest := strings.TrimSpace(b.String())
+	if rest != "" {
+		statements = append(statements, rest)
+	}
 	return statements
 }
 
