@@ -42,10 +42,22 @@ CREATE INDEX IF NOT EXISTS idx_assets_category_id ON assets(category_id);
 -- The application will handle NULL vs 0 distinction
 -- But we should ensure the columns allow NULL values
 
--- Update existing NOT NULL constraints if they exist
-ALTER TABLE purchases ALTER COLUMN ppn_rate DROP NOT NULL;
-ALTER TABLE purchases ALTER COLUMN pph21_rate DROP NOT NULL; 
-ALTER TABLE purchases ALTER COLUMN pph23_rate DROP NOT NULL;
+-- Update existing NOT NULL constraints if they exist (safely)
+DO $$
+BEGIN
+    -- Check if columns exist before trying to modify them
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'purchases' AND column_name = 'ppn_rate') THEN
+        ALTER TABLE purchases ALTER COLUMN ppn_rate DROP NOT NULL;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'purchases' AND column_name = 'pph21_rate') THEN
+        ALTER TABLE purchases ALTER COLUMN pph21_rate DROP NOT NULL;
+    END IF;
+    
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'purchases' AND column_name = 'pph23_rate') THEN
+        ALTER TABLE purchases ALTER COLUMN pph23_rate DROP NOT NULL;
+    END IF;
+END $$;
 
 -- ==============================================
 -- 4. UPDATE SALE_ITEMS TABLE

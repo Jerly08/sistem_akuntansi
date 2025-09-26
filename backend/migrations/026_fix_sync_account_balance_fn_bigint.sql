@@ -1,8 +1,8 @@
--- Migration: Add BIGINT-compatible sync_account_balance_from_ssOT function
+-- Migration: Add BIGINT-compatible sync_account_balance_from_ssot function
 -- Date: 2025-09-26
 -- Purpose: Fix runtime error when triggers call sync_account_balance_from_ssot(bigint)
--- Context: Some schemas use BIGINT for account_id in unified_journal_lines; the original
---          function was defined for INTEGER, causing "function ... (bigint) does not exist".
+-- Context: Some schemas use BIGINT for account_id in unified_journal_lines.
+-- The original function was defined for INTEGER, causing function not found errors.
 
 BEGIN;
 

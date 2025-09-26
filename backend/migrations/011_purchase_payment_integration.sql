@@ -21,37 +21,40 @@ WHERE payment_method IN ('CASH', 'TRANSFER') AND outstanding_amount != 0;
 
 -- Create purchase_payments table for cross-reference tracking
 CREATE TABLE IF NOT EXISTS purchase_payments (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    purchase_id INT NOT NULL,
+    id BIGSERIAL PRIMARY KEY,
+    purchase_id BIGINT NOT NULL,
     payment_number VARCHAR(50),
-    date DATETIME,
+    date TIMESTAMP WITH TIME ZONE,
     amount DECIMAL(15,2) DEFAULT 0,
     method VARCHAR(20),
     reference VARCHAR(100),
     notes TEXT,
-    cash_bank_id INT,
-    user_id INT NOT NULL,
-    payment_id INT, -- Cross-reference to payments table
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    cash_bank_id BIGINT,
+    user_id BIGINT NOT NULL,
+    payment_id BIGINT, -- Cross-reference to payments table
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY (purchase_id) REFERENCES purchases(id) ON DELETE CASCADE,
     FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL,
-    FOREIGN KEY (cash_bank_id) REFERENCES cash_banks(id) ON DELETE SET NULL,
-    
-    INDEX idx_purchase_payments_purchase_id (purchase_id),
-    INDEX idx_purchase_payments_payment_id (payment_id),
-    INDEX idx_purchase_payments_date (date)
+    FOREIGN KEY (cash_bank_id) REFERENCES cash_banks(id) ON DELETE SET NULL
 );
+
+-- Create indexes for purchase_payments
+CREATE INDEX IF NOT EXISTS idx_purchase_payments_purchase_id ON purchase_payments(purchase_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_payments_payment_id ON purchase_payments(payment_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_payments_date ON purchase_payments(date);
 
 -- Enhance payment_allocations to support purchase bills
 ALTER TABLE payment_allocations 
-ADD COLUMN IF NOT EXISTS bill_id INT,
-ADD INDEX IF NOT EXISTS idx_payment_allocations_bill_id (bill_id);
+ADD COLUMN IF NOT EXISTS bill_id BIGINT;
+
+-- Create index for bill_id
+CREATE INDEX IF NOT EXISTS idx_payment_allocations_bill_id ON payment_allocations(bill_id);
 
 -- Add foreign key constraint for bill_id
 ALTER TABLE payment_allocations 
-ADD CONSTRAINT IF NOT EXISTS fk_payment_allocations_bill 
+ADD CONSTRAINT fk_payment_allocations_bill 
     FOREIGN KEY (bill_id) REFERENCES purchases(id) ON DELETE SET NULL;
 
 -- Comments for documentation

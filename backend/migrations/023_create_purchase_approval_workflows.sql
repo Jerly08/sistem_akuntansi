@@ -8,10 +8,14 @@
 -- Check if approval workflows already exist for PURCHASE module
 DO $$
 DECLARE
-    workflow_count INTEGER := 0;
-    step_count INTEGER := 0;
+    workflow_count INTEGER;
+    step_count INTEGER;
     standard_workflow_id INTEGER;
 BEGIN
+    -- Initialize variables
+    workflow_count := 0;
+    step_count := 0;
+    
     -- Check existing workflows
     SELECT COUNT(*) INTO workflow_count FROM approval_workflows WHERE module = 'PURCHASE';
     

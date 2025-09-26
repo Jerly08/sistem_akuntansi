@@ -12,9 +12,12 @@ CREATE OR REPLACE FUNCTION check_table_structure(table_name TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE
     column_count INTEGER;
-    expected_columns TEXT[] := ARRAY['id', 'entry_number', 'source_type', 'source_id', 'entry_date', 'description', 'total_debit', 'total_credit', 'status', 'created_by'];
+    expected_columns TEXT[];
     actual_count INTEGER;
 BEGIN
+    -- Initialize expected columns array
+    expected_columns := ARRAY['id', 'entry_number', 'source_type', 'source_id', 'entry_date', 'description', 'total_debit', 'total_credit', 'status', 'created_by'];
+    
     -- Count expected columns that exist
     SELECT COUNT(*)
     INTO actual_count
