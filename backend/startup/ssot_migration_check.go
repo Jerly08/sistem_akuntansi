@@ -64,11 +64,11 @@ func verifyTablesExist(db *gorm.DB) error {
 		}
 	}
 	
-	// Check materialized view
+	// Check materialized view using pg_matviews (correct table for materialized views)
 	var viewCount int64
-	err := db.Raw("SELECT COUNT(*) FROM information_schema.views WHERE table_name = 'account_balances'").Scan(&viewCount).Error
+	err := db.Raw("SELECT COUNT(*) FROM pg_matviews WHERE schemaname = 'public' AND matviewname = 'account_balances'").Scan(&viewCount).Error
 	if err != nil {
-		return fmt.Errorf("failed to check account_balances view: %v", err)
+		return fmt.Errorf("failed to check account_balances materialized view: %v", err)
 	}
 	if viewCount == 0 {
 		return fmt.Errorf("account_balances materialized view not found")
@@ -145,11 +145,11 @@ func testTableStructures(db *gorm.DB) error {
 		}
 	}
 	
-	// Check materialized view
+	// Check materialized view using pg_matviews
 	var viewCount int64
-	err := db.Raw("SELECT COUNT(*) FROM information_schema.views WHERE table_name = 'account_balances'").Scan(&viewCount).Error
+	err := db.Raw("SELECT COUNT(*) FROM pg_matviews WHERE schemaname = 'public' AND matviewname = 'account_balances'").Scan(&viewCount).Error
 	if err != nil {
-		return fmt.Errorf("failed to check account_balances view: %v", err)
+		return fmt.Errorf("failed to check account_balances materialized view: %v", err)
 	}
 	if viewCount == 0 {
 		return fmt.Errorf("account_balances materialized view not found")

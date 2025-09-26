@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // ProductImageFixMigration fixes issues with product image uploads
@@ -17,11 +18,21 @@ func ProductImageFixMigration(db *gorm.DB) {
 
 	migrationID := "product_image_fix_v1.0"
 	
-	// Check if this migration has already been run
+	// Check if this migration has already been run (with better error handling)
 	var existingMigration models.MigrationRecord
-	if err := db.Where("migration_id = ?", migrationID).First(&existingMigration).Error; err == nil {
-		log.Printf("✅ Product Image Fix Migration already applied at %v", existingMigration.AppliedAt)
+	// Use silent logging for the initial check to avoid "record not found" error logs
+	silentDB := db.Session(&gorm.Session{Logger: db.Logger.LogMode(logger.Silent)})
+	err := silentDB.Where("migration_id = ?", migrationID).First(&existingMigration).Error
+	if err == nil {
+		log.Printf("✅ Product Image Fix Migration already completed at %s - skipping", 
+			existingMigration.AppliedAt.Format("2006-01-02 15:04:05"))
+		log.Printf("ℹ️  Previous migration description: %s", existingMigration.Description)
 		return
+	} else if err.Error() != "record not found" {
+		log.Printf("⚠️  Warning: Could not check migration status: %v", err)
+		log.Printf("ℹ️  Proceeding with migration anyway (this is safe)...")
+	} else {
+		log.Printf("ℹ️  Product Image Fix Migration not found in records, proceeding with migration...")
 	}
 
 	// Use separate transactions for each fix to avoid rollback cascades
@@ -50,17 +61,29 @@ func ProductImageFixMigration(db *gorm.DB) {
 		AppliedAt:   time.Now(),
 	}
 
-	if err := db.Create(&migrationRecord).Error; err != nil {
-		// Check if this is just a duplicate key constraint (normal scenario)
+	// Log what we're about to record
+	log.Printf("📝 Recording migration completion: %s (applied %d fixes)", migrationID, len(fixesApplied))
+	
+	// Use a session with silent logging for the migration record creation to avoid cluttering logs
+	silentDBCreate := db.Session(&gorm.Session{Logger: db.Logger.LogMode(logger.Silent)}) // Silent mode
+	if err := silentDBCreate.Create(&migrationRecord).Error; err != nil {
+		// Check if this is just a duplicate key constraint (normal scenario during concurrent runs)
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "uni_migration_records_migration_id") {
-			log.Printf("ℹ️  Product image fix migration record already exists (normal) - migration was successful")
+			log.Printf("ℹ️  Migration record '%s' already exists - this happens when multiple processes start simultaneously", migrationID)
+			log.Printf("✅ Product Image Fix Migration completed successfully!")
+			log.Printf("📝 Applied fixes: %v", fixesApplied)
+			log.Printf("🔄 This is normal behavior and indicates the migration system is working correctly.")
 		} else {
-			log.Printf("❌ Failed to record product image fix migration: %v", err)
+			log.Printf("❌ Failed to record product image fix migration in database: %v", err)
+			log.Printf("⚠️  Migration fixes were applied successfully but database record failed: %v", fixesApplied)
+			log.Printf("🚨 This may cause the migration to re-run on next startup (which is safe)")
 		}
 		return
 	}
 
-	log.Printf("✅ Product Image Fix Migration completed successfully. Applied fixes: %v", fixesApplied)
+	log.Printf("✅ Product Image Fix Migration completed successfully and recorded in database!")
+	log.Printf("📝 Applied fixes: %v", fixesApplied)
+	log.Printf("📦 Migration ID: %s, Version: %s", migrationID, migrationRecord.Version)
 }
 
 // ensureImagePathColumn ensures the image_path column has the correct specifications
