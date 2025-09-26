@@ -12,6 +12,9 @@ import { API_ENDPOINTS } from '@/config/api';
 
 class AccountService {
 
+  // SSOT account balance DTO
+  public typeSSOTBalance?: never; // dummy to keep file typed as module
+
   private getHeaders(token?: string): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -198,6 +201,29 @@ class AccountService {
     
     const result: ApiResponse<Account[]> = await this.handleResponse(response);
     return result.data;
+  }
+
+  // Get SSOT balances per account (leaf accounts only)
+  async getSSOTAccountBalances(token: string, asOfDate?: string): Promise<{
+    account_id: number;
+    account_code: string;
+    account_name: string;
+    account_type: string;
+    debit_total: number;
+    credit_total: number;
+    net_balance: number;
+  }[]> {
+    const params = new URLSearchParams();
+    if (asOfDate) params.set('as_of_date', asOfDate);
+    const url = `${API_ENDPOINTS.SSOT_REPORTS.ACCOUNT_BALANCES}${params.toString() ? `?${params.toString()}` : ''}`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: this.getHeaders(token),
+    });
+
+    const result = await this.handleResponse<{ status: string; data: any[] }>(response);
+    return result.data as any[];
   }
 
   // Get balance summary

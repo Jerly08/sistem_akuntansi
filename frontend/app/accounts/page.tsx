@@ -49,6 +49,7 @@ import AccountTreeView from '@/components/accounts/AccountTreeView';
 import AdminDeleteDialog from '@/components/accounts/AdminDeleteDialog';
 import { Account, AccountCreateRequest, AccountUpdateRequest } from '@/types/account';
 import accountService from '@/services/accountService';
+import { API_ENDPOINTS } from '@/config/api';
 
 const AccountsPage = () => {
   const { token } = useAuth();
@@ -120,6 +121,39 @@ const AccountsPage = () => {
     return result;
   };
 
+  // Recompute totals recursively from children using current balances
+  const recomputeTotals = (nodes: Account[]): number => {
+    let total = 0;
+    for (const n of nodes) {
+      if (n.children && n.children.length > 0) {
+        const childTotal = recomputeTotals(n.children);
+        n.total_balance = childTotal;
+        // For header accounts, mirror balance to total for display
+        if (n.is_header) n.balance = childTotal;
+        total += childTotal;
+      } else {
+        total += n.balance || 0;
+      }
+    }
+    return total;
+  };
+
+  // Apply SSOT balances to hierarchy (leaf nodes only) and recompute totals
+  const applySSOTBalances = (root: Account[], ssotMap: Map<number, number>) => {
+    const applyLeaf = (nodes: Account[]) => {
+      for (const n of nodes) {
+        if (n.children && n.children.length > 0) {
+          applyLeaf(n.children);
+        } else {
+          const ssotVal = ssotMap.get(n.id);
+          n.balance = ssotVal !== undefined ? ssotVal : 0;
+        }
+      }
+    };
+    applyLeaf(root);
+    recomputeTotals(root);
+  };
+
   // Unified fetch function using only hierarchy endpoint
   const fetchAccountData = async () => {
     if (!token) return;
@@ -128,7 +162,13 @@ const AccountsPage = () => {
     try {
       const hierarchyData = await accountService.getAccountHierarchy(token);
       console.log('📊 Unified Account Data:', hierarchyData);
-      
+
+      // Fetch SSOT balances and apply to hierarchy
+      const ssotBalances = await accountService.getSSOTAccountBalances(token);
+      const ssotMap = new Map<number, number>();
+      ssotBalances.forEach((row) => ssotMap.set(row.account_id, row.net_balance));
+      applySSOTBalances(hierarchyData as any, ssotMap);
+
       setHierarchyAccounts(hierarchyData);
       setFlatAccounts(flattenHierarchy(hierarchyData));
       setError(null);
@@ -152,7 +192,7 @@ const AccountsPage = () => {
     if (!token) return;
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/accounts/fix-header-status`, {
+      const response = await fetch(`${API_ENDPOINTS.ACCOUNTS.FIX_HEADER_STATUS}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

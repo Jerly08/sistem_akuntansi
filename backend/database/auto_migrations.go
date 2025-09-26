@@ -48,6 +48,13 @@ func RunAutoMigrations(db *gorm.DB) error {
 	}
 	log.Println("============================================")
 
+	// Ensure critical database functions exist (idempotent)
+	if err := ensureSSOTSyncFunctions(db); err != nil {
+		log.Printf("⚠️  Post-migration function install failed: %v", err)
+	} else {
+		log.Println("✅ Verified SSOT sync functions are installed")
+	}
+
 	log.Println("✅ Auto-migrations completed")
 	return nil
 }
@@ -366,6 +373,89 @@ func parseComplexSQL(content string) []string {
 }
 
 // logMigrationResult logs the result of a migration
+// ensureSSOTSyncFunctions creates or replaces required SSOT sync functions in a parser-safe way
+// This is idempotent and safe to run on every startup across environments
+func ensureSSOTSyncFunctions(db *gorm.DB) error {
+	log.Println("🔍 Ensuring SSOT sync functions (sync_account_balance_from_ssot) exist...")
+
+	// Check existing variants
+	var cntBigint, cntInteger int64
+	checkBigint := `SELECT COUNT(*) FROM pg_proc WHERE proname='sync_account_balance_from_ssot' AND pg_get_function_identity_arguments(oid) ILIKE '%bigint%'`
+	checkInteger := `SELECT COUNT(*) FROM pg_proc WHERE proname='sync_account_balance_from_ssot' AND pg_get_function_identity_arguments(oid) ILIKE '%integer%'`
+	if err := db.Raw(checkBigint).Scan(&cntBigint).Error; err != nil {
+		log.Printf("⚠️  Could not check existing BIGINT variant: %v", err)
+	}
+	if err := db.Raw(checkInteger).Scan(&cntInteger).Error; err != nil {
+		log.Printf("⚠️  Could not check existing INTEGER variant: %v", err)
+	}
+	alreadyBigint := cntBigint > 0
+	alreadyInteger := cntInteger > 0
+	log.Printf("   • Existing variants -> BIGINT: %v, INTEGER: %v", alreadyBigint, alreadyInteger)
+
+	bigintFn := `
+CREATE OR REPLACE FUNCTION sync_account_balance_from_ssot(account_id_param BIGINT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE accounts a
+    SET 
+        balance = COALESCE((
+            SELECT CASE 
+                WHEN a.type IN ('ASSET', 'EXPENSE') THEN 
+                    COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
+                ELSE 
+                    COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
+            END
+            FROM unified_journal_lines ujl 
+            LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
+            WHERE ujl.account_id = account_id_param 
+              AND uje.status = 'POSTED'
+        ), 0),
+        updated_at = NOW()
+    WHERE a.id = account_id_param;
+END;
+$$;`
+
+	intFn := `
+CREATE OR REPLACE FUNCTION sync_account_balance_from_ssot(account_id_param INTEGER)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM sync_account_balance_from_ssot(account_id_param::BIGINT);
+END;
+$$;`
+
+	if err := db.Exec(bigintFn).Error; err != nil {
+		return err
+	}
+	if err := db.Exec(intFn).Error; err != nil {
+		return err
+	}
+
+	// Re-check to confirm
+	cntBigint, cntInteger = 0, 0
+	_ = db.Raw(checkBigint).Scan(&cntBigint).Error
+	_ = db.Raw(checkInteger).Scan(&cntInteger).Error
+	nowBigint := cntBigint > 0
+	nowInteger := cntInteger > 0
+
+	if !alreadyBigint && nowBigint {
+		log.Println("   ✓ Installed BIGINT variant of sync_account_balance_from_ssot")
+	} else if alreadyBigint && nowBigint {
+		log.Println("   ↺ BIGINT variant already present (ensured)")
+	}
+
+	if !alreadyInteger && nowInteger {
+		log.Println("   ✓ Installed INTEGER wrapper for sync_account_balance_from_ssot")
+	} else if alreadyInteger && nowInteger {
+		log.Println("   ↺ INTEGER wrapper already present (ensured)")
+	}
+
+	return nil
+}
+
 func logMigrationResult(db *gorm.DB, migrationName, status, message string, executionTimeMs int) {
 	sql := `
 	INSERT INTO migration_logs (migration_name, status, message, execution_time_ms)

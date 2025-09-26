@@ -179,7 +179,9 @@ class CashBankService {
   async getCashBankAccounts(): Promise<CashBank[]> {
     try {
       const response = await api.get(API_ENDPOINTS.CASH_BANK.ACCOUNTS);
-      return response.data;
+      // Backend responses are wrapped with { status, message, data }
+      // Prefer inner data if present for compatibility
+      return response.data?.data ?? response.data;
     } catch (error) {
       console.error('Error fetching cash bank accounts:', error);
       throw error;
@@ -287,7 +289,7 @@ class CashBankService {
   async getBalanceSummary(): Promise<BalanceSummary> {
     try {
       const response = await api.get(API_ENDPOINTS.CASH_BANK.BALANCE_SUMMARY);
-      return response.data;
+      return response.data?.data ?? response.data;
     } catch (error) {
       console.error('Error fetching balance summary:', error);
       throw error;
@@ -367,13 +369,18 @@ class CashBankService {
     }
   }
 
-  // Get deposit source accounts (Revenue + Equity) for deposit form
+  // Get deposit source accounts for deposit form
+  // Business rule update: Deposit only needs equity accounts (no revenue)
   async getDepositSourceAccounts(): Promise<{revenue: any[], equity: any[]}> {
     try {
-      const response = await api.get(API_ENDPOINTS.CASH_BANK.DEPOSIT_SOURCE_ACCOUNTS);
-      return response.data.data;
+      // Fetch only EQUITY accounts using the accounts endpoint with type filter
+      const response = await api.get(API_ENDPOINTS.ACCOUNTS.LIST, {
+        params: { type: 'EQUITY' }
+      });
+      const equityAccounts = response.data?.data ?? response.data ?? [];
+      return { revenue: [], equity: equityAccounts };
     } catch (error) {
-      console.error('Error fetching deposit source accounts:', error);
+      console.error('Error fetching deposit source accounts (equity only):', error);
       throw error;
     }
   }

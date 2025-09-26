@@ -91,6 +91,10 @@ ssotReportController := controllers.NewSSOTReportIntegrationController(ssotRepor
 	ssotReportsGroup.GET("/cash-flow/summary", ssotCashFlowController.GetSSOTCashFlowSummary)
 	ssotReportsGroup.GET("/cash-flow/validate", ssotCashFlowController.ValidateSSOTCashFlow)
 
+	// 📒 SSOT Account Balances for COA sync
+	ssotAccountBalanceController := controllers.NewSSOTAccountBalanceController(db)
+	ssotReportsGroup.GET("/account-balances", ssotAccountBalanceController.GetSSOTAccountBalances)
+
 	// ✨ ENHANCED REPORT ENDPOINTS (with SSOT integration)
 	
 	// Create enhanced reports group for better organization

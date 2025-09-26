@@ -27,15 +27,15 @@ func NewSSOTSalesJournalService(db *gorm.DB) *SSOTSalesJournalService {
 func (s *SSOTSalesJournalService) CreateSaleJournalEntry(sale *models.Sale, userID uint) (*models.SSOTJournalEntry, error) {
 	log.Printf("📝 Creating SSOT journal entry for sale %d", sale.ID)
 	
-	// Get required accounts
-	arAccount, err := s.getAccountByCode("1201") // Accounts Receivable
+	// Resolve required accounts via AccountResolver (more robust than hard-coded codes)
+	arAccount, err := s.accountResolver.GetAccount(AccountTypeAccountsReceivable)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get accounts receivable: %v", err)
+		return nil, fmt.Errorf("failed to resolve AR account: %v", err)
 	}
 	
-	salesAccount, err := s.getAccountByCode("4101") // Sales Revenue (Pendapatan Penjualan)
+	salesAccount, err := s.accountResolver.GetAccount(AccountTypeSalesRevenue)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get sales revenue account: %v", err)
+		return nil, fmt.Errorf("failed to resolve sales revenue account: %v", err)
 	}
 	
 	// Create journal lines
@@ -56,24 +56,23 @@ func (s *SSOTSalesJournalService) CreateSaleJournalEntry(sale *models.Sale, user
 	
 	// Add PPN line if applicable
 	if sale.PPN > 0 {
-		ppnAccount, err := s.getAccountByCode("2103") // PPN Keluaran (Output VAT)
-		if err == nil {
+		ppnAccount, err := s.accountResolver.GetAccount(AccountTypePPNPayable)
+		if err == nil && ppnAccount != nil {
 			lines = append(lines, JournalLineRequest{
 				AccountID:    uint64(ppnAccount.ID),
 				Description:  "PPN Keluaran",
 				DebitAmount:  decimal.Zero,
 				CreditAmount: decimal.NewFromFloat(sale.PPN),
 			})
-			
 			// Adjust amounts for tax
-			lines[0].DebitAmount = decimal.NewFromFloat(sale.TotalAmount) // AR = Total including tax
-			lines[1].CreditAmount = decimal.NewFromFloat(sale.TotalAmount - sale.PPN) // Sales = Net amount
+			lines[0].DebitAmount = decimal.NewFromFloat(sale.TotalAmount) // AR = total incl. tax
+			lines[1].CreditAmount = decimal.NewFromFloat(sale.TotalAmount - sale.PPN) // Sales = net
 		}
 	}
 	
 	// Create journal entry request
 	journalRequest := &JournalEntryRequest{
-		SourceType:  "SALE",
+		SourceType:  models.SSOTSourceTypeSale,
 		SourceID:    func() *uint64 { id := uint64(sale.ID); return &id }(),
 		Reference:   sale.Code,
 		EntryDate:   sale.Date,
@@ -103,20 +102,20 @@ func (s *SSOTSalesJournalService) CreateSaleJournalEntry(sale *models.Sale, user
 func (s *SSOTSalesJournalService) CreatePaymentJournalEntry(payment *models.SalePayment, userID uint) (*models.SSOTJournalEntry, error) {
 	log.Printf("💰 Creating SSOT journal entry for payment %d", payment.ID)
 	
-	// Get required accounts
-	arAccount, err := s.getAccountByCode("1201") // Accounts Receivable
+	// Resolve required accounts
+	arAccount, err := s.accountResolver.GetAccount(AccountTypeAccountsReceivable)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get accounts receivable: %v", err)
+		return nil, fmt.Errorf("failed to resolve AR account: %v", err)
 	}
 	
-	cashAccount, err := s.getCashAccountForPayment(payment.PaymentMethod)
+	cashAccount, err := s.accountResolver.GetBankAccountForPaymentMethod(payment.PaymentMethod)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cash account: %v", err)
+		return nil, fmt.Errorf("failed to resolve cash/bank account: %v", err)
 	}
 	
 	// Create journal entry request
 	journalRequest := &JournalEntryRequest{
-		SourceType:  "PAYMENT",
+		SourceType:  models.SSOTSourceTypePayment,
 		SourceID:    func() *uint64 { id := uint64(payment.ID); return &id }(),
 		Reference:   fmt.Sprintf("PAY-%d", payment.ID),
 		EntryDate:   payment.PaymentDate,
@@ -165,7 +164,7 @@ func (s *SSOTSalesJournalService) getAccountByCode(code string) (*models.Account
 }
 
 func (s *SSOTSalesJournalService) getCashAccountForPayment(method string) (*models.Account, error) {
-	// Map payment methods to account codes
+	// Map payment methods to account codes (legacy fallback)
 	accountCodeMap := map[string]string{
 		"CASH":        "1101", // Kas
 		"BANK":        "1104", // Bank Mandiri

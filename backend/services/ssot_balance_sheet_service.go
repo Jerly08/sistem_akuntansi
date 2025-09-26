@@ -142,7 +142,8 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([
 		FROM accounts a
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
 		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
-		WHERE (uje.status = 'POSTED' AND uje.entry_date <= ?) OR uje.status IS NULL
+		WHERE ((uje.status = 'POSTED' AND uje.entry_date <= ?) OR uje.status IS NULL)
+		  AND COALESCE(a.is_header, false) = false
 		GROUP BY a.id, a.code, a.name, a.type
 		HAVING a.type IN ('ASSET', 'LIABILITY', 'EQUITY')
 		ORDER BY a.code
@@ -195,6 +196,7 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAc
 			a.balance as net_balance
 		FROM accounts a
 		WHERE a.type IN ('ASSET', 'LIABILITY', 'EQUITY')
+		  AND COALESCE(a.is_header, false) = false
 		ORDER BY a.code
 	`
 	
@@ -231,8 +233,9 @@ func (s *SSOTBalanceSheetService) calculateNetIncome(asOfDate string) float64 {
 		FROM accounts a
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
 		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
-		WHERE (uje.status = 'POSTED' AND uje.entry_date <= ?) OR uje.status IS NULL
+		WHERE ((uje.status = 'POSTED' AND uje.entry_date <= ?) OR uje.status IS NULL)
 		AND a.type IN ('REVENUE', 'EXPENSE')
+		AND COALESCE(a.is_header, false) = false
 	`
 	
 	if err := s.db.Raw(query, asOfDate).Scan(&netIncome).Error; err != nil {
@@ -277,11 +280,10 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 		code := balance.AccountCode
 		amount := balance.NetBalance
 		
-		// Show all accounts including zero balances for debugging
-		// TODO: Re-enable this skip logic after debugging
-		// if amount == 0 {
-		//	continue
-		// }
+		// Abaikan akun dengan saldo nol agar hanya data relevan yang tampil
+		if amount == 0 {
+			continue
+		}
 		
 		item := BSAccountItem{
 			AccountCode: balance.AccountCode,
@@ -301,17 +303,16 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 		}
 	}
 	
-	// Add Net Income to Retained Earnings
-	if netIncome != 0 {
-		bsData.Equity.RetainedEarnings += netIncome
-		// Add Net Income as a line item for transparency
-		netIncomeItem := BSAccountItem{
-			AccountCode: "NET_INCOME",
-			AccountName: "Net Income (Current Period)",
-			Amount:      netIncome,
+		// Tambahkan Net Income ke Retained Earnings dan tampilkan sebagai baris khusus
+		if netIncome != 0 {
+			bsData.Equity.RetainedEarnings += netIncome
+			netIncomeItem := BSAccountItem{
+				AccountCode: "NET_INCOME",
+				AccountName: "Laba/Rugi Berjalan",
+				Amount:      netIncome,
+			}
+			bsData.Equity.Items = append(bsData.Equity.Items, netIncomeItem)
 		}
-		bsData.Equity.Items = append(bsData.Equity.Items, netIncomeItem)
-	}
 	
 	// Calculate totals and check balance
 	s.calculateBalanceSheetTotals(bsData)

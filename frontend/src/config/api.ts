@@ -12,6 +12,17 @@ export const API_ENDPOINTS = {
   REFRESH: '/api/v1/auth/refresh',
   VALIDATE_TOKEN: '/api/v1/auth/validate-token',
   PROFILE: '/api/v1/profile',
+
+  // Auth nested object for services expecting AUTH.* structure
+  AUTH: {
+    LOGIN: '/api/v1/auth/login',
+    REGISTER: '/api/v1/auth/register',
+    REFRESH: '/api/v1/auth/refresh',
+    VALIDATE_TOKEN: '/api/v1/auth/validate-token',
+    PROFILE: '/api/v1/profile',
+    // Note: Ensure backend supports this; keep for compatibility if implemented
+    CHANGE_PASSWORD: '/api/v1/auth/change-password',
+  },
   
   // Products (with /api/v1 prefix)
   PRODUCTS: '/api/v1/products',
@@ -174,8 +185,13 @@ export const API_ENDPOINTS = {
   INVENTORY_BULK_PRICE_UPDATE: '/api/v1/inventory/bulk-price-update',
   
   // Users (with /api/v1 prefix)
-  USERS: '/api/v1/users',
-  USERS_BY_ID: (id: number) => `/api/v1/users/${id}`,
+  USERS: {
+    LIST: '/api/v1/users',
+    CREATE: '/api/v1/users',
+    GET_BY_ID: (id: number) => `/api/v1/users/${id}`,
+    UPDATE: (id: number) => `/api/v1/users/${id}`,
+    DELETE: (id: number) => `/api/v1/users/${id}`,
+  },
   
   // Permissions (with /api/v1 prefix)  
   PERMISSIONS_USERS: '/api/v1/permissions/users',
@@ -200,29 +216,29 @@ export const API_ENDPOINTS = {
   // CASH_BANK endpoints aligned with backend routes under /api/v1
   CASH_BANK: {
     // Accounts CRUD
-    ACCOUNTS: '/api/v1/cashbank/accounts',
-    GET_BY_ID: (id: number) => `/api/v1/cashbank/accounts/${id}`,
-    ACCOUNT_BY_ID: (id: number) => `/api/v1/cashbank/accounts/${id}`,
-    CREATE: '/api/v1/cashbank/accounts',
-    UPDATE: (id: number) => `/api/v1/cashbank/accounts/${id}`,
-    DELETE: (id: number) => `/api/v1/cashbank/accounts/${id}`,
+    ACCOUNTS: '/api/v1/cash-bank/accounts',
+    GET_BY_ID: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
+    ACCOUNT_BY_ID: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
+    CREATE: '/api/v1/cash-bank/accounts',
+    UPDATE: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
+    DELETE: (id: number) => `/api/v1/cash-bank/accounts/${id}`,
 
     // Transactions & history
-    TRANSACTIONS: (id: number) => `/api/v1/cashbank/accounts/${id}/transactions`,
-    ACCOUNT_TRANSACTIONS: (id: number) => `/api/v1/cashbank/accounts/${id}/transactions`,
+    TRANSACTIONS: (id: number) => `/api/v1/cash-bank/accounts/${id}/transactions`,
+    ACCOUNT_TRANSACTIONS: (id: number) => `/api/v1/cash-bank/accounts/${id}/transactions`,
 
     // Dropdowns / Lookups
-    PAYMENT_ACCOUNTS: '/api/v1/cashbank/payment-accounts',
-    REVENUE_ACCOUNTS: '/api/v1/cashbank/revenue-accounts',
-    DEPOSIT_SOURCE_ACCOUNTS: '/api/v1/cashbank/deposit-source-accounts',
+    PAYMENT_ACCOUNTS: '/api/v1/cash-bank/reports/payment-accounts',
+    REVENUE_ACCOUNTS: '/api/cashbank/revenue-accounts',
+    DEPOSIT_SOURCE_ACCOUNTS: '/api/cashbank/deposit-source-accounts',
 
     // Summaries & reports
-    BALANCE_SUMMARY: '/api/v1/cashbank/balance-summary',
+    BALANCE_SUMMARY: '/api/v1/cash-bank/reports/balance-summary',
 
-    // Operations
-    TRANSFER: '/api/v1/cashbank/transfer',
-    DEPOSIT: '/api/v1/cashbank/deposit',
-    WITHDRAWAL: '/api/v1/cashbank/withdrawal',
+    // Operations (use SSOT transaction routes to avoid 404 on some environments)
+    TRANSFER: '/api/v1/cash-bank/transactions/transfer',
+    DEPOSIT: '/api/v1/cash-bank/transactions/deposit',
+    WITHDRAWAL: '/api/v1/cash-bank/transactions/withdrawal',
 
     // Reconciliation (available under /cash-bank group)
     RECONCILE: (id: number) => `/api/v1/cash-bank/accounts/${id}/reconcile`,
@@ -274,24 +290,35 @@ export const API_ENDPOINTS = {
   MONITORING_API_UNUSED: '/monitoring/api-usage/unused',
   MONITORING_API_RESET: '/monitoring/api-usage/reset',
   
-  // Payments (with /api/v1 prefix based on error analysis) - with nested structure
+  // Payments (with /api/v1 prefix based on backend routes) - with nested structure
   PAYMENTS: {
     LIST: '/api/v1/payments',
     CREATE: '/api/v1/payments',
-    BY_ID: (id: number) => `/api/v1/payments/${id}`,
-    GET_BY_ID: (id: number) => `/api/v1/payments/${id}`,
+    // Prefer SSOT detail endpoint for GET by ID as legacy GET may be disabled
+    BY_ID: (id: number) => `/api/v1/payments/ssot/${id}`,
+    GET_BY_ID: (id: number) => `/api/v1/payments/ssot/${id}`,
     CANCEL: (id: number) => `/api/v1/payments/${id}/cancel`,
+    DELETE: (id: number | string) => `/api/v1/payments/${id}`,
     PDF: (id: number) => `/api/v1/payments/${id}/pdf`,
     ANALYTICS: '/api/v1/payments/analytics',
     SUMMARY: '/api/v1/payments/summary',
     UNPAID_BILLS: (vendorId: number) => `/api/v1/payments/unpaid-bills/${vendorId}`,
     UNPAID_INVOICES: (customerId: number) => `/api/v1/payments/unpaid-invoices/${customerId}`,
     EXPORT_EXCEL: '/api/v1/payments/export/excel',
-    REPORT_PDF: '/api/v1/payments/report/pdf',
-    // SSOT endpoints (these might use different prefix if they exist)
+    REPORT: {
+      PDF: '/api/v1/payments/report/pdf',
+    },
+    EXPORT: '/api/v1/payments/export', // If not implemented, callers should use EXPORT_EXCEL or REPORT.PDF
+    GENERATE_REPORT: (reportType: string) => `/api/v1/payments/report/${reportType}`,
+    BULK: '/api/v1/payments/bulk',
+    // SSOT endpoints (for creation and detail with journal integration)
     SSOT: {
       RECEIVABLE: '/api/v1/payments/ssot/receivable',
       PAYABLE: '/api/v1/payments/ssot/payable',
+      GET_BY_ID: (id: number) => `/api/v1/payments/ssot/${id}`,
+      REVERSE: (id: number) => `/api/v1/payments/ssot/${id}/reverse`,
+      PREVIEW_JOURNAL: '/api/v1/payments/ssot/preview-journal',
+      BALANCE_UPDATES: (id: number) => `/api/v1/payments/ssot/${id}/balance-updates`,
     }
   },
   // Legacy flat endpoints for backward compatibility
@@ -382,6 +409,9 @@ export const API_ENDPOINTS = {
     CASH_FLOW: '/api/v1/ssot-reports/cash-flow',
     CASH_FLOW_SUMMARY: '/api/v1/ssot-reports/cash-flow/summary',
     CASH_FLOW_VALIDATE: '/api/v1/ssot-reports/cash-flow/validate',
+
+    // Account balances for COA sync
+    ACCOUNT_BALANCES: '/api/v1/ssot-reports/account-balances',
   },
   
   // SSOT Balance Sheet & Cash Flow (no /api/v1 prefix based on Swagger)

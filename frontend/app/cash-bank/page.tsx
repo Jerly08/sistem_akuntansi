@@ -427,7 +427,8 @@ const CashBankPage: React.FC = () => {
         cashbankService.getBalanceSummary()
       ]);
       
-      setAccounts(accountsData);
+      // Ensure accountsData is an array before setting state
+      setAccounts(Array.isArray(accountsData) ? accountsData : []);
       setBalanceSummary(summaryData);
     } catch (err: any) {
       console.error('Error fetching cash bank data:', err);
@@ -556,8 +557,9 @@ const CashBankPage: React.FC = () => {
   };
 
   // Separate cash and bank accounts
-  const cashAccounts = accounts.filter(acc => acc.type === 'CASH' && acc.is_active);
-  const bankAccounts = accounts.filter(acc => acc.type === 'BANK' && acc.is_active);
+  const safeAccounts = Array.isArray(accounts) ? accounts : [];
+  const cashAccounts = safeAccounts.filter(acc => acc.type === 'CASH' && acc.is_active);
+  const bankAccounts = safeAccounts.filter(acc => acc.type === 'BANK' && acc.is_active);
   
   // Get columns with handlers
   const accountColumns = getAccountColumns(
@@ -640,19 +642,19 @@ const CashBankPage: React.FC = () => {
         </Alert>
         
         {/* COA Integration Status */}
-        {accounts.length > 0 && (
-          <Card mb={6} borderLeft="4px" borderLeftColor={accounts.some(acc => !acc.account) ? 'orange.400' : 'green.400'}>
+        {safeAccounts.length > 0 && (
+          <Card mb={6} borderLeft="4px" borderLeftColor={safeAccounts.some(acc => !acc.account) ? 'orange.400' : 'green.400'}>
             <CardBody>
               <Flex justify="space-between" align="center">
                 <Box>
                   <Text fontSize="sm" fontWeight="medium" mb={1}>
-                    {accounts.some(acc => !acc.account) ? '⚠️ COA Integration Status' : '✅ COA Integration Status'}
+                    {safeAccounts.some(acc => !acc.account) ? '⚠️ COA Integration Status' : '✅ COA Integration Status'}
                   </Text>
                   <Text fontSize="xs" color="gray.600">
-                    {accounts.filter(acc => acc.account).length} of {accounts.length} accounts linked to COA
+                    {safeAccounts.filter(acc => acc.account).length} of {safeAccounts.length} accounts linked to COA
                   </Text>
                 </Box>
-                {accounts.some(acc => !acc.account) && (
+                {safeAccounts.some(acc => !acc.account) && (
                   <Button 
                     size="xs" 
                     colorScheme="orange" 
