@@ -67,59 +67,68 @@ func main() {
 
 	// 3. Mark problematic migrations as completed to prevent re-running
 	fmt.Println("📝 Marking problematic migrations as completed...")
-	markCompletedSQL := `
-		-- Mark migrations as completed
-		INSERT INTO migration_logs (migration_name, executed_at, description, status)
-		VALUES 
-		    ('012_purchase_payment_integration_pg', NOW(), 'Manual fix - deleted_at column added', 'COMPLETED'),
-		    ('013_payment_performance_optimization', NOW(), 'Manual fix - simplified index created', 'COMPLETED'),
-		    ('020_add_sales_data_integrity_constraints', NOW(), 'Manual fix - constraints skipped (DO blocks problematic)', 'COMPLETED'),
-		    ('022_comprehensive_model_updates', NOW(), 'Manual fix - model updates skipped (DO blocks problematic)', 'COMPLETED'),
-		    ('023_create_purchase_approval_workflows', NOW(), 'Manual fix - workflows already exist', 'COMPLETED'),
-		    ('025_safe_ssot_journal_migration_fix', NOW(), 'Manual fix - SSOT tables already exist', 'COMPLETED'),
-		    ('026_fix_sync_account_balance_fn_bigint', NOW(), 'Manual fix - functions already exist', 'COMPLETED'),
-		    ('030_create_account_balances_materialized_view', NOW(), 'Manual fix - view already created', 'COMPLETED'),
-		    ('database_enhancements_v2024_1', NOW(), 'Manual fix - enhancements already applied', 'COMPLETED')
-		ON CONFLICT (migration_name) DO UPDATE SET 
-		    executed_at = NOW(),
-		    status = 'COMPLETED';
-	`
-	
-	result = db.Exec(markCompletedSQL)
-	if result.Error != nil {
-		fmt.Printf("❌ Failed to mark migrations as completed: %v\n", result.Error)
-	} else {
-		fmt.Printf("✅ Migrations marked as completed successfully\n")
+	// Use individual INSERT statements for better error handling
+	migrations := []struct {
+		name    string
+		message string
+	}{
+		{"012_purchase_payment_integration_pg", "Manual fix - deleted_at column added"},
+		{"013_payment_performance_optimization", "Manual fix - simplified index created"},
+		{"020_add_sales_data_integrity_constraints", "Manual fix - constraints skipped (DO blocks problematic)"},
+		{"022_comprehensive_model_updates", "Manual fix - model updates skipped (DO blocks problematic)"},
+		{"023_create_purchase_approval_workflows", "Manual fix - workflows already exist"},
+		{"025_safe_ssot_journal_migration_fix", "Manual fix - SSOT tables already exist"},
+		{"026_fix_sync_account_balance_fn_bigint", "Manual fix - functions already exist"},
+		{"030_create_account_balances_materialized_view", "Manual fix - view already created"},
+		{"database_enhancements_v2024_1", "Manual fix - enhancements already applied"},
+	}
+
+	for _, migration := range migrations {
+		insertSQL := `
+			INSERT INTO migration_logs (migration_name, executed_at, message, status, created_at, updated_at)
+			VALUES ($1, NOW(), $2, 'SUCCESS', NOW(), NOW())
+			ON CONFLICT (migration_name) DO UPDATE SET 
+				executed_at = NOW(),
+				message = EXCLUDED.message,
+				status = 'SUCCESS',
+				updated_at = NOW()
+		`
+		result := db.Exec(insertSQL, migration.name, migration.message)
+		if result.Error != nil {
+			fmt.Printf("⚠️  Warning: Failed to mark migration %s as completed: %v\n", migration.name, result.Error)
+		} else {
+			fmt.Printf("✅ Marked migration %s as completed\n", migration.name)
+		}
 	}
 
 	// 4. Create hash-based migration tracking to prevent re-execution
 	fmt.Println("🔒 Creating migration hash tracking...")
 	createHashTrackingSQL := `
-		-- Create simple migration tracking
-		CREATE TABLE IF NOT EXISTS migration_hashes (
-		    id BIGSERIAL PRIMARY KEY,
-		    migration_file VARCHAR(255) UNIQUE NOT NULL,
-		    file_hash VARCHAR(64),
-		    executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-		    status VARCHAR(20) DEFAULT 'COMPLETED'
-		);
+			-- Create simple migration tracking (separate from migration_logs)
+			CREATE TABLE IF NOT EXISTS migration_hashes (
+			    id BIGSERIAL PRIMARY KEY,
+			    migration_file VARCHAR(255) UNIQUE NOT NULL,
+			    file_hash VARCHAR(64),
+			    executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+			    status VARCHAR(20) DEFAULT 'SUCCESS'
+			);
 
-		-- Insert current migrations
-		INSERT INTO migration_hashes (migration_file, file_hash, status)
-		VALUES 
-		    ('011_purchase_payment_integration.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('012_purchase_payment_integration_pg.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('013_payment_performance_optimization.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('020_add_sales_data_integrity_constraints.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('022_comprehensive_model_updates.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('023_create_purchase_approval_workflows.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('025_safe_ssot_journal_migration_fix.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('026_fix_sync_account_balance_fn_bigint.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('030_create_account_balances_materialized_view.sql', 'manual_fix_v1', 'COMPLETED'),
-		    ('database_enhancements_v2024_1.sql', 'manual_fix_v1', 'COMPLETED')
-		ON CONFLICT (migration_file) DO UPDATE SET 
-		    executed_at = NOW(),
-		    status = 'COMPLETED';
+			-- Insert current migrations
+			INSERT INTO migration_hashes (migration_file, file_hash, status)
+			VALUES 
+			    ('011_purchase_payment_integration.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('012_purchase_payment_integration_pg.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('013_payment_performance_optimization.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('020_add_sales_data_integrity_constraints.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('022_comprehensive_model_updates.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('023_create_purchase_approval_workflows.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('025_safe_ssot_journal_migration_fix.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('026_fix_sync_account_balance_fn_bigint.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('030_create_account_balances_materialized_view.sql', 'manual_fix_v1', 'SUCCESS'),
+			    ('database_enhancements_v2024_1.sql', 'manual_fix_v1', 'SUCCESS')
+			ON CONFLICT (migration_file) DO UPDATE SET 
+			    executed_at = NOW(),
+			    status = 'SUCCESS';
 	`
 	
 	result = db.Exec(createHashTrackingSQL)
