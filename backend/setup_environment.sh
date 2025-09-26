@@ -20,21 +20,14 @@ if ! command -v go &> /dev/null; then
     exit 1
 fi
 
-echo "📋 Step 1: Running migration fixes..."
-if go run cmd/fix_migrations.go; then
-    echo "✅ Migration fixes completed"
+echo "🔧 Step 1: Running comprehensive migration fixes..."
+if go run cmd/fix_all_migrations.go; then
+    echo "✅ Comprehensive migration fixes completed"
 else
-    echo "⚠️  Migration fixes had some issues, continuing..."
+    echo "⚠️  Some migration fixes had issues, continuing..."
 fi
 
-echo "🔧 Step 2: Running remaining migration fixes..."
-if go run cmd/fix_remaining_migrations.go; then
-    echo "✅ Remaining migration fixes completed"
-else
-    echo "⚠️  Some remaining fixes had issues, continuing..."
-fi
-
-echo "🧪 Step 3: Running verification..."
+echo "🧪 Step 2: Running verification..."
 if go run cmd/final_verification.go; then
     echo "✅ Environment verification completed"
 else
