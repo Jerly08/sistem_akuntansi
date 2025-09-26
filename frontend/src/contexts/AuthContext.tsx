@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { API_ENDPOINTS } from '@/config/api';
+import { API_ENDPOINTS, API_BASE_URL } from '@/config/api';
 
 // Define user type - backend sends lowercase roles
 export type UserRole = 'admin' | 'finance' | 'inventory_manager' | 'director' | 'employee' | 'auditor' | 'operational_user';
@@ -31,8 +31,7 @@ interface AuthContextType {
 // Create context
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// API URL - ensure this is correctly defined
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+// Use API_BASE_URL from config which handles trailing slash properly
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -73,7 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (userData && userData.id && userData.email && storedToken.length > 20) {
               // Try to validate the token by making a quick API call
               try {
-                const response = await fetch(`${API_URL}${API_ENDPOINTS.VALIDATE_TOKEN}`, {
+                const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.VALIDATE_TOKEN}`, {
                   method: 'GET',
                   headers: {
                     'Authorization': `Bearer ${storedToken}`,
@@ -135,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       
-      const loginUrl = `${API_URL}${API_ENDPOINTS.LOGIN}`;
+      const loginUrl = `${API_BASE_URL}${API_ENDPOINTS.LOGIN}`;
       console.log('Login URL:', loginUrl);
       
       const response = await fetch(loginUrl, {
@@ -202,7 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       
-      const response = await fetch(`${API_URL}${API_ENDPOINTS.REGISTER}`, {
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.REGISTER}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

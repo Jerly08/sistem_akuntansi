@@ -1,7 +1,11 @@
 // API Configuration
-// Ensure trailing slash to avoid double slashes when concatenating with endpoint paths
+// For development, use empty string to leverage Next.js proxy rewrites
+// For production, use the full API URL
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-export const API_BASE_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
+const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+// Use empty string for localhost to leverage Next.js proxy, otherwise use full URL
+export const API_BASE_URL = isLocalhost ? '' : (rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl);
 // For local development, we use relative URLs since Next.js handles rewrites
 // This allows Next.js proxy to handle the backend communication
 export const API_V1_BASE = `/api/v1`;
