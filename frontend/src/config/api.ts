@@ -1,5 +1,7 @@
 // API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
+// Ensure trailing slash to avoid double slashes when concatenating with endpoint paths
+const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+export const API_BASE_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
 // For local development, we use relative URLs since Next.js handles rewrites
 // This allows Next.js proxy to handle the backend communication
 export const API_V1_BASE = `/api/v1`;

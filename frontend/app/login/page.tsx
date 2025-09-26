@@ -67,6 +67,9 @@ const LoginContent = () => {
   const decorativeElementBg1 = useColorModeValue('blue.100', 'blue.800');
   const decorativeElementBg2 = useColorModeValue('purple.100', 'purple.800');
   const passwordToggleHoverBg = useColorModeValue('gray.100', 'gray.600');
+  // Error alert colors
+  const errorAlertBg = useColorModeValue('red.50', 'red.900');
+  const errorAlertBorderColor = useColorModeValue('red.200', 'red.700');
   
   useEffect(() => {
     if (isAuthenticated) {
@@ -432,9 +435,9 @@ const LoginContent = () => {
                       status="error" 
                       mb={6} 
                       borderRadius="xl"
-                      bg={useColorModeValue('red.50', 'red.900')}
+                      bg={errorAlertBg}
                       borderWidth="1px"
-                      borderColor={useColorModeValue('red.200', 'red.700')}
+                      borderColor={errorAlertBorderColor}
                     >
                       <AlertIcon />
                       <Box>
