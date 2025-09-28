@@ -87,8 +87,8 @@ var DefaultAccountMappings = map[AccountType]AccountMapping{
 		Description: "Accounts receivable",
 	},
 	AccountTypePPNReceivable: {
-		Codes: []string{"1106", "1105", "1107"},
-		Names: []string{"PPN Masukan", "PPN Receivable", "Pajak Masukan"},
+		Codes: []string{"1240", "1106", "1105"},
+		Names: []string{"PPN Masukan", "PPN Receivable", "Pajak Masukan", "Input VAT"},
 		AccountType: models.AccountTypeAsset,
 		Description: "PPN receivable (input tax)",
 	},
@@ -105,8 +105,8 @@ var DefaultAccountMappings = map[AccountType]AccountMapping{
 		Description: "PPN payable (output tax)",
 	},
 	AccountTypeSalesRevenue: {
-		Codes: []string{"4000", "4001", "4100", "4101"},
-		Names: []string{"Sales Revenue", "Penjualan", "Revenue", "Sales"},
+		Codes: []string{"4101", "4100", "4001", "4000"},  // Prioritize leaf accounts first
+		Names: []string{"Pendapatan Penjualan", "Sales Revenue", "Penjualan", "Revenue", "Sales"},
 		AccountType: models.AccountTypeRevenue,
 		Description: "Sales revenue",
 	},
@@ -252,11 +252,17 @@ func (ar *AccountResolver) findAccountByCode(code string) (*models.Account, erro
 	}
 	
 	// Check if account is active
-	if account.IsActive {
-		return account, nil
+	if !account.IsActive {
+		return nil, gorm.ErrRecordNotFound
 	}
 	
-	return nil, gorm.ErrRecordNotFound
+	// 🛡️ CRITICAL: Prevent parent accounts from being used in journal entries
+	if account.IsHeader {
+		log.Printf("⚠️ Skipping header account %s (%s) - cannot be used for journal entries", account.Code, account.Name)
+		return nil, gorm.ErrRecordNotFound
+	}
+	
+	return account, nil
 }
 
 // findAccountByName finds account by name (partial match)

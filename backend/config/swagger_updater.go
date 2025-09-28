@@ -41,6 +41,8 @@ func UpdateSwaggerDocs() {
 	filterDeprecatedPSAK(swaggerDoc)
 	// Hide CashBank Integration endpoints from public docs
 	filterCashBankIntegration(swaggerDoc)
+	// Normalize paths to match actual backend + frontend usage
+	normalizePaths(swaggerDoc)
 	
 	// Update the dynamic fields
 	swaggerDoc["host"] = swaggerConfig.Host
@@ -52,8 +54,8 @@ func UpdateSwaggerDocs() {
 		info["description"] = swaggerConfig.Description
 	}
 	
-	// Update basePath
-	swaggerDoc["basePath"] = swaggerConfig.BasePath
+	// Force basePath to root so paths are absolute in UI
+	swaggerDoc["basePath"] = "/"
 	
 	// Marshal back to JSON
 	updatedData, err := json.MarshalIndent(swaggerDoc, "", "  ")
@@ -72,6 +74,65 @@ func UpdateSwaggerDocs() {
 	updateSwaggerGoDocs(swaggerConfig)
 	
 	log.Printf("✅ Swagger docs updated dynamically: %s", swaggerConfig.GetSwaggerURL())
+}
+
+// normalizePaths updates path keys to align with actual routes used by frontend/backend
+func normalizePaths(swaggerDoc map[string]interface{}) {
+	paths, ok := swaggerDoc["paths"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	changes := make(map[string]interface{})
+	removed := 0
+	for p, v := range paths {
+		newPath := p
+
+		// Fix common prefix issues by adding /api/v1 and correcting segment names
+		if strings.HasPrefix(newPath, "/api/cashbank") {
+			newPath = strings.Replace(newPath, "/api/cashbank", "/api/v1/cash-bank", 1)
+		}
+		if strings.HasPrefix(newPath, "/api/monitoring") {
+			newPath = strings.Replace(newPath, "/api/monitoring", "/api/v1/monitoring", 1)
+		}
+		if strings.HasPrefix(newPath, "/api/payments") {
+			newPath = strings.Replace(newPath, "/api/payments", "/api/v1/payments", 1)
+		}
+		if strings.HasPrefix(newPath, "/api/purchases") {
+			newPath = strings.Replace(newPath, "/api/purchases", "/api/v1/purchases", 1)
+		}
+		if strings.HasPrefix(newPath, "/api/admin") {
+			newPath = strings.Replace(newPath, "/api/admin", "/api/v1/admin", 1)
+		}
+
+		// Normalize root-level routes expected to live under /api/v1
+		if strings.HasPrefix(newPath, "/auth") ||
+			strings.HasPrefix(newPath, "/profile") ||
+			strings.HasPrefix(newPath, "/dashboard/") ||
+			strings.HasPrefix(newPath, "/journal-drilldown") ||
+			strings.HasPrefix(newPath, "/monitoring/") {
+			newPath = "/api/v1" + newPath
+		}
+
+		// If nothing changed, continue
+		if newPath == p {
+			continue
+		}
+
+		// Plan change: move value to new key
+		changes[newPath] = v
+		delete(paths, p)
+		removed++
+	}
+
+	// Apply changes
+	for np, val := range changes {
+		paths[np] = val
+	}
+
+	if removed > 0 {
+		log.Printf("🔧 Normalized %d Swagger path(s) to align with /api/v1 and naming conventions", removed)
+	}
 }
 
 // filterDeprecatedPSAK removes PSAK endpoints and tags from swaggerDoc in-place
@@ -110,16 +171,23 @@ func filterDeprecatedPSAK(swaggerDoc map[string]interface{}) {
 
 // filterCashBankIntegration removes CashBank Integration endpoints and tag from swaggerDoc in-place
 func filterCashBankIntegration(swaggerDoc map[string]interface{}) {
-	// We hide all endpoints under /api/cashbank/integrated from public docs
-	const integratedPrefix = "/api/cashbank/integrated"
+	// We hide all endpoints related to CashBank Integration from public docs
+	integratedPrefixes := []string{
+		"/api/cashbank/integrated",
+		"/api/v1/cash-bank/integrated",
+		"/api/v1/cash-bank/ssot",
+	}
 
 	// Remove paths for CashBank Integration
 	if paths, ok := swaggerDoc["paths"].(map[string]interface{}); ok {
 		removed := 0
 		for p := range paths {
-			if strings.HasPrefix(p, integratedPrefix) || strings.Contains(p, "/cashbank/integrated") {
-				delete(paths, p)
-				removed++
+			for _, pref := range integratedPrefixes {
+				if strings.HasPrefix(p, pref) || strings.Contains(p, pref) {
+					delete(paths, p)
+					removed++
+					break
+				}
 			}
 		}
 		if removed > 0 {

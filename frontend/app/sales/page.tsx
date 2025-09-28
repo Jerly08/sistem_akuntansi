@@ -178,8 +178,10 @@ const SalesPage: React.FC = () => {
       
       switch (action) {
         case 'confirm':
-          await salesService.confirmSale(sale.id);
-          message = 'Sale has been confirmed and invoiced successfully';
+          // FIXED: Use createInvoiceFromSale to directly create invoice (DRAFT -> INVOICED)
+          // This will create journal entries and set proper accounting impact
+          await salesService.createInvoiceFromSale(sale.id);
+          message = 'Sale has been invoiced successfully! Journal entries have been created.';
           break;
         case 'cancel':
           const reason = window.prompt('Please provide a reason for cancellation:');

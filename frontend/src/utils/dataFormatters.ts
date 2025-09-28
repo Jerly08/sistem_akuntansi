@@ -34,13 +34,23 @@ const indonesianMonthNames = [
 ];
 
 // Format date with Indonesian month names (DD Month YYYY)
-export const formatDateWithIndonesianMonth = (date: string | Date): string => {
-  if (!date) return '';
+export const formatDateWithIndonesianMonth = (date: string | Date | null): string => {
+  if (!date) return '-';
+  
+  // Handle Go's zero date
+  if (typeof date === 'string' && (date === '0001-01-01T00:00:00Z' || date === '0001-01-01')) {
+    return '-';
+  }
   
   const dateObj = typeof date === 'string' ? new Date(date) : date;
   
   // Handle invalid dates
-  if (isNaN(dateObj.getTime())) return '';
+  if (isNaN(dateObj.getTime())) return '-';
+  
+  // Check if it's Go's zero date after conversion
+  if (dateObj.getFullYear() === 1) {
+    return '-';
+  }
   
   const day = dateObj.getDate();
   const month = dateObj.getMonth(); // 0-based index

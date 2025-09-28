@@ -56,6 +56,7 @@ import AssetSummaryComponent from '@/components/assets/AssetSummary';
 import InteractiveMapPicker from '@/components/common/InteractiveMapPicker';
 import AssetImageUpload from '@/components/assets/AssetImageUpload';
 import CurrencyInput from '@/components/common/CurrencyInput';
+import { getAssetImageUrl } from '@/utils/imageUrl';
 import { 
   validateAssetForm, 
   getFieldError, 
@@ -76,6 +77,13 @@ const AssetsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
   
+  // Filters & pagination
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<BackendAsset | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,6 +100,15 @@ const AssetsPage = () => {
   
   // Category management states
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
+  // Recalculate depreciation (detail modal)
+  const [recalcDate, setRecalcDate] = useState('');
+  const [recalcResult, setRecalcResult] = useState<null | {
+    current_book_value: number;
+    accumulated_depreciation: number;
+    depreciation_method: string;
+  }>(null);
+  const [isRecalcLoading, setIsRecalcLoading] = useState(false);
   // Database categories (with code) and merged name list for the dropdown
   const [dbCategories, setDbCategories] = useState<{ id: number; code: string; name: string; is_active: boolean }[]>([]);
   const [customCategories, setCustomCategories] = useState<string[]>([...ASSET_CATEGORIES]);
@@ -398,11 +415,35 @@ const AssetsPage = () => {
   };
 
   // Handle form input changes
+  // Suggest accounts based on category name
+  const suggestAccountsForCategory = (categoryName: string) => {
+    if (!categoryName) return { assetId: formData.assetAccountId, depId: formData.depreciationAccountId };
+    const name = categoryName.toLowerCase();
+    let fa = fixedAssetAccounts.find(acc => acc.code?.startsWith('1502') || /bangunan|building/.test(acc.name?.toLowerCase() || ''))
+          || fixedAssetAccounts.find(acc => acc.code?.startsWith('1503') && /vehicle|kendaraan/.test(name))
+          || fixedAssetAccounts.find(acc => acc.code?.startsWith('1504') && /furniture/.test(name))
+          || fixedAssetAccounts.find(acc => acc.code?.startsWith('1505') && /(computer|it)/.test(name))
+          || fixedAssetAccounts.find(acc => acc.code?.startsWith('1501') && /(machinery|mesin)/.test(name))
+          || fixedAssetAccounts[0];
+    let dep = depreciationAccounts.find(acc => /depreciation|penyusutan/.test((acc.name||'').toLowerCase())) || depreciationAccounts[0];
+    return { assetId: fa?.id, depId: dep?.id };
+  };
+
   const handleInputChange = (field: keyof AssetFormData, value: any) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+
+    // Auto-suggest accounts when category changes and no account selected yet
+    if (field === 'category') {
+      const { assetId, depId } = suggestAccountsForCategory(value as string);
+      setFormData(prev => ({
+        ...prev,
+        assetAccountId: prev.assetAccountId || assetId,
+        depreciationAccountId: prev.depreciationAccountId || depId,
+      }));
+    }
   };
 
   // Format currency for display
@@ -434,24 +475,6 @@ const AssetsPage = () => {
     }
   };
 
-  // Generate image URL
-  const getImageUrl = (imagePath?: string): string => {
-    if (!imagePath) return '';
-    
-    // If path is already a full URL, return as is
-    if (imagePath.startsWith('http')) {
-      return imagePath;
-    }
-    
-    // Get the static file base URL
-    const staticBaseURL = process.env.NEXT_PUBLIC_STATIC_URL;
-    
-    // Ensure path starts with /
-    const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-    
-    // Construct full URL
-    return `${staticBaseURL}${cleanPath}`;
-  };
 
   // Table columns definition
   const columns = [
@@ -614,6 +637,8 @@ const AssetsPage = () => {
 
   // Handle view asset details
   const handleViewDetails = async (asset: BackendAsset) => {
+    setRecalcResult(null);
+    setRecalcDate('');
     try {
       const response = await assetService.getAsset(asset.id);
       setDetailAsset(response.data);
@@ -630,6 +655,25 @@ const AssetsPage = () => {
     }
   };
 
+
+  // Recalculate depreciation as of a date for selected detail asset
+  const handleRecalculate = async () => {
+    if (!detailAsset) return;
+    try {
+      setIsRecalcLoading(true);
+      const res = await assetService.calculateDepreciation(detailAsset.id, recalcDate || undefined);
+      setRecalcResult({
+        current_book_value: res.data.current_book_value,
+        accumulated_depreciation: res.data.accumulated_depreciation,
+        depreciation_method: res.data.depreciation_method,
+      });
+      toast({ title: 'Recalculated', status: 'success', duration: 2000, isClosable: true });
+    } catch (e) {
+      toast({ title: 'Failed to recalculate', status: 'error', duration: 3000, isClosable: true });
+    } finally {
+      setIsRecalcLoading(false);
+    }
+  };
 
   // Handle export assets
   const handleExport = () => {
@@ -971,15 +1015,88 @@ const AssetsPage = () => {
           isLoading={isLoadingSummary} 
         />
         
-        <Table<BackendAsset>
-          columns={columns}
-          data={assets}
-          keyField="id"
-          title={`Assets (${assets.length})`}
-          actions={renderActions}
-          isLoading={isLoading}
-          emptyMessage="No assets found. Click 'Add Asset' to create your first asset."
-        />
+        {/* Filters */}
+        <Box mb={4}>
+          <HStack spacing={3} align="center" wrap="wrap">
+            <Input
+              placeholder="Search code or name..."
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              maxW="280px"
+            />
+            <Select
+              placeholder="All categories"
+              value={filterCategory}
+              onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}
+              maxW="240px"
+            >
+              {Array.from(new Set(assets.map(a => a.category).filter(Boolean))).map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </Select>
+            <Select
+              placeholder="All status"
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+              maxW="200px"
+            >
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="INACTIVE">INACTIVE</option>
+              <option value="SOLD">SOLD</option>
+            </Select>
+            <HStack spacing={2}>
+              <Text fontSize="sm" color="gray.600">Rows:</Text>
+              <Select value={pageSize} onChange={(e) => { setPageSize(parseInt(e.target.value) || 10); setCurrentPage(1); }} maxW="80px">
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </Select>
+            </HStack>
+          </HStack>
+        </Box>
+        
+        {/* Filter & paginate data */}
+        {(() => {
+          const filtered = assets.filter(a => {
+            const matchSearch = !searchTerm ||
+              a.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              a.name?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchCat = !filterCategory || a.category === filterCategory;
+            const matchStatus = !filterStatus || a.status === filterStatus;
+            return matchSearch && matchCat && matchStatus;
+          });
+          const total = filtered.length;
+          const totalPages = Math.max(1, Math.ceil(total / pageSize));
+          const page = Math.min(currentPage, totalPages);
+          const start = (page - 1) * pageSize;
+          const pageData = filtered.slice(start, start + pageSize);
+          
+          return (
+            <>
+              <Table<BackendAsset>
+                columns={columns}
+                data={pageData}
+                keyField="id"
+                title={`Assets (${total})`}
+                actions={renderActions}
+                isLoading={isLoading}
+                emptyMessage="No assets found. Click 'Add Asset' to create your first asset."
+              />
+              {/* Pagination Controls */}
+              <HStack justify="space-between" mt={3}>
+                <Text fontSize="sm" color="gray.600">Showing {Math.min(total, start + 1)}–{Math.min(total, start + pageSize)} of {total}</Text>
+                <HStack>
+                  <Button size="sm" onClick={() => setCurrentPage(1)} isDisabled={page<=1}>First</Button>
+                  <Button size="sm" onClick={() => setCurrentPage(p => Math.max(1, p-1))} isDisabled={page<=1}>Prev</Button>
+                  <Text fontSize="sm">Page {page} / {totalPages}</Text>
+                  <Button size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} isDisabled={page>=totalPages}>Next</Button>
+                  <Button size="sm" onClick={() => setCurrentPage(totalPages)} isDisabled={page>=totalPages}>Last</Button>
+                </HStack>
+              </HStack>
+            </>
+          );
+        })()}
         
         <Modal 
           isOpen={isModalOpen} 
@@ -1500,7 +1617,7 @@ const AssetsPage = () => {
                   <Box textAlign="center">
                     {detailAsset.image_path ? (
                       <Image
-                        src={getImageUrl(detailAsset.image_path)}
+                        src={getAssetImageUrl(detailAsset.image_path) || ''}
                         alt={detailAsset.name}
                         maxH="300px"
                         maxW="400px"
@@ -1601,11 +1718,27 @@ const AssetsPage = () => {
                     </Grid>
                   </Box>
 
-                  {/* Financial Information */}
-                  <Box>
-                    <Text fontSize="xl" fontWeight="bold" mb={4} color="gray.700">
-                      💰 Financial Information
-                    </Text>
+              {/* Financial Information */}
+              <Box>
+                <Text fontSize="xl" fontWeight="bold" mb={4} color="gray.700">
+                  💰 Financial Information
+                </Text>
+                
+                {/* Recalculate as of date */}
+                <Box mb={4}>
+                  <HStack spacing={3} align="center">
+                    <Text fontSize="sm" color="gray.600">Recalculate as of</Text>
+                    <Input type="date" size="sm" value={recalcDate} onChange={(e) => setRecalcDate(e.target.value)} maxW="200px" />
+                    <Button size="sm" colorScheme="blue" isLoading={isRecalcLoading} onClick={handleRecalculate}>Recalculate</Button>
+                  </HStack>
+                  {recalcResult && (
+                    <HStack spacing={6} mt={3}>
+                      <Badge colorScheme="teal">Book Value: {formatCurrency(recalcResult.current_book_value)}</Badge>
+                      <Badge colorScheme="orange">Accumulated: {formatCurrency(recalcResult.accumulated_depreciation)}</Badge>
+                      <Badge colorScheme="purple">Method: {recalcResult.depreciation_method.replace('_',' ')}</Badge>
+                    </HStack>
+                  )}
+                </Box>
                     <Grid templateColumns="repeat(2, 1fr)" gap={6}>
                       <GridItem>
                         <VStack align="start" spacing={4}>

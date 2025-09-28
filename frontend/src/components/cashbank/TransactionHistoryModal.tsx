@@ -79,14 +79,24 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
       
       const result: TransactionResult = await cashbankService.getTransactionHistory(account.id, filters);
       
-      setTransactions(result.data);
-      setCurrentPage(result.page);
-      setTotalPages(result.total_pages);
-      setTotal(result.total);
+      // Ensure we always have an array for transactions
+      const transactionData = Array.isArray(result.data) ? result.data : [];
+      
+      setTransactions(transactionData);
+      setCurrentPage(result.page || 1);
+      setTotalPages(result.total_pages || 1);
+      setTotal(result.total || 0);
     } catch (err: any) {
       console.error('Error fetching transaction history:', err);
       const errorMessage = err.response?.data?.details || err.message || 'Failed to fetch transaction history';
       setError(errorMessage);
+      
+      // Reset transactions to empty array on error to prevent runtime errors
+      setTransactions([]);
+      setTotal(0);
+      setCurrentPage(1);
+      setTotalPages(1);
+      
       toast({
         title: 'Error',
         description: errorMessage,
@@ -192,7 +202,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
                   </Stat>
                   <Stat size="sm">
                     <StatLabel>Total Transactions</StatLabel>
-                    <StatNumber fontSize="md">{total.toLocaleString()}</StatNumber>
+                    <StatNumber fontSize="md">{total?.toLocaleString() || '0'}</StatNumber>
                   </Stat>
                 </SimpleGrid>
               </CardBody>
@@ -273,7 +283,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
             {/* Transaction Table */}
             <Box>
               <Text fontSize="md" fontWeight="semibold" mb={4} color="gray.700">
-                📋 Transaction History ({total} records)
+                📋 Transaction History ({total || 0} records)
               </Text>
               
               {loading ? (
@@ -281,7 +291,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
                   <Spinner size="lg" />
                   <Text mt={2} color="gray.500">Loading transactions...</Text>
                 </Box>
-              ) : transactions.length === 0 ? (
+              ) : !Array.isArray(transactions) || transactions.length === 0 ? (
                 <Box textAlign="center" py={8}>
                   <Text color="gray.500">No transactions found for this account</Text>
                   <Text fontSize="sm" color="gray.400" mt={1}>
@@ -302,7 +312,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
                       </Tr>
                     </Thead>
                     <Tbody>
-                      {transactions.map((transaction) => {
+                      {Array.isArray(transactions) && transactions.map((transaction) => {
                         const typeInfo = formatTransactionType(transaction.reference_type);
                         const isPositive = transaction.amount >= 0;
                         

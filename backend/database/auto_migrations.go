@@ -209,53 +209,51 @@ func runMigration(db *gorm.DB, filename string) error {
 	startTime := time.Now()
 	log.Printf("🔄 Running migration: %s", filename)
 
-	// Read migration file
+// Read migration file
 	migrationDir, dirErr := findMigrationDir()
 	if dirErr != nil {
 		logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to locate migrations dir: %v", dirErr), 0)
 		return dirErr
 	}
 	migrationPath := filepath.Join(migrationDir, filename)
-	content, err := ioutil.ReadFile(migrationPath)
+	contentBytes, err := ioutil.ReadFile(migrationPath)
 	if err != nil {
 		logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to read file: %v", err), 0)
 		return err
 	}
+	content := string(contentBytes)
 
-	// Special handling for SSOT migration (contains complex SQL structures)
-	if strings.Contains(filename, "unified_journal_ssot") {
-		return runComplexMigration(db, filename, string(content), startTime)
+	// Use complex parser for any file that defines PL/pgSQL functions or dollar-quoted blocks
+	lowerContent := strings.ToLower(content)
+	if strings.Contains(filename, "unified_journal_ssot") ||
+	   strings.Contains(lowerContent, "language plpgsql") ||
+	   strings.Contains(lowerContent, "create function") ||
+	   strings.Contains(lowerContent, "create or replace function") ||
+	   strings.Contains(lowerContent, "$$") {
+		return runComplexMigration(db, filename, content, startTime)
 	}
 
 	// Split SQL statements by semicolon (simple approach)
-	sqlStatements := strings.Split(string(content), ";")
+	sqlStatements := strings.Split(content, ";")
 
-	// Execute in transaction
-	tx := db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			_ = tx.Rollback().Error
-		}
-	}()
-
-	for _, stmt := range sqlStatements {
-		stmt = strings.TrimSpace(stmt)
+	// Execute statements one-by-one without wrapping in a single transaction.
+	// This allows us to skip harmless 'already exists' errors and continue.
+	for _, raw := range sqlStatements {
+		stmt := strings.TrimSpace(raw)
 		if stmt == "" || strings.HasPrefix(stmt, "--") || strings.HasPrefix(stmt, "/*") {
 			continue
 		}
 
-		if err := tx.Exec(stmt).Error; err != nil {
-			_ = tx.Rollback().Error
+		if err := db.Exec(stmt).Error; err != nil {
+			// Gracefully handle idempotent scenarios
+			if isAlreadyExistsError(err) {
+				log.Printf("ℹ️  Skipping statement due to already-exists: %v", err)
+				continue
+			}
 			executionTime := int(time.Since(startTime).Milliseconds())
 			logMigrationResult(db, filename, "FAILED", fmt.Sprintf("SQL error: %v", err), executionTime)
 			return err
 		}
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		executionTime := int(time.Since(startTime).Milliseconds())
-		logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Commit error: %v", err), executionTime)
-		return err
 	}
 
 	executionTime := int(time.Since(startTime).Milliseconds())
@@ -293,6 +291,11 @@ func runComplexMigration(db *gorm.DB, filename, content string, startTime time.T
 
 		// Execute statement (not in transaction at app layer; file may manage its own)
 		if err := db.Exec(stmt).Error; err != nil {
+			// Allow idempotent reruns: skip 'already exists' type errors
+			if isAlreadyExistsError(err) {
+				log.Printf("ℹ️  [%s] Skipped statement %d due to already-exists: %v", filename, i+1, err)
+				continue
+			}
 			// If the file opened a transaction, try to rollback to clear aborted state before logging
 			if transactionOpen {
 				_ = db.Exec("ROLLBACK").Error
@@ -521,7 +524,18 @@ $$;`
 		log.Println("   ↺ INTEGER wrapper already present (ensured)")
 	}
 
-	return nil
+return nil
+}
+
+// isAlreadyExistsError detects non-fatal, idempotent errors (object already exists or duplicate)
+func isAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := strings.ToLower(err.Error())
+	return strings.Contains(s, "already exists") ||
+		strings.Contains(s, "duplicate key value") ||
+		strings.Contains(s, "already defined")
 }
 
 func logMigrationResult(db *gorm.DB, migrationName, status, message string, executionTimeMs int) {

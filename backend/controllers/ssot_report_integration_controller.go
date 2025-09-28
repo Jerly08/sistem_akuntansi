@@ -144,11 +144,14 @@ func (c *SSOTReportIntegrationController) GetSSOTSalesSummary(ctx *gin.Context) 
 			"data":   salesSummary,
 		})
 case "pdf":
-		// Implement PDF export using SalesSummaryExportService
-		exporter := services.NewSalesSummaryExportService()
-		pdfBytes, err := exporter.ExportToPDF(salesSummary)
+		// Generate PDF using PDF service
+		pdfBytes, err := c.pdfService.GenerateSalesSummaryPDF(salesSummary)
 		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"status":"error","message":"Failed to generate PDF","error":err.Error()})
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to generate Sales Summary PDF",
+				"error":   err.Error(),
+			})
 			return
 		}
 		ctx.Header("Content-Type", "application/pdf")

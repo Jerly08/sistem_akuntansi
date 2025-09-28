@@ -13,9 +13,13 @@ func SeedData(db *gorm.DB) {
 	// Seed Users
 	seedUsers(db)
 	
-	// Seed Accounts
+	// Seed Accounts (COA)
 	if err := SeedAccounts(db); err != nil {
 		log.Printf("Error seeding accounts: %v", err)
+	}
+	// Fix account hierarchies for existing databases
+	if err := FixAccountHierarchies(db); err != nil {
+		log.Printf("Warning: Could not fix account hierarchies: %v", err)
 	}
 	
 	// Seed Contacts
@@ -33,7 +37,7 @@ func SeedData(db *gorm.DB) {
 	// Seed Expense Categories
 	seedExpenseCategories(db)
 	
-	// Seed Cash & Bank accounts
+	// Seed Cash & Bank accounts (start with zero balances)
 	seedCashBankAccounts(db)
 	
 	// Seed Company Profile
@@ -59,6 +63,8 @@ func SeedData(db *gorm.DB) {
 }
 
 func seedUsers(db *gorm.DB) {
+	log.Println("🔄 Starting user seeding with robust UPSERT...")
+	
 	// Seed all users for all roles
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 
@@ -109,14 +115,39 @@ func seedUsers(db *gorm.DB) {
 			IsActive:  true,
 		},
 	}
-	
-	// Add users if not existing
+
+	// Use PostgreSQL native UPSERT for robust user creation
+	successCount := 0
 	for _, user := range allUsers {
-		var existingUser models.User
-		if err := db.Where("username = ?", user.Username).First(&existingUser).Error; err != nil {
-			db.Create(&user)
+		// Use raw SQL UPSERT to avoid GORM conflicts
+		query := `
+			INSERT INTO users (
+				username, email, password, role, first_name, last_name,
+				phone, address, department, position, salary, is_active,
+				created_at, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, '', '', '', '', 0, ?, NOW(), NOW())
+			ON CONFLICT (username) DO UPDATE SET
+				email = EXCLUDED.email,
+				role = EXCLUDED.role,
+				first_name = EXCLUDED.first_name,
+				last_name = EXCLUDED.last_name,
+				is_active = EXCLUDED.is_active,
+				updated_at = NOW()
+		`
+		
+		result := db.Exec(query, 
+			user.Username, user.Email, user.Password, user.Role,
+			user.FirstName, user.LastName, user.IsActive)
+		
+		if result.Error != nil {
+			log.Printf("⚠️  Warning: Failed to upsert user %s: %v", user.Username, result.Error)
+		} else {
+			log.Printf("✅ User %s upserted successfully", user.Username)
+			successCount++
 		}
 	}
+	
+	log.Printf("📊 User seeding completed: %d/%d users processed successfully", successCount, len(allUsers))
 }
 
 
@@ -511,10 +542,15 @@ func seedRolePermissions(db *gorm.DB) {
 			"budgets:read", "budgets:create", "budgets:update",
 		},
 		"inventory_manager": {
+			// Core inventory modules
 			"products:read", "products:create", "products:update",
 			"sales:read", "sales:create", "sales:update",
 			"purchases:read", "purchases:create", "purchases:update",
 			"contacts:read", "contacts:create", "contacts:update",
+			// Supporting modules and reporting access
+			"assets:read", "assets:create", "assets:update",
+			"accounts:read",
+			"reports:read",
 		},
 		"employee": {
 			"products:read",

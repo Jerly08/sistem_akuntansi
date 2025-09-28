@@ -16,6 +16,7 @@ import {
 import { Upload, X, Camera } from 'lucide-react';
 import { assetService } from '../../services/assetService';
 import { Asset } from '../../types/asset';
+import { getAssetImageUrl } from '../../utils/imageUrl';
 
 interface AssetImageUploadProps {
   asset: Asset;
@@ -155,23 +156,6 @@ const AssetImageUpload: React.FC<AssetImageUploadProps> = ({
     setError(null);
   };
 
-  const getImageUrl = (imagePath?: string): string => {
-    if (!imagePath) return '';
-    
-    // If path is already a full URL, return as is
-    if (imagePath.startsWith('http')) {
-      return imagePath;
-    }
-    
-    // Get the static file base URL
-    const staticBaseURL = process.env.NEXT_PUBLIC_STATIC_URL;
-    
-    // Ensure path starts with /
-    const cleanPath = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
-    
-    // Construct full URL
-    return `${staticBaseURL}${cleanPath}`;
-  };
 
   return (
     <VStack spacing={4} align="stretch">
@@ -206,7 +190,7 @@ const AssetImageUpload: React.FC<AssetImageUploadProps> = ({
         >
           {asset.image_path ? (
             <Image
-              src={getImageUrl(asset.image_path)}
+              src={getAssetImageUrl(asset.image_path) || ''}
               alt={`${asset.name} image`}
               objectFit="cover"
               width="100%"

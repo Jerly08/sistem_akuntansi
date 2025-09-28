@@ -870,16 +870,41 @@ func (s *PurchaseService) createPurchaseJournalLines(purchase *models.Purchase, 
 	
 	// CREDIT SIDE - Liabilities
 	
-	// 3. Credit Accounts Payable (gross amount to vendor)
-	grossPayable := purchase.NetBeforeTax + purchase.TotalTaxAdditions
-	lines = append(lines, models.JournalLine{
-		AccountID:    accountIDs.AccountsPayableID,
-		Description:  fmt.Sprintf("Utang Usaha - %s", purchase.Vendor.Name),
-		DebitAmount:  0,
-		CreditAmount: grossPayable,
-		LineNumber:   lineNumber,
-	})
-	lineNumber++
+// 3. Credit side based on payment method
+	if isImmediatePayment(purchase.PaymentMethod) {
+		// Immediate payment: credit Cash/Bank with net amount (TotalAmount)
+		var cashAccountID uint
+		if purchase.BankAccountID != nil && *purchase.BankAccountID != 0 {
+			var cashBank models.CashBank
+			if err := s.db.Select("account_id").First(&cashBank, *purchase.BankAccountID).Error; err == nil && cashBank.AccountID != 0 {
+				cashAccountID = cashBank.AccountID
+			}
+		}
+		// Fallback to default cash account 1101
+		if cashAccountID == 0 {
+			if acc, err := s.accountRepo.FindByCode(nil, "1101"); err == nil {
+				cashAccountID = acc.ID
+			}
+		}
+		lines = append(lines, models.JournalLine{
+			AccountID:    cashAccountID,
+			Description:  fmt.Sprintf("Pembayaran langsung - %s", purchase.Vendor.Name),
+			DebitAmount:  0,
+			CreditAmount: purchase.TotalAmount,
+			LineNumber:   lineNumber,
+		})
+		lineNumber++
+	} else {
+		// Credit purchase: credit Accounts Payable with net payable (TotalAmount)
+		lines = append(lines, models.JournalLine{
+			AccountID:    accountIDs.AccountsPayableID,
+			Description:  fmt.Sprintf("Utang Usaha - %s", purchase.Vendor.Name),
+			DebitAmount:  0,
+			CreditAmount: purchase.TotalAmount,
+			LineNumber:   lineNumber,
+		})
+		lineNumber++
+	}
 	
 	// 4. Credit PPh 21 Payable if applicable
 	if purchase.PPh21Amount > 0 && accountIDs.PPh21PayableID != 0 {

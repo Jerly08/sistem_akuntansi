@@ -36,6 +36,17 @@ func (dc *DashboardController) GetStockAlertsBanner(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized to view stock alerts"})
 		return
 	}
+
+	// Auto-check minimum stock before returning alerts so users see up-to-date alerts
+	// This avoids relying solely on stock updates or purchases to trigger notifications
+	if err := dc.stockMonitoringService.CheckMinimumStock(); err != nil {
+		// Don't block the response if the check fails; continue with best-effort data
+		fmt.Printf("Warning: CheckMinimumStock failed: %v\n", err)
+	}
+	// Resolve alerts for items that have recovered above minimum
+	if err := dc.stockMonitoringService.ResolveStockAlerts(); err != nil {
+		fmt.Printf("Warning: ResolveStockAlerts failed: %v\n", err)
+	}
 	
 	// Get active stock alerts
 	activeAlerts, err := dc.stockMonitoringService.GetActiveStockAlerts()

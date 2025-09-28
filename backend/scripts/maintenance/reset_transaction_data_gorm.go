@@ -21,6 +21,7 @@ fmt.Println("Pilih mode operasi yang diinginkan:")
 	fmt.Println("  1) Reset TRANSAKSI (hard delete) — mempertahankan master (DEFAULT)")
 	fmt.Println("  2) Soft Delete SEMUA data — menandai semua record (deleted_at)")
 	fmt.Println("  3) RECOVERY — kembalikan semua soft deleted data")
+fmt.Println("  4) RESET SALDO MASTER — Reset balance COA & Cash Bank (tanpa hapus akun)")
 	fmt.Println("")
 	mode := askResetMode()
 
@@ -43,6 +44,11 @@ if mode == 1 {
 		fmt.Println("   - Data ditandai 'deleted_at = NOW()' tapi TIDAK dihapus permanen")
 		fmt.Println("   - Dapat dipulihkan dengan Mode 3 (Recovery)")
 		fmt.Println("   - Tabel sistem/backup akan dilewati")
+} else if mode == 4 {
+		fmt.Println("🧹 MODE RESET SALDO MASTER: Reset balance COA & CASH BANK (tanpa hapus akun)")
+		fmt.Println("   - Menghapus SEMUA transaksi & jurnal (sama seperti Mode 1)")
+		fmt.Println("   - Menetapkan saldo accounts.balance & cash_banks.balance = 0 (TANPA TRUNCATE akun)")
+		fmt.Println("   - Gunakan hanya di DEV/TEST! Pastikan sudah mem-backup bila perlu")
 	} else {
 		fmt.Println("🔄 MODE RECOVERY: Akan mengembalikan semua soft deleted data")
 		fmt.Println("   - Set kolom 'deleted_at = NULL' untuk semua record yang soft deleted")
@@ -105,6 +111,12 @@ if mode == 1 {
 		log.Printf("❌ Gagal soft delete semua data: %v", err)
 		return
 	}
+} else if mode == 4 {
+	fmt.Println("\n🧹 STEP 3: RESET SALDO MASTER — Hapus transaksi lalu reset saldo COA & Cash Bank (tanpa hapus akun)...")
+	if err := executeMasterPurgeWithGORM(db); err != nil {
+		log.Printf("❌ Gagal reset saldo master: %v", err)
+		return
+	}
 } else {
 	fmt.Println("\n🔄 STEP 3: Mengeksekusi RECOVERY soft deleted data...")
 	if err := executeRecoveryAllWithGORM(db); err != nil {
@@ -126,6 +138,10 @@ showPostResetSummary(db)
 		fmt.Println("Semua data telah ditandai sebagai deleted (deleted_at = NOW()).")
 		fmt.Println("Data TIDAK dihapus permanen dan dapat dipulihkan dengan Mode 3 (Recovery).")
 		fmt.Println("\nUntuk recovery: go run scripts/maintenance/reset_transaction_data_gorm.go (pilih opsi 3)")
+} else if mode == 4 {
+		fmt.Println("\n🎉 RESET SALDO MASTER SELESAI!")
+		fmt.Println("Saldo COA & Cash Bank telah direset ke 0 dan semua transaksi/jurnal telah dibersihkan.")
+		fmt.Println("Akun COA & Cash Bank tetap ada (tidak dihapus).")
 	} else {
 		fmt.Println("\n🎉 RECOVERY SELESAI!")
 		fmt.Println("Semua data yang soft deleted telah dipulihkan (deleted_at = NULL).")
@@ -135,13 +151,15 @@ showPostResetSummary(db)
 
 func askResetMode() int {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Masukkan pilihan [1/2/3] (default 1): ")
+	fmt.Print("Masukkan pilihan [1/2/3/4] (default 1): ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
 	if input == "2" {
 		return 2
 	} else if input == "3" {
 		return 3
+	} else if input == "4" {
+		return 4
 	}
 	return 1
 }
@@ -251,6 +269,16 @@ func executeTransactionResetWithGORM(db *gorm.DB) error {
 	// SSOT Journal Entries (main unified ledger)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.SSOTJournalEntry{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete SSOTJournalEntry error: %v\n", err)
+	}
+
+	// Also remove legacy/simple SSOT journal tables used by some endpoints
+	fmt.Println("   🔄 SSOT JOURNAL SYSTEM: Menghapus simple_ssot_journal_items...")
+	if err := tx.Unscoped().Where("1 = 1").Delete(&models.SimpleSSOTJournalItem{}).Error; err != nil {
+		fmt.Printf("   ⚠️  Warning: Delete SimpleSSOTJournalItem error: %v\n", err)
+	}
+	fmt.Println("   🔄 SSOT JOURNAL SYSTEM: Menghapus simple_ssot_journals...")
+	if err := tx.Unscoped().Where("1 = 1").Delete(&models.SimpleSSOTJournal{}).Error; err != nil {
+		fmt.Printf("   ⚠️  Warning: Delete SimpleSSOTJournal error: %v\n", err)
 	}
 	
 	// ===== CLASSIC JOURNAL SYSTEM RESET =====
@@ -447,6 +475,31 @@ func resetMainSequences(db *gorm.DB) {
 			}
 		}
 	}
+}
+
+func executeMasterPurgeWithGORM(db *gorm.DB) error {
+	start := time.Now()
+	// 1) Reset transaksi & jurnal seperti Mode 1
+	fmt.Println("   🔄 Menghapus semua transaksi & jurnal (langkah 1/2)...")
+	if err := executeTransactionResetWithGORM(db); err != nil {
+		return err
+	}
+
+	// 2) Reset saldo master (tanpa hapus akun)
+	fmt.Println("   🧮 Menyetel saldo COA & Cash Bank ke 0 (langkah 2/2)...")
+	if err := db.Model(&models.Account{}).Where("deleted_at IS NULL").Update("balance", 0).Error; err != nil {
+		return fmt.Errorf("gagal reset saldo accounts: %v", err)
+	}
+	if err := db.Model(&models.CashBank{}).Where("deleted_at IS NULL").Update("balance", 0).Error; err != nil {
+		return fmt.Errorf("gagal reset saldo cash_banks: %v", err)
+	}
+
+	// Optional: Refresh MV jika ada
+	_ = db.Exec("REFRESH MATERIALIZED VIEW account_balances").Error
+
+	dur := time.Since(start)
+	fmt.Printf("✅ Reset saldo master selesai dalam %s\n", dur.String())
+	return nil
 }
 
 func logResetActivity(db *gorm.DB) {

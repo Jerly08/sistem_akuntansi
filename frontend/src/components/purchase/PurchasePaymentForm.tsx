@@ -182,15 +182,20 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
       // Use the new Payment Management integration endpoint
       const result = await purchaseService.createPurchasePayment(purchase.id, formData);
       
-      toast({
-        title: 'Payment Recorded Successfully! 🎉',
-        description: 'Payment has been recorded via Payment Management and will appear in both Purchase and Payment systems',
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
+      // Avoid duplicate success toasts.
+      // If a parent onSuccess handler is provided, let the parent show the toast.
+      if (onSuccess) {
+        onSuccess(result);
+      } else {
+        toast({
+          title: 'Payment Recorded Successfully! 🎉',
+          description: 'Payment has been recorded via Payment Management and will appear in both Purchase and Payment systems',
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
 
-      onSuccess?.(result);
       onClose();
     } catch (error: any) {
       console.error('Error recording payment:', error);

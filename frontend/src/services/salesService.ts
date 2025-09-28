@@ -35,6 +35,8 @@ export interface Sale {
   outstanding_amount: number;
   payment_terms: string;
   payment_method?: string;
+  payment_method_type?: string; // CASH, BANK, CREDIT
+  cash_bank_id?: number;
   shipping_method?: string;
   shipping_cost: number;
   billing_address?: string;
@@ -148,6 +150,8 @@ export interface SaleCreateRequest {
   pph_type?: string;
   payment_terms?: string;
   payment_method?: string;
+  payment_method_type?: string; // CASH, BANK, CREDIT
+  cash_bank_id?: number;
   shipping_method?: string;
   shipping_cost?: number;
   billing_address?: string;
@@ -182,6 +186,8 @@ export interface SaleUpdateRequest {
   pph_type?: string;
   payment_terms?: string;
   payment_method?: string;
+  payment_method_type?: string; // CASH, BANK, CREDIT
+  cash_bank_id?: number;
   shipping_method?: string;
   shipping_cost?: number;
   billing_address?: string;
@@ -314,7 +320,8 @@ class SalesService {
 
   async getSale(id: number): Promise<Sale> {
     const response = await api.get(API_ENDPOINTS.SALES_BY_ID(id));
-    return response.data;
+    // Backend commonly wraps responses as { status, message, data }
+    return (response.data && response.data.data) ? response.data.data : response.data;
   }
 
   async createSale(data: SaleCreateRequest): Promise<Sale> {
@@ -413,7 +420,8 @@ class SalesService {
     if (endDate) params.append('end_date', endDate);
     
     const response = await api.get(`${API_ENDPOINTS.SALES_SUMMARY}?${params}`);
-    return response.data;
+    // Backend wraps responses as { status, message, data }
+    return (response.data && response.data.data) ? response.data.data : response.data;
   }
 
   async getSalesAnalytics(period: string = 'monthly', year: string = '2024'): Promise<SalesAnalytics> {
@@ -441,10 +449,33 @@ class SalesService {
   // PDF Export
   
   async exportInvoicePDF(saleId: number): Promise<Blob> {
-    const response = await api.get(API_ENDPOINTS.SALES_INVOICE_PDF(saleId), {
-      responseType: 'blob'
-    });
-    return response.data;
+    try {
+      const response = await api.get(API_ENDPOINTS.SALES_INVOICE_PDF(saleId), {
+        responseType: 'blob',
+        headers: {
+          Accept: 'application/pdf'
+        },
+        // Add timestamp to avoid any caching issues in dev
+        params: { t: Date.now() }
+      });
+      return response.data;
+    } catch (err: any) {
+      // If server returned JSON error with blob, try to decode for better message
+      const res = err?.response;
+      if (res && res.data instanceof Blob) {
+        try {
+          const text = await res.data.text();
+          // Try parse JSON
+          try {
+            const json = JSON.parse(text);
+            err.message = json.error || json.message || err.message;
+          } catch {
+            err.message = text || err.message;
+          }
+        } catch {}
+      }
+      throw err;
+    }
   }
 
   async exportSalesReportPDF(startDate?: string, endDate?: string): Promise<Blob> {
@@ -521,6 +552,10 @@ class SalesService {
   }
 
   formatDate(date: string): string {
+    // Check for empty date or default Go zero date
+    if (!date || date === '0001-01-01T00:00:00Z' || date === '0001-01-01') {
+      return '-';
+    }
     // Use Indonesian month names for better clarity (e.g., "9 Juni 2025" instead of "9/6/2025")
     return formatDateWithIndonesianMonth(date);
   }
@@ -547,8 +582,8 @@ class SalesService {
     }
     
     data.items?.forEach((item, index) => {
-      if (!item.product_id) {
-        errors.push(`Product is required for item ${index + 1}`);
+      if (!item.product_id && (!item.description || item.description.trim() === '')) {
+        errors.push(`Product or description is required for item ${index + 1}`);
       }
       if (!item.quantity || item.quantity <= 0) {
         errors.push(`Valid quantity is required for item ${index + 1}`);

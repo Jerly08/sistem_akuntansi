@@ -3,7 +3,9 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
+	"app-sistem-akuntansi/repositories"
 	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
 )
@@ -210,12 +212,54 @@ func (ctrl *SSOTPaymentController) GetAccountBalanceUpdates(c *gin.Context) {
 	})
 }
 
-// GetPayments retrieves all payments (legacy compatibility method)
+// GetPayments retrieves payments list with filters (SSOT list)
 func (ctrl *SSOTPaymentController) GetPayments(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "This endpoint is deprecated. Use enhanced payment endpoints with journal integration.",
-		"migration_notes": "Please migrate to use /api/v1/payments/ssot/* endpoints which provide full journal integration",
-	})
+	// Parse query params
+	var filter repositories.PaymentFilter
+
+	if pageStr := c.Query("page"); pageStr != "" {
+		if page, err := strconv.Atoi(pageStr); err == nil {
+			filter.Page = page
+		}
+	}
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			filter.Limit = limit
+		}
+	}
+	if contactIDStr := c.Query("contact_id"); contactIDStr != "" {
+		if cid64, err := strconv.ParseUint(contactIDStr, 10, 32); err == nil {
+			filter.ContactID = uint(cid64)
+		}
+	}
+	if status := c.Query("status"); status != "" {
+		filter.Status = status
+	}
+	if method := c.Query("method"); method != "" {
+		filter.Method = method
+	}
+	if startDateStr := c.Query("start_date"); startDateStr != "" {
+		if t, err := time.Parse("2006-01-02", startDateStr); err == nil {
+			filter.StartDate = t
+		}
+	}
+	if endDateStr := c.Query("end_date"); endDateStr != "" {
+		if t, err := time.Parse("2006-01-02", endDateStr); err == nil {
+			filter.EndDate = t
+		}
+	}
+
+	result, err := ctrl.enhancedPaymentService.ListPayments(filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to fetch payments",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Return the paginated result directly as expected by frontend
+	c.JSON(http.StatusOK, result)
 }
 
 // getSSOTUserIDFromContext extracts user ID from JWT context for SSOT payment controller

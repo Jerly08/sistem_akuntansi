@@ -186,31 +186,82 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 	return buf.Bytes(), nil
 }
 
-// ExportToPDF exports cash flow data to PDF format
+// ExportToPDF exports cash flow data to PDF format (invoice-like)
 func (s *CashFlowExportService) ExportToPDF(data *SSOTCashFlowData) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(15, 15, 15)
+	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
-	// Set font
+// Header area and layout helpers
+	lm, tm, rm, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	contentW := pageW - lm - rm
+
+	// Letterhead placeholder on top-left to mirror invoice (logo may not be available in this service)
+	logoW := 35.0
+	pdf.SetDrawColor(220, 220, 220)
+	pdf.SetFillColor(248, 249, 250)
+	pdf.SetLineWidth(0.3)
+	pdf.Rect(lm, tm, logoW, logoW, "FD")
 	pdf.SetFont("Arial", "B", 16)
-	
-	// Title
-	pdf.Cell(0, 10, "CASH FLOW STATEMENT")
-	pdf.Ln(10)
-	
-	// Company info
+	pdf.SetTextColor(120, 120, 120)
+	pdf.SetXY(lm+8, tm+19)
+	pdf.CellFormat(19, 8, "</>", "", 0, "C", false, 0, "")
+	pdf.SetTextColor(0, 0, 0)
+
+	// Company info on top-right (right aligned)
 	pdf.SetFont("Arial", "B", 12)
-	pdf.Cell(0, 8, data.Company.Name)
+	nameW := pdf.GetStringWidth(data.Company.Name)
+	pdf.SetXY(pageW-rm-nameW, tm)
+	pdf.Cell(nameW, 6, data.Company.Name)
+	pdf.SetFont("Arial", "", 9)
+	addr := strings.TrimSpace(data.Company.Address)
+	if addr != "" {
+		pdf.SetXY(pageW-rm-pdf.GetStringWidth(addr), tm+8)
+		pdf.Cell(0, 4, addr)
+	}
+	if strings.TrimSpace(data.Company.Phone) != "" {
+		phone := fmt.Sprintf("Phone: %s", data.Company.Phone)
+		pdf.SetXY(pageW-rm-pdf.GetStringWidth(phone), tm+14)
+		pdf.Cell(0, 4, phone)
+	}
+	if strings.TrimSpace(data.Company.Email) != "" {
+		email := fmt.Sprintf("Email: %s", data.Company.Email)
+		pdf.SetXY(pageW-rm-pdf.GetStringWidth(email), tm+20)
+		pdf.Cell(0, 4, email)
+	}
+
+	// Separator line
+	pdf.SetDrawColor(238, 238, 238)
+	pdf.SetLineWidth(0.2)
+	pdf.Line(lm, tm+45, pageW-rm, tm+45)
+
+	// Title and details under header
+	pdf.SetY(tm + 55)
+	pdf.SetFont("Arial", "B", 22)
+	pdf.SetTextColor(51, 51, 51)
+	pdf.Cell(contentW, 10, "CASH FLOW STATEMENT")
+	pdf.SetTextColor(0, 0, 0)
 	pdf.Ln(8)
 	
-	pdf.SetFont("Arial", "", 10)
-	pdf.Cell(0, 6, fmt.Sprintf("Period: %s - %s", 
-		data.StartDate.Format("02/01/2006"), 
-		data.EndDate.Format("02/01/2006")))
-	pdf.Ln(6)
-	pdf.Cell(0, 6, fmt.Sprintf("Generated: %s", 
-		data.GeneratedAt.Format("02/01/2006 15:04")))
-	pdf.Ln(15)
+	// Period left, Generated right (two-column, like invoice)
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetX(lm)
+	pdf.Cell(25, 5, "Period:")
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(102, 102, 102)
+	pdf.Cell(60, 5, fmt.Sprintf("%s - %s", data.StartDate.Format("02/01/2006"), data.EndDate.Format("02/01/2006")))
+	
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetTextColor(0, 0, 0)
+	rightX := lm + contentW - 60
+	pdf.SetX(rightX)
+	pdf.Cell(26, 5, "Generated:")
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(102, 102, 102)
+	pdf.Cell(34, 5, data.GeneratedAt.Format("02/01/2006 15:04"))
+	pdf.Ln(12)
 
 	// Operating Activities
 	pdf.SetFont("Arial", "B", 12)
@@ -336,18 +387,25 @@ func (s *CashFlowExportService) ExportToPDF(data *SSOTCashFlowData) ([]byte, err
 	pdf.Cell(0, 8, s.formatAmountPDF(data.CashAtEnd))
 	pdf.Ln(15)
 
-	// Add footer with generation info
-	pdf.SetY(280)
+// Footer centered with subtle top border
+	pdf.SetDrawColor(238, 238, 238)
+	pdf.SetLineWidth(0.2)
+	pdf.Line(lm, pdf.GetY()+6, pageW-rm, pdf.GetY()+6)
+	pdf.Ln(8)
 	pdf.SetFont("Arial", "I", 8)
-	pdf.Cell(0, 4, fmt.Sprintf("Generated on %s", time.Now().Format("02/01/2006 15:04:05")))
+	footer := fmt.Sprintf("Generated on %s", time.Now().Format("02/01/2006 15:04:05"))
+	fw := pdf.GetStringWidth(footer)
+	pdf.SetX((pageW - fw) / 2)
+	pdf.Cell(fw, 4, footer)
 
 	var buf bytes.Buffer
 	err := pdf.Output(&buf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate PDF: %v", err)
 	}
-	return buf.Bytes(), nil
+return buf.Bytes(), nil
 }
+
 
 // formatAmount formats amount for CSV export
 func (s *CashFlowExportService) formatAmount(amount float64) string {

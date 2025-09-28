@@ -34,13 +34,20 @@ type Settings struct {
 	DecimalSeparator  string `json:"decimal_separator" gorm:"default:','"`
 	DecimalPlaces     int    `json:"decimal_places" gorm:"default:2"`
 	
-	// Invoice Settings
+	// Invoice/Document Prefix Settings
 	InvoicePrefix      string `json:"invoice_prefix" gorm:"default:'INV'"`
-	InvoiceNextNumber  int    `json:"invoice_next_number" gorm:"default:1"`
+	SalesPrefix        string `json:"sales_prefix" gorm:"default:'SOA'"`
 	QuotePrefix        string `json:"quote_prefix" gorm:"default:'QT'"`
-	QuoteNextNumber    int    `json:"quote_next_number" gorm:"default:1"`
 	PurchasePrefix     string `json:"purchase_prefix" gorm:"default:'PO'"`
+	// Sequence counters for documents
+	InvoiceNextNumber  int    `json:"invoice_next_number" gorm:"default:1"`
+	SalesNextNumber    int    `json:"sales_next_number" gorm:"default:1"`
+	QuoteNextNumber    int    `json:"quote_next_number" gorm:"default:1"`
 	PurchaseNextNumber int    `json:"purchase_next_number" gorm:"default:1"`
+
+	// Payment Settings
+	PaymentReceivablePrefix string `json:"payment_receivable_prefix" gorm:"default:'RCV'"`
+	PaymentPayablePrefix    string `json:"payment_payable_prefix" gorm:"default:'PAY'"`
 
 	// Journal Settings (Unified with static config)
 	JournalPrefix         string `json:"journal_prefix" gorm:"default:'JE'"`
@@ -84,13 +91,20 @@ type SettingsResponse struct {
 	DecimalSeparator  string `json:"decimal_separator"`
 	DecimalPlaces     int    `json:"decimal_places"`
 	
-	// Invoice Settings
+	// Invoice/Document Prefix Settings
 	InvoicePrefix      string `json:"invoice_prefix"`
-	InvoiceNextNumber  int    `json:"invoice_next_number"`
+	SalesPrefix        string `json:"sales_prefix"`
 	QuotePrefix        string `json:"quote_prefix"`
-	QuoteNextNumber    int    `json:"quote_next_number"`
 	PurchasePrefix     string `json:"purchase_prefix"`
+	// Sequence counters for documents
+	InvoiceNextNumber  int    `json:"invoice_next_number"`
+	SalesNextNumber    int    `json:"sales_next_number"`
+	QuoteNextNumber    int    `json:"quote_next_number"`
 	PurchaseNextNumber int    `json:"purchase_next_number"`
+
+	// Payment Settings
+	PaymentReceivablePrefix string `json:"payment_receivable_prefix"`
+	PaymentPayablePrefix    string `json:"payment_payable_prefix"`
 
 	// Journal Settings
 	JournalPrefix          string `json:"journal_prefix"`
@@ -122,11 +136,15 @@ func (s *Settings) ToResponse() SettingsResponse {
 		DecimalSeparator:   s.DecimalSeparator,
 		DecimalPlaces:      s.DecimalPlaces,
 		InvoicePrefix:      s.InvoicePrefix,
-		InvoiceNextNumber:  s.InvoiceNextNumber,
+		SalesPrefix:        s.SalesPrefix,
 		QuotePrefix:        s.QuotePrefix,
-		QuoteNextNumber:    s.QuoteNextNumber,
 		PurchasePrefix:     s.PurchasePrefix,
+		InvoiceNextNumber:  s.InvoiceNextNumber,
+		SalesNextNumber:    s.SalesNextNumber,
+		QuoteNextNumber:    s.QuoteNextNumber,
 		PurchaseNextNumber: s.PurchaseNextNumber,
+		PaymentReceivablePrefix: s.PaymentReceivablePrefix,
+		PaymentPayablePrefix:    s.PaymentPayablePrefix,
 		JournalPrefix:          s.JournalPrefix,
 		JournalNextNumber:      s.JournalNextNumber,
 		RequireJournalApproval: s.RequireJournalApproval,

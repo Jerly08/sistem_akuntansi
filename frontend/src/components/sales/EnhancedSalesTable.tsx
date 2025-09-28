@@ -131,7 +131,6 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
               <Thead bg={theadBg}>
                 <Tr>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">CODE</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">INVOICE #</Th>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">CUSTOMER</Th>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">DATE</Th>
                   <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">TOTAL</Th>
@@ -152,11 +151,6 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                     <Td borderColor={borderColor} py={3}>
                       <Text fontWeight="medium" color="blue.600">
                         {sale.code}
-                      </Text>
-                    </Td>
-                    <Td borderColor={borderColor} py={3}>
-                      <Text fontSize="sm" color={textColor}>
-                        {sale.invoice_number || '-'}
                       </Text>
                     </Td>
                     <Td borderColor={borderColor} py={3}>
@@ -243,11 +237,11 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                             <MenuItem 
                               icon={<FiCheck />} 
                               onClick={() => {
-                                console.log('Confirm clicked for sale:', sale.id);
+                                console.log('Create Invoice clicked for sale:', sale.id);
                                 onConfirm(sale);
                               }}
                             >
-                              Confirm & Invoice
+                              Create Invoice
                             </MenuItem>
                           )}
                           {sale.status === 'INVOICED' && sale.outstanding_amount > 0 && canEdit && onPayment && (

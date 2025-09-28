@@ -262,8 +262,8 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
                                 Submit for Approval
                               </MenuItem>
                             )}
-                            {/* Record Payment - Only for APPROVED credit purchases with outstanding amount */}
-                            {purchase.status === 'APPROVED' && 
+                            {/* Record Payment - Show for APPROVED, COMPLETED, or PAID credit purchases with outstanding amount */}
+                            {(purchase.status === 'APPROVED' || purchase.status === 'COMPLETED' || purchase.status === 'PAID') && 
                              purchase.payment_method === 'CREDIT' && 
                              (purchase.outstanding_amount || 0) > 0 && 
                              onRecordPayment && (

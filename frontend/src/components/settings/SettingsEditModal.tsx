@@ -55,11 +55,13 @@ interface SystemSettings {
   decimal_separator: string;
   decimal_places: number;
   invoice_prefix: string;
-  invoice_next_number: number;
+  invoice_next_number?: number; // optional: field removed from API
   quote_prefix: string;
-  quote_next_number: number;
+  quote_next_number?: number; // optional: field removed from API
   purchase_prefix: string;
-  purchase_next_number: number;
+  purchase_next_number?: number; // optional: field removed from API
+  payment_receivable_prefix?: string;
+  payment_payable_prefix?: string;
 }
 
 interface SettingsEditModalProps {
@@ -99,6 +101,8 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
     quote_next_number: 1,
     purchase_prefix: 'PO',
     purchase_next_number: 1,
+    payment_receivable_prefix: 'RCV',
+    payment_payable_prefix: 'PAY',
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof SystemSettings, string>>>({});
@@ -141,7 +145,7 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
 
     setIsLoading(true);
     try {
-      const response = await api.put('/settings', formData);
+      const response = await api.put('/api/v1/settings', formData);
       
       if (response.data.success) {
         toast({
@@ -453,47 +457,8 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                       />
                     </FormControl>
 
-                    <FormControl flex={1}>
-                      <FormLabel>{t('settings.invoiceNextNumber')}</FormLabel>
-                      <NumberInput
-                        value={formData.invoice_next_number}
-                        onChange={(_, value) => handleInputChange('invoice_next_number', value)}
-                        min={1}
-                      >
-                        <NumberInputField />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
-                      </NumberInput>
-                    </FormControl>
                   </HStack>
 
-                  <HStack width="full" spacing={4}>
-                    <FormControl flex={1}>
-                      <FormLabel>{t('settings.quotePrefix')}</FormLabel>
-                      <Input
-                        value={formData.quote_prefix}
-                        onChange={(e) => handleInputChange('quote_prefix', e.target.value)}
-                        placeholder="QT"
-                      />
-                    </FormControl>
-
-                    <FormControl flex={1}>
-                      <FormLabel>{t('settings.quoteNextNumber')}</FormLabel>
-                      <NumberInput
-                        value={formData.quote_next_number}
-                        onChange={(_, value) => handleInputChange('quote_next_number', value)}
-                        min={1}
-                      >
-                        <NumberInputField />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
-                      </NumberInput>
-                    </FormControl>
-                  </HStack>
 
                   <HStack width="full" spacing={4}>
                     <FormControl flex={1}>
@@ -505,19 +470,25 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                       />
                     </FormControl>
 
+                  </HStack>
+
+                  <HStack width="full" spacing={4}>
                     <FormControl flex={1}>
-                      <FormLabel>{t('settings.purchaseNextNumber')}</FormLabel>
-                      <NumberInput
-                        value={formData.purchase_next_number}
-                        onChange={(_, value) => handleInputChange('purchase_next_number', value)}
-                        min={1}
-                      >
-                        <NumberInputField />
-                        <NumberInputStepper>
-                          <NumberIncrementStepper />
-                          <NumberDecrementStepper />
-                        </NumberInputStepper>
-                      </NumberInput>
+                      <FormLabel>{t('settings.paymentReceivablePrefix')}</FormLabel>
+                      <Input
+                        value={formData.payment_receivable_prefix || ''}
+                        onChange={(e) => handleInputChange('payment_receivable_prefix', e.target.value)}
+                        placeholder="RCV"
+                      />
+                    </FormControl>
+
+                    <FormControl flex={1}>
+                      <FormLabel>{t('settings.paymentPayablePrefix')}</FormLabel>
+                      <Input
+                        value={formData.payment_payable_prefix || ''}
+                        onChange={(e) => handleInputChange('payment_payable_prefix', e.target.value)}
+                        placeholder="PAY"
+                      />
                     </FormControl>
                   </HStack>
                 </VStack>

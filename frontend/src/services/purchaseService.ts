@@ -295,8 +295,10 @@ class PurchaseService {
 
   // Helper method to check if purchase can receive payment
   canReceivePayment(purchase: Purchase): boolean {
-    return purchase.status === 'APPROVED' && 
-           purchase.payment_method === 'CREDIT' && 
+    const status = (purchase.status || '').toUpperCase();
+    const eligibleStatus = status === 'APPROVED' || status === 'COMPLETED' || status === 'PAID';
+    return eligibleStatus &&
+           purchase.payment_method === 'CREDIT' &&
            (purchase.outstanding_amount || 0) > 0;
   }
 

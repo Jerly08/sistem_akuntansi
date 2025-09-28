@@ -43,11 +43,8 @@ func AddSettingsTable(db *gorm.DB) error {
 			DecimalSeparator:   ",",
 			DecimalPlaces:      2,
 			InvoicePrefix:      "INV",
-			InvoiceNextNumber:  1,
 			QuotePrefix:        "QT",
-			QuoteNextNumber:    1,
 			PurchasePrefix:     "PO",
-			PurchaseNextNumber: 1,
 			UpdatedBy:          1, // System user
 		}
 		

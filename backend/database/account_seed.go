@@ -33,6 +33,7 @@ func SeedAccounts(db *gorm.DB) error {
 		{Code: "2100", Name: "CURRENT LIABILITIES", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 2, IsHeader: true, IsActive: true},
 		{Code: "2101", Name: "Utang Usaha", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "2102", Name: "PPN Masukan", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "2103", Name: "PPN Keluaran", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 		// EQUITY (3xxx)
 		{Code: "3000", Name: "EQUITY", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 1, IsHeader: true, IsActive: true},
@@ -107,6 +108,7 @@ func SeedAccounts(db *gorm.DB) error {
 		"2100": "2000", // CURRENT LIABILITIES -> LIABILITIES
 		"2101": "2100", // Utang Usaha -> CURRENT LIABILITIES
 		"2102": "1100", // PPN Masukan -> CURRENT ASSETS
+		"2103": "2100", // PPN Keluaran -> CURRENT LIABILITIES
 		"3101": "3000", // Modal Pemilik -> EQUITY
 		"3201": "3000", // Laba Ditahan -> EQUITY
 		"4101": "4000", // Pendapatan Penjualan -> REVENUE
@@ -132,5 +134,76 @@ func SeedAccounts(db *gorm.DB) error {
 	}
 
 	log.Println("✅ Account seeding completed - all existing balances preserved")
+	return nil
+}
+
+// FixAccountHierarchies fixes incorrect account hierarchies in existing databases
+func FixAccountHierarchies(db *gorm.DB) error {
+	log.Println("🔧 Fixing account hierarchies for existing databases...")
+	
+	// Define fixes needed for incorrect hierarchies
+	hierarchyFixes := []struct {
+		Code        string
+		ParentCode  string
+		Description string
+	}{
+		{
+			Code:        "2103",
+			ParentCode:  "2100",
+			Description: "Fix PPN Keluaran (LIABILITY) to be under CURRENT LIABILITIES",
+		},
+	}
+	
+	for _, fix := range hierarchyFixes {
+		log.Printf("🔧 Processing fix: %s", fix.Description)
+		
+		// Find the account to fix
+		var account models.Account
+		result := db.Where("code = ?", fix.Code).First(&account)
+		if result.Error != nil {
+			log.Printf("⚠️  Account %s not found, skipping fix", fix.Code)
+			continue
+		}
+		
+		// Find the target parent
+		var parent models.Account
+		result = db.Where("code = ?", fix.ParentCode).First(&parent)
+		if result.Error != nil {
+			log.Printf("⚠️  Parent account %s not found, skipping fix", fix.ParentCode)
+			continue
+		}
+		
+		// Check if fix is needed
+		if account.ParentID != nil && *account.ParentID == parent.ID {
+			log.Printf("✅ Account %s (%s) already has correct parent %s", 
+				account.Code, account.Name, parent.Code)
+			continue
+		}
+		
+		// Apply the fix
+		oldParentID := account.ParentID
+		newLevel := parent.Level + 1
+		
+		// Update account with correct parent and level
+		result = db.Model(&account).Updates(map[string]interface{}{
+			"parent_id": parent.ID,
+			"level":     newLevel,
+		})
+		
+		if result.Error != nil {
+			log.Printf("❌ Failed to fix account %s: %v", fix.Code, result.Error)
+			continue
+		}
+		
+		// Ensure parent is marked as header
+		if !parent.IsHeader {
+			db.Model(&parent).Update("is_header", true)
+		}
+		
+		log.Printf("✅ Fixed: %s (%s) moved from parent %v to %s (level %d)", 
+			account.Code, account.Name, oldParentID, parent.Code, newLevel)
+	}
+	
+	log.Println("✅ Account hierarchy fixes completed")
 	return nil
 }

@@ -9,6 +9,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// SSOTJournal is an alias for compatibility
+type SSOTJournal = SSOTJournalEntry
+
+// SSOTJournalItem is an alias for compatibility
+type SSOTJournalItem = SSOTJournalLine
+
 // SSOTJournalEntry represents a unified journal entry in the SSOT system
 type SSOTJournalEntry struct {
 	ID               uint64          `json:"id" gorm:"primaryKey;column:id"`

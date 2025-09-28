@@ -153,7 +153,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                     fontWeight={account.is_header ? "bold" : "medium"}
                     color={displayBalance >= 0 ? 'green.600' : 'red.600'}
                   >
-                    {prefix}{accountService.formatBalance(displayBalance)}
+                    {prefix}{accountService.formatBalance(displayBalance, 'IDR', account.code, account.type)}
                   </Text>
                   {account.is_header && account.child_count && account.child_count > 0 && (
                     <Text fontSize="xs" color="gray.500">

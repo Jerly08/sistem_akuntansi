@@ -203,7 +203,13 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
             <Button
               variant="outline"
               leftIcon={<FiFilePlus />}
-              onClick={() => exportPaymentDetailToPDF(payment)}
+onClick={async () => {
+              try {
+                await paymentService.downloadPaymentDetailPDF(payment.id, payment.code);
+              } catch (e) {
+                console.error('Download payment PDF failed', e);
+              }
+            }}
               colorScheme="red"
             >
               Export to PDF

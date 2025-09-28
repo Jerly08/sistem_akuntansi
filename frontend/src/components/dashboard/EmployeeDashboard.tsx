@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/services/api';
+import { API_ENDPOINTS } from '@/config/api';
 import { 
   Box, 
   Heading, 
@@ -50,7 +51,8 @@ export const EmployeeDashboard = () => {
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const res = await api.get('/dashboard/summary');
+        // Use analytics endpoint under /api/v1 for summary data
+        const res = await api.get(API_ENDPOINTS.DASHBOARD_ANALYTICS);
         setSummary(res.data?.data || res.data || {});
         setError(null);
       } catch (e: any) {

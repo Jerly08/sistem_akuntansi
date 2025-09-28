@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -66,13 +67,12 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	contactService := services.NewContactService(contactRepo)
 	contactController := controllers.NewContactController(contactService)
 	
-	// Notification repositories, services and handlers
+// Notification repositories, services and handlers
 	notificationRepo := repositories.NewNotificationRepository(db)
 	notificationService := services.NewNotificationService(db, notificationRepo)
-	notificationHandler := handlers.NewNotificationHandler(notificationService)
-	
 	// Initialize Stock Monitoring service and Dashboard controller
 	stockMonitoringService := services.NewStockMonitoringService(db, notificationService)
+	notificationHandler := handlers.NewNotificationHandler(notificationService, stockMonitoringService)
 	dashboardController := controllers.NewDashboardController(db, stockMonitoringService)
 	
 	// Update ProductController with stockMonitoringService
@@ -265,7 +265,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			// Dashboard routes
 			dashboard := protected.Group("/dashboard")
 			{
-				dashboard.GET("/analytics", middleware.RoleRequired("admin", "finance", "director"), dashboardController.GetAnalytics)
+				dashboard.GET("/analytics", permMiddleware.CanView("reports"), dashboardController.GetAnalytics)
 				dashboard.GET("/finance", middleware.RoleRequired("admin", "finance"), dashboardController.GetFinanceDashboardData)
 				dashboard.GET("/stock-alerts", middleware.RoleRequired("admin", "inventory_manager", "director"), dashboardController.GetStockAlertsBanner)
 				dashboard.POST("/stock-alerts/:id/dismiss", middleware.RoleRequired("admin", "inventory_manager"), dashboardController.DismissStockAlert)
@@ -347,9 +347,29 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				accounts.DELETE("/admin/:code", middleware.RoleRequired("admin"), accountHandler.AdminDeleteAccount)
 				accounts.POST("/import", permMiddleware.CanCreate("accounts"), accountHandler.ImportAccounts)
 				
-				// Export routes
-				accounts.GET("/export/pdf", permMiddleware.CanExport("accounts"), accountHandler.ExportAccountsPDF)
-				accounts.GET("/export/excel", permMiddleware.CanExport("accounts"), accountHandler.ExportAccountsExcel)
+			// Export routes
+			accounts.GET("/export/pdf", permMiddleware.CanExport("accounts"), accountHandler.ExportAccountsPDF)
+			accounts.GET("/export/excel", permMiddleware.CanExport("accounts"), accountHandler.ExportAccountsExcel)
+		}
+		
+// 📊 COA Display routes (V2 with proper balance display)
+			coaDisplayServiceV2 := services.NewCOADisplayServiceV2(db)
+			coaControllerV2 := controllers.NewCOAControllerV2(coaDisplayServiceV2)
+			postedCOAController := controllers.NewCOAPostedController(db)
+			
+			coadisplay := protected.Group("/coa-display")
+			{
+				coadisplay.GET("", permMiddleware.CanView("accounts"), coaControllerV2.GetCOAWithDisplay)
+				coadisplay.GET("/:id", permMiddleware.CanView("accounts"), coaControllerV2.GetCOAByID)
+				coadisplay.GET("/by-type", permMiddleware.CanView("accounts"), coaControllerV2.GetCOABalancesByType)
+				coadisplay.GET("/specific", permMiddleware.CanView("accounts"), coaControllerV2.GetSpecificAccounts)
+				coadisplay.GET("/sales-related", permMiddleware.CanView("accounts"), coaControllerV2.GetSalesRelatedAccounts)
+			}
+
+			// 🔒 SSOT Posted-only COA endpoint for frontend
+			coaPosted := protected.Group("/coa")
+			{
+				coaPosted.GET("/posted-balances", permMiddleware.CanView("accounts"), postedCOAController.GetPostedBalances)
 			}
 
 			// 📞 Contact routes with enhanced permission checks dan audit logging
@@ -383,8 +403,21 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			// Sales repositories, services and controllers
 			salesRepo := repositories.NewSalesRepository(db)
 			productRepo := repositories.NewProductRepository(db)
-			// Note: pdfService is already initialized earlier for purchase service
-	salesService := services.NewSalesService(db, salesRepo, productRepo, contactRepo, accountRepo, nil, pdfService)
+			
+// Initialize services for Sales V2
+			coaService := services.NewCOAService(db)
+			
+			// Initialize Sales Journal Service V2 (clean implementation)
+salesJournalServiceV2 := services.NewSalesJournalServiceV2(db, journalRepo, coaService)
+			
+			// Initialize Stock Service (can be nil if not available)
+			stockService := services.NewStockService(db)
+			
+			// Initialize Settings Service for sales code generation
+			settingsService := services.NewSettingsService(db)
+			
+			// Initialize Sales Service V2 (clean implementation with proper status-based journal posting)
+			salesServiceV2 := services.NewSalesServiceV2(db, salesRepo, salesJournalServiceV2, stockService, notificationService, settingsService)
 
 	// Initialize Payment repositories, services and controllers
 	paymentRepo := repositories.NewPaymentRepository(db)
@@ -396,11 +429,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	cashBankController := controllers.NewCashBankController(cashBankService, accountService)
 
 	// Initialize additional Sales Payment services required by SalesController
-	salesPaymentService := services.NewSalesPaymentService(db, salesRepo, paymentService)
-	unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db, salesRepo, accountRepo)
+unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 	
-	// Initialize SalesController with PaymentService integration
-	salesController := controllers.NewSalesController(salesService, paymentService, salesPaymentService, unifiedSalesPaymentService)
+	// Initialize SalesController with new V2 Sales Service (inject pdfService)
+	salesController := controllers.NewSalesController(salesServiceV2, paymentService, unifiedSalesPaymentService, pdfService)
 	
 	// Initialize PurchaseController with PaymentService integration (moved here after paymentService is available)
 	purchaseController := controllers.NewPurchaseController(purchaseService, paymentService)
@@ -418,11 +450,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			}
 
 			// Sales routes with permission checks
-			sales := protected.Group("/sales")
+				sales := protected.Group("/sales")
 			{
 				// Basic CRUD operations
 				sales.GET("", permMiddleware.CanView("sales"), salesController.GetSales)
 				sales.GET("/:id", permMiddleware.CanView("sales"), salesController.GetSale)
+				// Validate stock for sales create form
+				sales.POST("/validate-stock", permMiddleware.CanCreate("sales"), salesController.ValidateSaleStock)
 				sales.POST("", permMiddleware.CanCreate("sales"), salesController.CreateSale)
 				sales.PUT("/:id", permMiddleware.CanEdit("sales"), salesController.UpdateSale)
 				sales.DELETE("/:id", permMiddleware.CanDelete("sales"), salesController.DeleteSale)
@@ -450,8 +484,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				sales.GET("/receivables", middleware.RoleRequired("admin", "finance", "director"), salesController.GetReceivablesReport)
 
 				// PDF exports
-				sales.GET("/:id/invoice/pdf", middleware.RoleRequired("admin", "finance", "director"), salesController.ExportSaleInvoicePDF)
-				sales.GET("/report/pdf", middleware.RoleRequired("admin", "finance", "director"), salesController.ExportSalesReportPDF)
+				sales.GET("/:id/invoice/pdf", permMiddleware.CanExport("sales"), salesController.ExportSaleInvoicePDF)
+				sales.GET("/report/pdf", permMiddleware.CanExport("sales"), salesController.ExportSalesReportPDF)
 
 				// Customer portal
 				sales.GET("/customer/:customer_id", middleware.RoleRequired("admin", "finance", "director"), salesController.GetCustomerSales)
@@ -470,10 +504,25 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			
 			// ⚠️  DEPRECATED: Setup legacy Payment routes (including cash bank routes with GL fix functionality)
 			// These routes may cause double posting - use SSOT routes instead
-			SetupPaymentRoutes(protected, paymentController, cashBankController, cashBankService, jwtManager, db)
+			// 🔒 PRODUCTION GUARD: Only enable legacy routes in development with explicit flag
+			if os.Getenv("ENABLE_LEGACY_PAYMENT_ROUTES") == "true" && isDevelopmentMode() {
+				log.Printf("⚠️ WARNING: Legacy payment routes enabled - may cause conflicts with SalesJournalServiceV2")
+				SetupPaymentRoutes(protected, paymentController, cashBankController, cashBankService, jwtManager, db)
+			} else {
+				log.Printf("✅ Legacy payment routes disabled - using SalesJournalServiceV2 consistent flow only")
+			}
 			
 			// ✅ NEW: Setup SSOT Payment routes with journal integration (prevents double posting)
 			SetupSSOTPaymentRoutes(protected, db, jwtManager)
+
+			// 📄 Export-only compatibility routes for Payments (safe, read-only)
+			// These endpoints restore PDF/Excel exports without enabling legacy write routes
+			paymentExports := protected.Group("/payments")
+			{
+				paymentExports.GET("/report/pdf", permMiddleware.CanExport("payments"), paymentController.ExportPaymentReportPDF)
+				paymentExports.GET("/export/excel", permMiddleware.CanExport("payments"), paymentController.ExportPaymentReportExcel)
+				paymentExports.GET("/:id/pdf", permMiddleware.CanExport("payments"), paymentController.ExportPaymentDetailPDF)
+			}
 			
 			// ⚡ ULTRA-FAST: Setup Ultra-Fast Payment routes with minimal operations
 			ultraFastRoutes := NewUltraFastPaymentRoutes(db)
@@ -556,6 +605,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				assets.PUT("/:id", permMiddleware.CanEdit("assets"), assetController.UpdateAsset)
 				assets.DELETE("/:id", permMiddleware.CanDelete("assets"), assetController.DeleteAsset)
 				assets.POST("/upload-image", permMiddleware.CanEdit("assets"), assetController.UploadAssetImage)
+				
+				// Manual capitalization endpoint
+				assets.POST("/:id/capitalize", permMiddleware.CanEdit("assets"), assetController.CapitalizeAsset)
 				
 				// Asset categories management
 				assets.GET("/categories", permMiddleware.CanView("assets"), assetController.GetAssetCategories)

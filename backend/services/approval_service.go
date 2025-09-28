@@ -7,6 +7,7 @@ import (
 	"time"
 	"strings"
 	"app-sistem-akuntansi/models"
+	"app-sistem-akuntansi/utils"
 	"gorm.io/gorm"
 )
 
@@ -608,7 +609,7 @@ func (s *ApprovalService) notifyApprovers(request *models.ApprovalRequest, step 
 			UserID:   user.ID,
 			Type:     models.NotificationTypeApprovalPending,
 			Title:    fmt.Sprintf("Approval Required: %s", request.RequestTitle),
-			Message:  fmt.Sprintf("You have a pending approval request for %s (Amount: %.2f)", request.RequestTitle, actualAmount),
+			Message:  fmt.Sprintf("You have a pending approval request for %s (Amount: %s)", request.RequestTitle, utils.FormatRupiahWithoutDecimals(actualAmount)),
 			Priority: request.Priority,
 			Data:     s.createNotificationData(request),
 		}
@@ -957,7 +958,7 @@ func (s *ApprovalService) notifyDirectors(request *models.ApprovalRequest, escal
 			UserID:   director.ID,
 			Type:     models.NotificationTypeApprovalPending,
 			Title:    fmt.Sprintf("URGENT: Director Approval Required - %s", request.RequestTitle),
-			Message:  fmt.Sprintf("Finance has escalated this request: %s. Reason: %s (Amount: %.2f)", request.RequestTitle, escalationReason, actualAmount),
+			Message:  fmt.Sprintf("Finance has escalated this request: %s. Reason: %s (Amount: %s)", request.RequestTitle, escalationReason, utils.FormatRupiahWithoutDecimals(actualAmount)),
 			Priority: models.ApprovalPriorityUrgent,
 			Data:     s.createNotificationData(request),
 		}

@@ -67,15 +67,15 @@ func (ufpr *UltraFastPaymentRoutes) recordPaymentUltraFast(c *gin.Context) {
 
 	// Set user ID from auth
 	if userIDUint, ok := userID.(uint); ok {
-		req.UserID = userIDUint
+		req.UserID = uint64(userIDUint)
 	} else {
 		// Try to convert from other types
 		if userIDStr, ok := userID.(string); ok {
 			if id, err := strconv.ParseUint(userIDStr, 10, 32); err == nil {
-				req.UserID = uint(id)
+				req.UserID = id
 			}
 		} else if userIDFloat, ok := userID.(float64); ok {
-			req.UserID = uint(userIDFloat)
+			req.UserID = uint64(userIDFloat)
 		}
 	}
 
@@ -88,8 +88,7 @@ func (ufpr *UltraFastPaymentRoutes) recordPaymentUltraFast(c *gin.Context) {
 	}
 
 	// Process payment with timeout context
-	ctx := c.Request.Context()
-	response, err := ufpr.service.RecordPaymentUltraFast(ctx, &req)
+	err := ufpr.service.RecordPaymentUltraFast(&req)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -102,12 +101,14 @@ func (ufpr *UltraFastPaymentRoutes) recordPaymentUltraFast(c *gin.Context) {
 	}
 
 	// Start async journal creation (non-blocking)
-	if response.Success {
-		go ufpr.service.CreateJournalEntryAsync(response.PaymentID, req.Amount)
-	}
+	go ufpr.service.CreateJournalEntryAsync(&req)
 
 	// Return immediate response
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{
+		"success":         true,
+		"message":         "Payment recorded (ultra-fast mode)",
+		"processing_time": time.Since(startTime).String(),
+	})
 }
 
 // healthCheck provides a simple health check endpoint

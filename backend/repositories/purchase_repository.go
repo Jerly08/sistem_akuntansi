@@ -220,9 +220,41 @@ func (r *PurchaseRepository) FindReceiptsByPurchaseID(purchaseID uint) ([]models
 	err := r.db.Preload("Receiver").
 		Preload("ReceiptItems").
 		Where("purchase_id = ?", purchaseID).
+		Order("created_at ASC").
 		Find(&receipts).Error
 
 	return receipts, err
+}
+
+// SumReceivedQtyByPurchaseItem returns total received quantity for a purchase item across all receipts
+func (r *PurchaseRepository) SumReceivedQtyByPurchaseItem(purchaseItemID uint) (int, error) {
+	var total int64
+	err := r.db.Model(&models.PurchaseReceiptItem{}).
+		Where("purchase_item_id = ?", purchaseItemID).
+		Select("COALESCE(SUM(quantity_received), 0)").
+		Scan(&total).Error
+	if err != nil {
+		return 0, err
+	}
+	return int(total), nil
+}
+
+// AreAllItemsFullyReceived checks if all purchase items have been fully received
+func (r *PurchaseRepository) AreAllItemsFullyReceived(purchaseID uint) (bool, error) {
+	items, err := r.FindItemsByPurchaseID(purchaseID)
+	if err != nil {
+		return false, err
+	}
+	for _, it := range items {
+		received, err := r.SumReceivedQtyByPurchaseItem(it.ID)
+		if err != nil {
+			return false, err
+		}
+		if received < int(it.Quantity) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // FindCompletedReceiptsByPurchaseID gets only completed receipts for a purchase

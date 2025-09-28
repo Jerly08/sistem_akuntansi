@@ -97,6 +97,7 @@ import CurrencyInput from '@/components/common/CurrencyInput';
 // SSOT Journal Integration
 import PurchaseJournalEntriesModal from '../../src/components/purchase/PurchaseJournalEntriesModal';
 import purchaseJournalService from '../../src/services/purchaseJournalService';
+import { API_ENDPOINTS } from '@/config/api';
 
 // Types for form data
 interface PurchaseFormData {
@@ -234,7 +235,7 @@ const formatDate = (date: string) => {
 };
 
 const columns = [
-  { header: 'Purchase #', accessor: 'code' as keyof Purchase },
+  { header: 'Code', accessor: 'code' as keyof Purchase },
   { 
     header: 'Vendor', 
     accessor: ((row: Purchase) => {
@@ -399,9 +400,14 @@ const PurchasesPage: React.FC = () => {
     needingApproval: 0,
     totalValue: 0,
     totalApprovedAmount: 0,
-    totalPaid: 0,         // New: Total paid amount
-    totalOutstanding: 0,  // New: Total outstanding amount
+    totalPaid: 0,
+    totalOutstanding: 0,
   });
+
+  // Local UI helpers to reflect receipt availability/completion immediately after creation
+  const [purchasesWithReceipts, setPurchasesWithReceipts] = useState<Set<number>>(new Set());
+  const [fullyReceivedPurchases, setFullyReceivedPurchases] = useState<Set<number>>(new Set());
+  const [remainingQtyMap, setRemainingQtyMap] = useState<Record<number, number>>({});
 
   // View and Edit Modal states
   const { isOpen: isViewOpen, onOpen: onViewOpen, onClose: onViewClose } = useDisclosure();
@@ -1013,7 +1019,7 @@ const PurchasesPage: React.FC = () => {
       if (!purchaseService.canReceivePayment(purchase)) {
         toast({
           title: 'Cannot Record Payment',
-          description: 'Only approved credit purchases with outstanding amount can receive payments',
+          description: 'Only approved or completed credit purchases with outstanding amount can receive payments',
           status: 'warning',
           duration: 4000,
           isClosable: true,
@@ -1057,7 +1063,7 @@ const PurchasesPage: React.FC = () => {
   const fetchCashBanksForPayment = async () => {
     if (!token) return;
     try {
-      const response = await fetch('/api/v1/cashbank/payment-accounts', {
+      const response = await fetch('/api/v1/cash-bank/reports/payment-accounts', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1083,14 +1089,66 @@ const PurchasesPage: React.FC = () => {
       // Fetch detailed purchase data to get items
       const detailResponse = await purchaseService.getById(purchase.id);
       setSelectedPurchase(detailResponse);
+
+      // Fetch existing receipts to compute remaining qty per item
+      const receiptsRes = await fetch(`${API_ENDPOINTS.PURCHASES_RECEIPTS_BY_ID(purchase.id)}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      let existingReceipts: any[] = [];
+      if (receiptsRes.ok) {
+        const data = await receiptsRes.json();
+        existingReceipts = data.data || [];
+      }
+      const receivedMap: Record<number, number> = {};
+      for (const r of existingReceipts) {
+        for (const it of (r.receipt_items || [])) {
+          const pid = it.purchase_item_id || it.purchase_item?.id;
+          if (!pid) continue;
+          receivedMap[pid] = (receivedMap[pid] || 0) + (it.quantity_received || 0);
+        }
+      }
+
+      // Ensure accounts catalog is loaded (to detect fixed asset 150x)
+      await fetchExpenseAccounts();
       
-      // Initialize receipt form data
-      const receiptItems = detailResponse.purchase_items?.map(item => ({
-        purchase_item_id: item.id,
-        quantity_received: item.quantity, // Default to full quantity
-        condition: 'GOOD',
-        notes: ''
-      })) || [];
+      // Initialize receipt form data with remaining quantity per item
+      const receiptItems = (detailResponse.purchase_items || []).map((item: any) => {
+        const receivedSoFar = receivedMap[item.id] || 0;
+        const remaining = Math.max((item.quantity || 0) - receivedSoFar, 0);
+        // Determine if the item's expense account is a Fixed Asset (150x) to default-enable asset creation
+        const acc = expenseAccounts.find(a => a.id === item.expense_account_id);
+        const accCode = (acc?.code || '').toString();
+        const accName = (acc?.name || '').toLowerCase();
+        const isFixedAsset = accCode.startsWith('15') || accName.includes('asset tetap') || accName.includes('fixed asset') || accName.includes('bangunan') || accName.includes('gedung') || accName.includes('peralatan') || accName.includes('kendaraan') || accName.includes('mesin') || accName.includes('furniture') || accName.includes('computer') || accName.includes('komputer');
+        return {
+          purchase_item_id: item.id,
+          quantity_received: remaining, // default to remaining qty
+          condition: 'GOOD',
+          notes: '',
+          create_asset: isFixedAsset // auto-enable when account is fixed asset
+        };
+      });
+      const remainingMap: Record<number, number> = {};
+      (detailResponse.purchase_items || []).forEach((it: any) => {
+        const receivedSoFar = receivedMap[it.id] || 0;
+        remainingMap[it.id] = Math.max((it.quantity || 0) - receivedSoFar, 0);
+      });
+      setRemainingQtyMap(remainingMap);
+
+      // If semua sisa = 0, tidak perlu buka modal dan sembunyikan tombol Create Receipt
+      const allZero = Object.values(remainingMap).every(v => v <= 0);
+      if (allZero) {
+        setFullyReceivedPurchases(prev => new Set(prev).add(purchase.id));
+        toast({
+          title: 'Semua item sudah diterima',
+          description: 'Tidak ada sisa yang perlu diterima. Tombol Create Receipt disembunyikan.',
+          status: 'info',
+          duration: 4000,
+          isClosable: true,
+        });
+        return; // Jangan buka modal
+      }
       
       setReceiptFormData({
         received_date: new Date().toISOString().split('T')[0],
@@ -1137,16 +1195,35 @@ const PurchasesPage: React.FC = () => {
     try {
       setSavingReceipt(true);
       
+      // Filter setelah validasi agar minimal ada 1 item
+      const filteredItems = receiptFormData.receipt_items
+        .filter(item => (item.quantity_received || 0) > 0)
+        .map(item => ({
+          purchase_item_id: item.purchase_item_id,
+          quantity_received: Math.min(item.quantity_received, remainingQtyMap[item.purchase_item_id] ?? item.quantity_received),
+          condition: item.condition,
+          notes: item.notes,
+          capitalize_asset: !!item.create_asset,
+        }));
+
+      if (filteredItems.length === 0) {
+        toast({
+          title: 'Tidak ada item untuk diterima',
+          description: 'Semua kuantitas 0 atau sudah habis. Tombol Create Receipt disembunyikan.',
+          status: 'info',
+          duration: 4000,
+          isClosable: true,
+        });
+        setFullyReceivedPurchases(prev => selectedPurchase ? new Set(prev).add(selectedPurchase.id) : prev);
+        onReceiptClose();
+        return;
+      }
+
       const payload = {
         purchase_id: selectedPurchase.id,
         received_date: receiptFormData.received_date + 'T00:00:00Z',
         notes: receiptFormData.notes,
-        receipt_items: receiptFormData.receipt_items.map(item => ({
-          purchase_item_id: item.purchase_item_id,
-          quantity_received: item.quantity_received,
-          condition: item.condition,
-          notes: item.notes
-        }))
+        receipt_items: filteredItems,
       };
 
       // Call API to create receipt
@@ -1166,6 +1243,25 @@ const PurchasesPage: React.FC = () => {
 
       const receiptData = await response.json();
       
+      // Normalize receipt number from API response shape
+      const receiptNumber: string = receiptData?.receipt?.receipt_number || receiptData?.receipt_number || 'N/A';
+
+      // Mark this purchase as having receipts in local UI state
+      setPurchasesWithReceipts(prev => new Set(prev).add(selectedPurchase.id));
+
+      // Update remaining map after this receipt
+      const newRemaining: Record<number, number> = { ...remainingQtyMap };
+      for (const ri of receiptFormData.receipt_items) {
+        newRemaining[ri.purchase_item_id] = Math.max((newRemaining[ri.purchase_item_id] ?? 0) - (ri.quantity_received || 0), 0);
+      }
+      setRemainingQtyMap(newRemaining);
+
+      // Determine if this receipt completes all remaining quantities
+      const isFullyReceived = Object.values(newRemaining).every(v => v <= 0);
+      if (isFullyReceived) {
+        setFullyReceivedPurchases(prev => new Set(prev).add(selectedPurchase.id));
+      }
+      
       // NEW: Auto create assets for items marked as assets
       const assetsToCreate = receiptFormData.receipt_items.filter(item => item.create_asset);
       
@@ -1174,15 +1270,15 @@ const PurchasesPage: React.FC = () => {
       
       if (assetsToCreate.length > 0) {
         console.log('🚀 Creating assets from receipt...');
-        await createAssetsFromReceipt(selectedPurchase, assetsToCreate, receiptData);
+        await createAssetsFromReceipt(selectedPurchase, assetsToCreate, receiptNumber);
       } else {
         console.log('⏭️ No assets to create (no items marked as assets)');
       }
       
       const assetCount = assetsToCreate.length;
       const successMessage = assetCount > 0 
-        ? `Receipt ${receiptData.receipt_number} created successfully! Purchase status updated to COMPLETED. ${assetCount} asset(s) will be created automatically.`
-        : `Receipt ${receiptData.receipt_number} created successfully. Purchase status updated to COMPLETED.`;
+        ? `Receipt ${receiptNumber} created successfully. ${assetCount} asset(s) will be created automatically.`
+        : `Receipt ${receiptNumber} created successfully.`;
       
       toast({
         title: 'Receipt Created Successfully! 🎉',
@@ -1288,7 +1384,7 @@ const PurchasesPage: React.FC = () => {
     try {
       setLoadingBankAccounts(true);
       
-      const response = await fetch('/api/v1/cashbank/payment-accounts', {
+      const response = await fetch('/api/v1/cash-bank/reports/payment-accounts', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1567,8 +1663,8 @@ const PurchasesPage: React.FC = () => {
       setLoadingReceipts(true);
       setSelectedPurchaseForReceipts(purchase);
       
-      // Fetch only completed receipts to simplify the view
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/${purchase.id}/receipts?completed_only=true`, {
+      // Fetch all receipts (include PARTIAL and COMPLETE)
+      const response = await fetch(`${API_ENDPOINTS.PURCHASES_RECEIPTS_BY_ID(purchase.id)}` , {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1582,6 +1678,8 @@ const PurchasesPage: React.FC = () => {
 
       const data = await response.json();
       setReceipts(data.data || []);
+      // Mark purchase as having receipts locally
+      setPurchasesWithReceipts(prev => new Set(prev).add(purchase.id));
       onReceiptsOpen();
     } catch (err: any) {
       console.error('Error fetching receipts:', err);
@@ -1600,7 +1698,7 @@ const PurchasesPage: React.FC = () => {
   // Handle download receipt PDF
   const handleDownloadReceiptPDF = async (receiptId: number, receiptNumber: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/receipts/${receiptId}/pdf`, {
+      const response = await fetch(`${API_ENDPOINTS.PURCHASES_RECEIPT_PDF(receiptId)}`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -1675,11 +1773,32 @@ const PurchasesPage: React.FC = () => {
   };
 
   // NEW: Create assets from receipt items
-  const createAssetsFromReceipt = async (purchase: Purchase, assetItems: any[], receiptData: any) => {
+  const createAssetsFromReceipt = async (purchase: Purchase, assetItems: any[], receiptNumber: string) => {
     try {
       console.log('📝 Starting asset creation process...', { purchase: purchase.code, assetItemsCount: assetItems.length });
-      const assetsCreated = [];
-      const errors = [];
+      const assetsCreated = [] as any[];
+      const errors = [] as string[];
+
+      // Load existing assets once for duplicate guard
+      let existingAssets: any[] = [];
+      try {
+        const res = await assetService.getAssets();
+        existingAssets = res.data || [];
+      } catch (e) {
+        console.warn('⚠️ Could not load existing assets for duplicate guard. Proceeding without duplicate check.');
+      }
+      const existingSerials = new Set<string>(
+        existingAssets
+          .map((a: any) => (a.serial_number || '').toString().trim().toLowerCase())
+          .filter((s: string) => !!s)
+      );
+
+      // Helper to detect duplicate by computed name + receipt reference in notes
+      const isDuplicateByNameAndReceipt = (name: string) => {
+        return existingAssets.some(
+          (a: any) => a.name === name && typeof a.notes === 'string' && a.notes.includes(`Receipt ${receiptNumber}`)
+        );
+      };
       
       // Get valid account IDs first
       const accountIds = await getValidAccountIds();
@@ -1702,9 +1821,10 @@ const PurchasesPage: React.FC = () => {
         const salvageValue = purchasePrice * (receiptItem.asset_salvage_percentage || 10) / 100;
         
         // Create minimal asset data - let backend handle complex logic
+        const assetName = `${purchaseItem.product?.name || 'Asset'} (${purchase.code})`;
         const assetData = {
           // Core Asset Info
-          name: `${purchaseItem.product?.name || 'Asset'} (${purchase.code})`,
+          name: assetName,
           category: receiptItem.asset_category || 'Equipment',
           serial_number: receiptItem.serial_number || '',
           condition: receiptItem.condition || 'Good',
@@ -1721,10 +1841,10 @@ const PurchasesPage: React.FC = () => {
           // References
           vendor_id: purchase.vendor_id,
           purchase_reference: purchase.code,
-          receipt_reference: receiptData.receipt_number,
+          receipt_reference: receiptNumber,
           
           // Notes
-          notes: `Auto-created from Purchase ${purchase.code}, Receipt ${receiptData.receipt_number}. ${receiptItem.notes || ''}`,
+          notes: `Auto-created from Purchase ${purchase.code}, Receipt ${receiptNumber}. ${receiptItem.notes || ''}`,
           
           // MINIMAL ACCOUNTING DATA - Let backend use defaults
           payment_method: 'CREDIT', // Simplify to avoid account ID issues
@@ -1736,11 +1856,21 @@ const PurchasesPage: React.FC = () => {
         console.log('📋 Asset data prepared:', assetData);
         
         try {
+          // Duplicate guard: skip if serial exists OR name+receipt already present
+          const serialKey = (assetData.serial_number || '').toString().trim().toLowerCase();
+          if ((serialKey && existingSerials.has(serialKey)) || isDuplicateByNameAndReceipt(assetName)) {
+            console.warn('⏭️ Skipping duplicate asset creation for', { assetName, serial: serialKey });
+            continue;
+          }
+
           // Use assetService to create asset
           console.log('🚀 Calling assetService.createAsset with data:', assetData);
           const newAsset = await assetService.createAsset(assetData);
           console.log('✅ Asset created successfully via assetService:', newAsset);
           assetsCreated.push(newAsset);
+          // Update in-memory sets to prevent duplicates within the same run
+          if (serialKey) existingSerials.add(serialKey);
+          existingAssets.push({ name: assetName, notes: assetData.notes, serial_number: assetData.serial_number });
         } catch (apiError: any) {
           console.error('❌ AssetService Error:', apiError);
           const errorResponse = apiError.response?.data;
@@ -1803,7 +1933,7 @@ const PurchasesPage: React.FC = () => {
   // Handle download all receipts PDF
   const handleDownloadAllReceiptsPDF = async (purchase: Purchase) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/${purchase.id}/receipts/pdf`, {
+      const response = await fetch(`${API_ENDPOINTS.PURCHASES_ALL_RECEIPTS_PDF(purchase.id)}`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2196,7 +2326,7 @@ const handleCreate = async () => {
         </Button>
         
         {/* Record Payment button for APPROVED or PAID CREDIT purchases with outstanding amount */}
-        {(purchaseStatus === 'APPROVED' || purchaseStatus === 'PAID') && 
+        {(purchaseStatus === 'APPROVED' || purchaseStatus === 'PAID' || purchaseStatus === 'COMPLETED') && 
          purchaseService.canReceivePayment(purchase) &&
          (roleNorm === 'admin' || roleNorm === 'finance' || roleNorm === 'director') && (
           <Button
@@ -2217,7 +2347,8 @@ const handleCreate = async () => {
         
         {/* Create Receipt button for APPROVED or PAID purchases for Inventory Manager, Admin, Director */}
         {(purchaseStatus === 'APPROVED' || purchaseStatus === 'PAID') && 
-         (roleNorm === 'inventory_manager' || roleNorm === 'admin' || roleNorm === 'director') && (
+         (roleNorm === 'inventory_manager' || roleNorm === 'admin' || roleNorm === 'director') &&
+         !fullyReceivedPurchases.has(purchase.id) && (
           <Button
             size="sm"
             colorScheme="green"
@@ -2234,8 +2365,10 @@ const handleCreate = async () => {
           </Button>
         )}
         
-        {/* View Receipts button for COMPLETED purchases for all roles */}
-        {purchaseStatus === 'COMPLETED' && (
+        {/* View Receipts button always available (modal will show empty state if none) */}
+        {(
+          roleNorm === 'admin' || roleNorm === 'finance' || roleNorm === 'director' || roleNorm === 'inventory_manager' || roleNorm === 'employee'
+        ) && (
           <Button
             size="sm"
             colorScheme="blue"
@@ -2253,7 +2386,7 @@ const handleCreate = async () => {
         )}
         
         {/* View Journal Entries button for APPROVED or PAID purchases - for users with report view permissions */}
-        {(purchaseStatus === 'APPROVED' || purchaseStatus === 'PAID') && 
+        {(purchaseStatus === 'APPROVED' || purchaseStatus === 'PAID' || purchaseStatus === 'COMPLETED') && 
          (roleNorm === 'admin' || roleNorm === 'finance' || roleNorm === 'director') && (
           <Button
             size="sm"
@@ -5130,7 +5263,7 @@ const handleCreate = async () => {
                                   <NumberInput
                                     size="sm"
                                     min={0}
-                                    max={purchaseItem?.quantity || 0}
+                                    max={remainingQtyMap[purchaseItem?.id as number] ?? (purchaseItem?.quantity || 0)}
                                     value={receiptItem.quantity_received}
                                     onChange={(_, value) => {
                                       const newItems = [...receiptFormData.receipt_items];
@@ -5188,26 +5321,50 @@ const handleCreate = async () => {
                                   <VStack spacing={2} align="center">
                                     {/* Asset Creation Checkbox */}
                                     <HStack>
-                                      <input
-                                        type="checkbox"
-                                        checked={receiptItem.create_asset || false}
-                                        onChange={(e) => {
-                                          const newItems = [...receiptFormData.receipt_items];
-                                          newItems[index].create_asset = e.target.checked;
-                                          // Set defaults when checked
-                                          if (e.target.checked) {
-                                            newItems[index].asset_category = newItems[index].asset_category || 'Equipment';
-                                            newItems[index].asset_useful_life = newItems[index].asset_useful_life || 5;
-                                            newItems[index].asset_salvage_percentage = newItems[index].asset_salvage_percentage || 10;
-                                          }
-                                          setReceiptFormData({
-                                            ...receiptFormData,
-                                            receipt_items: newItems
-                                          });
-                                        }}
-                                        style={{ transform: 'scale(1.2)' }}
-                                      />
-                                      <Text fontSize="xs" fontWeight="medium">Asset</Text>
+                                      {(() => {
+                                        // Determine account type from selected expense account
+                                        const accId = purchaseItem?.expense_account_id as number | undefined;
+                                        const acc = expenseAccounts.find(a => a.id === accId);
+                                        const code = (acc?.code || '').toString();
+                                        const name = (acc?.name || '').toLowerCase();
+                                        const isFixedAsset = code.startsWith('15') || name.includes('asset tetap') || name.includes('fixed asset') || name.includes('bangunan') || name.includes('gedung');
+                                        // Convenience mode: checkbox always enabled
+                                        const disabled = false;
+                                        // Default-check for Fixed Asset items if user hasn't set it yet
+                                        const checked = receiptItem.create_asset ?? isFixedAsset;
+                                        return (
+                                          <>
+                                            <input
+                                              type="checkbox"
+                                              checked={checked}
+                                              disabled={disabled}
+                                              onChange={(e) => {
+                                                const newItems = [...receiptFormData.receipt_items];
+                                                newItems[index].create_asset = e.target.checked;
+                                                // Set defaults when checked
+                                                if (e.target.checked) {
+                                                  newItems[index].asset_category = newItems[index].asset_category || 'Equipment';
+                                                  newItems[index].asset_useful_life = newItems[index].asset_useful_life || 5;
+                                                  newItems[index].asset_salvage_percentage = newItems[index].asset_salvage_percentage || 10;
+                                                }
+                                                setReceiptFormData({
+                                                  ...receiptFormData,
+                                                  receipt_items: newItems
+                                                });
+                                              }}
+                                              style={{ transform: 'scale(1.2)' }}
+                                            />
+                                            <VStack spacing={0} align="start">
+                                              <Text fontSize="xs" fontWeight="medium">
+                                                Asset
+                                              </Text>
+                                              <Text fontSize="10px" color="gray.400">
+                                                (Shortcut: creates asset record only; journals follow purchase account)
+                                              </Text>
+                                            </VStack>
+                                          </>
+                                        );
+                                      })()}
                                     </HStack>
                                     
                                     {/* Asset Options - Show when checked */}
@@ -5410,7 +5567,7 @@ const handleCreate = async () => {
                                   {receipt.status}
                                 </Badge>
                               </Td>
-                              <Td>{receipt.receipt_items?.length || 0}</Td>
+                              <Td>{(receipt.receipt_items || []).reduce((sum: number, it: any) => sum + (it.quantity_received || 0), 0)}</Td>
                             </Tr>
                           ))}
                         </Tbody>

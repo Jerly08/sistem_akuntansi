@@ -23,6 +23,7 @@ type PaymentService struct {
 	cashBankRepo    *repositories.CashBankRepository
 	accountRepo     repositories.AccountRepository
 	contactRepo     repositories.ContactRepository
+	statusValidator *StatusValidationHelper // NEW: Konsistensi dengan SalesJournalServiceV2
 }
 
 func NewPaymentService(
@@ -35,13 +36,14 @@ func NewPaymentService(
 	contactRepo repositories.ContactRepository,
 ) *PaymentService {
 	return &PaymentService{
-		db:           db,
-		paymentRepo:  paymentRepo,
-		salesRepo:    salesRepo,
-		purchaseRepo: purchaseRepo,
-		cashBankRepo: cashBankRepo,
-		accountRepo:  accountRepo,
-		contactRepo:  contactRepo,
+		db:              db,
+		paymentRepo:     paymentRepo,
+		salesRepo:       salesRepo,
+		purchaseRepo:    purchaseRepo,
+		cashBankRepo:    cashBankRepo,
+		accountRepo:     accountRepo,
+		contactRepo:     contactRepo,
+		statusValidator: NewStatusValidationHelper(), // Initialize status validator
 	}
 }
 
@@ -132,7 +134,14 @@ func (s *PaymentService) CreateReceivablePaymentFixed(request PaymentCreateReque
 	// Step 2: Generate payment code
 	log.Printf("📝 Step 2: Generating payment code...")
 	stepStart = time.Now()
-	code := s.generatePaymentCode("RCV")
+	// Get prefix from settings (default RCV)
+	settingsSvc := NewSettingsService(s.db)
+	settings, _ := settingsSvc.GetSettings()
+	prefix := "RCV"
+	if settings != nil && settings.PaymentReceivablePrefix != "" {
+		prefix = settings.PaymentReceivablePrefix
+	}
+	code := s.generatePaymentCode(prefix)
 	log.Printf("✅ Payment code generated: %s (%.2fms)", code, float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
 	// Step 3: Create payment record
@@ -182,6 +191,13 @@ func (s *PaymentService) CreateReceivablePaymentFixed(request PaymentCreateReque
 			log.Printf("❌ Invoice ownership mismatch: Sale.CustomerID=%d, Request.ContactID=%d", sale.CustomerID, request.ContactID)
 			return nil, fmt.Errorf("invoice does not belong to this customer")
 		}
+		
+		// 🔒 CRITICAL: Validate invoice status (consistent with SalesJournalServiceV2.ShouldPostToJournal)
+		if err := s.statusValidator.ValidatePaymentAllocation(sale.Status, allocation.InvoiceID); err != nil {
+			log.Printf("❌ Payment allocation blocked: %v", err)
+			return nil, err
+		}
+		log.Printf("✅ Invoice #%d status '%s' is valid for payment allocation", allocation.InvoiceID, sale.Status)
 		
 		// Calculate allocated amount
 		allocatedAmount := allocation.Amount
@@ -258,47 +274,37 @@ func (s *PaymentService) CreateReceivablePaymentFixed(request PaymentCreateReque
 	}
 	log.Printf("✅ All allocations processed. Total allocated: %.2f (%.2fms)", totalAllocatedAmount, float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
-	// Step 5: Process balance updates via ULTRA-FAST posting (EMERGENCY FIX)
-	log.Printf("📝 Step 5: Processing balance updates via Ultra-Fast Posting...")
+	// Step 5: Create proper journals via SalesJournalServiceV2 (no ultra-fast posting)
+	log.Printf("📝 Step 5: Creating journals via SalesJournalServiceV2 (no ultra-fast posting)...")
 	stepStart = time.Now()
-	if request.CashBankID > 0 {
-		log.Printf("⚡ Using ULTRA-FAST Posting for amount: %.2f (vs original request: %.2f, vs payment record: %.2f)", 
-			totalAllocatedAmount, request.Amount, payment.Amount)
-		
-		// Use Ultra-Fast Posting Service - EMERGENCY BYPASS for timeout issues
-		ultraFastService := NewUltraFastPostingService(s.db)
-		
-		// Temporarily update payment amount for posting
-		originalAmount := payment.Amount
-		payment.Amount = totalAllocatedAmount
-		
-		// Use EXPLICIT receivable payment posting to ensure correct accounting
-		postingErr := ultraFastService.UltraFastReceivablePaymentPosting(payment, request.CashBankID, userID)
-		if postingErr != nil {
-			log.Printf("❌ Ultra-Fast Receivable Posting failed: %v (%.2fms)", postingErr, float64(time.Since(stepStart).Nanoseconds())/1000000)
-			return nil, fmt.Errorf("ultra-fast receivable posting failed: %v", postingErr)
-		}
-		
-		// Restore original amount 
-		payment.Amount = originalAmount
-		
-		// Start async journal creation after transaction commits (with explicit type)
-		defer func() {
-			if committed {
-				ultraFastService.CreateJournalEntryAsyncWithType(payment, request.CashBankID, userID, "RECEIVABLE")
-			}
-		}()
-		
-		log.Printf("✅ Ultra-Fast Posting completed (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
-	} else {
-		log.Printf("⚠️ No cash/bank account specified - skipping balance update")
-	}
-	log.Printf("✅ Balance processing completed (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
+	coaSvc := NewCOAService(s.db)
+	journalRepo := repositories.NewJournalEntryRepository(s.db)
+	salesJournal := NewSalesJournalServiceV2(s.db, journalRepo, coaSvc)
 	
-	// Step 6: Journal entries will be created asynchronously by Ultra-Fast Posting Service
-	log.Printf("📝 Step 6: Journal entries will be handled asynchronously...")
+	// Create payment journals for each allocation cross-reference we just created
+	// We will query sale payments created within this transaction for this payment code reference
+	var salePayments []models.SalePayment
+	if err := tx.Where("reference = ?", fmt.Sprintf("Payment ID: %d", payment.ID)).Find(&salePayments).Error; err == nil {
+		for _, sp := range salePayments {
+			// Load sale for each sp.SaleID
+			sale, err := s.salesRepo.FindByID(sp.SaleID)
+			if err != nil {
+				log.Printf("⚠️ Warning: Skipping journal for SalePayment %d (sale not found): %v", sp.ID, err)
+				continue
+			}
+			if postErr := salesJournal.CreateSalesPaymentJournal(&sp, sale, tx); postErr != nil {
+				log.Printf("⚠️ Warning: Failed to create sales payment journal for sp=%d: %v", sp.ID, postErr)
+			}
+		}
+	} else {
+		log.Printf("⚠️ Warning: Could not load sale payments for journaling: %v", err)
+	}
+	log.Printf("✅ Payment journals created (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
+	
+	// Step 6: Continue
+	log.Printf("📝 Step 6: Finalizing...")
 	stepStart = time.Now()
-	log.Printf("✅ Journal creation scheduled - will be handled asynchronously for speed (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
+	log.Printf("✅ Proceeding to status update (%.2fms)", float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
 	// Step 7: Update payment status
 	log.Printf("📝 Step 7: Updating payment status to COMPLETED...")
@@ -379,9 +385,15 @@ func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, user
 		log.Printf("Balance check passed: %.2f available (%.2fms)", cashBank.Balance, float64(time.Since(balanceCheckStart).Nanoseconds())/1000000)
 	}
 	
-	// Generate payment code
+	// Generate payment code (prefix from settings)
 	codeGenStart := time.Now()
-	code := s.generatePaymentCode("PAY")
+	settingsSvc := NewSettingsService(s.db)
+	settings, _ := settingsSvc.GetSettings()
+	prefix := "PAY"
+	if settings != nil && settings.PaymentPayablePrefix != "" {
+		prefix = settings.PaymentPayablePrefix
+	}
+	code := s.generatePaymentCode(prefix)
 	log.Printf("Payment code generated: %s (%.2fms)", code, float64(time.Since(codeGenStart).Nanoseconds())/1000000)
 	
 	// Create payment record
@@ -446,21 +458,16 @@ func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, user
 		remainingAmount -= allocatedAmount
 	}
 	
-	// Update cash/bank account using UltraFastPayablePaymentPosting
+	// Update cash/bank account balance and record transaction safely (OUT flow)
 	if request.CashBankID > 0 {
-		log.Printf("⚡ Using ULTRA-FAST Payable Payment Posting for amount: %.2f", request.Amount)
-		
-		// Use Ultra-Fast Posting Service for PAYABLE payments (explicit)
-		ultraFastService := NewUltraFastPostingService(s.db)
-		
-		postingErr := ultraFastService.UltraFastPayablePaymentPosting(payment, request.CashBankID, userID)
-		if postingErr != nil {
-			log.Printf("❌ Ultra-Fast Payable Posting failed: %v", postingErr)
+		log.Printf("🏦 Updating cash/bank balance for payable payment: amount=%.2f, cashBankID=%d", request.Amount, request.CashBankID)
+		// For payable (outgoing) payments, pass negative amount and direction OUT
+		if err := s.updateCashBankBalance(tx, request.CashBankID, -request.Amount, "OUT", payment.ID, userID); err != nil {
+			log.Printf("❌ Cash/Bank balance update failed: %v", err)
 			tx.Rollback()
-			return nil, fmt.Errorf("ultra-fast payable posting failed: %v", postingErr)
+			return nil, fmt.Errorf("cash/bank balance update failed: %v", err)
 		}
-		
-		log.Printf("✅ Ultra-Fast Payable Posting completed")
+		log.Printf("✅ Cash/Bank balance updated and transaction recorded")
 	}
 	
 	// 🔥 SSOT Integration: Skip legacy journal creation for purchase payments
@@ -1515,7 +1522,7 @@ func (s *PaymentService) ExportPaymentReportPDF(startDate, endDate, status, meth
 
 	// Generate PDF using existing PDF service
 	pdfService := NewPDFService(s.db)
-	pdfData, err := pdfService.GeneratePaymentReportPDF(result.Data, startDate, endDate)
+	pdfData, err := pdfService.GeneratePaymentReportPDF(result.Data)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1551,7 +1558,14 @@ func (s *PaymentService) ExportPaymentDetailPDF(paymentID uint) ([]byte, string,
 // This method is kept for backward compatibility but should NOT be used for new code
 // WARNING: Using this method directly can cause double posting!
 func (s *PaymentService) updateCashBankBalanceWithLogging(tx *gorm.DB, cashBankID uint, amount float64, direction string, referenceID uint, userID uint) error {
-	log.Printf("⚠️ WARNING: Using deprecated updateCashBankBalanceWithLogging - use SingleSourcePostingService instead!")
+	// 🔒 PRODUCTION GUARD: Block deprecated methods in production
+	statusValidator := NewStatusValidationHelper()
+	if err := statusValidator.ValidateDeprecatedMethodUsage("updateCashBankBalanceWithLogging"); err != nil {
+		log.Printf("❌ Deprecated method blocked: %v", err)
+		return err
+	}
+	
+	log.Printf("⚠️ WARNING: Using deprecated updateCashBankBalanceWithLogging - use SalesJournalServiceV2 instead!")
 	log.Printf("💰 Updating Cash/Bank Balance: ID=%d, Amount=%.2f, Direction=%s", cashBankID, amount, direction)
 	
 	var cashBank models.CashBank
@@ -1602,7 +1616,14 @@ func (s *PaymentService) updateCashBankBalanceWithLogging(tx *gorm.DB, cashBankI
 // createReceivablePaymentJournalWithSSOT - DEPRECATED: Use SingleSourcePostingService instead
 // WARNING: This method can cause double posting if used with manual balance updates!
 func (s *PaymentService) createReceivablePaymentJournalWithSSOT(tx *gorm.DB, payment *models.Payment, cashBankID uint, userID uint) error {
-	log.Printf("⚠️ WARNING: Using deprecated createReceivablePaymentJournalWithSSOT - use SingleSourcePostingService instead!")
+	// 🔒 PRODUCTION GUARD: Block deprecated methods in production
+	statusValidator := NewStatusValidationHelper()
+	if err := statusValidator.ValidateDeprecatedMethodUsage("createReceivablePaymentJournalWithSSOT"); err != nil {
+		log.Printf("❌ Deprecated method blocked: %v", err)
+		return err
+	}
+	
+	log.Printf("⚠️ WARNING: Using deprecated createReceivablePaymentJournalWithSSOT - use SalesJournalServiceV2 instead!")
 	log.Printf("📋 Creating SSOT journal entries for payment %d", payment.ID)
 	
 	// Initialize unified journal service - using transaction-safe approach
@@ -1656,7 +1677,7 @@ func (s *PaymentService) createReceivablePaymentJournalWithSSOT(tx *gorm.DB, pay
 	paymentID := uint64(payment.ID)
 	journalRequest := &JournalEntryRequest{
 		SourceType:  models.SSOTSourceTypePayment,
-		SourceID:    &paymentID,
+		SourceID:    paymentID,
 		Reference:   payment.Code,
 		EntryDate:   payment.Date,
 		Description: fmt.Sprintf("Customer Payment %s", payment.Code),
@@ -1689,7 +1710,14 @@ func (s *PaymentService) createReceivablePaymentJournalWithSSOT(tx *gorm.DB, pay
 // This method was created to fix double posting but is now superseded by SingleSourcePostingService
 // WARNING: Complex logic that can still cause issues - use SingleSourcePostingService for all new code!
 func (s *PaymentService) createReceivablePaymentJournalWithSSOTFixed(tx *gorm.DB, payment *models.Payment, cashBankID uint, userID uint, cashBankAlreadyUpdated bool) error {
-	log.Printf("⚠️ WARNING: Using deprecated createReceivablePaymentJournalWithSSOTFixed - use SingleSourcePostingService instead!")
+	// 🔒 PRODUCTION GUARD: Block deprecated methods in production
+	statusValidator := NewStatusValidationHelper()
+	if err := statusValidator.ValidateDeprecatedMethodUsage("createReceivablePaymentJournalWithSSOTFixed"); err != nil {
+		log.Printf("❌ Deprecated method blocked: %v", err)
+		return err
+	}
+	
+	log.Printf("⚠️ WARNING: Using deprecated createReceivablePaymentJournalWithSSOTFixed - use SalesJournalServiceV2 instead!")
 	log.Printf("📋 Creating SSOT journal entries for payment %d (cash bank updated: %v)", payment.ID, cashBankAlreadyUpdated)
 	
 	// Initialize unified journal service - using transaction-safe approach
@@ -1743,7 +1771,7 @@ func (s *PaymentService) createReceivablePaymentJournalWithSSOTFixed(tx *gorm.DB
 	paymentID := uint64(payment.ID)
 	journalRequest := &JournalEntryRequest{
 		SourceType:  models.SSOTSourceTypePayment,
-		SourceID:    &paymentID,
+		SourceID:    paymentID,
 		Reference:   payment.Code,
 		EntryDate:   payment.Date,
 		Description: fmt.Sprintf("Customer Payment %s", payment.Code),

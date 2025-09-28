@@ -8,6 +8,7 @@ import {
   ReconciliationStatus
 } from '../types/cashBankIntegration.types';
 import { cashBankIntegrationService } from '../services/cashBankIntegrationService';
+import SummaryStatCard from './SummaryStatCard';
 
 interface CashBankIntegratedDashboardProps {
   onAccountSelect?: (accountId: number) => void;
@@ -119,31 +120,31 @@ export const CashBankIntegratedDashboard: React.FC<CashBankIntegratedDashboardPr
         </button>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - colored like Sales Management */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard
+        <SummaryStatCard
           title="Total Cash"
           value={cashBankIntegrationService.formatCurrency(summary.summary.total_cash)}
-          icon="💵"
-          color="bg-green-50 border-green-200 text-green-800"
+          icon={<span className="text-2xl">💵</span>}
+          color="green"
         />
-        <SummaryCard
+        <SummaryStatCard
           title="Total Bank"
           value={cashBankIntegrationService.formatCurrency(summary.summary.total_bank)}
-          icon="🏦"
-          color="bg-blue-50 border-blue-200 text-blue-800"
+          icon={<span className="text-2xl">🏦</span>}
+          color="blue"
         />
-        <SummaryCard
+        <SummaryStatCard
           title="Total Balance"
           value={cashBankIntegrationService.formatCurrency(summary.summary.total_balance)}
-          icon="💰"
-          color="bg-purple-50 border-purple-200 text-purple-800"
+          icon={<span className="text-2xl">💰</span>}
+          color="purple"
         />
-        <SummaryCard
+        <SummaryStatCard
           title="SSOT Balance"
           value={cashBankIntegrationService.formatCurrency(summary.summary.total_ssot_balance)}
-          icon="📊"
-          color="bg-indigo-50 border-indigo-200 text-indigo-800"
+          icon={<span className="text-2xl">📊</span>}
+          color="indigo"
         />
       </div>
 
@@ -240,25 +241,6 @@ export const CashBankIntegratedDashboard: React.FC<CashBankIntegratedDashboardPr
   );
 };
 
-// Summary Card Component
-interface SummaryCardProps {
-  title: string;
-  value: string;
-  icon: string;
-  color: string;
-}
-
-const SummaryCard: React.FC<SummaryCardProps> = ({ title, value, icon, color }) => (
-  <div className={`border rounded-lg p-4 ${color}`}>
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium opacity-75">{title}</p>
-        <p className="text-xl font-bold">{value}</p>
-      </div>
-      <div className="text-2xl">{icon}</div>
-    </div>
-  </div>
-);
 
 // Account Card Component
 interface AccountCardProps {

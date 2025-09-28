@@ -364,8 +364,21 @@ func (r *JournalEntryRepo) updateAccountBalancesInTx(tx *gorm.DB, entry *models.
 			return utils.NewBadRequestError("Invalid account ID in journal line")
 		}
 
-		// Calculate balance change: debit increases balance, credit decreases balance
-		balanceChange := line.DebitAmount - line.CreditAmount
+		// Get account details to determine normal balance type
+		var account models.Account
+		if err := tx.Select("id, code, name, type, balance").First(&account, line.AccountID).Error; err != nil {
+			return utils.NewInternalError(fmt.Sprintf("Failed to get account %d details", line.AccountID), err)
+		}
+
+		// Calculate balance change based on account type (normal balance)
+		var balanceChange float64
+		if account.Type == "ASSET" || account.Type == "EXPENSE" {
+			// Debit normal accounts: debit increases, credit decreases
+			balanceChange = line.DebitAmount - line.CreditAmount
+		} else {
+			// Credit normal accounts (LIABILITY, EQUITY, REVENUE): credit increases, debit decreases
+			balanceChange = line.CreditAmount - line.DebitAmount
+		}
 
 		// Update account balance atomically
 		result := tx.Model(&models.Account{}).

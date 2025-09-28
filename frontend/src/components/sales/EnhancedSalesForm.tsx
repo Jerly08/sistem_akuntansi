@@ -667,10 +667,10 @@ const EnhancedSalesForm: React.FC<EnhancedSalesFormProps> = ({
 
   const populateFormWithSale = (saleData: Sale) => {
     reset({
-      document_type: saleData.type === 'QUOTATION' ? 'QUOTATION' : 'INVOICE',
+      document_type: 'INVOICE',
       customer_id: saleData.customer_id,
       sales_person_id: saleData.sales_person_id,
-      type: saleData.type,
+      type: 'INVOICE',
       date: saleData.date.split('T')[0],
       due_date: saleData.due_date ? saleData.due_date.split('T')[0] : undefined,
       valid_until: saleData.valid_until ? saleData.valid_until.split('T')[0] : undefined,
@@ -804,15 +804,9 @@ const EnhancedSalesForm: React.FC<EnhancedSalesFormProps> = ({
     if (!data.date) errors.push('Date is required');
 
     // Document type specific validation
-    if (data.document_type === 'QUOTATION') {
-      if (!data.valid_until) errors.push('Valid Until is required for quotations');
-      if (data.valid_until && new Date(data.valid_until) < new Date(data.date)) {
-        errors.push('Valid Until must be after quotation date');
-      }
-    } else {
-      if (data.due_date && new Date(data.due_date) < new Date(data.date)) {
-        errors.push('Due Date cannot be earlier than invoice date');
-      }
+    // Invoice-only validation
+    if (data.due_date && new Date(data.due_date) < new Date(data.date)) {
+      errors.push('Due Date cannot be earlier than invoice date');
     }
 
     // Items validation
@@ -891,7 +885,7 @@ const EnhancedSalesForm: React.FC<EnhancedSalesFormProps> = ({
         const createData: SaleCreateRequest = {
           customer_id: data.customer_id,
           sales_person_id: data.sales_person_id,
-          type: data.document_type,
+          type: 'INVOICE',
           date: `${data.date}T00:00:00Z`,
           due_date: data.due_date ? `${data.due_date}T00:00:00Z` : undefined,
           valid_until: data.valid_until ? `${data.valid_until}T00:00:00Z` : undefined,
@@ -995,38 +989,6 @@ const EnhancedSalesForm: React.FC<EnhancedSalesFormProps> = ({
               </Badge>
             </HStack>
             
-            {/* Document Type Selector */}
-            {!sale && (
-              <Box>
-                <Text fontSize="sm" fontWeight="medium" mb={2} color={subHeadingColor}>
-                  Document Type
-                </Text>
-                <ButtonGroup size="sm" isAttached variant="outline">
-                  <Button
-                    onClick={() => handleDocumentTypeChange('INVOICE')}
-                    colorScheme={watchDocumentType === 'INVOICE' ? 'blue' : 'gray'}
-                    variant={watchDocumentType === 'INVOICE' ? 'solid' : 'outline'}
-                    leftIcon={<FiFileText />}
-                  >
-                    Invoice
-                  </Button>
-                  <Button
-                    onClick={() => handleDocumentTypeChange('QUOTATION')}
-                    colorScheme={watchDocumentType === 'QUOTATION' ? 'blue' : 'gray'}
-                    variant={watchDocumentType === 'QUOTATION' ? 'solid' : 'outline'}
-                    leftIcon={<FiClock />}
-                  >
-                    Quotation
-                  </Button>
-                </ButtonGroup>
-                <Text fontSize="xs" color={textColor} mt={1}>
-                  {watchDocumentType === 'INVOICE' 
-                    ? 'Invoice: Direct sale with payment terms and journal posting'
-                    : 'Quotation: Price quote with expiry date, no journal posting'
-                  }
-                </Text>
-              </Box>
-            )}
           </VStack>
         </ModalHeader>
         <ModalCloseButton />
@@ -1206,27 +1168,6 @@ const EnhancedSalesForm: React.FC<EnhancedSalesFormProps> = ({
                       </FormControl>
                     )}
 
-                    {/* Valid Until - Only for Quotation */}
-                    {watchDocumentType === 'QUOTATION' && (
-                      <FormControl isRequired={watchDocumentType === 'QUOTATION'} flex={1}>
-                        <FormLabel>
-                          <HStack>
-                            <Icon as={FiClock} />
-                            <Text>Valid Until</Text>
-                            <Text fontSize="xs" color={textColor}>(DD/MM/YYYY)</Text>
-                          </HStack>
-                        </FormLabel>
-                        <Input
-                          type="date"
-                          {...register('valid_until', {
-                            required: watchDocumentType === 'QUOTATION' ? 'Valid Until is required for quotations' : false
-                          })}
-                          bg={inputBg}
-                          _focus={{ bg: inputFocusBg }}
-                        />
-                        <FormErrorMessage>{errors.valid_until?.message}</FormErrorMessage>
-                      </FormControl>
-                    )}
 
                     <FormControl flex={1}>
                       <FormLabel>Reference</FormLabel>
@@ -1553,8 +1494,8 @@ const EnhancedSalesForm: React.FC<EnhancedSalesFormProps> = ({
               {/* Left - Status Info */}
               <VStack align="start" spacing={1}>
                 <HStack spacing={2}>
-                  <Badge colorScheme={watchDocumentType === 'INVOICE' ? 'green' : 'blue'}>
-                    {watchDocumentType}
+                  <Badge colorScheme={'green'}>
+                    {'INVOICE'}
                   </Badge>
                   <Text fontSize="sm" color={textColor}>
                     {fields.length} item{fields.length !== 1 ? 's' : ''}
@@ -1591,10 +1532,10 @@ const EnhancedSalesForm: React.FC<EnhancedSalesFormProps> = ({
                   colorScheme="blue"
                   size="lg"
                   isLoading={loading}
-                  loadingText={sale ? "Updating..." : `Creating ${watchDocumentType}...`}
+                  loadingText={sale ? "Updating..." : 'Creating Invoice...'}
                   shadow="md"
                 >
-                  {sale ? 'Update Sale' : `Create ${watchDocumentType}`}
+                  {sale ? 'Update Sale' : 'Create Invoice'}
                 </Button>
               </HStack>
             </HStack>

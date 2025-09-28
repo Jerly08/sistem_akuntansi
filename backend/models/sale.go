@@ -54,6 +54,8 @@ type Sale struct {
 	TotalTaxDeductions float64         `json:"total_tax_deductions" gorm:"type:decimal(15,2);default:0"`        // Total pemotongan
 	PaymentTerms       string          `json:"payment_terms" gorm:"size:50"`
 	PaymentMethod      string          `json:"payment_method" gorm:"size:50"`
+	PaymentMethodType  string          `json:"payment_method_type" gorm:"size:20"` // CASH, BANK, CREDIT
+	CashBankID         *uint           `json:"cash_bank_id" gorm:"index"`
 	ShippingMethod     string          `json:"shipping_method" gorm:"size:50"`
 	ShippingCost       float64         `json:"shipping_cost" gorm:"type:decimal(15,2);default:0"`
 	ShippingTaxable    bool            `json:"shipping_taxable" gorm:"default:false"`
@@ -74,6 +76,13 @@ type Sale struct {
 	SaleItems    []SaleItem    `json:"sale_items" gorm:"foreignKey:SaleID"`
 	SalePayments []SalePayment `json:"sale_payments" gorm:"foreignKey:SaleID"`
 	SaleReturns  []SaleReturn  `json:"sale_returns" gorm:"foreignKey:SaleID"`
+}
+
+// AfterFind hook to ensure computed fields are set correctly
+func (s *Sale) AfterFind(tx *gorm.DB) (err error) {
+	// Set computed field for frontend compatibility
+	s.SubTotal = s.Subtotal
+	return
 }
 
 type SaleItem struct {
@@ -159,8 +168,10 @@ type SaleCreateRequest struct {
 	PPh21Rate            float64         `json:"pph21_rate"`                  // PPh 21 percentage
 	PPh23Rate            float64         `json:"pph23_rate"`                  // PPh 23 percentage
 	OtherTaxDeductions   float64         `json:"other_tax_deductions"`        // Other tax deductions
-	PaymentTerms     string              `json:"payment_terms"`
-	PaymentMethod    string              `json:"payment_method"`
+	PaymentTerms       string              `json:"payment_terms"`
+	PaymentMethod      string              `json:"payment_method"`
+	PaymentMethodType  string              `json:"payment_method_type"` // CASH, BANK, CREDIT
+	CashBankID         *uint               `json:"cash_bank_id"`
 	ShippingMethod   string              `json:"shipping_method"`
 	ShippingCost     float64             `json:"shipping_cost"`
 	ShippingTaxable  bool                `json:"shipping_taxable"`
@@ -190,8 +201,10 @@ type SaleUpdateRequest struct {
 	PPh21Rate            *float64        `json:"pph21_rate"`                  // PPh 21 percentage
 	PPh23Rate            *float64        `json:"pph23_rate"`                  // PPh 23 percentage
 	OtherTaxDeductions   *float64        `json:"other_tax_deductions"`        // Other tax deductions
-	PaymentTerms     *string             `json:"payment_terms"`
-	PaymentMethod    *string             `json:"payment_method"`
+	PaymentTerms       *string             `json:"payment_terms"`
+	PaymentMethod      *string             `json:"payment_method"`
+	PaymentMethodType  *string             `json:"payment_method_type"` // CASH, BANK, CREDIT
+	CashBankID         *uint               `json:"cash_bank_id"`
 	ShippingMethod   *string             `json:"shipping_method"`
 	ShippingCost     *float64            `json:"shipping_cost"`
 	ShippingTaxable  *bool               `json:"shipping_taxable"`
@@ -204,18 +217,18 @@ type SaleUpdateRequest struct {
 }
 
 type SaleItemRequest struct {
-	ProductID        uint    `json:"product_id" binding:"required"`
-	Description      string  `json:"description"`
-	Quantity         int     `json:"quantity" binding:"required,min=1"`
-	UnitPrice        float64 `json:"unit_price" binding:"required,min=0"`
-	DiscountPercent  float64 `json:"discount_percent"`
-	DiscountAmount   float64 `json:"discount_amount"`
+	ProductID        uint     `json:"product_id" binding:"required"`
+	Description      string   `json:"description"`
+	Quantity         float64  `json:"quantity" binding:"required,min=1"` // Accept float from frontend
+	UnitPrice        float64  `json:"unit_price" binding:"required,min=0"`
+	DiscountPercent  *float64 `json:"discount_percent"`
+	DiscountAmount   *float64 `json:"discount_amount"`
 	// Legacy fields for backward compatibility
-	Discount         float64 `json:"discount"`
-	Tax              float64 `json:"tax"`
-	Taxable          bool    `json:"taxable"`
-	RevenueAccountID uint    `json:"revenue_account_id"`
-	TaxAccountID     *uint   `json:"tax_account_id"`
+	Discount         *float64 `json:"discount"` // Can come from frontend
+	Tax              *float64 `json:"tax"`
+	Taxable          *bool    `json:"taxable"`
+	RevenueAccountID uint     `json:"revenue_account_id"`
+	TaxAccountID     *uint    `json:"tax_account_id"`
 }
 
 // Return related to a Sale
@@ -278,6 +291,15 @@ const (
 	SalePaymentStatusPending   = "PENDING"
 	SalePaymentStatusCancelled = "CANCELLED"
 )
+
+// Result DTOs
+type SalesResult struct {
+	Data       []Sale `json:"data"`
+	Total      int    `json:"total"`
+	Page       int    `json:"page"`
+	Limit      int    `json:"limit"`
+	TotalPages int    `json:"total_pages"`
+}
 
 // Reporting/Analytics DTOs
 
@@ -407,12 +429,7 @@ type SaleItemUpdateRequest struct {
 	RevenueAccountID *uint    `json:"revenue_account_id"`
 }
 
-// GORM hooks untuk update computed fields
-func (s *Sale) AfterFind(tx *gorm.DB) (err error) {
-	// Update SubTotal alias to match Subtotal
-	s.SubTotal = s.Subtotal
-	return
-}
+// GORM hooks untuk update computed fields (removed duplicate - see line 82)
 
 func (s *Sale) BeforeCreate(tx *gorm.DB) (err error) {
 	// Update SubTotal alias to match Subtotal

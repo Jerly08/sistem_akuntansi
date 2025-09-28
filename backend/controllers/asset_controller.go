@@ -17,6 +17,7 @@ import (
 
 type AssetController struct {
 	assetService services.AssetServiceInterface
+	db           *gorm.DB
 }
 
 type AssetCreateRequest struct {
@@ -70,6 +71,7 @@ func NewAssetController(db *gorm.DB) *AssetController {
 	
 	return &AssetController{
 		assetService: assetService,
+		db:           db,
 	}
 }
 
@@ -178,6 +180,77 @@ func (ac *AssetController) CreateAsset(c *gin.Context) {
 		"message": "Asset created successfully",
 		"data":    asset,
 	})
+}
+
+// CapitalizeAsset creates capitalization journal entries for a given asset
+func (ac *AssetController) CapitalizeAsset(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid asset ID"})
+		return
+	}
+	var req struct {
+		Amount              float64   `json:"amount" binding:"required,gt=0"`
+		Date                *time.Time `json:"date"`
+		Description         string    `json:"description"`
+		Reference           string    `json:"reference"`
+		SourceAccountID     *uint     `json:"source_account_id"`
+		FixedAssetAccountID *uint     `json:"fixed_asset_account_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request data", "details": err.Error()})
+		return
+	}
+	// Resolve accounts
+	accountRepo := repositories.NewAccountRepository(ac.db)
+	journalRepo := repositories.NewJournalEntryRepository(ac.db)
+	capSvc := services.NewAssetCapitalizationService(ac.db, accountRepo, nil, journalRepo)
+	// Defaults
+	date := time.Now()
+	if req.Date != nil {
+		date = *req.Date
+	}
+	var sourceID uint
+	if req.SourceAccountID != nil {
+		sourceID = *req.SourceAccountID
+	} else {
+		// default to inventory 1301
+		if acc, err := accountRepo.FindByCode(nil, "1301"); err == nil {
+			sourceID = acc.ID
+		}
+	}
+	var faID uint
+	if req.FixedAssetAccountID != nil {
+		faID = *req.FixedAssetAccountID
+	} else {
+		// default fixed asset 1501
+		if acc, err := accountRepo.FindByCode(nil, "1501"); err == nil {
+			faID = acc.ID
+		}
+	}
+	if sourceID == 0 || faID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Unable to resolve accounts. Provide source_account_id and fixed_asset_account_id explicitly."})
+		return
+	}
+	userID := c.MustGet("user_id").(uint)
+	input := services.CapitalizationInput{
+		AssetID:             uint(id),
+		Amount:              req.Amount,
+		Date:                date,
+		Description:         req.Description,
+		Reference:           req.Reference,
+		SourceAccountID:     sourceID,
+		FixedAssetAccountID: faID,
+		UserID:              userID,
+		ReferenceType:       models.JournalRefAsset,
+		ReferenceID:         uint(id),
+	}
+	if err := capSvc.Capitalize(input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to capitalize asset", "details": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Asset capitalized successfully"})
 }
 
 // UpdateAsset updates an existing asset

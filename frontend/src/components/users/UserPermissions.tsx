@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '@/services/api';
 import { handleApiError } from '@/utils/authErrorHandler';
+import { API_ENDPOINTS } from '@/config/api';
 import {
   Modal,
   ModalOverlay,
@@ -93,7 +94,7 @@ const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user
     
     setLoading(true);
     try {
-      const response = await api.get(`/permissions/users/${user.id}`);
+      const response = await api.get(API_ENDPOINTS.PERMISSIONS_USER_BY_ID(user.id));
       const data = response.data;
       
       setPermissions(data);
@@ -154,7 +155,7 @@ const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user
 
     setSaving(true);
     try {
-      await api.put(`/permissions/users/${user.id}`, {
+      await api.put(API_ENDPOINTS.PERMISSIONS_USER_BY_ID(user.id), {
         permissions: permissions.permissions,
       });
 
@@ -189,7 +190,7 @@ const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user
 
     setSaving(true);
     try {
-      await api.post(`/permissions/users/${user.id}/reset`);
+      await api.post(API_ENDPOINTS.PERMISSIONS_USER_RESET(user.id));
 
       toast({
         title: 'Success',

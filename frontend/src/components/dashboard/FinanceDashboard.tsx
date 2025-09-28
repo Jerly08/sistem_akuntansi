@@ -28,6 +28,7 @@ import {
   FiClock
 } from 'react-icons/fi';
 import api from '../../services/api';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface FinanceDashboardData {
   invoices_pending_payment: number;
@@ -56,7 +57,7 @@ export const FinanceDashboard = () => {
   const fetchFinanceDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/dashboard/finance');
+      const response = await api.get(API_ENDPOINTS.DASHBOARD_FINANCE);
       setData(response.data.data);
     } catch (error: any) {
       console.error('Error fetching finance dashboard data:', error);

@@ -11,35 +11,41 @@ Backend API untuk sistem akuntansi dengan fitur lengkap termasuk SSOT (Single So
 
 ### 1. Setup Environment (Untuk PC Baru)
 
-Setelah `git clone` atau `git pull` di PC baru, pilih salah satu cara:
+Setelah `git clone` atau `git pull` di PC baru, **WAJIB** jalankan setup berikut:
 
-#### Opsi A: Script Otomatis (Recommended)
+#### 🛡️ Balance Protection Setup (CRITICAL)
 
-**Windows (PowerShell):**
-```powershell
-# Masuk ke direktori backend
-cd backend
+**⚠️ PENTING:** Sistem ini mencegah balance mismatch yang bisa merusak laporan keuangan!
 
-# Jalankan setup script
-.\setup_environment.ps1
-```
-
-**Linux/Mac (Bash):**
+**Windows:**
 ```bash
 # Masuk ke direktori backend
 cd backend
 
-# Jalankan setup script
-./setup_environment.sh
+# Setup balance protection system
+setup_balance_protection.bat
 ```
 
-#### Opsi B: Manual Step-by-Step
-
+**Linux/Mac:**
 ```bash
 # Masuk ke direktori backend
 cd backend
 
-# Jalankan migration fixes (WAJIB untuk PC baru)
+# Setup balance protection system
+chmod +x setup_balance_protection.sh
+./setup_balance_protection.sh
+```
+
+**Manual Alternative:**
+```bash
+# Jika script di atas tidak bisa jalan
+go run cmd/scripts/setup_balance_sync_auto.go
+```
+
+#### ⚙️ Environment Setup (Optional)
+
+```bash
+# Jalankan migration fixes jika diperlukan
 go run cmd/fix_migrations.go
 go run cmd/fix_remaining_migrations.go
 
@@ -115,8 +121,9 @@ Setelah backend running, akses dokumentasi lengkap di:
 
 ## 🛡️ Features
 
+- ✅ **Balance Protection System** - **NEW!** Auto-prevent balance mismatch issues
 - ✅ **SSOT Journal System** - Single source of truth untuk semua transaksi
-- ✅ **Account Balance Sync** - Automatic balance synchronization
+- ✅ **Account Balance Sync** - Real-time automatic balance synchronization
 - ✅ **Purchase Payment Integration** - Complete purchase-to-payment workflow
 - ✅ **Sales Management** - Full sales cycle management
 - ✅ **Financial Reporting** - Trial balance, P&L, Balance sheet
@@ -125,6 +132,73 @@ Setelah backend running, akses dokumentasi lengkap di:
 - ✅ **Approval Workflow** - Configurable approval processes
 - ✅ **Audit Trail** - Complete transaction logging
 
+## 🛡️ Balance Protection System
+
+**⚠️ CRITICAL:** Sistem ini **WAJIB** di-setup di setiap PC untuk mencegah masalah balance yang bisa merusak data keuangan!
+
+### ❓ Apa itu Balance Protection?
+
+Sistem otomatis yang:
+- 🔄 **Auto-sync** balance saat ada transaksi baru
+- 🔍 **Monitor** konsistensi balance real-time  
+- 🚑 **Fix** masalah balance secara otomatis
+- 📈 **Prevent** laporan keuangan yang salah
+
+### 🚀 Quick Setup
+
+```bash
+# Windows
+setup_balance_protection.bat
+
+# Linux/Mac  
+./setup_balance_protection.sh
+
+# Manual
+go run cmd/scripts/setup_balance_sync_auto.go
+```
+
+### ✅ Verification
+
+```sql
+-- Check sistem sudah installed
+SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_name = 'balance_sync_trigger';
+-- Hasil harus: 1
+
+-- Check balance health
+SELECT * FROM account_balance_monitoring WHERE status='MISMATCH';
+-- Hasil harus: empty (no mismatches)
+```
+
+### 📁 More Info
+
+- **Setup Guide**: `README_BALANCE_SETUP.md`
+- **Full Documentation**: `BALANCE_PREVENTION_GUIDE.md`
+- **Migration File**: `migrations/balance_sync_system.sql`
+
 ---
 
-> **💡 Tips**: Jika mengalami masalah, jalankan `go run cmd/final_verification.go` untuk memastikan semua komponen berjalan dengan benar.
+## 🔍 Troubleshooting
+
+### Balance Issues
+
+```sql
+-- Health check
+SELECT * FROM account_balance_monitoring WHERE status='MISMATCH';
+
+-- Manual fix
+SELECT * FROM sync_account_balances();
+```
+
+### General Issues
+
+```bash
+# Cek status database
+go run cmd/final_verification.go
+
+# Jika masih ada masalah, coba jalankan ulang
+go run cmd/fix_remaining_migrations.go
+```
+
+---
+
+> **💡 Tips**: Jika mengalami masalah, pastikan Balance Protection sudah di-setup dengan menjalankan `setup_balance_protection.bat` (Windows) atau `./setup_balance_protection.sh` (Linux/Mac).

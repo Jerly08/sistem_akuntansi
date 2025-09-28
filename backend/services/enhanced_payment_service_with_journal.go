@@ -21,6 +21,12 @@ type EnhancedPaymentServiceWithJournal struct {
 	purchaseRepo         *repositories.PurchaseRepository
 	journalFactory       *PaymentJournalFactory
 	journalService       *UnifiedJournalService
+	statusValidator      *StatusValidationHelper // NEW: Konsistensi dengan SalesJournalServiceV2
+}
+
+// ListPayments returns paginated payments with filters (SSOT-compatible)
+func (eps *EnhancedPaymentServiceWithJournal) ListPayments(filter repositories.PaymentFilter) (*repositories.PaymentResult, error) {
+	return eps.paymentRepo.FindWithFilter(filter)
 }
 
 // NewEnhancedPaymentServiceWithJournal creates a new instance with journal integration
@@ -33,17 +39,18 @@ func NewEnhancedPaymentServiceWithJournal(
 	purchaseRepo *repositories.PurchaseRepository,
 	journalService *UnifiedJournalService,
 ) *EnhancedPaymentServiceWithJournal {
-	journalFactory := NewPaymentJournalFactory(db, journalService)
+	journalFactory := NewPaymentJournalFactory(db)
 
 	return &EnhancedPaymentServiceWithJournal{
-		db:             db,
-		paymentRepo:    paymentRepo,
-		contactRepo:    contactRepo,
-		cashBankRepo:   cashBankRepo,
-		salesRepo:      salesRepo,
-		purchaseRepo:   purchaseRepo,
-		journalFactory: journalFactory,
-		journalService: journalService,
+		db:              db,
+		paymentRepo:     paymentRepo,
+		contactRepo:     contactRepo,
+		cashBankRepo:    cashBankRepo,
+		salesRepo:       salesRepo,
+		purchaseRepo:    purchaseRepo,
+		journalFactory:  journalFactory,
+		journalService:  journalService,
+		statusValidator: NewStatusValidationHelper(), // Initialize status validator
 	}
 }
 
@@ -393,6 +400,20 @@ func (eps *EnhancedPaymentServiceWithJournal) createPaymentAllocations(
 	var allocations []models.PaymentAllocation
 
 	if contactType == "CUSTOMER" && req.TargetInvoiceID != nil {
+		// 🔒 CRITICAL: Validate invoice status before allocation (consistent with SalesJournalServiceV2)
+		var sale models.Sale
+		if err := tx.First(&sale, *req.TargetInvoiceID).Error; err != nil {
+			return nil, fmt.Errorf("invoice not found: %w", err)
+		}
+		
+		// Use StatusValidationHelper for consistency with SalesJournalServiceV2.ShouldPostToJournal
+		if err := eps.statusValidator.ValidatePaymentAllocation(sale.Status, *req.TargetInvoiceID); err != nil {
+			log.Printf("❌ Payment allocation blocked: %v", err)
+			return nil, err
+		}
+		
+		log.Printf("✅ Invoice #%d status '%s' is valid for payment allocation", *req.TargetInvoiceID, sale.Status)
+		
 		// Allocate to specific invoice
 		allocation := models.PaymentAllocation{
 			PaymentID:       uint64(payment.ID),

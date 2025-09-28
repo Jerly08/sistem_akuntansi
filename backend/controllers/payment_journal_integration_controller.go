@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
 )
@@ -322,7 +323,7 @@ func (ctrl *PaymentJournalIntegrationController) GetPaymentJournalEntries(c *gin
 	}
 
 	// Filter for payment-related entries
-	var paymentEntries []services.JournalResponse
+	var paymentEntries []models.SSOTJournalEntry
 	for _, entry := range response.Data {
 		// Check if this journal entry is related to the payment
 		// This would need to be implemented based on your journal entry structure

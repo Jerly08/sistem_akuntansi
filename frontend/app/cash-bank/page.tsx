@@ -45,6 +45,7 @@ import {
 } from '@chakra-ui/react';
 import { FiPlus, FiDollarSign, FiCreditCard, FiEdit2, FiEye, FiArrowRight, FiTrendingUp, FiTrendingDown, FiMoreVertical, FiTrash2 } from 'react-icons/fi';
 import cashbankService, { CashBank, BalanceSummary } from '@/services/cashbankService';
+import accountService from '@/services/accountService';
 import CashBankForm from '@/components/cashbank/CashBankForm';
 import DepositWithdrawalForm from '@/components/cashbank/DepositWithdrawalForm'; // Used for withdrawal only
 import DepositFormImproved from '@/components/cashbank/DepositFormImproved'; // New improved form for deposits
@@ -422,14 +423,44 @@ const CashBankPage: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      const [accountsData, summaryData] = await Promise.all([
+      const [accountsData, summaryData, postedBalances] = await Promise.all([
         cashbankService.getCashBankAccounts(),
-        cashbankService.getBalanceSummary()
+        cashbankService.getBalanceSummary(),
+        accountService.getPostedCOABalances(token!)
       ]);
       
-      // Ensure accountsData is an array before setting state
-      setAccounts(Array.isArray(accountsData) ? accountsData : []);
-      setBalanceSummary(summaryData);
+      // Build map of COA posted-only raw balances by account_id
+      const ssotMap = new Map<number, number>();
+      postedBalances.forEach((row: any) => ssotMap.set(row.account_id, row.raw_balance));
+
+      // Merge posted-only balances into each cash/bank row (by linked GL account id)
+      // IMPORTANT: Prefer real-time CashBank balance; only override with SSOT posted balance
+      // when SSOT has a non-zero value. This avoids showing 0 right after a deposit/withdrawal
+      // before the SSOT materialized view refreshes.
+      const merged = (Array.isArray(accountsData) ? accountsData : []).map((acc: CashBank) => {
+        const glId = acc.account_id || acc.account?.id;
+        if (glId && ssotMap.has(glId)) {
+          const ssotVal = ssotMap.get(glId)!;
+          if (typeof ssotVal === 'number' && Math.abs(ssotVal) > 0.0000001) {
+            const current = acc.balance || 0;
+            const diff = Math.abs(ssotVal - current);
+            const rel = current !== 0 ? diff / Math.abs(current) : 0;
+            // Only override when SSOT value is reasonably close (<= 1 IDR or <= 1% difference)
+            if (diff <= 1 || rel <= 0.01) {
+              return { ...acc, balance: ssotVal };
+            }
+          }
+        }
+        return acc;
+      });
+
+      setAccounts(merged);
+
+      // Recompute summary from merged to keep cards consistent
+      const total_cash = merged.filter(a => a.type === 'CASH').reduce((s, a) => s + (a.balance || 0), 0);
+      const total_bank = merged.filter(a => a.type === 'BANK').reduce((s, a) => s + (a.balance || 0), 0);
+      const total_balance = total_cash + total_bank;
+      setBalanceSummary({ ...(summaryData || {}), total_cash, total_bank, total_balance, by_account: [], by_currency: {} } as any);
     } catch (err: any) {
       console.error('Error fetching cash bank data:', err);
       const errorMessage = err.response?.data?.details || err.message || 'Failed to fetch cash & bank data';

@@ -184,7 +184,7 @@ const PaymentsPage: React.FC = () => {
 
   const columns = [
   {
-    header: 'Payment #',
+    header: 'Code',
     accessor: (row: Payment) => (
       <Text fontWeight="medium" color={statColors.blue}>{row.code}</Text>
     )

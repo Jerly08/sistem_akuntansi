@@ -67,23 +67,57 @@ func (s *PurchaseReportExportService) ExportToCSV(data *PurchaseReportData) ([]b
 	return buf.Bytes(), nil
 }
 
-// ExportToPDF exports purchase report to PDF bytes
+// ExportToPDF exports purchase report to PDF bytes (invoice-like)
 func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(15, 15, 15)
+	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
-	// Title
-	pdf.SetFont("Arial", "B", 16)
-	pdf.Cell(190, 10, "PURCHASE REPORT")
-	pdf.Ln(12)
+	lm, tm, rm, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	contentW := pageW - lm - rm
 
-	// Company & Period
+	// Note: Company logo path may not be available in this data structure; header will use text info only.
+
+	// Company info
+	pdf.SetFont("Arial", "B", 12)
+	w := pdf.GetStringWidth(data.Company.Name)
+	pdf.SetXY(pageW-rm-w, tm)
+	pdf.Cell(w, 6, data.Company.Name)
+	pdf.SetFont("Arial", "", 9)
+	addr := strings.TrimSpace(data.Company.Address)
+	if addr != "" {
+		pdf.SetXY(pageW-rm-pdf.GetStringWidth(addr), tm+8)
+		pdf.Cell(0, 4, addr)
+	}
+	if strings.TrimSpace(data.Company.Phone) != "" {
+		phone := fmt.Sprintf("Phone: %s", data.Company.Phone)
+		pdf.SetXY(pageW-rm-pdf.GetStringWidth(phone), tm+14)
+		pdf.Cell(0, 4, phone)
+	}
+	if strings.TrimSpace(data.Company.Email) != "" {
+		email := fmt.Sprintf("Email: %s", data.Company.Email)
+		pdf.SetXY(pageW-rm-pdf.GetStringWidth(email), tm+20)
+		pdf.Cell(0, 4, email)
+	}
+
+	// Separator
+	pdf.SetDrawColor(238, 238, 238)
+	pdf.SetLineWidth(0.2)
+	pdf.Line(lm, tm+45, pageW-rm, tm+45)
+
+	// Title and period
+	pdf.SetY(tm + 55)
+	pdf.SetFont("Arial", "B", 18)
+	pdf.SetTextColor(51, 51, 51)
+	pdf.Cell(contentW, 10, "PURCHASE REPORT")
+	pdf.SetTextColor(0, 0, 0)
+	pdf.Ln(8)
 	pdf.SetFont("Arial", "", 11)
-	pdf.Cell(190, 6, data.Company.Name)
+	pdf.Cell(contentW, 6, fmt.Sprintf("Period: %s to %s", data.StartDate.Format("2006-01-02"), data.EndDate.Format("2006-01-02")))
 	pdf.Ln(6)
-	pdf.Cell(190, 6, fmt.Sprintf("Period: %s to %s", data.StartDate.Format("2006-01-02"), data.EndDate.Format("2006-01-02")))
-	pdf.Ln(6)
-	pdf.Cell(190, 6, fmt.Sprintf("Generated: %s", data.GeneratedAt.In(time.Local).Format("2006-01-02 15:04")))
+	pdf.Cell(contentW, 6, fmt.Sprintf("Generated: %s", data.GeneratedAt.In(time.Local).Format("2006-01-02 15:04")))
 	pdf.Ln(10)
 
 	// Summary block
@@ -134,8 +168,9 @@ func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData) ([]b
 	if err := pdf.Output(&out); err != nil {
 		return nil, fmt.Errorf("failed to generate purchase report PDF: %v", err)
 	}
-	return out.Bytes(), nil
+return out.Bytes(), nil
 }
+
 
 // formatRupiahSimple formats a number as Indonesian Rupiah (no decimals)
 func formatRupiahSimple(amount float64) string {

@@ -149,11 +149,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let errorMessage = 'Login failed';
         try {
           const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
+          // Prefer backend 'error' field, then 'message'
+          errorMessage = errorData.error || errorData.message || errorMessage;
         } catch (jsonError) {
           // If response is not JSON, use status text or generic message
           errorMessage = response.statusText || `HTTP ${response.status}: Login failed`;
           console.warn('Failed to parse error response as JSON:', jsonError);
+        }
+        // Map common status codes to clearer messages
+        if (response.status === 401) {
+          errorMessage = 'Invalid email or password';
         }
         throw new Error(errorMessage);
       }

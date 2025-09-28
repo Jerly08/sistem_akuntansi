@@ -124,7 +124,7 @@ func (s *SSOTBalanceSheetService) GenerateSSOTBalanceSheet(asOfDate string) (*SS
 // getAccountBalancesFromSSOT retrieves account balances from SSOT journal system up to a specific date
 func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([]SSOTAccountBalance, error) {
 	var balances []SSOTAccountBalance
-	
+
 	query := `
 		SELECT 
 			a.id as account_id,
@@ -134,52 +134,38 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([
 			COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
 			COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
 			CASE 
-				WHEN a.type IN ('ASSET', 'EXPENSE') THEN 
+				WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
 					COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
 				ELSE 
 					COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
 			END as net_balance
 		FROM accounts a
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
-		WHERE ((uje.status = 'POSTED' AND uje.entry_date <= ?) OR uje.status IS NULL)
+		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id AND uje.status = 'POSTED' AND uje.deleted_at IS NULL
+		WHERE (uje.entry_date <= ? OR uje.entry_date IS NULL)
 		  AND COALESCE(a.is_header, false) = false
 		GROUP BY a.id, a.code, a.name, a.type
-		HAVING a.type IN ('ASSET', 'LIABILITY', 'EQUITY')
+		HAVING (COALESCE(SUM(ujl.debit_amount), 0) <> 0 OR COALESCE(SUM(ujl.credit_amount), 0) <> 0)
 		ORDER BY a.code
 	`
-	
+
 	if err := s.db.Raw(query, asOfDate).Scan(&balances).Error; err != nil {
 		return nil, fmt.Errorf("error executing account balances query: %v", err)
 	}
-	
-	// Debug logging
-	fmt.Printf("[DEBUG] Balance Sheet Service: Found %d account balances for date %s\n", len(balances), asOfDate)
-	
-	// Check if we have any actual journal activity (non-zero balances)
-	hasJournalActivity := false
-	for _, balance := range balances {
-		if balance.DebitTotal != 0 || balance.CreditTotal != 0 {
-			hasJournalActivity = true
-			break
+
+	// If SSOT returns no data, try legacy journals fallback
+	if len(balances) == 0 {
+		legacy, lerr := s.getAccountBalancesFromLegacy(asOfDate)
+		if lerr == nil && len(legacy) > 0 {
+			fmt.Printf("[DEBUG] SSOT returned no data, using legacy: %d accounts\n", len(legacy))
+			return legacy, nil
 		}
 	}
-	
-	for i, balance := range balances {
-		if i < 5 { // Log first 5 accounts
-			fmt.Printf("[DEBUG] Account %s (%s): Debit=%.2f, Credit=%.2f, Net=%.2f\n", 
-				balance.AccountCode, balance.AccountName, balance.DebitTotal, balance.CreditTotal, balance.NetBalance)
-		}
-	}
-	
-	// If no journal activity found for this date, fall back to account balances
-	if !hasJournalActivity {
-		fmt.Printf("[DEBUG] No journal activity found for date %s, falling back to account.balance\n", asOfDate)
-		return s.getAccountBalancesFromAccountTable()
-	}
-	
+
+	fmt.Printf("[DEBUG] Retrieved %d account balances from SSOT for balance sheet\n", len(balances))
 	return balances, nil
 }
+	
 
 // getAccountBalancesFromAccountTable gets account balances directly from accounts.balance when SSOT data is not available
 func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAccountBalance, error) {
@@ -215,6 +201,37 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAc
 	return balances, nil
 }
 
+// getAccountBalancesFromLegacy retrieves account balances using legacy journal tables up to an as-of date
+func (s *SSOTBalanceSheetService) getAccountBalancesFromLegacy(asOfDate string) ([]SSOTAccountBalance, error) {
+	var balances []SSOTAccountBalance
+	legacyQuery := `
+		SELECT 
+			a.id as account_id,
+			a.code as account_code,
+			a.name as account_name,
+			a.type as account_type,
+			COALESCE(SUM(jl.debit_amount), 0) as debit_total,
+			COALESCE(SUM(jl.credit_amount), 0) as credit_total,
+			CASE 
+				WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
+					COALESCE(SUM(jl.debit_amount), 0) - COALESCE(SUM(jl.credit_amount), 0)
+				ELSE 
+					COALESCE(SUM(jl.credit_amount), 0) - COALESCE(SUM(jl.debit_amount), 0)
+			END as net_balance
+		FROM accounts a
+		LEFT JOIN journal_lines jl ON jl.account_id = a.id
+		LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status = 'POSTED' AND je.deleted_at IS NULL
+		WHERE (je.entry_date <= ? OR je.entry_date IS NULL)
+		  AND COALESCE(a.is_header, false) = false
+		GROUP BY a.id, a.code, a.name, a.type
+		HAVING (COALESCE(SUM(jl.debit_amount), 0) <> 0 OR COALESCE(SUM(jl.credit_amount), 0) <> 0)
+		ORDER BY a.code`
+	if err := s.db.Raw(legacyQuery, asOfDate).Scan(&balances).Error; err != nil {
+		return nil, fmt.Errorf("legacy account balances query failed: %v", err)
+	}
+	return balances, nil
+}
+
 // calculateNetIncome calculates net income (Revenue - Expenses) from SSOT journal system
 func (s *SSOTBalanceSheetService) calculateNetIncome(asOfDate string) float64 {
 	// NOTE: Scanning a single aggregate value into a basic type with GORM Scan can be unreliable.
@@ -236,8 +253,8 @@ func (s *SSOTBalanceSheetService) calculateNetIncome(asOfDate string) float64 {
 			), 0) as net_income
 		FROM accounts a
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
-		WHERE ((uje.status = 'POSTED' AND uje.entry_date <= ?) OR uje.status IS NULL)
+		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id AND uje.status = 'POSTED' AND uje.deleted_at IS NULL
+		WHERE (uje.entry_date <= ? OR uje.entry_date IS NULL)
 		AND UPPER(a.type) IN ('REVENUE', 'EXPENSE')
 		AND COALESCE(a.is_header, false) = false
 	`
@@ -247,17 +264,41 @@ func (s *SSOTBalanceSheetService) calculateNetIncome(asOfDate string) float64 {
 		fmt.Printf("[DEBUG] Net Income calculated from SSOT: %.2f\n", netIncome)
 	} else {
 		fmt.Printf("[DEBUG] Failed to get net income from SSOT, falling back to accounts.balance: %v\n", err)
-		// If query fails, try to get from account balances directly (fallback for environments without SSOT data)
-		var revenue, expense float64
-		s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'REVENUE'`).Scan(&revenue)
-		s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'EXPENSE'`).Scan(&expense)
-		netIncome = revenue - expense
-		fmt.Printf("[DEBUG] Net Income from fallback - Revenue: %.2f, Expense: %.2f, Net: %.2f\n", revenue, expense, netIncome)
 	}
 
-	// Net Income calculation: Revenue - Expenses
-	// For Revenue accounts: Credit increases balance (positive net income)
-	// For Expense accounts: Debit increases balance (negative net income)
+	// If SSOT returned zero and tables might be empty, try legacy journals fallback
+	if netIncome == 0 {
+		var legacy niRow
+		legacyQuery := `
+			SELECT 
+				COALESCE(SUM(
+					CASE 
+						WHEN UPPER(a.type) = 'REVENUE' THEN 
+							COALESCE(jl.credit_amount, 0) - COALESCE(jl.debit_amount, 0)
+						WHEN UPPER(a.type) = 'EXPENSE' THEN 
+							COALESCE(jl.debit_amount, 0) - COALESCE(jl.credit_amount, 0)
+						ELSE 0
+					END
+				), 0) as net_income
+			FROM accounts a
+			LEFT JOIN journal_lines jl ON jl.account_id = a.id
+			LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status = 'POSTED' AND je.deleted_at IS NULL
+			WHERE (je.entry_date <= ? OR je.entry_date IS NULL)
+			AND UPPER(a.type) IN ('REVENUE', 'EXPENSE')
+			AND COALESCE(a.is_header, false) = false`
+		if err := s.db.Raw(legacyQuery, asOfDate).Scan(&legacy).Error; err == nil {
+			netIncome = legacy.NetIncome
+			fmt.Printf("[DEBUG] Net Income from legacy journals: %.2f\n", netIncome)
+		} else {
+			// Fallback to accounts table balances as last resort
+			var revenue, expense float64
+			s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'REVENUE'`).Scan(&revenue)
+			s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'EXPENSE'`).Scan(&expense)
+			netIncome = revenue - expense
+			fmt.Printf("[DEBUG] Net Income from fallback - Revenue: %.2f, Expense: %.2f, Net: %.2f\n", revenue, expense, netIncome)
+		}
+	}
+
 	return netIncome
 }
 

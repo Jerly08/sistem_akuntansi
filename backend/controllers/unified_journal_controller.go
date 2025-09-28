@@ -119,12 +119,13 @@ func (c *UnifiedJournalController) GetJournalEntries(ctx *gin.Context) {
 	// Parse date filters if provided
 	if dateFromStr := ctx.Query("date_from"); dateFromStr != "" {
 		if parsedDate, err := time.Parse("2006-01-02", dateFromStr); err == nil {
-			filters.DateFrom = parsedDate
+			filters.DateFrom = &parsedDate
 		}
 	}
 	if dateToStr := ctx.Query("date_to"); dateToStr != "" {
 		if parsedDate, err := time.Parse("2006-01-02", dateToStr); err == nil {
-			filters.DateTo = parsedDate.AddDate(0, 0, 1) // Include the entire day
+			dateTo := parsedDate.AddDate(0, 0, 1) // Include the entire day
+			filters.DateTo = &dateTo
 		}
 	}
 

@@ -153,6 +153,13 @@ func RunMigrations(db *gorm.DB) {
 	}
 	
 	log.Println("Database migrations completed successfully")
+
+	// Ensure Simple SSOT journal tables exist for SalesJournalServiceV2
+	if err2 := db.AutoMigrate(&models.SimpleSSOTJournal{}, &models.SimpleSSOTJournalItem{}); err2 != nil {
+		log.Printf("⚠️  Failed to migrate Simple SSOT journal tables: %v", err2)
+	} else {
+		log.Println("✅ Simple SSOT journal tables migrated successfully")
+	}
 }
 
 // CreateIndexes creates additional database indexes for performance optimization

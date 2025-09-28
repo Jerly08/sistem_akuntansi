@@ -147,6 +147,9 @@ export const API_ENDPOINTS = {
     CATALOG: '/api/v1/accounts/catalog', // Public
     CREDIT: '/api/v1/accounts/credit', // Public
   },
+
+  // SSOT posted-only COA balances
+  COA_POSTED_BALANCES: '/api/v1/coa/posted-balances',
   // Legacy flat endpoints for backward compatibility
   ACCOUNTS_LIST: '/api/v1/accounts',
   ACCOUNTS_CREATE: '/api/v1/accounts',
@@ -206,19 +209,6 @@ export const API_ENDPOINTS = {
   PERMISSIONS_ME: '/api/v1/permissions/me',
   PERMISSIONS_CHECK: '/api/v1/permissions/check',
   
-  // Cash & Bank (matching actual backend routes /api/cashbank) - with nested structure
-  CASHBANK: {
-    ACCOUNTS: '/api/cashbank/accounts',
-    ACCOUNT_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
-    ACCOUNT_TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
-    PAYMENT_ACCOUNTS: '/api/cashbank/payment-accounts',
-    REVENUE_ACCOUNTS: '/api/cashbank/revenue-accounts',
-    DEPOSIT_SOURCE_ACCOUNTS: '/api/cashbank/deposit-source-accounts',
-    BALANCE_SUMMARY: '/api/cashbank/balance-summary',
-    TRANSFER: '/api/cashbank/transfer',
-    DEPOSIT: '/api/cashbank/deposit',
-    WITHDRAWAL: '/api/cashbank/withdrawal',
-  },
   // CASH_BANK endpoints aligned with backend routes under /api/v1
   CASH_BANK: {
     // Accounts CRUD
@@ -235,8 +225,8 @@ export const API_ENDPOINTS = {
 
     // Dropdowns / Lookups
     PAYMENT_ACCOUNTS: '/api/v1/cash-bank/reports/payment-accounts',
-    REVENUE_ACCOUNTS: '/api/cashbank/revenue-accounts',
-    DEPOSIT_SOURCE_ACCOUNTS: '/api/cashbank/deposit-source-accounts',
+    REVENUE_ACCOUNTS: '/api/v1/cash-bank/revenue-accounts',
+    DEPOSIT_SOURCE_ACCOUNTS: '/api/v1/cash-bank/deposit-source-accounts',
 
     // Summaries & reports
     BALANCE_SUMMARY: '/api/v1/cash-bank/reports/balance-summary',
@@ -250,20 +240,9 @@ export const API_ENDPOINTS = {
     RECONCILE: (id: number) => `/api/v1/cash-bank/accounts/${id}/reconcile`,
 
     // Admin maintenance (kept for compatibility if wired)
-    CHECK_GL_LINKS: '/api/admin/check-cashbank-gl-links',
-    FIX_GL_LINKS: '/api/admin/fix-cashbank-gl-links',
+    CHECK_GL_LINKS: '/api/v1/admin/check-cashbank-gl-links',
+    FIX_GL_LINKS: '/api/v1/admin/fix-cashbank-gl-links',
   },
-  // Legacy flat endpoints for backward compatibility - matching actual backend routes
-  CASHBANK_ACCOUNTS: '/api/cashbank/accounts',
-  CASHBANK_ACCOUNT_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
-  CASHBANK_ACCOUNT_TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
-  CASHBANK_PAYMENT_ACCOUNTS: '/api/cashbank/payment-accounts',
-  CASHBANK_REVENUE_ACCOUNTS: '/api/cashbank/revenue-accounts',
-  CASHBANK_DEPOSIT_SOURCE_ACCOUNTS: '/api/cashbank/deposit-source-accounts',
-  CASHBANK_BALANCE_SUMMARY: '/api/cashbank/balance-summary',
-  CASHBANK_TRANSFER: '/api/cashbank/transfer',
-  CASHBANK_DEPOSIT: '/api/cashbank/deposit',
-  CASHBANK_WITHDRAWAL: '/api/cashbank/withdrawal',
   
   // Cash Bank SSOT Routes (with /api/v1 prefix)
   CASH_BANK_SSOT_ACCOUNTS: '/api/v1/cash-bank/accounts',
@@ -278,23 +257,23 @@ export const API_ENDPOINTS = {
   CASH_BANK_SSOT_JOURNALS: '/api/v1/cash-bank/ssot/journals',
   CASH_BANK_SSOT_VALIDATE: '/api/v1/cash-bank/ssot/validate-integrity',
   
-  // Admin
-  ADMIN_CHECK_CASHBANK_GL: '/api/admin/check-cashbank-gl-links',
-  ADMIN_FIX_CASHBANK_GL: '/api/admin/fix-cashbank-gl-links',
+  // Admin (with /api/v1 prefix)
+  ADMIN_CHECK_CASHBANK_GL: '/api/v1/admin/check-cashbank-gl-links',
+  ADMIN_FIX_CASHBANK_GL: '/api/v1/admin/fix-cashbank-gl-links',
   
-  // Balance Monitoring
-  MONITORING_BALANCE_HEALTH: '/api/monitoring/balance-health',
-  MONITORING_BALANCE_SYNC: '/api/monitoring/balance-sync',
-  MONITORING_DISCREPANCIES: '/api/monitoring/discrepancies',
-  MONITORING_FIX_DISCREPANCIES: '/api/monitoring/fix-discrepancies',
-  MONITORING_SYNC_STATUS: '/api/monitoring/sync-status',
+  // Balance Monitoring (with /api/v1 prefix)
+  MONITORING_BALANCE_HEALTH: '/api/v1/monitoring/balance-health',
+  MONITORING_BALANCE_SYNC: '/api/v1/monitoring/balance-sync',
+  MONITORING_DISCREPANCIES: '/api/v1/monitoring/discrepancies',
+  MONITORING_FIX_DISCREPANCIES: '/api/v1/monitoring/fix-discrepancies',
+  MONITORING_SYNC_STATUS: '/api/v1/monitoring/sync-status',
   
-  // API Usage Monitoring  
-  MONITORING_API_ANALYTICS: '/monitoring/api-usage/analytics',
-  MONITORING_API_STATS: '/monitoring/api-usage/stats',
-  MONITORING_API_TOP: '/monitoring/api-usage/top',
-  MONITORING_API_UNUSED: '/monitoring/api-usage/unused',
-  MONITORING_API_RESET: '/monitoring/api-usage/reset',
+  // API Usage Monitoring (with /api/v1 prefix)
+  MONITORING_API_ANALYTICS: '/api/v1/monitoring/api-usage/analytics',
+  MONITORING_API_STATS: '/api/v1/monitoring/api-usage/stats',
+  MONITORING_API_TOP: '/api/v1/monitoring/api-usage/top',
+  MONITORING_API_UNUSED: '/api/v1/monitoring/api-usage/unused',
+  MONITORING_API_RESET: '/api/v1/monitoring/api-usage/reset',
   
   // Payments (with /api/v1 prefix based on backend routes) - with nested structure
   PAYMENTS: {
@@ -319,6 +298,7 @@ export const API_ENDPOINTS = {
     BULK: '/api/v1/payments/bulk',
     // SSOT endpoints (for creation and detail with journal integration)
     SSOT: {
+      LIST: '/api/v1/payments/ssot',
       RECEIVABLE: '/api/v1/payments/ssot/receivable',
       PAYABLE: '/api/v1/payments/ssot/payable',
       GET_BY_ID: (id: number) => `/api/v1/payments/ssot/${id}`,

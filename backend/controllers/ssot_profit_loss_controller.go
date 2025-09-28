@@ -1,9 +1,12 @@
 package controllers
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
@@ -99,11 +102,53 @@ func (c *SSOTProfitLossController) GetSSOTProfitLoss(ctx *gin.Context) {
 		ctx.Header("Content-Length", fmt.Sprintf("%d", len(pdfBytes)))
 		
 		ctx.Data(http.StatusOK, "application/pdf", pdfBytes)
-	case "excel", "csv":
-		// For Excel/CSV export, return structured data with additional export metadata
+case "excel", "csv":
+		if format == "csv" {
+			// Build CSV on the fly from responseData sections
+			var buf bytes.Buffer
+			w := csv.NewWriter(&buf)
+			// header
+			_ = w.Write([]string{"Section", "Subsection", "Account Code", "Account Name", "Amount"})
+			// flatten sections
+			if secs, ok := responseData["sections"].([]gin.H); ok {
+				for _, sec := range secs {
+					secName, _ := sec["name"].(string)
+					// direct items
+					if items, ok := sec["items"].([]gin.H); ok {
+						for _, it := range items {
+							code, _ := it["account_code"].(string)
+							name, _ := it["name"].(string)
+							amt := fmt.Sprintf("%v", it["amount"])
+							_ = w.Write([]string{secName, "", code, name, amt})
+						}
+					}
+					// subsections if any
+					if subs, ok := sec["subsections"].([]gin.H); ok {
+						for _, sub := range subs {
+							subName, _ := sub["name"].(string)
+							if sits, ok := sub["items"].([]gin.H); ok {
+								for _, it := range sits {
+									code, _ := it["account_code"].(string)
+									name, _ := it["name"].(string)
+									amt := fmt.Sprintf("%v", it["amount"])
+									_ = w.Write([]string{secName, subName, code, name, amt})
+								}
+							}
+						}
+					}
+				}
+			}
+			w.Flush()
+			filename := fmt.Sprintf("SSOT_ProfitLoss_%s_to_%s.csv", ssotData.StartDate.Format("2006-01-02"), ssotData.EndDate.Format("2006-01-02"))
+			ctx.Header("Content-Type", "text/csv")
+			ctx.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+			ctx.Header("Content-Length", strconv.Itoa(buf.Len()))
+			ctx.Data(http.StatusOK, "text/csv", buf.Bytes())
+			return
+		}
+		// For Excel export (placeholder JSON contract)
 		responseData["export_format"] = format
 		responseData["export_ready"] = true
-		responseData["csv_headers"] = []string{"Account Code", "Account Name", "Amount", "Type"}
 		ctx.JSON(http.StatusOK, gin.H{
 			"status": "success",
 			"data":   responseData,
@@ -387,7 +432,15 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		"end_date":        ssotData.EndDate.Format("2006-01-02"),
 		"generated_at":    ssotData.GeneratedAt.Format(time.RFC3339),
 		"account_details": ssotData.AccountDetails,
-		"data_source":     "SSOT Journal System",
+		"data_source":     ssotData.DataSource,
+		"data_source_label": func() string {
+			if ssotData.DataSource == "SSOT" {
+				return "SSOT Journal System"
+			} else if ssotData.DataSource == "LEGACY" {
+				return "Legacy Journals"
+			}
+			return "Accounts Balance Fallback"
+		}(),
 		"message":         c.generateAnalysisMessage(ssotData),
 	}
 }

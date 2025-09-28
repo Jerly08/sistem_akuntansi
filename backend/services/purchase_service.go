@@ -26,6 +26,8 @@ type PurchaseService struct {
 	// SSOT Journal Integration
 	ssotJournalAdapter        *PurchaseSSOTJournalAdapter
 	unifiedJournalService     *UnifiedJournalService
+	// Asset capitalization
+	assetCapitalizationSvc    *AssetCapitalizationService
 }
 
 type PurchaseResult struct {
@@ -48,10 +50,10 @@ func NewPurchaseService(
 	pdfService PDFServiceInterface,
 	unifiedJournalService *UnifiedJournalService,
 ) *PurchaseService {
-	// Initialize SSOT Journal Adapter
+	// Initialize SSOT Journal Adapter (wired to unified journal service)
 	ssotAdapter := NewPurchaseSSOTJournalAdapter(db, unifiedJournalService, accountRepo)
 	
-	ps := &PurchaseService{
+ps := &PurchaseService{
 		db:                        db,
 		purchaseRepo:              purchaseRepo,
 		productRepo:               productRepo,
@@ -64,6 +66,8 @@ func NewPurchaseService(
 		unifiedJournalService:     unifiedJournalService,
 		ssotJournalAdapter:        ssotAdapter,
 	}
+	// Asset capitalization service (reuses existing repos and unified journal)
+	ps.assetCapitalizationSvc = NewAssetCapitalizationService(db, accountRepo, unifiedJournalService, journalRepo)
 	
 	// Setup post-approval callback
 	if approvalService != nil {
@@ -636,19 +640,28 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 		}
 	} else {
 		fmt.Printf("📋 SSOT journal entries already exist for purchase %d, skipping creation\n", purchaseID)
-	}
+    }
 
-	// For credit purchases, create payment tracking records to manage accounts payable
-	if purchase.PaymentMethod == models.PurchasePaymentCredit {
-		fmt.Printf("Creating payment tracking records for credit purchase %d\n", purchaseID)
-		err = s.createPaymentTrackingForCreditPurchase(purchase, userID)
-		if err != nil {
-			fmt.Printf("Warning: Failed to create payment tracking for credit purchase %d: %v\n", purchaseID, err)
-			// Don't fail the approval process, but log the issue
-		}
-	}
+    // NEW: Create and post legacy COA journal entry on approval (like sales)
+    // This ensures COA balances are updated immediately when status becomes APPROVED
+    if err := s.createAndPostPurchaseJournalEntries(purchase, userID); err != nil {
+        fmt.Printf("⚠️ Warning: Failed to create/post legacy COA journal for purchase %d: %v\n", purchaseID, err)
+        // Do not fail approval; SSOT journal already created. We log and continue.
+    } else {
+        fmt.Printf("📗 Legacy COA journal created and posted for purchase %d\n", purchaseID)
+    }
 
-	result["message"] = "Purchase approved successfully"
+    // For credit purchases, create payment tracking records to manage accounts payable
+    if purchase.PaymentMethod == models.PurchasePaymentCredit {
+        fmt.Printf("Creating payment tracking records for credit purchase %d\n", purchaseID)
+        err = s.createPaymentTrackingForCreditPurchase(purchase, userID)
+        if err != nil {
+            fmt.Printf("Warning: Failed to create payment tracking for credit purchase %d: %v\n", purchaseID, err)
+            // Don't fail the approval process, but log the issue
+        }
+    }
+
+    result["message"] = "Purchase approved successfully"
 	result["purchase_id"] = purchaseID
 	result["escalated"] = false
 	result["status"] = "APPROVED"
@@ -707,6 +720,21 @@ func (s *PurchaseService) CreatePurchaseReceipt(request models.PurchaseReceiptRe
 			return nil, errors.New("purchase item does not belong to this purchase")
 		}
 
+		// Validate remaining quantity for this item
+		receivedSoFar, err := s.purchaseRepo.SumReceivedQtyByPurchaseItem(purchaseItem.ID)
+		if err != nil {
+			return nil, err
+		}
+		remaining := int(purchaseItem.Quantity) - receivedSoFar
+		if remaining <= 0 {
+			// Nothing left to receive for this item; skip
+			allReceived = allReceived && true
+			continue
+		}
+		if itemReq.QuantityReceived > remaining {
+			return nil, fmt.Errorf("received quantity (%d) exceeds remaining (%d) for item %d", itemReq.QuantityReceived, remaining, itemReq.PurchaseItemID)
+		}
+
 		// Create receipt item
 		receiptItem := &models.PurchaseReceiptItem{
 			ReceiptID:        createdReceipt.ID,
@@ -727,25 +755,108 @@ func (s *PurchaseService) CreatePurchaseReceipt(request models.PurchaseReceiptRe
 		}
 	}
 
-	// Update receipt status only - do not change purchase status based on receipt completion
-	if allReceived {
-		createdReceipt.Status = models.ReceiptStatusComplete
-		// DO NOT set purchase to COMPLETED here - purchase should only be COMPLETED when fully paid
-		// Keep purchase in its current status (APPROVED) until payment is made
-	} else {
-		createdReceipt.Status = models.ReceiptStatusPartial
-	}
+    // Update receipt status only - do not change purchase status based on receipt completion
+    if allReceived {
+        createdReceipt.Status = models.ReceiptStatusComplete
+        // DO NOT set purchase to COMPLETED here - purchase should only be COMPLETED when fully paid
+        // Keep purchase in its current status (APPROVED) until payment is made
+    } else {
+        createdReceipt.Status = models.ReceiptStatusPartial
+    }
 
-	// Update receipt status
-	createdReceipt, err = s.purchaseRepo.UpdateReceipt(createdReceipt)
-	if err != nil {
-		return nil, err
-	}
+    // Update receipt status
+    createdReceipt, err = s.purchaseRepo.UpdateReceipt(createdReceipt)
+    if err != nil {
+        return nil, err
+    }
 
-	// Do not update purchase status here - it should remain in current status until payment is made
-	// Receipt completion is independent of purchase completion
+    // If all items of the purchase are fully received, mark purchase as COMPLETED (receipt-wise)
+    allItemsReceived, err := s.purchaseRepo.AreAllItemsFullyReceived(request.PurchaseID)
+    if err == nil && allItemsReceived {
+        // Update purchase status to COMPLETED but do not change payment amounts
+        purchase.Status = models.PurchaseStatusCompleted
+        if _, upErr := s.purchaseRepo.Update(purchase); upErr != nil {
+            fmt.Printf("⚠️ Warning: Failed to update purchase status to COMPLETED after receipts: %v\n", upErr)
+        }
+    }
 
-	return s.purchaseRepo.FindReceiptByID(createdReceipt.ID)
+    // Optional: Capitalization journals for items flagged in request
+    // This leverages optional fields in PurchaseReceiptItemRequest (CapitalizeAsset, FixedAssetAccountID, SourceAccountOverride)
+    if s.assetCapitalizationSvc != nil {
+        // Load default accounts
+        var inventoryAccountID uint
+        if inv, err := s.accountRepo.FindByCode(nil, "1301"); err == nil {
+            inventoryAccountID = inv.ID
+        }
+        var defaultFAAccountID uint
+        if fa, err := s.accountRepo.FindByCode(nil, "1501"); err == nil {
+            defaultFAAccountID = fa.ID
+        }
+        // Map request items by PurchaseItemID for quick lookup of flags
+        reqFlags := make(map[uint]models.PurchaseReceiptItemRequest)
+        for _, ri := range request.ReceiptItems {
+            reqFlags[ri.PurchaseItemID] = ri
+        }
+        // Iterate over receipt items again using the request list for flags
+        for _, itemReq := range request.ReceiptItems {
+            if !itemReq.CapitalizeAsset {
+                continue
+            }
+            // Find purchase item to compute amount
+            purchaseItem, err := s.purchaseRepo.GetPurchaseItemByID(itemReq.PurchaseItemID)
+            if err != nil {
+                fmt.Printf("⚠️ Capitalization skipped: cannot find purchase item %d: %v\n", itemReq.PurchaseItemID, err)
+                continue
+            }
+            // Compute capitalization amount (exclude VAT): unit_price * qty_received
+            capAmount := float64(itemReq.QuantityReceived) * purchaseItem.UnitPrice
+            if capAmount <= 0 {
+                fmt.Printf("ℹ️ Capitalization skipped for item %d: amount is 0\n", itemReq.PurchaseItemID)
+                continue
+            }
+            // SAFEGUARD: if purchase item booked to Inventory (expense_account_id == 0), skip capitalization to avoid double handling
+            if purchaseItem.ExpenseAccountID == 0 {
+                fmt.Printf("ℹ️ Capitalization disabled for inventory (1301) item %d. Skipping.\n", itemReq.PurchaseItemID)
+                continue
+            }
+            // Determine source account (override > item expense > inventory)
+            sourceAccountID := inventoryAccountID
+            if itemReq.SourceAccountOverride != nil && *itemReq.SourceAccountOverride != 0 {
+                sourceAccountID = *itemReq.SourceAccountOverride
+            } else if purchaseItem.ExpenseAccountID != 0 {
+                sourceAccountID = purchaseItem.ExpenseAccountID
+            }
+            // Determine fixed asset account
+            fixedAssetAccountID := defaultFAAccountID
+            if itemReq.FixedAssetAccountID != nil && *itemReq.FixedAssetAccountID != 0 {
+                fixedAssetAccountID = *itemReq.FixedAssetAccountID
+            }
+            // Build input
+            capInput := CapitalizationInput{
+                AssetID:             0, // asset record may be created separately from frontend; link to receipt for now
+                Amount:              capAmount,
+                Date:                request.ReceivedDate,
+                Description:         fmt.Sprintf("Capitalization from Receipt %s - Purchase %s", createdReceipt.ReceiptNumber, purchase.Code),
+                Reference:           createdReceipt.ReceiptNumber,
+                SourceAccountID:     sourceAccountID,
+                FixedAssetAccountID: fixedAssetAccountID,
+                UserID:              userID,
+                ReferenceType:       "RECEIPT",
+                ReferenceID:         createdReceipt.ID,
+            }
+            if err := s.assetCapitalizationSvc.Capitalize(capInput); err != nil {
+                fmt.Printf("⚠️ Failed to create capitalization journal for receipt item %d: %v\n", itemReq.PurchaseItemID, err)
+                // Continue other items; do not fail receipt creation
+            } else {
+                fmt.Printf("✅ Capitalization journal created for receipt item %d (amount=%.2f)\n", itemReq.PurchaseItemID, capAmount)
+            }
+        }
+    }
+
+    // Do not update purchase status here - it should remain in current status until payment is made
+    // Receipt completion is independent of purchase completion
+
+    return s.purchaseRepo.FindReceiptByID(createdReceipt.ID)
 }
 
 // Document Management
@@ -844,13 +955,27 @@ func (s *PurchaseService) GetVendorPurchaseSummary(vendorID uint) (*models.Vendo
 // GetPurchaseReceipts returns all receipts for a purchase
 func (s *PurchaseService) GetPurchaseReceipts(purchaseID uint) ([]models.PurchaseReceipt, error) {
 	// Verify purchase exists
-	_, err := s.purchaseRepo.FindByID(purchaseID)
+	purchase, err := s.purchaseRepo.FindByID(purchaseID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Get receipts from repository
-	return s.purchaseRepo.FindReceiptsByPurchaseID(purchaseID)
+	receipts, err := s.purchaseRepo.FindReceiptsByPurchaseID(purchaseID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-sync status: if seluruh item sudah diterima, set COMPLETED
+	allReceived, err2 := s.purchaseRepo.AreAllItemsFullyReceived(purchaseID)
+	if err2 == nil && allReceived && purchase.Status != models.PurchaseStatusCompleted {
+		purchase.Status = models.PurchaseStatusCompleted
+		if _, upErr := s.purchaseRepo.Update(purchase); upErr != nil {
+			fmt.Printf("⚠️ Warning: Failed to set purchase %d to COMPLETED during receipt fetch: %v\n", purchaseID, upErr)
+		}
+	}
+
+	return receipts, nil
 }
 
 // GetCompletedPurchaseReceipts returns only completed receipts for a purchase
@@ -911,7 +1036,12 @@ func (s *PurchaseService) GenerateAllReceiptsPDF(purchaseID uint) ([]byte, *mode
 	}
 
 	// Generate combined PDF using the PDF service
-	pdfBytes, err := s.pdfService.GenerateAllReceiptsPDF(purchase, receipts)
+	// Create data structure for the PDF service
+	data := map[string]interface{}{
+		"purchase": purchase,
+		"receipts": receipts,
+	}
+	pdfBytes, err := s.pdfService.GenerateAllReceiptsPDF(data)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate combined receipts PDF: %v", err)
 	}

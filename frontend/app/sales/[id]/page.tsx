@@ -312,19 +312,19 @@ const SaleDetailPage: React.FC = () => {
               <GridItem>
                 <VStack align="start" spacing={2}>
                   <Text fontSize="sm" color="gray.600">Customer</Text>
-                  <Text fontWeight="medium">{sale.customer?.name || 'N/A'}</Text>
+                  <Text fontWeight="medium">{sale.customer ? sale.customer.name : 'N/A'}</Text>
                 </VStack>
               </GridItem>
               <GridItem>
                 <VStack align="start" spacing={2}>
                   <Text fontSize="sm" color="gray.600">Invoice Number</Text>
-                  <Text fontWeight="medium">{sale.invoice_number || '-'}</Text>
+                  <Text fontWeight="medium">{sale.invoice_number ? sale.invoice_number : '-'}</Text>
                 </VStack>
               </GridItem>
               <GridItem>
                 <VStack align="start" spacing={2}>
                   <Text fontSize="sm" color="gray.600">Sales Person</Text>
-                  <Text fontWeight="medium">{sale.sales_person?.name || 'N/A'}</Text>
+                  <Text fontWeight="medium">{sale.sales_person ? sale.sales_person.name : 'N/A'}</Text>
                 </VStack>
               </GridItem>
               <GridItem>
@@ -337,14 +337,14 @@ const SaleDetailPage: React.FC = () => {
                 <VStack align="start" spacing={2}>
                   <Text fontSize="sm" color="gray.600">Due Date</Text>
                   <Text fontWeight="medium">
-                    {sale.due_date ? salesService.formatDate(sale.due_date) : '-'}
+                    {sale.due_date && sale.due_date !== '0001-01-01T00:00:00Z' ? salesService.formatDate(sale.due_date) : '-'}
                   </Text>
                 </VStack>
               </GridItem>
               <GridItem>
                 <VStack align="start" spacing={2}>
                   <Text fontSize="sm" color="gray.600">Payment Terms</Text>
-                  <Text fontWeight="medium">{sale.payment_terms || 'N/A'}</Text>
+                  <Text fontWeight="medium">{sale.payment_terms ? sale.payment_terms : 'N/A'}</Text>
                 </VStack>
               </GridItem>
             </Grid>

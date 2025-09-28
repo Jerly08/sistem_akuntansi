@@ -213,16 +213,17 @@ func (h *CashBankHandler) GetTransactions(c *gin.Context) {
 		Limit: utils.ParseIntWithDefault(c.Query("limit"), 20),
 	}
 
-	// Parse date filters
+	// Parse date filters (inclusive end-date at end of day, Jakarta timezone)
+	du := utils.NewDateUtils()
 	if startDate := c.Query("start_date"); startDate != "" {
-		if parsedDate, err := utils.ParseDate(startDate); err == nil {
+		if parsedDate, err := du.ParseDateTimeWithTZ(startDate); err == nil {
 			filter.StartDate = parsedDate
 		}
 	}
 
 	if endDate := c.Query("end_date"); endDate != "" {
-		if parsedDate, err := utils.ParseDate(endDate); err == nil {
-			filter.EndDate = parsedDate
+		if endOfDay, err := du.ParseEndDateTimeWithTZ(endDate); err == nil {
+			filter.EndDate = endOfDay
 		}
 	}
 

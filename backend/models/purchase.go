@@ -352,10 +352,14 @@ type PurchaseReceiptRequest struct {
 }
 
 type PurchaseReceiptItemRequest struct {
-	PurchaseItemID   uint   `json:"purchase_item_id" binding:"required"`
-	QuantityReceived int    `json:"quantity_received" binding:"required,min=1"`
-	Condition        string `json:"condition"`
-	Notes            string `json:"notes"`
+	PurchaseItemID         uint   `json:"purchase_item_id" binding:"required"`
+	QuantityReceived       int    `json:"quantity_received" binding:"required,min=1"`
+	Condition              string `json:"condition"`
+	Notes                  string `json:"notes"`
+	// Optional: trigger asset capitalization journal for this item
+	CapitalizeAsset        bool   `json:"capitalize_asset"`
+	FixedAssetAccountID    *uint  `json:"fixed_asset_account_id"`
+	SourceAccountOverride  *uint  `json:"source_account_id"` // override source (defaults to inventory 1301 or item expense)
 }
 
 // Receipt Status Constants

@@ -100,10 +100,20 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
   const textColor = useColorModeValue('gray.800', 'white');
   const descriptionColor = useColorModeValue('gray.600', 'gray.300');
 
-  // Format currency for display
-  const formatCurrency = (amount: number | null | undefined) => {
+  // Format currency for display with account type consideration
+  const formatCurrency = (amount: number | null | undefined, accountCode?: string, accountType?: string) => {
     if (amount === null || amount === undefined || isNaN(Number(amount))) {
       return 'Rp 0';
+    }
+    
+    let displayAmount = Number(amount);
+    
+    // Convert to positive for revenue and liability accounts for user-friendly display
+    if (accountType === 'REVENUE' || accountType === 'LIABILITY' || 
+        accountCode?.startsWith('4') || // Revenue accounts
+        accountCode?.startsWith('2103') || accountCode?.startsWith('2203')) { // PPN accounts
+      displayAmount = Math.abs(displayAmount);
+      console.log(`[EnhancedBalanceSheetReport] Converted ${accountCode} (${accountType}) balance ${amount} to positive ${displayAmount}`);
     }
     
     return new Intl.NumberFormat('id-ID', {
@@ -111,7 +121,7 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
       currency: 'IDR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(Number(amount));
+    }).format(displayAmount);
   };
 
   // Generate Balance Sheet Report
@@ -513,7 +523,7 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
                             <Tr key={index}>
                               <Td pl={6}>{item.account_code}</Td>
                               <Td pl={6}>{item.account_name}</Td>
-                              <Td isNumeric>{formatCurrency(item.amount)}</Td>
+                              <Td isNumeric>{formatCurrency(item.amount, item.account_code, 'ASSET')}</Td>
                             </Tr>
                           ))}
                           
@@ -531,7 +541,7 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
                                 <Tr key={index}>
                                   <Td pl={6}>{item.account_code}</Td>
                                   <Td pl={6}>{item.account_name}</Td>
-                                  <Td isNumeric>{formatCurrency(item.amount)}</Td>
+                                  <Td isNumeric>{formatCurrency(item.amount, item.account_code, 'ASSET')}</Td>
                                 </Tr>
                               ))}
                             </>
@@ -582,7 +592,7 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
                               <Tr key={index}>
                                 <Td pl={6}>{item.account_code}</Td>
                                 <Td pl={6}>{item.account_name}</Td>
-                                <Td isNumeric>{formatCurrency(item.amount)}</Td>
+                                <Td isNumeric>{formatCurrency(item.amount, item.account_code, 'LIABILITY')}</Td>
                               </Tr>
                             ))}
                           </>
@@ -602,7 +612,7 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
                               <Tr key={index}>
                                 <Td pl={6}>{item.account_code}</Td>
                                 <Td pl={6}>{item.account_name}</Td>
-                                <Td isNumeric>{formatCurrency(item.amount)}</Td>
+                                <Td isNumeric>{formatCurrency(item.amount, item.account_code, 'EQUITY')}</Td>
                               </Tr>
                             ))}
                           </>

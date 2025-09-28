@@ -14,15 +14,15 @@ export const SWAGGER_ENDPOINTS = {
   ADMIN_CHECK_CASHBANK_GL: '/api/admin/check-cashbank-gl-links',
   ADMIN_FIX_CASHBANK_GL: '/api/admin/fix-cashbank-gl-links',
 
-  // CashBank
-  CASHBANK_ACCOUNTS: '/api/cashbank/accounts',
-  CASHBANK_ACCOUNT_BY_ID: (id: number) => `/api/cashbank/accounts/${id}`,
-  CASHBANK_ACCOUNT_TRANSACTIONS: (id: number) => `/api/cashbank/accounts/${id}/transactions`,
-  CASHBANK_BALANCE_SUMMARY: '/api/cashbank/balance-summary',
-  CASHBANK_DEPOSIT: '/api/cashbank/deposit',
-  CASHBANK_PAYMENT_ACCOUNTS: '/api/cashbank/payment-accounts',
-  CASHBANK_TRANSFER: '/api/cashbank/transfer',
-  CASHBANK_WITHDRAWAL: '/api/cashbank/withdrawal',
+  // CashBank (legacy group under v1)
+  CASHBANK_ACCOUNTS: '/api/v1/cashbank/accounts',
+  CASHBANK_ACCOUNT_BY_ID: (id: number) => `/api/v1/cashbank/accounts/${id}`,
+  CASHBANK_ACCOUNT_TRANSACTIONS: (id: number) => `/api/v1/cashbank/accounts/${id}/transactions`,
+  CASHBANK_BALANCE_SUMMARY: '/api/v1/cashbank/balance-summary',
+  CASHBANK_DEPOSIT: '/api/v1/cashbank/deposit',
+  CASHBANK_PAYMENT_ACCOUNTS: '/api/v1/cashbank/payment-accounts',
+  CASHBANK_TRANSFER: '/api/v1/cashbank/transfer',
+  CASHBANK_WITHDRAWAL: '/api/v1/cashbank/withdrawal',
 
   // Balance Monitoring
   MONITORING_BALANCE_HEALTH: '/api/monitoring/balance-health',
@@ -32,32 +32,32 @@ export const SWAGGER_ENDPOINTS = {
   MONITORING_SYNC_STATUS: '/api/monitoring/sync-status',
 
   // Payment Integration
-  PAYMENTS_ACCOUNT_BALANCES_REALTIME: '/api/payments/account-balances/real-time',
-  PAYMENTS_ACCOUNT_BALANCES_REFRESH: '/api/payments/account-balances/refresh',
-  PAYMENTS_ENHANCED_WITH_JOURNAL: '/api/payments/enhanced-with-journal',
-  PAYMENTS_INTEGRATION_METRICS: '/api/payments/integration-metrics',
-  PAYMENTS_JOURNAL_ENTRIES: '/api/payments/journal-entries',
-  PAYMENTS_PREVIEW_JOURNAL: '/api/payments/preview-journal',
-  PAYMENTS_ACCOUNT_UPDATES: (id: number) => `/api/payments/${id}/account-updates`,
-  PAYMENTS_REVERSE: (id: number) => `/api/payments/${id}/reverse`,
-  PAYMENTS_WITH_JOURNAL: (id: number) => `/api/payments/${id}/with-journal`,
+  PAYMENTS_ACCOUNT_BALANCES_REALTIME: '/api/v1/payments/account-balances/real-time',
+  PAYMENTS_ACCOUNT_BALANCES_REFRESH: '/api/v1/payments/account-balances/refresh',
+  PAYMENTS_ENHANCED_WITH_JOURNAL: '/api/v1/payments/enhanced-with-journal',
+  PAYMENTS_INTEGRATION_METRICS: '/api/v1/payments/integration-metrics',
+  PAYMENTS_JOURNAL_ENTRIES: '/api/v1/payments/journal-entries',
+  PAYMENTS_PREVIEW_JOURNAL: '/api/v1/payments/preview-journal',
+  PAYMENTS_ACCOUNT_UPDATES: (id: number) => `/api/v1/payments/${id}/account-updates`,
+  PAYMENTS_REVERSE: (id: number) => `/api/v1/payments/${id}/reverse`,
+  PAYMENTS_WITH_JOURNAL: (id: number) => `/api/v1/payments/${id}/with-journal`,
 
   // Payments
-  PAYMENTS_ANALYTICS: '/api/payments/analytics',
-  PAYMENTS_DEBUG_RECENT: '/api/payments/debug/recent',
-  PAYMENTS_EXPORT_EXCEL: '/api/payments/export/excel',
-  PAYMENTS_REPORT_PDF: '/api/payments/report/pdf',
-  PAYMENTS_SUMMARY: '/api/payments/summary',
-  PAYMENTS_UNPAID_BILLS: (vendorId: number) => `/api/payments/unpaid-bills/${vendorId}`,
-  PAYMENTS_UNPAID_INVOICES: (customerId: number) => `/api/payments/unpaid-invoices/${customerId}`,
-  PAYMENTS_BY_ID: (id: number) => `/api/payments/${id}`,
-  PAYMENTS_CANCEL: (id: number) => `/api/payments/${id}/cancel`,
-  PAYMENTS_PDF: (id: number) => `/api/payments/${id}/pdf`,
+  PAYMENTS_ANALYTICS: '/api/v1/payments/analytics',
+  PAYMENTS_DEBUG_RECENT: '/api/v1/payments/debug/recent',
+  PAYMENTS_EXPORT_EXCEL: '/api/v1/payments/export/excel',
+  PAYMENTS_REPORT_PDF: '/api/v1/payments/report/pdf',
+  PAYMENTS_SUMMARY: '/api/v1/payments/summary',
+  PAYMENTS_UNPAID_BILLS: (vendorId: number) => `/api/v1/payments/unpaid-bills/${vendorId}`,
+  PAYMENTS_UNPAID_INVOICES: (customerId: number) => `/api/v1/payments/unpaid-invoices/${customerId}`,
+  PAYMENTS_BY_ID: (id: number) => `/api/v1/payments/${id}`,
+  PAYMENTS_CANCEL: (id: number) => `/api/v1/payments/${id}/cancel`,
+  PAYMENTS_PDF: (id: number) => `/api/v1/payments/${id}/pdf`,
 
   // Purchases
-  PURCHASES_FOR_PAYMENT: (id: number) => `/api/purchases/${id}/for-payment`,
-  PURCHASES_INTEGRATED_PAYMENT: (id: number) => `/api/purchases/${id}/integrated-payment`,
-  PURCHASES_PAYMENTS: (id: number) => `/api/purchases/${id}/payments`,
+  PURCHASES_FOR_PAYMENT: (id: number) => `/api/v1/purchases/${id}/for-payment`,
+  PURCHASES_INTEGRATED_PAYMENT: (id: number) => `/api/v1/purchases/${id}/integrated-payment`,
+  PURCHASES_PAYMENTS: (id: number) => `/api/v1/purchases/${id}/payments`,
 
   // Security
   SECURITY_ALERTS: '/api/v1/admin/security/alerts',
@@ -101,28 +101,28 @@ export const SWAGGER_ENDPOINTS = {
   SSOT_REPORTS_PURCHASE_SUMMARY: '/api/v1/ssot-reports/purchase-summary',
 
   // Authentication
-  AUTH_LOGIN: '/auth/login',
-  AUTH_REFRESH: '/auth/refresh',
-  AUTH_REGISTER: '/auth/register',
-  AUTH_VALIDATE_TOKEN: '/auth/validate-token',
-  PROFILE: '/profile',
+  AUTH_LOGIN: '/api/v1/auth/login',
+  AUTH_REFRESH: '/api/v1/auth/refresh',
+  AUTH_REGISTER: '/api/v1/auth/register',
+  AUTH_VALIDATE_TOKEN: '/api/v1/auth/validate-token',
+  PROFILE: '/api/v1/profile',
 
   // Dashboard
-  DASHBOARD_ANALYTICS: '/dashboard/analytics',
-  DASHBOARD_FINANCE: '/dashboard/finance',
+  DASHBOARD_ANALYTICS: '/api/v1/dashboard/analytics',
+  DASHBOARD_FINANCE: '/api/v1/dashboard/finance',
 
   // Journal Drilldown
-  JOURNAL_DRILLDOWN: '/journal-drilldown',
-  JOURNAL_DRILLDOWN_ACCOUNTS: '/journal-drilldown/accounts',
-  JOURNAL_DRILLDOWN_ENTRIES: '/journal-drilldown/entries',
-  JOURNAL_DRILLDOWN_ENTRY_BY_ID: (id: number) => `/journal-drilldown/entries/${id}`,
+  JOURNAL_DRILLDOWN: '/api/v1/journal-drilldown',
+  JOURNAL_DRILLDOWN_ACCOUNTS: '/api/v1/journal-drilldown/accounts',
+  JOURNAL_DRILLDOWN_ENTRIES: '/api/v1/journal-drilldown/entries',
+  JOURNAL_DRILLDOWN_ENTRY_BY_ID: (id: number) => `/api/v1/journal-drilldown/entries/${id}`,
 
   // Monitoring
-  MONITORING_API_ANALYTICS: '/monitoring/api-usage/analytics',
-  MONITORING_API_RESET: '/monitoring/api-usage/reset',
-  MONITORING_API_STATS: '/monitoring/api-usage/stats',
-  MONITORING_API_TOP: '/monitoring/api-usage/top',
-  MONITORING_API_UNUSED: '/monitoring/api-usage/unused'
+  MONITORING_API_ANALYTICS: '/api/v1/monitoring/api-usage/analytics',
+  MONITORING_API_RESET: '/api/v1/monitoring/api-usage/reset',
+  MONITORING_API_STATS: '/api/v1/monitoring/api-usage/stats',
+  MONITORING_API_TOP: '/api/v1/monitoring/api-usage/top',
+  MONITORING_API_UNUSED: '/api/v1/monitoring/api-usage/unused'
 } as const;
 
 // Comparison interface

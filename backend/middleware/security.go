@@ -98,7 +98,8 @@ func (sm *SecurityMiddleware) CORS() gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-CSRF-Token")
+			// Allow Cache-Control to satisfy preflight when browsers/clients send it
+			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-CSRF-Token, Cache-Control")
 			c.Header("Access-Control-Max-Age", "86400") // 24 hours
 			c.Header("Access-Control-Expose-Headers", "Content-Length, Content-Range")
 		}

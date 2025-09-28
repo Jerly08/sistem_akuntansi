@@ -851,10 +851,10 @@ func (pc *PurchaseController) CreatePurchasePayment(c *gin.Context) {
 		return
 	}
 
-	// Validate purchase status - only APPROVED credit purchases can receive payments
-	if purchase.Status != models.PurchaseStatusApproved {
+	// Validate purchase status - allow APPROVED, COMPLETED, or PAID (still requires CREDIT and outstanding > 0)
+	if !(purchase.Status == models.PurchaseStatusApproved || purchase.Status == models.PurchaseStatusCompleted || purchase.Status == models.PurchaseStatusPaid) {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Purchase must be approved to receive payments",
+			"error": "Purchase must be approved or completed to receive payments",
 			"purchase_status": purchase.Status,
 		})
 		return
@@ -1080,7 +1080,14 @@ func (pc *PurchaseController) GetPurchaseJournalEntries(c *gin.Context) {
 	// Get journal entries for the purchase
 	entries, err := pc.purchaseService.GetPurchaseJournalEntries(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("⚠️ GetPurchaseJournalEntries failed for purchase %d: %v. Returning empty result.", id, err)
+		c.JSON(http.StatusOK, gin.H{
+			"purchase_id": id,
+			"journal_entries": []interface{}{},
+			"count": 0,
+			"status": "empty",
+			"message": "No journal entries available or journal system disabled",
+		})
 		return
 	}
 

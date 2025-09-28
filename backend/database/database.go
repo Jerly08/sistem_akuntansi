@@ -741,6 +741,18 @@ func AutoMigrate(db *gorm.DB) {
 
 	// Ensure SSOT tables exist without forcing constraint drops
 	EnsureSSOTTables(db)
+
+	// Ensure Simple SSOT journal tables exist for SalesJournalServiceV2
+	if err := db.AutoMigrate(&models.SimpleSSOTJournal{}, &models.SimpleSSOTJournalItem{}); err != nil {
+		log.Printf("⚠️  Failed to migrate Simple SSOT journal tables: %v", err)
+	} else {
+		log.Println("✅ Simple SSOT journal tables migrated successfully")
+	}
+	
+	// Ensure account_balances materialized view exists and is up to date
+	if err := EnsureAccountBalancesMaterializedView(db); err != nil {
+		log.Printf("Warning: Failed to ensure account_balances materialized view: %v", err)
+	}
 	
 	// Migrate approval models separately to debug any issues
 	log.Println("Starting approval models migration...")

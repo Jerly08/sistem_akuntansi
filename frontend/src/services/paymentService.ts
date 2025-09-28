@@ -105,8 +105,28 @@ class PaymentService {
       if (filters.start_date) params.append('start_date', filters.start_date);
       if (filters.end_date) params.append('end_date', filters.end_date);
 
-      const response = await api.get(API_ENDPOINTS.PAYMENTS.LIST + `?${params}`);
-      return response.data;
+      // Prefer SSOT list route if available; fall back to legacy when not present
+      const listCandidates = [
+        (API_ENDPOINTS as any).PAYMENTS?.SSOT?.LIST,
+        API_ENDPOINTS.PAYMENTS.LIST,
+      ].filter(Boolean) as string[];
+
+      let lastError: any = null;
+      for (const base of listCandidates) {
+        try {
+          const response = await api.get(`${base}?${params.toString()}`);
+          return response.data;
+        } catch (err: any) {
+          // If it's not a 404, rethrow immediately; otherwise, try next candidate
+          if (err?.response?.status !== 404) {
+            throw err;
+          }
+          lastError = err;
+        }
+      }
+
+      if (lastError) throw lastError;
+      throw new Error('No valid payments endpoint available');
     } catch (error) {
       console.error('Error fetching payments:', error);
       throw error;

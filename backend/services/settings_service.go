@@ -168,7 +168,7 @@ func (s *SettingsService) validateSettings(updates map[string]interface{}) error
 		}
 	}
 	// Validate prefixes (non-empty and length)
-	prefixes := []string{"invoice_prefix", "quote_prefix", "purchase_prefix", "journal_prefix"}
+	prefixes := []string{"invoice_prefix", "sales_prefix", "quote_prefix", "purchase_prefix", "journal_prefix", "payment_receivable_prefix", "payment_payable_prefix"}
 	for _, prefix := range prefixes {
 		if value, ok := updates[prefix].(string); ok {
 			if strings.TrimSpace(value) == "" {
@@ -179,15 +179,7 @@ func (s *SettingsService) validateSettings(updates map[string]interface{}) error
 			}
 		}
 	}
-	// Validate next numbers (must be positive)
-	nextNumbers := []string{"invoice_next_number", "quote_next_number", "purchase_next_number", "journal_next_number"}
-	for _, nextNum := range nextNumbers {
-		if value, ok := updates[nextNum].(int); ok {
-			if value < 1 {
-				return fmt.Errorf("%s must be at least 1", nextNum)
-			}
-		}
-	}
+	// No more validation for next numbers — now using monthly sequences
 	return nil
 }
 
@@ -216,11 +208,11 @@ func (s *SettingsService) createDefaultSettings() models.Settings {
 		DecimalPlaces:      ifThenInt(cfg != nil && cfg.CurrencySettings.DecimalPlaces != 0, cfg.CurrencySettings.DecimalPlaces, 2),
 		DefaultTaxRate:     ifThenFloat(cfg != nil && cfg.TaxRates.DefaultPPN != 0, cfg.TaxRates.DefaultPPN, 11.0),
 		InvoicePrefix:      "INV",
-		InvoiceNextNumber:  1,
+		SalesPrefix:        "SOA",
 		QuotePrefix:        "QT",
-		QuoteNextNumber:    1,
 		PurchasePrefix:     "PO",
-		PurchaseNextNumber: 1,
+		PaymentReceivablePrefix: "RCV",
+		PaymentPayablePrefix:    "PAY",
 		JournalPrefix:          journalPrefix,
 		JournalNextNumber:      1,
 		RequireJournalApproval: requireApproval,
@@ -297,6 +289,37 @@ func (s *SettingsService) GetNextQuoteNumber() (string, error) {
 	}
 	
 	return quoteNumber, nil
+}
+
+// GetNextSalesNumber gets and increments the next sales number
+func (s *SettingsService) GetNextSalesNumber() (string, error) {
+	var settings models.Settings
+	
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+	
+	if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&settings).Error; err != nil {
+		tx.Rollback()
+		return "", err
+	}
+	
+	salesNumber := formatInvoiceNumber(settings.SalesPrefix, settings.SalesNextNumber)
+	settings.SalesNextNumber++
+	
+	if err := tx.Save(&settings).Error; err != nil {
+		tx.Rollback()
+		return "", err
+	}
+	
+	if err := tx.Commit().Error; err != nil {
+		return "", err
+	}
+	
+	return salesNumber, nil
 }
 
 // GetNextPurchaseNumber gets and increments the next purchase order number
@@ -392,6 +415,7 @@ func (s *SettingsService) ResetToDefaults(userID uint) error {
 	defaultSettings.ID = settings.ID
 	defaultSettings.CreatedAt = settings.CreatedAt
 	defaultSettings.InvoiceNextNumber = settings.InvoiceNextNumber
+	defaultSettings.SalesNextNumber = settings.SalesNextNumber
 	defaultSettings.QuoteNextNumber = settings.QuoteNextNumber
 	defaultSettings.PurchaseNextNumber = settings.PurchaseNextNumber
 	defaultSettings.UpdatedBy = userID

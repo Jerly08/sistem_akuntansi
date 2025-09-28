@@ -1,4 +1,6 @@
-# 📊 Aplikasi Sistem Akuntansi Modern
+# 📋 Aplikasi Sistem Akuntansi Modern
+
+> **⚠️ PENTING UNTUK DEVELOPER:** Setelah `git pull`, WAJIB jalankan Balance Protection setup! Lihat [Balance Protection Notice](BALANCE_PROTECTION_NOTICE.md)
 
 Sebuah aplikasi sistem akuntansi komprehensif yang menggabungkan backend API (Go) dan frontend web (Next.js) untuk mengelola seluruh aspek keuangan dan operasional bisnis modern. **Dilengkapi dengan Dark/Light Mode yang User-Friendly dan Multi-Language Support (Bahasa Indonesia & English)**.
 
@@ -215,13 +217,21 @@ cp .env.example .env
 # Edit .env dengan konfigurasi database Anda:
 # DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME, JWT_SECRET
 
-# Jalankan database migrations dan seeding
+# 🛡️ CRITICAL: Setup Balance Protection System (WAJIB untuk PC baru!)
+# Windows:
+setup_balance_protection.bat
+# Linux/Mac:
+./setup_balance_protection.sh
+# Manual:
+go run cmd/scripts/setup_balance_sync_auto.go
+
+# Jalankan backend server
 go run cmd/main.go
 # Server akan otomatis:
 # - Migrate database schema
 # - Seed initial data (users, accounts, categories)
 # - Initialize security monitoring
-# - Setup balance monitoring
+# - Setup balance monitoring (jika belum di-setup manual)
 # - Start HTTP server
 ```
 **Backend Server**: `http://localhost:8080`  

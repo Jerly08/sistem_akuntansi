@@ -98,10 +98,20 @@ export const EnhancedTrialBalanceReport: React.FC<EnhancedTrialBalanceReportProp
   const textColor = useColorModeValue('gray.800', 'white');
   const descriptionColor = useColorModeValue('gray.600', 'gray.300');
 
-  // Format currency for display
-  const formatCurrency = (amount: number | null | undefined) => {
+  // Format currency for display with account type consideration
+  const formatCurrency = (amount: number | null | undefined, accountCode?: string, accountType?: string) => {
     if (amount === null || amount === undefined || isNaN(Number(amount))) {
       return 'Rp 0';
+    }
+    
+    let displayAmount = Number(amount);
+    
+    // Convert to positive for revenue and liability accounts for user-friendly display
+    if (accountType === 'REVENUE' || accountType === 'LIABILITY' || 
+        accountCode?.startsWith('4') || // Revenue accounts
+        accountCode?.startsWith('2103') || accountCode?.startsWith('2203')) { // PPN accounts
+      displayAmount = Math.abs(displayAmount);
+      console.log(`[EnhancedTrialBalanceReport] Converted ${accountCode} (${accountType}) balance ${amount} to positive ${displayAmount}`);
     }
     
     return new Intl.NumberFormat('id-ID', {
@@ -109,7 +119,7 @@ export const EnhancedTrialBalanceReport: React.FC<EnhancedTrialBalanceReportProp
       currency: 'IDR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(Number(amount));
+    }).format(displayAmount);
   };
 
   // Generate Trial Balance Report
@@ -507,10 +517,10 @@ export const EnhancedTrialBalanceReport: React.FC<EnhancedTrialBalanceReportProp
                               </Badge>
                             </Td>
                             <Td isNumeric>
-                              {account.debit_balance > 0 ? formatCurrency(account.debit_balance) : '-'}
+                              {account.debit_balance > 0 ? formatCurrency(account.debit_balance, account.account_code, account.account_type) : '-'}
                             </Td>
                             <Td isNumeric>
-                              {account.credit_balance > 0 ? formatCurrency(account.credit_balance) : '-'}
+                              {account.credit_balance > 0 ? formatCurrency(account.credit_balance, account.account_code, account.account_type) : '-'}
                             </Td>
                           </Tr>
                         ))}

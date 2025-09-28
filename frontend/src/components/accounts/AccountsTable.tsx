@@ -167,7 +167,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
                   fontWeight={account.is_header ? '600' : '400'}
                   color={primaryTextColor}
                 >
-                  {accountService.formatBalance(getDisplayBalance(account))}
+                  {accountService.formatBalance(getDisplayBalance(account), 'IDR', account.code, account.type)}
                 </Text>
               </Td>
               <Td px={6} py={4} borderColor={borderColor}>

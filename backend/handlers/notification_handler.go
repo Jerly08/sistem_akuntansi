@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
@@ -12,12 +13,14 @@ import (
 )
 
 type NotificationHandler struct {
-	notificationService *services.NotificationService
+	notificationService   *services.NotificationService
+	stockMonitoringService *services.StockMonitoringService
 }
 
-func NewNotificationHandler(notificationService *services.NotificationService) *NotificationHandler {
+func NewNotificationHandler(notificationService *services.NotificationService, stockMonitoringService *services.StockMonitoringService) *NotificationHandler {
 	return &NotificationHandler{
-		notificationService: notificationService,
+		notificationService:    notificationService,
+		stockMonitoringService: stockMonitoringService,
 	}
 }
 
@@ -29,6 +32,9 @@ func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or missing token"})
 		return
 	}
+
+	// Proactively run minimum stock check so low-stock notifications appear without manual triggers
+	h.runAutoStockCheck(c)
 	
 	page := 1
 	limit := 20
@@ -118,13 +124,16 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or missing token"})
 		return
 	}
+
+	// Ensure stock alerts are created before counting
+	h.runAutoStockCheck(c)
 	
 	count, err := h.notificationService.GetUnreadCount(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
+	
 	c.JSON(http.StatusOK, gin.H{
 		"count": count,
 	})
@@ -165,6 +174,9 @@ func (h *NotificationHandler) GetNotificationsByType(c *gin.Context) {
 		return
 	}
 	notificationType := c.Param("type")
+
+	// If requesting stock-related notifications, proactively run the stock check
+	h.runAutoStockCheck(c)
 	
 	page := 1
 	limit := 20
@@ -194,6 +206,22 @@ func (h *NotificationHandler) GetNotificationsByType(c *gin.Context) {
 		"limit": limit,
 		"type": notificationType,
 	})
+}
+
+// runAutoStockCheck checks min stock and resolves alerts so notifications appear without manual triggers
+func (h *NotificationHandler) runAutoStockCheck(c *gin.Context) {
+	// Only run for roles that should see stock alerts
+	role, err := utils.GetUserRoleFromToken(c)
+	if err != nil {
+		return
+	}
+	switch strings.ToLower(role) {
+	case "admin", "inventory_manager", "director":
+		if h.stockMonitoringService != nil {
+			_ = h.stockMonitoringService.CheckMinimumStock()
+			_ = h.stockMonitoringService.ResolveStockAlerts()
+		}
+	}
 }
 
 // CreateNotification creates a new notification (admin only)

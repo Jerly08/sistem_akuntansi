@@ -18,7 +18,9 @@ const getApiBaseUrl = (): string => {
 // Get the full static file base URL
 const getStaticBaseUrl = (): string => {
   const baseUrl = getApiBaseUrl();
-  return `${baseUrl}`;
+  // Ensure no trailing slash to avoid double slashes when concatenating with paths
+  const normalizedBase = baseUrl.replace(/\/+$/, '');
+  return normalizedBase;
 };
 
 /**

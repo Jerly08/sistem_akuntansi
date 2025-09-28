@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	
 	"gorm.io/gorm"
 )
 
@@ -36,6 +37,7 @@ type SSOTProfitLossData struct {
 	StartDate             time.Time              `json:"start_date"`
 	EndDate               time.Time              `json:"end_date"`
 	Currency              string                 `json:"currency"`
+	DataSource            string                 `json:"data_source"`
 	
 	// Revenue Section
 	Revenue struct {
@@ -119,21 +121,54 @@ func (s *SSOTProfitLossService) GenerateSSOTProfitLoss(startDate, endDate string
 		return nil, fmt.Errorf("invalid end date format: %v", err)
 	}
 	
-	// Get account balances from SSOT journal entries
-	accountBalances, err := s.getAccountBalancesFromSSOT(startDate, endDate)
+// Get account balances from SSOT journal entries (with data source flag)
+	accountBalances, source, err := s.getAccountBalancesFromSSOT(startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account balances: %v", err)
 	}
 	
 	// Generate P&L data structure
 	plData := s.generateProfitLossFromBalances(accountBalances, start, end)
+	plData.DataSource = source
 	
-	return plData, nil
+return plData, nil
 }
 
-// getAccountBalancesFromSSOT retrieves account balances from SSOT journal system
-func (s *SSOTProfitLossService) getAccountBalancesFromSSOT(startDate, endDate string) ([]SSOTAccountBalance, error) {
+// getAccountBalancesFromLegacy retrieves account balances using legacy journal tables as fallback
+func (s *SSOTProfitLossService) getAccountBalancesFromLegacy(startDate, endDate string) ([]SSOTAccountBalance, error) {
 	var balances []SSOTAccountBalance
+	legacyQuery := `
+		SELECT 
+			a.id as account_id,
+			a.code as account_code,
+			a.name as account_name,
+			a.type as account_type,
+			COALESCE(SUM(jl.debit_amount), 0) as debit_total,
+			COALESCE(SUM(jl.credit_amount), 0) as credit_total,
+			CASE 
+				WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
+					COALESCE(SUM(jl.debit_amount), 0) - COALESCE(SUM(jl.credit_amount), 0)
+				ELSE 
+					COALESCE(SUM(jl.credit_amount), 0) - COALESCE(SUM(jl.debit_amount), 0)
+			END as net_balance
+		FROM accounts a
+		LEFT JOIN journal_lines jl ON jl.account_id = a.id
+		LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status = 'POSTED' AND je.deleted_at IS NULL
+		WHERE je.entry_date >= ? AND je.entry_date <= ?
+		  AND COALESCE(a.is_header, false) = false
+		GROUP BY a.id, a.code, a.name, a.type
+		HAVING (COALESCE(SUM(jl.debit_amount), 0) <> 0 OR COALESCE(SUM(jl.credit_amount), 0) <> 0)
+		ORDER BY a.code`
+	if err := s.db.Raw(legacyQuery, startDate, endDate).Scan(&balances).Error; err != nil {
+		return nil, fmt.Errorf("legacy account balances query failed: %v", err)
+	}
+	return balances, nil
+}
+
+// getAccountBalancesFromSSOT retrieves account balances from SSOT journal system, with automatic fallbacks
+func (s *SSOTProfitLossService) getAccountBalancesFromSSOT(startDate, endDate string) ([]SSOTAccountBalance, string, error) {
+	var balances []SSOTAccountBalance
+	source := "SSOT"
 	
 	query := `
 		SELECT 
@@ -144,26 +179,75 @@ func (s *SSOTProfitLossService) getAccountBalancesFromSSOT(startDate, endDate st
 			COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
 			COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
 			CASE 
-				WHEN a.type IN ('ASSET', 'EXPENSE') THEN 
+				WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
 					COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
 				ELSE 
 					COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
 			END as net_balance
 		FROM accounts a
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
-		WHERE uje.status = 'POSTED' 
-			AND uje.entry_date >= ? 
-			AND uje.entry_date <= ?
+		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id AND uje.status = 'POSTED' AND uje.deleted_at IS NULL
+		WHERE uje.entry_date >= ? AND uje.entry_date <= ?
+		  AND COALESCE(a.is_header, false) = false
 		GROUP BY a.id, a.code, a.name, a.type
-		HAVING COALESCE(SUM(ujl.debit_amount), 0) > 0 OR COALESCE(SUM(ujl.credit_amount), 0) > 0
+		HAVING (COALESCE(SUM(ujl.debit_amount), 0) <> 0 OR COALESCE(SUM(ujl.credit_amount), 0) <> 0)
 		ORDER BY a.code
 	`
 	
-	if err := s.db.Raw(query, startDate, endDate).Scan(&balances).Error; err != nil {
-		return nil, fmt.Errorf("error executing account balances query: %v", err)
+if err := s.db.Raw(query, startDate, endDate).Scan(&balances).Error; err != nil {
+		return nil, source, fmt.Errorf("error executing account balances query: %v", err)
 	}
 	
+	// Fallback to legacy journals if SSOT returns no activity OR no PL activity (no 4xxx/5xxx)
+if len(balances) == 0 || !hasPLActivity(balances) {
+		legacy, lerr := s.getAccountBalancesFromLegacy(startDate, endDate)
+		if lerr == nil && len(legacy) > 0 && hasPLActivity(legacy) {
+			source = "LEGACY"
+			return legacy, source, nil
+		}
+		// Final fallback: derive from accounts table balances for 4xxx/5xxx if journals have no PL activity
+		acctFallback, aerr := s.getPLFromAccountsBalance()
+		if aerr == nil && len(acctFallback) > 0 && hasPLActivity(acctFallback) {
+			source = "ACCOUNTS"
+			return acctFallback, source, nil
+		}
+	}
+	
+	return balances, source, nil
+}
+
+// hasPLActivity returns true if there is any revenue or expense activity in the balances
+func hasPLActivity(balances []SSOTAccountBalance) bool {
+	for _, b := range balances {
+		if strings.HasPrefix(b.AccountCode, "4") || strings.HasPrefix(b.AccountCode, "5") ||
+			strings.EqualFold(b.AccountType, "REVENUE") || strings.EqualFold(b.AccountType, "EXPENSE") {
+			if b.DebitTotal != 0 || b.CreditTotal != 0 || b.NetBalance != 0 {
+				return true
+			}
+		}
+	}
+return false
+}
+
+// getPLFromAccountsBalance builds minimal PL balances using accounts.balance when neither SSOT nor legacy journals provide PL activity
+func (s *SSOTProfitLossService) getPLFromAccountsBalance() ([]SSOTAccountBalance, error) {
+	var balances []SSOTAccountBalance
+	query := `
+		SELECT 
+			id as account_id,
+			code as account_code,
+			name as account_name,
+			type as account_type,
+			0 as debit_total,
+			0 as credit_total,
+			CASE WHEN UPPER(type) = 'EXPENSE' THEN balance ELSE balance END as net_balance
+		FROM accounts
+		WHERE (code LIKE '4%%' OR code LIKE '5%%')
+		  AND COALESCE(is_header,false) = false
+		ORDER BY code`
+	if err := s.db.Raw(query).Scan(&balances).Error; err != nil {
+		return nil, fmt.Errorf("accounts balance PL fallback failed: %v", err)
+	}
 	return balances, nil
 }
 

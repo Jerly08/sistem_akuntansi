@@ -300,7 +300,7 @@ const ReportsPage: React.FC = () => {
       }
 
       const response = await fetch(
-        `http://localhost:8080/api/v1/ssot-reports/purchase-report?start_date=${ssotPRStartDate}&end_date=${ssotPREndDate}&format=json`,
+        `/api/v1/ssot-reports/purchase-report?start_date=${ssotPRStartDate}&end_date=${ssotPREndDate}&format=json`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -568,7 +568,7 @@ const ReportsPage: React.FC = () => {
       }
 
       const response = await fetch(
-        `http://localhost:8080/api/v1/reports/ssot-profit-loss?start_date=${ssotStartDate}&end_date=${ssotEndDate}&format=json`,
+        `/api/v1/reports/ssot-profit-loss?start_date=${ssotStartDate}&end_date=${ssotEndDate}&format=json`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,

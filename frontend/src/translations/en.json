@@ -81,7 +81,9 @@
     "quotePrefix": "Quote Prefix",
     "quoteNextNumber": "Quote Next Number",
     "purchasePrefix": "Purchase Order Prefix",
-    "purchaseNextNumber": "Purchase Order Next Number",
+    "purchaseNextNumber": "Next Purchase Order Number",
+    "paymentReceivablePrefix": "Payment Received Prefix",
+    "paymentPayablePrefix": "Payment Made Prefix",
     "updateSuccess": "Settings updated successfully",
     "updateError": "Failed to update settings",
     "tooltips": {

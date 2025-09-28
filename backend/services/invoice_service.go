@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"time"
 	"gorm.io/gorm"
@@ -20,77 +21,61 @@ func NewInvoiceService(db *gorm.DB) *InvoiceService {
 	}
 }
 
-// GenerateInvoiceNumber generates next invoice number using settings
+// GenerateInvoiceNumber generates next invoice number using monthly sequence (compatibility path)
 func (s *InvoiceService) GenerateInvoiceNumber() (string, error) {
-	// Get settings
 	_, err := s.settingsService.GetSettings()
-	if err != nil {
-		return "", fmt.Errorf("failed to get settings: %v", err)
-	}
+	if err != nil { return "", fmt.Errorf("failed to get settings: %v", err) }
 
 	var invoiceNumber string
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// Lock settings for update to prevent race conditions
 		var settingsForUpdate models.Settings
-		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&settingsForUpdate).Error; err != nil {
-			return err
-		}
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&settingsForUpdate).Error; err != nil { return err }
 
-		// Generate invoice number using current next number
-		invoiceNumber = fmt.Sprintf("%s-%05d", settingsForUpdate.InvoicePrefix, settingsForUpdate.InvoiceNextNumber)
-		
-		// Increment next number for future use
-		settingsForUpdate.InvoiceNextNumber++
-		
-		// Save updated settings
-		if err := tx.Save(&settingsForUpdate).Error; err != nil {
-			return err
+		// Use the same sequence table as full service
+		if err := tx.AutoMigrate(&InvoiceCodeSequence{}); err != nil { return err }
+		year := time.Now().Year(); month := int(time.Now().Month())
+		var seq InvoiceCodeSequence
+		res := tx.Set("gorm:query_option", "FOR UPDATE").Where("year = ? AND month = ?", year, month).First(&seq)
+		if res.Error != nil {
+			if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+				seq = InvoiceCodeSequence{Year: year, Month: month, LastNumber: 0}
+				if err := tx.Create(&seq).Error; err != nil { return err }
+			} else { return res.Error }
 		}
-
+		seq.LastNumber++
+		invoiceNumber = fmt.Sprintf("%s/%04d/%02d/%04d", settingsForUpdate.InvoicePrefix, year, month, seq.LastNumber)
+		if err := tx.Save(&seq).Error; err != nil { return err }
 		return nil
 	})
-
-	if err != nil {
-		return "", fmt.Errorf("failed to generate invoice number: %v", err)
-	}
-
+	if err != nil { return "", fmt.Errorf("failed to generate invoice number: %v", err) }
 	return invoiceNumber, nil
 }
 
-// GenerateQuoteNumber generates next quote number using settings
+// GenerateQuoteNumber generates next quote number using monthly sequence (compatibility path)
 func (s *InvoiceService) GenerateQuoteNumber() (string, error) {
-	// Get settings
 	_, err := s.settingsService.GetSettings()
-	if err != nil {
-		return "", fmt.Errorf("failed to get settings: %v", err)
-	}
+	if err != nil { return "", fmt.Errorf("failed to get settings: %v", err) }
 
 	var quoteNumber string
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// Lock settings for update to prevent race conditions
 		var settingsForUpdate models.Settings
-		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&settingsForUpdate).Error; err != nil {
-			return err
+		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&settingsForUpdate).Error; err != nil { return err }
+		if err := tx.AutoMigrate(&QuoteCodeSequence{}); err != nil { return err }
+		year := time.Now().Year(); month := int(time.Now().Month())
+		var seq QuoteCodeSequence
+		res := tx.Set("gorm:query_option", "FOR UPDATE").Where("year = ? AND month = ?", year, month).First(&seq)
+		if res.Error != nil {
+			if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+				seq = QuoteCodeSequence{Year: year, Month: month, LastNumber: 0}
+				if err := tx.Create(&seq).Error; err != nil { return err }
+			} else { return res.Error }
 		}
-
-		// Generate quote number using current next number
-		quoteNumber = fmt.Sprintf("%s-%05d", settingsForUpdate.QuotePrefix, settingsForUpdate.QuoteNextNumber)
-		
-		// Increment next number for future use
-		settingsForUpdate.QuoteNextNumber++
-		
-		// Save updated settings
-		if err := tx.Save(&settingsForUpdate).Error; err != nil {
-			return err
-		}
-
+		seq.LastNumber++
+		quoteNumber = fmt.Sprintf("%s/%04d/%02d/%04d", settingsForUpdate.QuotePrefix, year, month, seq.LastNumber)
+		if err := tx.Save(&seq).Error; err != nil { return err }
 		return nil
 	})
-
-	if err != nil {
-		return "", fmt.Errorf("failed to generate quote number: %v", err)
-	}
-
+	if err != nil { return "", fmt.Errorf("failed to generate quote number: %v", err) }
 	return quoteNumber, nil
 }
 

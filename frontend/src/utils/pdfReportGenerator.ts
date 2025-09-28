@@ -83,7 +83,7 @@ export interface ReportData {
 // Function to fetch company settings from API
 export const fetchCompanySettings = async (): Promise<SystemSettings | null> => {
   try {
-    const response = await api.get('/settings');
+    const response = await api.get('/api/v1/settings');
     if (response.data.success) {
       return response.data.data;
     }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"time"
 	"math"
@@ -38,9 +39,9 @@ func NewQuoteServiceFull(
 	}
 }
 
-// GenerateQuoteCode generates next quote code using settings
+// GenerateQuoteCode generates next quote code using monthly sequence like Purchases
 func (s *QuoteServiceFull) GenerateQuoteCode() (string, error) {
-	// Get settings to use configured prefix
+	// Get settings for prefix
 	_, err := s.settingsService.GetSettings()
 	if err != nil {
 		return "", fmt.Errorf("failed to get settings: %v", err)
@@ -48,30 +49,36 @@ func (s *QuoteServiceFull) GenerateQuoteCode() (string, error) {
 
 	var quoteCode string
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// Lock settings for update to prevent race conditions
+		// Lock settings for prefix
 		var settingsForUpdate models.Settings
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&settingsForUpdate).Error; err != nil {
 			return err
 		}
 
-		// Generate quote code using current next number
-		quoteCode = fmt.Sprintf("%s-%05d", settingsForUpdate.QuotePrefix, settingsForUpdate.QuoteNextNumber)
-		
-		// Verify code uniqueness
-		var existingCount int64
-		tx.Model(&models.Quote{}).Where("code = ?", quoteCode).Count(&existingCount)
-		if existingCount > 0 {
-			return fmt.Errorf("generated quote code %s already exists", quoteCode)
-		}
-		
-		// Increment next number for future use
-		settingsForUpdate.QuoteNextNumber++
-		
-		// Save updated settings
-		if err := tx.Save(&settingsForUpdate).Error; err != nil {
-			return err
+		year := time.Now().Year()
+		month := int(time.Now().Month())
+
+		// Auto-migrate sequence table
+		if err := tx.AutoMigrate(&InvoiceCodeSequence{}, &QuoteCodeSequence{}); err != nil { return err }
+
+		var seq QuoteCodeSequence
+		res := tx.Set("gorm:query_option", "FOR UPDATE").Where("year = ? AND month = ?", year, month).First(&seq)
+		if res.Error != nil {
+			if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+				seq = QuoteCodeSequence{Year: year, Month: month, LastNumber: 0}
+				if err := tx.Create(&seq).Error; err != nil { return err }
+			} else { return res.Error }
 		}
 
+		seq.LastNumber++
+		quoteCode = fmt.Sprintf("%s/%04d/%02d/%04d", settingsForUpdate.QuotePrefix, year, month, seq.LastNumber)
+
+		// Ensure uniqueness
+		var existingCount int64
+		tx.Model(&models.Quote{}).Where("code = ?", quoteCode).Count(&existingCount)
+		if existingCount > 0 { return fmt.Errorf("generated quote code %s already exists", quoteCode) }
+
+		if err := tx.Save(&seq).Error; err != nil { return err }
 		return nil
 	})
 

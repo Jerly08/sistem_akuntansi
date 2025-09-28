@@ -63,11 +63,14 @@ interface SystemSettings {
   decimal_separator: string;
   decimal_places: number;
   invoice_prefix: string;
-  invoice_next_number: number;
+  invoice_next_number?: number; // removed from API – keep optional for backward compatibility
   quote_prefix: string;
-  quote_next_number: number;
+  quote_next_number?: number; // removed from API – keep optional for backward compatibility
   purchase_prefix: string;
-  purchase_next_number: number;
+  purchase_next_number?: number; // removed from API – keep optional for backward compatibility
+  // New: Payment prefixes
+  payment_receivable_prefix?: string;
+  payment_payable_prefix?: string;
   email_notifications: boolean;
   smtp_host?: string;
   smtp_port?: number;
@@ -199,7 +202,7 @@ const SettingsPage: React.FC = () => {
     try {
       const fd = new FormData();
       fd.append('image', file);
-      const resp = await api.post('/settings/company/logo', fd, {
+      const resp = await api.post('/api/v1/settings/company/logo', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       const newPath: string | undefined = resp.data?.path;
@@ -525,28 +528,6 @@ const SettingsPage: React.FC = () => {
                   
                   <FormControl>
                     <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.invoiceNextNumber')}
-                    </FormLabel>
-                    <NumberInput
-                      value={formData?.invoice_next_number ?? settings?.invoice_next_number ?? 1}
-                      onChange={(valueString) => handleFormChange('invoice_next_number', parseInt(valueString) || 1)}
-                      min={1}
-                    >
-                      <NumberInputField 
-                        variant="filled"
-                        _hover={{ bg: 'gray.100' }}
-                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                      />
-                      <NumberInputStepper>
-                        <NumberIncrementStepper />
-                        <NumberDecrementStepper />
-                      </NumberInputStepper>
-                    </NumberInput>
-                  </FormControl>
-                  <Divider />
-                  
-                  <FormControl>
-                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
                       {t('settings.quotePrefix')}
                     </FormLabel>
                     <Input
@@ -557,28 +538,6 @@ const SettingsPage: React.FC = () => {
                       _hover={{ bg: 'gray.100' }}
                       _focus={{ bg: 'white', borderColor: 'blue.500' }}
                     />
-                  </FormControl>
-                  <Divider />
-                  
-                  <FormControl>
-                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.quoteNextNumber')}
-                    </FormLabel>
-                    <NumberInput
-                      value={formData?.quote_next_number ?? settings?.quote_next_number ?? 1}
-                      onChange={(valueString) => handleFormChange('quote_next_number', parseInt(valueString) || 1)}
-                      min={1}
-                    >
-                      <NumberInputField 
-                        variant="filled"
-                        _hover={{ bg: 'gray.100' }}
-                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                      />
-                      <NumberInputStepper>
-                        <NumberIncrementStepper />
-                        <NumberDecrementStepper />
-                      </NumberInputStepper>
-                    </NumberInput>
                   </FormControl>
                   <Divider />
                   
@@ -597,25 +556,34 @@ const SettingsPage: React.FC = () => {
                   </FormControl>
                   <Divider />
                   
+                  {/* Payment prefixes */}
                   <FormControl>
                     <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.purchaseNextNumber')}
+                      {t('settings.paymentReceivablePrefix')}
                     </FormLabel>
-                    <NumberInput
-                      value={formData?.purchase_next_number ?? settings?.purchase_next_number ?? 1}
-                      onChange={(valueString) => handleFormChange('purchase_next_number', parseInt(valueString) || 1)}
-                      min={1}
-                    >
-                      <NumberInputField 
-                        variant="filled"
-                        _hover={{ bg: 'gray.100' }}
-                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                      />
-                      <NumberInputStepper>
-                        <NumberIncrementStepper />
-                        <NumberDecrementStepper />
-                      </NumberInputStepper>
-                    </NumberInput>
+                    <Input
+                      value={formData?.payment_receivable_prefix || settings?.payment_receivable_prefix || ''}
+                      onChange={(e) => handleFormChange('payment_receivable_prefix', e.target.value)}
+                      placeholder="RCV"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
+                  </FormControl>
+                  <Divider />
+
+                  <FormControl>
+                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                      {t('settings.paymentPayablePrefix')}
+                    </FormLabel>
+                    <Input
+                      value={formData?.payment_payable_prefix || settings?.payment_payable_prefix || ''}
+                      onChange={(e) => handleFormChange('payment_payable_prefix', e.target.value)}
+                      placeholder="PAY"
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                    />
                   </FormControl>
                 </VStack>
               </CardBody>

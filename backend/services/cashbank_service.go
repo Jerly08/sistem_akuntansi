@@ -33,7 +33,7 @@ func NewCashBankService(
 	unifiedJournalService := NewUnifiedJournalService(db)
 	
 	// Initialize SSOT Journal Adapter
-	sSOTJournalAdapter := NewCashBankSSOTJournalAdapter(db, unifiedJournalService, accountRepo)
+	sSOTJournalAdapter := NewCashBankSSOTJournalAdapter(db)
 	
 	return &CashBankService{
 		db:                    db,

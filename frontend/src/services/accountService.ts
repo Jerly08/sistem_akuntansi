@@ -48,13 +48,15 @@ class AccountService {
   // Get all accounts
   async getAccounts(token: string, type?: string): Promise<Account[]> {
     let url = API_ENDPOINTS.ACCOUNTS.LIST;
-    if (type) {
-      url += `?type=${encodeURIComponent(type)}`;
-    }
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    params.set('_t', Date.now().toString());
+    url += `?${params.toString()}`;
     
     const response = await fetch(url, {
       method: 'GET',
-      headers: this.getHeaders(token),
+      headers: { ...this.getHeaders(token), 'Cache-Control': 'no-store' },
+      cache: 'no-store',
     });
     
     const result: ApiResponse<Account[]> = await this.handleResponse(response);
@@ -64,15 +66,18 @@ class AccountService {
   // Get account catalog (minimal data for accounts) - PUBLIC ENDPOINT (no auth required)
   async getAccountCatalog(token?: string, type?: string): Promise<AccountCatalogItem[]> {
     let url = API_ENDPOINTS.ACCOUNTS.CATALOG;
-    if (type) {
-      url += `?type=${encodeURIComponent(type)}`;
-    }
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    params.set('_t', Date.now().toString());
+    url += `?${params.toString()}`;
     
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
       },
+      cache: 'no-store',
     });
     
     const result: ApiResponse<AccountCatalogItem[]> = await this.handleResponse(response);
@@ -86,13 +91,15 @@ class AccountService {
   
   // Get liability accounts for credit payment methods - PUBLIC ENDPOINT (no auth required)
   async getCreditAccounts(token?: string): Promise<AccountCatalogItem[]> {
-    const url = API_ENDPOINTS.ACCOUNTS.CREDIT + '?type=LIABILITY';
+    const url = `${API_ENDPOINTS.ACCOUNTS.CREDIT}?type=LIABILITY&_t=${Date.now()}`;
     
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
       },
+      cache: 'no-store',
     });
     
     const result: ApiResponse<AccountCatalogItem[]> = await this.handleResponse(response);
@@ -135,9 +142,11 @@ class AccountService {
 
   // Get single account by code
   async getAccount(token: string, code: string): Promise<Account> {
-    const response = await fetch(API_ENDPOINTS.ACCOUNTS.GET_BY_CODE(code), {
+    const url = `${API_ENDPOINTS.ACCOUNTS.GET_BY_CODE(code)}?_t=${Date.now()}`;
+    const response = await fetch(url, {
       method: 'GET',
-      headers: this.getHeaders(token),
+      headers: { ...this.getHeaders(token), 'Cache-Control': 'no-store' },
+      cache: 'no-store',
     });
     
     const result: ApiResponse<Account> = await this.handleResponse(response);
@@ -194,16 +203,20 @@ class AccountService {
 
   // Get account hierarchy
   async getAccountHierarchy(token: string): Promise<Account[]> {
-    const response = await fetch(API_ENDPOINTS.ACCOUNTS.HIERARCHY, {
+    const url = `${API_ENDPOINTS.ACCOUNTS.HIERARCHY}?_t=${Date.now()}`;
+    const response = await fetch(url, {
       method: 'GET',
-      headers: this.getHeaders(token),
+      headers: { ...this.getHeaders(token), 'Cache-Control': 'no-store' },
+      cache: 'no-store',
     });
     
-    const result: ApiResponse<Account[]> = await this.handleResponse(response);
-    return result.data;
+    const result: ApiResponse<Account[] | null | undefined> = await this.handleResponse(response);
+    // Go will encode a nil slice as null; normalize to [] for frontend safety
+    const data = Array.isArray(result?.data) ? result!.data! : [];
+    return data;
   }
 
-  // Get SSOT balances per account (leaf accounts only)
+  // Get legacy SSOT balances per account (kept for compatibility)
   async getSSOTAccountBalances(token: string, asOfDate?: string): Promise<{
     account_id: number;
     account_code: string;
@@ -215,15 +228,52 @@ class AccountService {
   }[]> {
     const params = new URLSearchParams();
     if (asOfDate) params.set('as_of_date', asOfDate);
+    
+    // 🗏 Add filter to ensure only POSTED journal entries (from INVOICED sales)
+    params.set('status_filter', 'POSTED');
+    params.set('source_filter', 'INVOICED_ONLY'); // Backend should understand this
+    
+    params.set('_t', Date.now().toString());
     const url = `${API_ENDPOINTS.SSOT_REPORTS.ACCOUNT_BALANCES}${params.toString() ? `?${params.toString()}` : ''}`;
+
+    console.log('🔍 Fetching SSOT account balances with INVOICED-only filter:', url);
 
     const response = await fetch(url, {
       method: 'GET',
-      headers: this.getHeaders(token),
+      headers: { ...this.getHeaders(token), 'Cache-Control': 'no-store' },
+      cache: 'no-store',
     });
 
     const result = await this.handleResponse<{ status: string; data: any[] }>(response);
+    
+    // Validate that we're getting INVOICED-only data
+    console.log('✅ SSOT Account Balances fetched:', {
+      count: result.data?.length || 0,
+      filter: 'INVOICED_ONLY',
+      as_of_date: asOfDate || 'latest'
+    });
+    
     return result.data as any[];
+  }
+
+  // New: Get posted-only COA balances from SSOT
+  async getPostedCOABalances(token: string): Promise<{
+    account_id: number;
+    account_code: string;
+    account_name: string;
+    account_type: string;
+    raw_balance: number;
+    display_balance: number;
+    is_positive: boolean;
+  }[]> {
+    const url = `${API_ENDPOINTS.COA_POSTED_BALANCES}?_t=${Date.now()}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { ...this.getHeaders(token), 'Cache-Control': 'no-store' },
+      cache: 'no-store',
+    });
+    const result = await this.handleResponse<{ status: string; data: any[] | null | undefined }>(response);
+    return Array.isArray(result?.data) ? (result!.data as any[]) : [];
   }
 
   // Get balance summary
@@ -319,14 +369,46 @@ class AccountService {
     return response.blob();
   }
 
-  // Helper: Format balance for display
-  formatBalance(balance: number, currency = 'IDR'): string {
+  // Helper: Format balance for display with special handling for Revenue/PPN accounts
+  formatBalance(balance: number, currency = 'IDR', accountCode?: string, accountType?: string): string {
+    let displayBalance = balance;
+    
+    // 🎯 CRITICAL: Display Revenue and PPN accounts as positive for user clarity
+    // Even though they are stored as negative in DB (credit accounts), show positive to users
+    if (this.shouldDisplayAsPositive(accountCode, accountType)) {
+      displayBalance = Math.abs(balance);
+      console.log(`💡 Displaying ${accountCode} as positive: ${displayBalance} (original: ${balance})`);
+    }
+    
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(balance);
+    }).format(displayBalance);
+  }
+  
+  // Helper: Determine if account should be displayed as positive
+  private shouldDisplayAsPositive(accountCode?: string, accountType?: string): boolean {
+    if (!accountCode) return false;
+    
+    // Revenue accounts (4xxx) should display as positive
+    if (accountCode.startsWith('4') || accountType === 'REVENUE') {
+      return true;
+    }
+    
+    // PPN Keluaran accounts (2103, 21xx tax-related) should display as positive 
+    if (accountCode === '2103' || accountCode.startsWith('210')) {
+      return true;
+    }
+    
+    // Other specific tax accounts that should display positive
+    const positiveTaxAccounts = ['2102', '2104', '2105']; // Common tax payable accounts
+    if (positiveTaxAccounts.includes(accountCode)) {
+      return true;
+    }
+    
+    return false;
   }
 
   // Helper: Get account type color

@@ -50,6 +50,7 @@ import {
   useColorModeValue
 } from '@chakra-ui/react';
 import CurrencyInput from '@/components/common/CurrencyInput';
+import ErrorAlert, { ErrorDetail } from '@/components/common/ErrorAlert';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { FiPlus, FiTrash2, FiSave, FiX, FiDollarSign, FiShoppingCart, FiFileText } from 'react-icons/fi';
 import salesService, { 
@@ -59,7 +60,7 @@ import salesService, {
   SaleItemRequest,
   SaleItemUpdateRequest 
 } from '@/services/salesService';
-import ErrorHandler from '@/utils/errorHandler';
+import ErrorHandler, { ParsedValidationError } from '@/utils/errorHandler';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface SalesFormProps {
@@ -79,6 +80,9 @@ interface FormData {
   currency: string;
   exchange_rate: number;
   discount_percent: number;
+  // Payment method and accounting fields
+  payment_method_type: 'CASH' | 'BANK' | 'CREDIT';
+  cash_bank_id?: number;
   // Legacy tax fields (for backward compatibility)
   ppn_percent: number;
   pph_percent: number;
@@ -122,7 +126,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const [products, setProducts] = useState<any[]>([]);
   const [salesPersons, setSalesPersons] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [cashBankAccounts, setCashBankAccounts] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [validationError, setValidationError] = useState<ParsedValidationError | null>(null);
   const toast = useToast();
   const { user, token } = useAuth();
   const modalBodyRef = useRef<HTMLDivElement>(null);
@@ -196,6 +202,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
       pph23_rate: 0,
       other_tax_deductions: 0,
       payment_terms: 'NET_30',
+      payment_method_type: 'CREDIT' as 'CASH' | 'BANK' | 'CREDIT',
       shipping_cost: 0,
       items: [
         {
@@ -228,6 +235,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const watchOtherTaxDeductions = watch('other_tax_deductions');
   const watchShippingCost = watch('shipping_cost');
   const watchPaymentTerms = watch('payment_terms');
+  const watchPaymentMethodType = watch('payment_method_type');
+  const watchCashBankId = watch('cash_bank_id');
   const watchDate = watch('date');
   const watchType = watch('type');
   const watchDueDate = watch('due_date');
@@ -298,7 +307,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
       console.log('SalesForm: Starting to load form data...');
       
       // Load all data concurrently with proper error handling
-      const [customersResult, productsResult, salesPersonsResult, accountsResult] = await Promise.allSettled([
+      const [customersResult, productsResult, salesPersonsResult, accountsResult, cashBankResult] = await Promise.allSettled([
         // Load customers
         (async () => {
           console.log('SalesForm: Loading customers...');
@@ -339,6 +348,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
           const result = await accountService.default.getAccounts(token, 'REVENUE');
           console.log('SalesForm: Revenue accounts loaded:', result?.length || 0);
           return result;
+        })(),
+        
+        // Load cash & bank accounts for payment method selection
+        (async () => {
+          console.log('SalesForm: Loading cash & bank accounts...');
+          const cashBankService = await import('@/services/cashbankService');
+          const result = await cashBankService.default.getCashBankAccounts();
+          console.log('SalesForm: Cash & bank accounts loaded:', result?.length || 0);
+          return result;
         })()
       ]);
 
@@ -372,10 +390,20 @@ const SalesForm: React.FC<SalesFormProps> = ({
 
       // Process accounts
       if (accountsResult.status === 'fulfilled' && Array.isArray(accountsResult.value)) {
+        console.log('SalesForm: Revenue accounts loaded successfully:', accountsResult.value);
         setAccounts(accountsResult.value);
       } else {
         console.warn('Failed to load accounts:', accountsResult.status === 'rejected' ? accountsResult.reason : 'No data');
+        console.log('SalesForm: AccountsResult details:', accountsResult);
         setAccounts([]);
+      }
+
+      // Process cash & bank accounts
+      if (cashBankResult.status === 'fulfilled' && Array.isArray(cashBankResult.value)) {
+        setCashBankAccounts(cashBankResult.value);
+      } else {
+        console.warn('Failed to load cash & bank accounts:', cashBankResult.status === 'rejected' ? cashBankResult.reason : 'No data');
+        setCashBankAccounts([]);
       }
 
     } catch (error: any) {
@@ -415,6 +443,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
       other_tax_deductions: saleData.other_tax_deductions || 0,
       payment_terms: saleData.payment_terms,
       payment_method: saleData.payment_method,
+      payment_method_type: saleData.payment_method_type || 'CREDIT',
+      cash_bank_id: saleData.cash_bank_id,
       shipping_method: saleData.shipping_method,
       shipping_cost: saleData.shipping_cost,
       billing_address: saleData.billing_address,
@@ -453,6 +483,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
       pph23_rate: 0,
       other_tax_deductions: 0,
       payment_terms: 'NET_30',
+      payment_method_type: 'CREDIT' as 'CASH' | 'BANK' | 'CREDIT',
       shipping_cost: 0,
       items: [
         {
@@ -703,6 +734,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
           other_tax_deductions: data.other_tax_deductions,
           payment_terms: data.payment_terms,
           payment_method: data.payment_method,
+          payment_method_type: data.payment_method_type,
+          cash_bank_id: data.cash_bank_id,
           shipping_method: data.shipping_method,
           shipping_cost: data.shipping_cost,
           billing_address: data.billing_address,
@@ -749,6 +782,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
           other_tax_deductions: data.other_tax_deductions,
           payment_terms: data.payment_terms,
           payment_method: data.payment_method,
+          payment_method_type: data.payment_method_type,
+          cash_bank_id: data.cash_bank_id,
           shipping_method: data.shipping_method,
           shipping_cost: data.shipping_cost,
           billing_address: data.billing_address,
@@ -773,16 +808,77 @@ const SalesForm: React.FC<SalesFormProps> = ({
         ErrorHandler.handleSuccess('Sale has been created successfully', toast, 'create sale');
       }
 
+      // Clear any validation errors on success
+      setValidationError(null);
+      
       onSave();
       onClose();
     } catch (error: any) {
-      ErrorHandler.handleSaveError('sale', error, toast, !!sale);
+      console.error('SalesForm submission error:', error);
+      
+      // Log detailed error information for debugging
+      if (error.response) {
+        console.error('Error response:', {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+        console.error('Raw error response data:', error.response.data);
+        console.error('Error response status text:', error.response.statusText);
+      } else {
+        console.error('No response data available:', error.message);
+      }
+      
+      // Clear any previous validation errors
+      setValidationError(null);
+      
+      // Handle different error formats
+      let errorObj = error;
+      if (typeof error === 'string') {
+        errorObj = { message: error };
+      } else if (!error) {
+        errorObj = { message: 'An unknown error occurred' };
+      }
+      
+      // Parse the error for display
+      let parsedError;
+      try {
+        parsedError = ErrorHandler.parseValidationError(errorObj);
+      } catch (parseError) {
+        console.error('Error parsing validation error:', parseError);
+        // Fallback error structure
+        parsedError = {
+          type: 'unknown',
+          title: 'Error',
+          message: errorObj?.response?.data?.error || errorObj?.message || 'An unexpected error occurred',
+          errors: [],
+          canRetry: true,
+          suggestions: ['Please check your input and try again']
+        };
+      }
+      
+      console.log('Parsed error:', parsedError);
+      
+      // If it's a validation error, show the ErrorAlert instead of toast
+      if (parsedError.type === 'validation' || parsedError.type === 'business' || error?.response?.status === 400) {
+        setValidationError(parsedError);
+        
+        // Scroll to the top so user can see the error
+        if (modalBodyRef.current) {
+          modalBodyRef.current.scrollTop = 0;
+        }
+      } else {
+        // For other errors, continue using toast notifications
+        ErrorHandler.handleSaveError('sale', errorObj, toast, !!sale);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleClose = () => {
+    // Clear validation errors when closing
+    setValidationError(null);
     reset();
     onClose();
   };
@@ -893,6 +989,19 @@ const SalesForm: React.FC<SalesFormProps> = ({
             }}
           >
             <VStack spacing={6} align="stretch">
+              {/* Error Alert */}
+              {validationError && (
+                <ErrorAlert
+                  title={validationError.title}
+                  message={validationError.message}
+                  errors={validationError.errors}
+                  type={validationError.type === 'validation' ? 'error' : 'warning'}
+                  onClose={() => setValidationError(null)}
+                  dismissible={true}
+                  className="mb-4"
+                />
+              )}
+              
               {/* Basic Information */}
               <Box>
                 <Heading size="md" mb={4} color={subHeadingColor}>
@@ -1068,6 +1177,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         <Th>Unit Price</Th>
                         <Th>Discount %</Th>
                         <Th>Taxable</Th>
+                        <Th>Revenue Account</Th>
                         <Th>Line Total</Th>
                         <Th width="60px">Action</Th>
                       </Tr>
@@ -1160,6 +1270,24 @@ const SalesForm: React.FC<SalesFormProps> = ({
                                 {watchItems[index]?.taxable !== false ? 'Tax' : 'No Tax'}
                               </Text>
                             </VStack>
+                          </Td>
+                          <Td>
+                            <Select
+                              size="sm"
+                              {...register(`items.${index}.revenue_account_id`, {
+                                setValueAs: value => parseInt(value) || 0
+                              })}
+                              bg={inputBg}
+                              _focus={{ bg: inputFocusBg }}
+                              placeholder="Select account"
+                            >
+                              <option value="">Choose revenue account</option>
+                              {accounts.map(account => (
+                                <option key={account.id} value={account.id}>
+                                  {account.code} - {account.name}
+                                </option>
+                              ))}
+                            </Select>
                           </Td>
                           <Td>
                             <Text fontSize="sm" fontWeight="medium" color="green.600">
@@ -1497,6 +1625,99 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         </FormHelperText>
                       </FormControl>
                   </HStack>
+
+                  {/* Double Entry Accounting Section */}
+                  <Box p={4} bg={alertBg} borderRadius="md" border="1px solid" borderColor={alertBorderColor}>
+                    <Text fontSize="md" fontWeight="semibold" color={subHeadingColor} mb={3}>
+                      🏦 Double Entry & Payment Method
+                    </Text>
+                    <VStack spacing={4} align="stretch">
+                      <Alert status="info" size="sm" borderRadius="md">
+                        <AlertIcon />
+                        <AlertDescription fontSize="sm">
+                          <Text><strong>Double Entry Logic:</strong></Text>
+                          <Text mt={1}>• <strong>Cash/Bank:</strong> Debit Cash/Bank Account, Credit Revenue Account</Text>
+                          <Text>• <strong>Credit:</strong> Debit Accounts Receivable, Credit Revenue Account</Text>
+                        </AlertDescription>
+                      </Alert>
+                      
+                      <HStack w="full" spacing={4}>
+                        <FormControl isRequired>
+                          <FormLabel>Payment Method</FormLabel>
+                          <Select
+                            {...register('payment_method_type', {
+                              required: 'Payment method is required'
+                            })}
+                            bg={inputBg}
+                            _focus={{ bg: inputFocusBg }}
+                          >
+                            <option value="CASH">Cash Payment</option>
+                            <option value="BANK">Bank Transfer</option>
+                            <option value="CREDIT">Credit (Accounts Receivable)</option>
+                          </Select>
+                          <FormHelperText color={textColor}>
+                            Choose payment method for proper double-entry recording
+                          </FormHelperText>
+                        </FormControl>
+
+                        {(watchPaymentMethodType === 'CASH' || watchPaymentMethodType === 'BANK') && (
+                          <FormControl isRequired>
+                            <FormLabel>
+                              {watchPaymentMethodType === 'CASH' ? 'Cash Account' : 'Bank Account'}
+                            </FormLabel>
+                            <Select
+                              {...register('cash_bank_id', {
+                                required: `${watchPaymentMethodType === 'CASH' ? 'Cash' : 'Bank'} account is required`,
+                                setValueAs: value => parseInt(value) || undefined
+                              })}
+                              bg={inputBg}
+                              _focus={{ bg: inputFocusBg }}
+                              isDisabled={loadingData}
+                            >
+                              <option value="">
+                                {loadingData ? `Loading ${watchPaymentMethodType.toLowerCase()} accounts...` : 
+                                 cashBankAccounts.length === 0 ? `No ${watchPaymentMethodType.toLowerCase()} accounts available` : 
+                                 `Select ${watchPaymentMethodType.toLowerCase()} account`}
+                              </option>
+                              {cashBankAccounts
+                                .filter(account => 
+                                  watchPaymentMethodType === 'CASH' ? 
+                                    account.type === 'CASH' : 
+                                    account.type === 'BANK'
+                                )
+                                .map(account => (
+                                  <option key={account.id} value={account.id}>
+                                    {account.code} - {account.name}
+                                    {account.bank_name && ` (${account.bank_name})`}
+                                  </option>
+                              ))}
+                            </Select>
+                            <FormHelperText color={textColor}>
+                              Which {watchPaymentMethodType.toLowerCase()} account will receive the money
+                            </FormHelperText>
+                          </FormControl>
+                        )}
+                      </HStack>
+                      
+                      {watchPaymentMethodType === 'CREDIT' && (
+                        <Alert status="warning" size="sm" borderRadius="md">
+                          <AlertIcon />
+                          <AlertDescription fontSize="sm">
+                            <Text><strong>Credit Sale:</strong> Creates accounts receivable that requires follow-up payment collection.</Text>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      
+                      {(watchPaymentMethodType === 'CASH' || watchPaymentMethodType === 'BANK') && (
+                        <Alert status="success" size="sm" borderRadius="md">
+                          <AlertIcon />
+                          <AlertDescription fontSize="sm">
+                            <Text><strong>Immediate Payment:</strong> Money will be recorded as received in the selected {watchPaymentMethodType.toLowerCase()} account.</Text>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </VStack>
+                  </Box>
 
                   {/* Payment Terms Explanation */}
                   {watchPaymentTerms && watchPaymentTerms !== 'CUSTOM' && getPaymentTermsExplanation(watchPaymentTerms) && (

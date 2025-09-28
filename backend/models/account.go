@@ -5,6 +5,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// COA is an alias for Account (Chart of Accounts)
+type COA = Account
+
 type Account struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	Code        string         `json:"code" gorm:"not null;size:20;index"`

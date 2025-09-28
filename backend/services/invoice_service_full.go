@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"time"
 	"math"
@@ -14,6 +15,25 @@ type InvoiceServiceFull struct {
 	settingsService *SettingsService
 	contactRepo     repositories.ContactRepository
 	productRepo     *repositories.ProductRepository
+}
+
+// InvoiceCodeSequence and QuoteCodeSequence are used to generate monthly sequential codes
+// Table will be auto-migrated if not exists
+// Composite key: year + month
+// LastNumber stores the last used running number for that period
+// Exported so other services can reuse
+// Note: mirrors the approach used in Purchase code generation
+
+type InvoiceCodeSequence struct {
+	Year      int `gorm:"primaryKey"`
+	Month     int `gorm:"primaryKey"`
+	LastNumber int `gorm:"default:0"`
+}
+
+type QuoteCodeSequence struct {
+	Year      int `gorm:"primaryKey"`
+	Month     int `gorm:"primaryKey"`
+	LastNumber int `gorm:"default:0"`
 }
 
 type InvoiceResult struct {
@@ -38,9 +58,9 @@ func NewInvoiceServiceFull(
 	}
 }
 
-// GenerateInvoiceCode generates next invoice code using settings
+// GenerateInvoiceCode generates next invoice code using monthly sequence like Purchases
 func (s *InvoiceServiceFull) GenerateInvoiceCode() (string, error) {
-	// Get settings to use configured prefix
+	// Ensure settings available (for prefix)
 	_, err := s.settingsService.GetSettings()
 	if err != nil {
 		return "", fmt.Errorf("failed to get settings: %v", err)
@@ -48,30 +68,44 @@ func (s *InvoiceServiceFull) GenerateInvoiceCode() (string, error) {
 
 	var invoiceCode string
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-		// Lock settings for update to prevent race conditions
+		// Lock settings for reading prefix and to keep transaction stable
 		var settingsForUpdate models.Settings
 		if err := tx.Set("gorm:query_option", "FOR UPDATE").First(&settingsForUpdate).Error; err != nil {
 			return err
 		}
 
-		// Generate invoice code using current next number
-		invoiceCode = fmt.Sprintf("%s-%05d", settingsForUpdate.InvoicePrefix, settingsForUpdate.InvoiceNextNumber)
-		
-		// Verify code uniqueness
+		// Monthly sequence using a dedicated table similar to Purchases
+		year := time.Now().Year()
+		month := int(time.Now().Month())
+
+		// Auto-migrate sequence table
+		if err := tx.AutoMigrate(&InvoiceCodeSequence{}); err != nil {
+			return err
+		}
+
+		var seq InvoiceCodeSequence
+		res := tx.Set("gorm:query_option", "FOR UPDATE").Where("year = ? AND month = ?", year, month).First(&seq)
+		if res.Error != nil {
+			if errors.Is(res.Error, gorm.ErrRecordNotFound) {
+				seq = InvoiceCodeSequence{Year: year, Month: month, LastNumber: 0}
+				if err := tx.Create(&seq).Error; err != nil { return err }
+			} else {
+				return res.Error
+			}
+		}
+
+		seq.LastNumber++
+		invoiceCode = fmt.Sprintf("%s/%04d/%02d/%04d", settingsForUpdate.InvoicePrefix, year, month, seq.LastNumber)
+
+		// Ensure uniqueness
 		var existingCount int64
 		tx.Model(&models.Invoice{}).Where("code = ?", invoiceCode).Count(&existingCount)
 		if existingCount > 0 {
 			return fmt.Errorf("generated invoice code %s already exists", invoiceCode)
 		}
-		
-		// Increment next number for future use
-		settingsForUpdate.InvoiceNextNumber++
-		
-		// Save updated settings
-		if err := tx.Save(&settingsForUpdate).Error; err != nil {
-			return err
-		}
 
+		// Save updated sequence
+		if err := tx.Save(&seq).Error; err != nil { return err }
 		return nil
 	})
 

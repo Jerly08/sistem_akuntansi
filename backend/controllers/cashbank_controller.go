@@ -302,7 +302,8 @@ func (c *CashBankController) GetTransactions(ctx *gin.Context) {
 	}
 	if endDate := ctx.Query("end_date"); endDate != "" {
 		if parsedEndDate, err := time.Parse("2006-01-02", endDate); err == nil {
-			filter.EndDate = parsedEndDate
+			// make end_date inclusive by setting to end of day
+			filter.EndDate = parsedEndDate.Add(24*time.Hour - time.Nanosecond)
 		}
 	}
 	

@@ -16,6 +16,7 @@ import {
 } from '../components/ui';
 import { FastPaymentForm } from '../components/FastPaymentForm';
 import { fastPaymentService } from '../services/fastPaymentService';
+import SummaryStatCard from '../components/SummaryStatCard';
 
 interface Sale {
   id: number;
@@ -250,56 +251,37 @@ const SalesManagementFast: React.FC = () => {
         </Alert>
       )}
 
-      {/* Statistics Cards */}
+      {/* Statistics Cards - colored like the Sales Management screenshot */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <FileText className="h-8 w-8 text-blue-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Sales</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.total_sales}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <DollarSign className="h-8 w-8 text-green-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.total_revenue)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Clock className="h-8 w-8 text-orange-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Outstanding</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.total_outstanding)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <Users className="h-8 w-8 text-purple-600" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Avg Order Value</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.avg_order_value)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <SummaryStatCard
+            title="Total Sales"
+            value={stats.total_sales}
+            subtitle="Transactions this period"
+            icon={<FileText className="h-8 w-8" />}
+            color="blue"
+          />
+          <SummaryStatCard
+            title="Total Revenue"
+            value={formatCurrency(stats.total_revenue)}
+            subtitle="Gross revenue"
+            icon={<DollarSign className="h-8 w-8" />}
+            color="green"
+          />
+          <SummaryStatCard
+            title="Outstanding"
+            value={formatCurrency(stats.total_outstanding)}
+            subtitle="Unpaid invoices"
+            icon={<Clock className="h-8 w-8" />}
+            color="orange"
+          />
+          <SummaryStatCard
+            title="Avg Order Value"
+            value={formatCurrency(stats.avg_order_value)}
+            subtitle="Per transaction"
+            icon={<Users className="h-8 w-8" />}
+            color="purple"
+          />
         </div>
       )}
 

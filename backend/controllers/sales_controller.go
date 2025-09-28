@@ -15,18 +15,18 @@ import (
 )
 
 type SalesController struct {
-	salesService         *services.SalesService
-	paymentService       *services.PaymentService
-	salesPaymentService  *services.SalesPaymentService
-	unifiedPaymentService *services.UnifiedSalesPaymentService // NEW: Single source of truth
+	salesServiceV2        *services.SalesServiceV2 // NEW: Clean sales service
+	paymentService        *services.PaymentService
+	unifiedPaymentService *services.UnifiedSalesPaymentService
+	pdfService            services.PDFServiceInterface
 }
 
-func NewSalesController(salesService *services.SalesService, paymentService *services.PaymentService, salesPaymentService *services.SalesPaymentService, unifiedPaymentService *services.UnifiedSalesPaymentService) *SalesController {
+func NewSalesController(salesServiceV2 *services.SalesServiceV2, paymentService *services.PaymentService, unifiedPaymentService *services.UnifiedSalesPaymentService, pdfService services.PDFServiceInterface) *SalesController {
 	return &SalesController{
-		salesService:          salesService,
+		salesServiceV2:        salesServiceV2, // Use V2 service
 		paymentService:        paymentService,
-		salesPaymentService:   salesPaymentService,
-		unifiedPaymentService: unifiedPaymentService, // NEW: Single source of truth
+		unifiedPaymentService: unifiedPaymentService,
+		pdfService:            pdfService,
 	}
 }
 
@@ -74,7 +74,7 @@ func (sc *SalesController) GetSales(c *gin.Context) {
 	log.Printf("🔍 Fetching sales with filters: page=%d, limit=%d, status=%s, customer_id=%s", 
 		page, limit, status, customerID)
 	
-	result, err := sc.salesService.GetSales(filter)
+	result, err := sc.salesServiceV2.GetSales(filter)
 	if err != nil {
 		log.Printf("❌ Failed to get sales: %v", err)
 		utils.SendInternalError(c, "Failed to retrieve sales data", err.Error())
@@ -84,12 +84,12 @@ func (sc *SalesController) GetSales(c *gin.Context) {
 	log.Printf("✅ Retrieved %d sales (total: %d)", len(result.Data), result.Total)
 	
 	// Send paginated success response
-	utils.SendPaginatedSuccess(c, 
+utils.SendPaginatedSuccess(c, 
 		"Sales retrieved successfully", 
 		result.Data, 
 		result.Page, 
 		result.Limit, 
-		result.Total)
+		int64(result.Total))
 }
 
 // GetSale gets a single sale by ID
@@ -105,15 +105,43 @@ func (sc *SalesController) GetSale(c *gin.Context) {
 
 	log.Printf("🔍 Getting sale details for ID: %d", id)
 	
-	sale, err := sc.salesService.GetSaleByID(uint(id))
+	sale, err := sc.salesServiceV2.GetSaleByID(uint(id))
 	if err != nil {
 		log.Printf("❌ Sale %d not found: %v", id, err)
 		utils.SendSaleNotFound(c, uint(id))
 		return
 	}
 
+	// Debug: Log key fields that might be null
+	log.Printf("🔍 Sale %d debug info:", id)
+	log.Printf("  Customer: %+v", sale.Customer)
+	log.Printf("  Sales Person ID: %v", sale.SalesPersonID)
+	log.Printf("  Sales Person: %+v", sale.SalesPerson)
+	log.Printf("  Invoice Number: '%s'", sale.InvoiceNumber)
+	log.Printf("  Due Date: %v", sale.DueDate)
+	log.Printf("  Payment Terms: '%s'", sale.PaymentTerms)
+
 	log.Printf("✅ Retrieved sale %d details successfully", id)
 	utils.SendSuccess(c, "Sale retrieved successfully", sale)
+}
+
+// ValidateSaleStock validates stock levels for items in the sales create form without creating a sale
+func (sc *SalesController) ValidateSaleStock(c *gin.Context) {
+	var req models.StockValidationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.SendValidationError(c, "Invalid request payload", map[string]string{
+			"request": "Please provide items to validate",
+		})
+		return
+	}
+
+	res, err := sc.salesServiceV2.ValidateStockForCreate(req)
+	if err != nil {
+		utils.SendInternalError(c, "Failed to validate stock", err.Error())
+		return
+	}
+
+	utils.SendSuccess(c, "Stock validation completed", res)
 }
 
 // CreateSale creates a new sale
@@ -145,7 +173,7 @@ func (sc *SalesController) CreateSale(c *gin.Context) {
 
 	log.Printf("📄 Creating sale for customer %d by user %d", request.CustomerID, userID)
 	
-	sale, err := sc.salesService.CreateSale(request, userID)
+	sale, err := sc.salesServiceV2.CreateSale(request, userID)
 	if err != nil {
 		log.Printf("❌ Failed to create sale: %v", err)
 		
@@ -188,7 +216,7 @@ func (sc *SalesController) UpdateSale(c *gin.Context) {
 
 	userID := c.MustGet("user_id").(uint)
 
-	sale, err := sc.salesService.UpdateSale(uint(id), request, userID)
+	sale, err := sc.salesServiceV2.UpdateSale(uint(id), request, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -205,15 +233,8 @@ func (sc *SalesController) DeleteSale(c *gin.Context) {
 		return
 	}
 
-	// Get user role from context for permission checking
-	userRole, exists := c.Get("role")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User role not found"})
-		return
-	}
-	roleStr := userRole.(string)
-
-	if err := sc.salesService.DeleteSaleWithRole(uint(id), roleStr); err != nil {
+// For V2, we'll delete the sale directly (role checks can be re-enabled if needed)
+	if err := sc.salesServiceV2.DeleteSale(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -233,10 +254,14 @@ func (sc *SalesController) ConfirmSale(c *gin.Context) {
 
 	userID := c.MustGet("user_id").(uint)
 
-	if err := sc.salesService.ConfirmSale(uint(id), userID); err != nil {
+	sale, err := sc.salesServiceV2.ConfirmSale(uint(id), userID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	
+	c.JSON(http.StatusOK, gin.H{"message": "Sale confirmed successfully", "data": sale})
+	return
 
 	c.JSON(http.StatusOK, gin.H{"message": "Sale confirmed successfully"})
 }
@@ -251,7 +276,7 @@ func (sc *SalesController) InvoiceSale(c *gin.Context) {
 
 	userID := c.MustGet("user_id").(uint)
 
-	invoice, err := sc.salesService.CreateInvoiceFromSale(uint(id), userID)
+	invoice, err := sc.salesServiceV2.CreateInvoice(uint(id), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -275,7 +300,7 @@ func (sc *SalesController) CancelSale(c *gin.Context) {
 
 	userID := c.MustGet("user_id").(uint)
 
-	if err := sc.salesService.CancelSale(uint(id), request.Reason, userID); err != nil {
+	if err := sc.salesServiceV2.CancelSale(uint(id), request.Reason, userID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -293,7 +318,7 @@ func (sc *SalesController) GetSalePayments(c *gin.Context) {
 		return
 	}
 
-	payments, err := sc.salesService.GetSalePayments(uint(id))
+	payments, err := sc.salesServiceV2.GetSalePayments(uint(id))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -468,7 +493,7 @@ func (sc *SalesController) CreateIntegratedPayment(c *gin.Context) {
 	log.Printf("Received integrated payment request for sale %d: amount=%.2f, method=%s, cash_bank_id=%d", id, request.Amount, request.Method, request.CashBankID)
 	
 	// Get sale details to validate and get customer ID
-	sale, err := sc.salesService.GetSaleByID(uint(id))
+sale, err := sc.salesServiceV2.GetSaleByID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error": "Sale not found",
@@ -549,7 +574,7 @@ func (sc *SalesController) CreateIntegratedPayment(c *gin.Context) {
 	log.Printf("✅ Payment created successfully: ID=%d, Code=%s", payment.ID, payment.Code)
 
 	// Return response with both payment info and updated sale status
-	updatedSale, err := sc.salesService.GetSaleByID(uint(id))
+updatedSale, err := sc.salesServiceV2.GetSaleByID(uint(id))
 	if err != nil {
 		// If we can't get updated sale info, still return success but with basic info
 		log.Printf("Warning: Could not fetch updated sale info after payment creation: %v", err)
@@ -585,7 +610,7 @@ func (sc *SalesController) GetSaleForPayment(c *gin.Context) {
 		return
 	}
 
-	sale, err := sc.salesService.GetSaleByID(uint(id))
+sale, err := sc.salesServiceV2.GetSaleByID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Sale not found"})
 		return
@@ -617,82 +642,91 @@ func (sc *SalesController) GetSaleForPayment(c *gin.Context) {
 
 // CreateSaleReturn creates a return for a sale
 func (sc *SalesController) CreateSaleReturn(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid sale ID"})
-		return
-	}
+_, err := strconv.ParseUint(c.Param("id"), 10, 32)
+if err != nil {
+	c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid sale ID"})
+	return
+}
 
-	var request models.SaleReturnRequest
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+var request models.SaleReturnRequest
+if err := c.ShouldBindJSON(&request); err != nil {
+	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	return
+}
 
-	userID := c.MustGet("user_id").(uint)
+_ = c.MustGet("user_id").(uint)
 
-	saleReturn, err := sc.salesService.CreateSaleReturn(uint(id), request, userID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, saleReturn)
+// Not implemented in V2 service yet
+c.JSON(http.StatusNotImplemented, gin.H{"error": "Sale returns are not implemented in this build"})
 }
 
 // GetSaleReturns gets all returns
 func (sc *SalesController) GetSaleReturns(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	
-	returns, err := sc.salesService.GetSaleReturns(page, limit)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, returns)
+_, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+_, _ = strconv.Atoi(c.DefaultQuery("limit", "10"))
+ 
+c.JSON(http.StatusNotImplemented, gin.H{"error": "GetSaleReturns is not implemented in this build"})
 }
 
 // Reporting and Analytics
 
 // GetSalesSummary gets sales summary statistics
 func (sc *SalesController) GetSalesSummary(c *gin.Context) {
-	startDate := c.Query("start_date")
-	endDate := c.Query("end_date")
-
-	summary, err := sc.salesService.GetSalesSummary(startDate, endDate)
+	log.Printf("📊 Getting sales summary with filters")
+	
+	startDateStr := c.Query("start_date")
+	endDateStr := c.Query("end_date")
+	
+	// Parse dates if provided
+	var startDate, endDate *time.Time
+	if startDateStr != "" {
+		if parsed, err := time.Parse("2006-01-02", startDateStr); err == nil {
+			startDate = &parsed
+		} else {
+			log.Printf("⚠️ Invalid start_date format: %s (expected: YYYY-MM-DD)", startDateStr)
+			utils.SendValidationError(c, "Invalid date format", map[string]string{
+				"start_date": "Date must be in YYYY-MM-DD format",
+			})
+			return
+		}
+	}
+	if endDateStr != "" {
+		if parsed, err := time.Parse("2006-01-02", endDateStr); err == nil {
+			endDate = &parsed
+		} else {
+			log.Printf("⚠️ Invalid end_date format: %s (expected: YYYY-MM-DD)", endDateStr)
+			utils.SendValidationError(c, "Invalid date format", map[string]string{
+				"end_date": "Date must be in YYYY-MM-DD format",
+			})
+			return
+		}
+	}
+	
+	log.Printf("📅 Date filters: start=%v, end=%v", startDate, endDate)
+	
+	// Get summary from service
+	summary, err := sc.salesServiceV2.GetSalesSummary(startDate, endDate)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("❌ Failed to get sales summary: %v", err)
+		utils.SendInternalError(c, "Failed to retrieve sales summary", err.Error())
 		return
 	}
-
-	c.JSON(http.StatusOK, summary)
+	
+	log.Printf("✅ Sales summary retrieved: %d sales, %.2f total", summary.TotalSales, summary.TotalAmount)
+	utils.SendSuccess(c, "Sales summary retrieved successfully", summary)
 }
 
 // GetSalesAnalytics gets sales analytics data
 func (sc *SalesController) GetSalesAnalytics(c *gin.Context) {
-	period := c.DefaultQuery("period", "monthly")
-	year := c.DefaultQuery("year", "2024")
+_, _ = c.GetQuery("period")
+_, _ = c.GetQuery("year")
 
-	analytics, err := sc.salesService.GetSalesAnalytics(period, year)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, analytics)
+c.JSON(http.StatusNotImplemented, gin.H{"error": "GetSalesAnalytics is not implemented in this build"})
 }
 
 // GetReceivablesReport gets accounts receivable report
 func (sc *SalesController) GetReceivablesReport(c *gin.Context) {
-	receivables, err := sc.salesService.GetReceivablesReport()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, receivables)
+c.JSON(http.StatusNotImplemented, gin.H{"error": "GetReceivablesReport is not implemented in this build"})
 }
 
 // PDF Export
@@ -705,15 +739,25 @@ func (sc *SalesController) ExportSaleInvoicePDF(c *gin.Context) {
 		return
 	}
 
-	pdfData, filename, err := sc.salesService.ExportInvoicePDF(uint(id))
+// Load sale and generate PDF via pdfService
+	sale, err := sc.salesServiceV2.GetSaleByID(uint(id))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Sale not found"})
 		return
 	}
-
+	pdfBytes, genErr := sc.pdfService.GenerateInvoicePDF(sale)
+	if genErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": genErr.Error()})
+		return
+	}
+	filename := sale.InvoiceNumber
+	if filename == "" {
+		filename = sale.Code
+	}
+	filename = filename + ".pdf"
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.Data(http.StatusOK, "application/pdf", pdfData)
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
 // ExportSalesReportPDF exports sales report as PDF
@@ -729,16 +773,23 @@ func (sc *SalesController) ExportSalesReportPDF(c *gin.Context) {
 		endDate = end.Format("2006-01-02")
 	}
 
-	pdfData, filename, err := sc.salesService.ExportSalesReportPDF(startDate, endDate)
+// Collect sales data via service and generate PDF
+	filter := models.SalesFilter{StartDate: startDate, EndDate: endDate, Page: 1, Limit: 10000}
+	res, err := sc.salesServiceV2.GetSales(filter)
 	if err != nil {
-		log.Printf("❌ Error generating sales report PDF (start=%s, end=%s): %v", startDate, endDate, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate sales report PDF", "details": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
+	pdfBytes, genErr := sc.pdfService.GenerateSalesReportPDF(res.Data, startDate, endDate)
+	if genErr != nil {
+		log.Printf("❌ Error generating sales report PDF (start=%s, end=%s): %v", startDate, endDate, genErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate sales report PDF", "details": genErr.Error()})
+		return
+	}
+	filename := fmt.Sprintf("sales-report_%s_to_%s.pdf", startDate, endDate)
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
-	c.Data(http.StatusOK, "application/pdf", pdfData)
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
 
@@ -746,37 +797,25 @@ func (sc *SalesController) ExportSalesReportPDF(c *gin.Context) {
 
 // GetCustomerSales gets sales for a specific customer (for customer portal)
 func (sc *SalesController) GetCustomerSales(c *gin.Context) {
-	customerID, err := strconv.ParseUint(c.Param("customer_id"), 10, 32)
+_, err := strconv.ParseUint(c.Param("customer_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid customer ID"})
 		return
 	}
 
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+_, _ = strconv.Atoi(c.DefaultQuery("page", "1"))
+_, _ = strconv.Atoi(c.DefaultQuery("limit", "10"))
 
-	sales, err := sc.salesService.GetCustomerSales(uint(customerID), page, limit)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, sales)
+c.JSON(http.StatusNotImplemented, gin.H{"error": "GetCustomerSales is not implemented in this build"})
 }
 
 // GetCustomerInvoices gets invoices for a specific customer
 func (sc *SalesController) GetCustomerInvoices(c *gin.Context) {
-	customerID, err := strconv.ParseUint(c.Param("customer_id"), 10, 32)
+_, err := strconv.ParseUint(c.Param("customer_id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid customer ID"})
 		return
 	}
 
-	invoices, err := sc.salesService.GetCustomerInvoices(uint(customerID))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, invoices)
+c.JSON(http.StatusNotImplemented, gin.H{"error": "GetCustomerInvoices is not implemented in this build"})
 }

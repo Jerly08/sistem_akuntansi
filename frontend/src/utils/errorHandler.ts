@@ -1,4 +1,5 @@
 import { UseToastOptions } from '@chakra-ui/react';
+import { ErrorDetail } from '../components/common/ErrorAlert';
 
 export interface APIError {
   response?: {
@@ -6,12 +7,31 @@ export interface APIError {
       error?: string;
       message?: string;
       details?: any;
+      errors?: ValidationErrorResponse[];
+      validationErrors?: ValidationErrorResponse[];
     };
     status?: number;
     statusText?: string;
   };
   message?: string;
   code?: string;
+}
+
+export interface ValidationErrorResponse {
+  field?: string;
+  code?: string;
+  message: string;
+  value?: any;
+  context?: Record<string, any>;
+}
+
+export interface ParsedValidationError {
+  type: 'validation' | 'business' | 'network' | 'server' | 'unknown';
+  title: string;
+  message: string;
+  errors: ErrorDetail[];
+  canRetry: boolean;
+  suggestions: string[];
 }
 
 export interface ErrorHandlerOptions {
@@ -23,6 +43,140 @@ export interface ErrorHandlerOptions {
 }
 
 export class ErrorHandler {
+  /**
+   * Parse validation errors from backend response into structured format
+   */
+  static parseValidationError(error: APIError): ParsedValidationError {
+    const status = error?.response?.status;
+    const errorData = error?.response?.data;
+    
+    // Default error structure
+    const parsed: ParsedValidationError = {
+      type: 'unknown',
+      title: 'Error',
+      message: '',
+      errors: [],
+      canRetry: false,
+      suggestions: []
+    };
+
+    // Determine error type based on status code
+    if (status === 400) {
+      parsed.type = 'validation';
+      parsed.title = 'Validation Error';
+      parsed.canRetry = true;
+    } else if (status === 422) {
+      parsed.type = 'business';
+      parsed.title = 'Business Rule Violation';
+      parsed.canRetry = true;
+    } else if (status >= 500) {
+      parsed.type = 'server';
+      parsed.title = 'Server Error';
+      parsed.canRetry = true;
+      parsed.suggestions.push('Please try again in a few moments');
+    } else if (!error?.response) {
+      parsed.type = 'network';
+      parsed.title = 'Connection Error';
+      parsed.canRetry = true;
+      parsed.suggestions.push('Check your internet connection');
+    }
+
+    // Parse structured validation errors from different possible locations
+    const validationErrors = errorData?.errors || 
+                           errorData?.validationErrors || 
+                           errorData?.validation_errors || 
+                           [];
+    if (validationErrors.length > 0) {
+      parsed.errors = validationErrors.map((err: ValidationErrorResponse) => {
+        const errorDetail: ErrorDetail = {
+          field: err.field,
+          message: err.message,
+          context: err.context
+        };
+
+        // Add specific suggestions based on error code
+        if (err.code === 'INSUFFICIENT_STOCK' && err.context) {
+          const productName = err.context.product_name;
+          const availableStock = err.context.available_stock;
+          errorDetail.suggestion = `Only ${availableStock} units of "${productName}" are available. Please reduce the quantity or add more stock first.`;
+        } else if (err.code === 'NOT_FOUND') {
+          errorDetail.suggestion = 'Please refresh the page and try selecting the item again.';
+        } else if (err.code === 'REQUIRED') {
+          errorDetail.suggestion = `Please provide a value for ${err.field?.replace(/[_-]/g, ' ')}.`;
+        } else if (err.code === 'INVALID_RANGE') {
+          errorDetail.suggestion = 'Please check the valid range for this field.';
+        } else if (err.code === 'CREDIT_LIMIT_EXCEEDED' && err.context) {
+          const availableCredit = err.context.available_credit;
+          errorDetail.suggestion = `Maximum available credit: ${availableCredit}. Consider requesting a credit limit increase or reducing the order amount.`;
+        }
+
+        return errorDetail;
+      });
+    }
+
+    // Extract main error message and ensure it's a string
+    // Handle different error response formats from Go backend
+    try {
+      if (typeof errorData === 'string') {
+        parsed.message = errorData;
+      } else if (errorData?.error) {
+        parsed.message = String(errorData.error);
+      } else if (errorData?.message) {
+        parsed.message = String(errorData.message);
+      } else if (errorData?.details) {
+        parsed.message = String(errorData.details);
+      } else if (error?.message) {
+        parsed.message = String(error.message);
+      } else if (error?.response?.statusText) {
+        parsed.message = `${error.response.status}: ${error.response.statusText}`;
+      } else {
+        parsed.message = 'An unexpected error occurred';
+      }
+    } catch (e) {
+      console.warn('Error parsing message:', e);
+      parsed.message = 'An unexpected error occurred';
+    }
+
+    // Parse validation errors from message if structured errors aren't available
+    if (parsed.errors.length === 0 && typeof parsed.message === 'string' && parsed.message.includes('validation failed:')) {
+      const errorMessages = parsed.message
+        .replace('validation failed: ', '')
+        .split('; ')
+        .filter(msg => msg.trim().length > 0);
+      
+      parsed.errors = errorMessages.map(msg => {
+        const errorDetail: ErrorDetail = { message: msg };
+        
+        // Extract field name if present
+        const fieldMatch = msg.match(/^([^:]+):\s*(.+)$/);
+        if (fieldMatch) {
+          errorDetail.field = fieldMatch[1].trim();
+          errorDetail.message = fieldMatch[2].trim();
+        }
+        
+        // Add suggestions for common validation errors
+        if (msg.toLowerCase().includes('insufficient stock')) {
+          errorDetail.suggestion = 'Please check the available stock and reduce the quantity, or add more inventory first.';
+        } else if (msg.toLowerCase().includes('required')) {
+          errorDetail.suggestion = 'This field is mandatory. Please provide a valid value.';
+        } else if (msg.toLowerCase().includes('not found')) {
+          errorDetail.suggestion = 'Please refresh the page and try selecting the item again.';
+        }
+        
+        return errorDetail;
+      });
+    }
+
+    // Add general suggestions based on error type
+    if (parsed.type === 'validation' && parsed.suggestions.length === 0) {
+      parsed.suggestions.push('Please review and correct the highlighted fields');
+    } else if (parsed.type === 'business' && parsed.suggestions.length === 0) {
+      parsed.suggestions.push('Please review the business requirements and adjust your input');
+    }
+
+    return parsed;
+  }
+
   /**
    * Extract meaningful error message from API error response
    */

@@ -118,37 +118,37 @@ export interface PendingApprovalsResponse {
 class ApprovalService {
   // Get purchases pending approval for current user
   async getPurchasesForApproval(params: { page?: number; limit?: number } = {}): Promise<PendingApprovalsResponse> {
-    const response = await api.get(API_ENDPOINTS.PURCHASES.PENDING_APPROVAL, { params });
+    const response = await api.get(API_ENDPOINTS.PURCHASES_PENDING_APPROVAL, { params });
     return response.data;
   }
 
   // Approve a purchase
   async approvePurchase(purchaseId: number, data: { comments?: string; escalate_to_director?: boolean }): Promise<{ message: string; purchase_id: number; escalated?: boolean; status?: string; approval_status?: string }> {
-    const response = await api.post(API_ENDPOINTS.PURCHASES.APPROVE(purchaseId), data);
+    const response = await api.post(API_ENDPOINTS.PURCHASES_APPROVE(purchaseId), data);
     return response.data;
   }
 
   // Reject a purchase
   async rejectPurchase(purchaseId: number, data: { comments: string }): Promise<{ message: string; purchase_id: number; comments: string }> {
-    const response = await api.post(API_ENDPOINTS.PURCHASES.REJECT(purchaseId), data);
+    const response = await api.post(API_ENDPOINTS.PURCHASES_REJECT(purchaseId), data);
     return response.data;
   }
 
   // Get approval history for a purchase
   async getApprovalHistory(purchaseId: number): Promise<{ purchase_id: number; approval_history: ApprovalHistory[] }> {
-    const response = await api.get(API_ENDPOINTS.PURCHASES.APPROVAL_HISTORY(purchaseId));
+    const response = await api.get(API_ENDPOINTS.PURCHASES_APPROVAL_HISTORY(purchaseId));
     return response.data;
   }
 
   // Get approval statistics
   async getApprovalStats(): Promise<ApprovalStats> {
-    const response = await api.get(API_ENDPOINTS.PURCHASES.APPROVAL_STATS);
+    const response = await api.get(API_ENDPOINTS.PURCHASES_APPROVAL_STATS);
     return response.data;
   }
 
   // Submit purchase for approval
   async submitPurchaseForApproval(purchaseId: number): Promise<{ message: string; purchase_id: number }> {
-    const response = await api.post(API_ENDPOINTS.PURCHASES.SUBMIT_APPROVAL(purchaseId));
+    const response = await api.post(API_ENDPOINTS.PURCHASES_SUBMIT_APPROVAL(purchaseId));
     return response.data;
   }
 
@@ -256,18 +256,20 @@ class ApprovalService {
 
   // Get notifications
   async getNotifications(params: { page?: number; limit?: number; type?: string } = {}): Promise<any> {
-    const response = await api.get(API_ENDPOINTS.NOTIFICATIONS.LIST, { params });
+    // Use flat endpoints defined in API config
+    const endpoint = params.type ? API_ENDPOINTS.NOTIFICATIONS_BY_TYPE(params.type) : API_ENDPOINTS.NOTIFICATIONS;
+    const response = await api.get(endpoint, { params });
     return response.data;
   }
 
   // Mark notification as read
   async markNotificationAsRead(notificationId: number): Promise<void> {
-    await api.put(API_ENDPOINTS.NOTIFICATIONS.MARK_AS_READ(notificationId));
+    await api.put(API_ENDPOINTS.NOTIFICATIONS_MARK_READ(notificationId));
   }
 
   // Get unread notification count
   async getUnreadNotificationCount(): Promise<{ count: number }> {
-    const response = await api.get(API_ENDPOINTS.NOTIFICATIONS.UNREAD_COUNT);
+    const response = await api.get(API_ENDPOINTS.NOTIFICATIONS_UNREAD_COUNT);
     return response.data;
   }
 

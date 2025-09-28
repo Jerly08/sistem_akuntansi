@@ -220,6 +220,15 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 				return nil, err
 			}
 			
+			// Validate parent-child type compatibility
+			if newParent.Type != account.Type {
+				return nil, utils.NewValidationError("Parent and child accounts must be of the same type", map[string]string{
+					"parent_type": newParent.Type,
+					"child_type":  account.Type,
+					"message":     fmt.Sprintf("Cannot assign %s account to %s parent", account.Type, newParent.Type),
+				})
+			}
+			
 			// Update parent and level
 			account.ParentID = req.ParentID
 			account.Level = newParent.Level + 1
@@ -497,18 +506,20 @@ func (r *AccountRepo) GetHierarchy(ctx context.Context) ([]models.Account, error
 // calculateTotalBalance recursively calculates the total balance for parent accounts.
 // It sums up the balances of its children.
 func (r *AccountRepo) calculateTotalBalance(ctx context.Context, account *models.Account) {
-	// If it's a leaf account, calculate its balance from transactions
+	// If it's a leaf account, calculate its balance from SSOT (posted-only)
 	if len(account.Children) == 0 {
 		if !account.IsHeader {
-			calculatedBalance, err := r.CalculateBalance(ctx, account.ID)
+			calculatedBalance, err := r.CalculateBalanceSSOT(ctx, account.ID)
 			if err != nil {
 				// On error, use the stored balance and log the error
-				fmt.Printf("[ERROR] Failed to calculate balance for account %s: %v\\n", account.Code, err)
+				fmt.Printf("[ERROR] Failed to calculate SSOT balance for account %s: %v\\n", account.Code, err)
 				account.TotalBalance = account.Balance
 			} else {
 				account.Balance = calculatedBalance
 				account.TotalBalance = calculatedBalance
 			}
+		} else {
+			account.TotalBalance = account.Balance
 		}
 		account.ChildCount = 0
 		return
@@ -625,7 +636,80 @@ func (r *AccountRepo) CalculateBalance(ctx context.Context, accountID uint) (flo
 	// Final Balance = Opening Balance + Transaction Balance
 	// For accounts with normal credit balance (Liabilities, Equity, Revenue):
 	// Final Balance = Opening Balance + Transaction Balance
-	return account.Balance + transactionBalance, nil
+return account.Balance + transactionBalance, nil
+}
+
+// CalculateBalanceSSOT calculates account balance using SSOT (unified_journal_ledger/lines)
+// Rules:
+// - Only POSTED journals are included
+// - For SALES source_type, include only sales with status INVOICED or PAID
+// - Non-sales source types are included without extra filter
+// - Netting uses account type: ASSET/EXPENSE => debit - credit, others => credit - debit
+// - Fallback to accounts.balance when no SSOT data found
+func (r *AccountRepo) CalculateBalanceSSOT(ctx context.Context, accountID uint) (float64, error) {
+	// Load account to know its type and current stored balance (fallback)
+	var account models.Account
+	if err := r.DB.WithContext(ctx).First(&account, accountID).Error; err != nil {
+		return 0, utils.NewDatabaseError("find account for SSOT calculation", err)
+	}
+
+	type sums struct {
+		DebitSum  float64
+		CreditSum float64
+	}
+	var result sums
+
+	query := `
+		SELECT
+			COALESCE(SUM(ujl.debit_amount), 0)  AS debit_sum,
+			COALESCE(SUM(ujl.credit_amount), 0) AS credit_sum
+		FROM unified_journal_lines ujl
+		JOIN unified_journal_ledger ujd ON ujd.id = ujl.journal_id
+		LEFT JOIN sales s ON ujd.source_type = 'SALE' AND ujd.source_id = s.id
+		WHERE ujl.account_id = ?
+		  AND ujd.status = 'POSTED'
+		  AND ujd.deleted_at IS NULL
+		  AND (
+				(ujd.source_type = 'SALE' AND s.status IN ('INVOICED','PAID'))
+				OR (ujd.source_type <> 'SALE')
+			)
+	`
+
+	if err := r.DB.WithContext(ctx).Raw(query, accountID).Scan(&result).Error; err != nil {
+		return 0, utils.NewDatabaseError("calculate SSOT sums", err)
+	}
+
+	// If unified_journal has no movement, try simple_ssot_journals as fallback
+	if result.DebitSum == 0 && result.CreditSum == 0 {
+		var simple sums
+		simpleQry := `
+			SELECT 
+				COALESCE(SUM(ssi.debit), 0)  AS debit_sum,
+				COALESCE(SUM(ssi.credit), 0) AS credit_sum
+			FROM simple_ssot_journal_items ssi
+			JOIN simple_ssot_journals ssj ON ssj.id = ssi.journal_id
+			WHERE ssi.account_id = ?
+			  AND ssj.status = 'POSTED'
+			  AND ssj.deleted_at IS NULL
+		`
+		if err := r.DB.WithContext(ctx).Raw(simpleQry, accountID).Scan(&simple).Error; err != nil {
+			return 0, utils.NewDatabaseError("calculate simple SSOT sums", err)
+		}
+		result = simple
+	}
+
+	// If still zero (no SSOT data at all), fallback to stored balance
+	if result.DebitSum == 0 && result.CreditSum == 0 {
+		return account.Balance, nil
+	}
+
+	var net float64
+	if account.Type == models.AccountTypeAsset || account.Type == models.AccountTypeExpense {
+		net = result.DebitSum - result.CreditSum
+	} else {
+		net = result.CreditSum - result.DebitSum
+	}
+	return net, nil
 }
 
 // UpdateBalance updates the balance of an account based on a transaction
@@ -775,13 +859,13 @@ func (r *AccountRepo) FixAccountHeaderStatus(ctx context.Context) error {
 
 // calculateTotalBalanceRecursive recursively calculates balances for the entire hierarchy
 func (r *AccountRepo) calculateTotalBalanceRecursive(ctx context.Context, account *models.Account) {
-	// If it's a leaf account, calculate its balance from transactions
+	// If it's a leaf account, calculate its balance from SSOT (posted-only)
 	if len(account.Children) == 0 {
 		if !account.IsHeader {
-			calculatedBalance, err := r.CalculateBalance(ctx, account.ID)
+			calculatedBalance, err := r.CalculateBalanceSSOT(ctx, account.ID)
 			if err != nil {
 				// On error, use the stored balance and log the error
-				fmt.Printf("[ERROR] Failed to calculate balance for account %s: %v\\n", account.Code, err)
+				fmt.Printf("[ERROR] Failed to calculate SSOT balance for account %s: %v\\n", account.Code, err)
 				account.TotalBalance = account.Balance
 			} else {
 				account.Balance = calculatedBalance
