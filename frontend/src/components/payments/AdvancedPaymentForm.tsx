@@ -484,6 +484,16 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
     setAllocations(newAllocations);
   };
 
+  // Keep amount in sync with allocations for receivable payments
+  useEffect(() => {
+    if (type !== 'receivable') return;
+    const total = allocations.reduce((sum, a) => sum + a.amount, 0);
+    // If user hasn't set amount or amount is less than allocated, auto-adjust
+    if ((watchedAmount || 0) < total) {
+      setValue('amount', total);
+    }
+  }, [allocations]);
+
   const onSubmit = async (data: PaymentFormData) => {
     try {
       setLoading(true);
