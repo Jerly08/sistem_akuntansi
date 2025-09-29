@@ -523,6 +523,16 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				paymentExports.GET("/export/excel", permMiddleware.CanExport("payments"), paymentController.ExportPaymentReportExcel)
 				paymentExports.GET("/:id/pdf", permMiddleware.CanExport("payments"), paymentController.ExportPaymentDetailPDF)
 			}
+
+			// 🔁 Compatibility read-only routes required by frontend forms
+			// These are safe GET endpoints and do not perform any write operations
+			paymentsCompat := protected.Group("/payments")
+			{
+				// Unpaid invoices for receivable payment form
+				paymentsCompat.GET("/sales/unpaid-invoices/:customer_id", permMiddleware.CanView("payments"), paymentController.GetSalesUnpaidInvoices)
+				// Unpaid bills for payable payment form
+				paymentsCompat.GET("/unpaid-bills/:vendor_id", permMiddleware.CanView("payments"), paymentController.GetUnpaidBills)
+			}
 			
 			// ⚡ ULTRA-FAST: Setup Ultra-Fast Payment routes with minimal operations
 			ultraFastRoutes := NewUltraFastPaymentRoutes(db)
