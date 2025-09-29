@@ -240,12 +240,24 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
+      // Log both the generic error and backend payload to aid diagnosis
       console.error('Error saving account:', err);
+      if (err?.response?.data) {
+        console.error('Backend error payload:', err.response.data);
+      }
+      const resp = err?.response?.data;
+      const message =
+        resp?.details ||
+        resp?.message ||
+        resp?.error ||
+        err?.message ||
+        'Failed to save account';
+      const statusCode = err?.response?.status;
       toast({
-        title: 'Error',
-        description: err.response?.data?.details || err.message || 'Failed to save account',
+        title: statusCode ? `Error (${statusCode})` : 'Error',
+        description: typeof message === 'string' ? message : JSON.stringify(message),
         status: 'error',
-        duration: 5000,
+        duration: 7000,
         isClosable: true,
       });
     } finally {
