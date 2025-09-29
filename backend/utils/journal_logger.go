@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"app-sistem-akuntansi/models"
@@ -19,8 +20,15 @@ type JournalLogger struct {
 
 // NewJournalLogger creates a new journal logger
 func NewJournalLogger(db *gorm.DB) *JournalLogger {
+	// Ensure logs directory exists before opening file
+	logDir := "logs"
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		_ = os.MkdirAll(logDir, 0755)
+	}
+
 	// Create journal-specific log file
-	logFile, err := os.OpenFile("logs/journal_entries.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	journalPath := filepath.Join(logDir, "journal_entries.log")
+	logFile, err := os.OpenFile(journalPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		log.Printf("Warning: Could not create journal log file: %v", err)
 		return &JournalLogger{

@@ -33,36 +33,39 @@ fi
 echo "🚀 Running balance protection setup..."
 echo
 
-# Run the setup script
-go run cmd/scripts/setup_balance_sync_auto.go
+# Step 1: Create balance sync system (reads DATABASE_URL from .env)
+go run cmd/scripts/create_balance_sync_system.go
 
-if [ $? -eq 0 ]; then
-    echo
-    echo "================================================================"
-    echo "✅ SUCCESS: Balance Protection System Installed!"
-    echo "================================================================"
-    echo
-    echo "Your accounting system is now protected against balance mismatches."
-    echo
-    echo "💡 What's installed:"
-    echo "  • Automatic balance sync triggers"
-    echo "  • Real-time monitoring system"
-    echo "  • Manual sync functions"
-    echo "  • Performance optimizations"
-    echo
-    echo "🔧 Manual commands available:"
-    echo "  • Health check: psql -d \$DATABASE_URL -c \"SELECT * FROM account_balance_monitoring WHERE status='MISMATCH';\""
-    echo "  • Manual sync:  psql -d \$DATABASE_URL -c \"SELECT * FROM sync_account_balances();\""
-    echo
-    echo "📚 For more info, read: BALANCE_PREVENTION_GUIDE.md"
-    echo
-else
-    echo
-    echo "❌ FAILED: Setup encountered errors"
-    echo "Please check the error messages above and try again."
-    echo
-    exit 1
+if [ $? -ne 0 ]; then
+    echo "⚠️  Creation failed. Attempting to grant DB permissions using CURRENT_USER from .env..."
+    go run cmd/scripts/grant_db_permissions.go
+    echo "🔁 Retrying creation..."
+    go run cmd/scripts/create_balance_sync_system.go
 fi
 
-echo "Press any key to continue..."
-read -n 1 -s
+# Step 2: Verify installation status
+go run cmd/scripts/verify_system_status.go
+
+echo
+
+# Summary
+
+echo "================================================================"
+echo "✅ Setup process finished. See status above."
+echo "================================================================"
+echo
+
+echo "💡 What's available:"
+echo "  • Automatic balance sync triggers"
+echo "  • Real-time monitoring system"
+echo "  • Manual sync functions"
+echo "  • Performance optimizations"
+echo
+
+echo "🔧 Manual SQL (with psql or your tool):"
+echo "  • Health check:    SELECT * FROM account_balance_monitoring WHERE status='MISMATCH';"
+echo "  • Manual sync:     SELECT * FROM sync_account_balances();"
+echo
+
+echo "📚 For more info, read: BALANCE_PREVENTION_GUIDE.md"
+echo

@@ -875,50 +875,42 @@ const ReportsPage: React.FC = () => {
     }
   };
   
-  // Helper function to convert JSON to CSV with professional formatting
+// Helper function to convert JSON to CSV with professional formatting
   const convertJSONToCSV = (data: any, reportType: string): string => {
     try {
       if (!data) return 'No data available';
-      
-      console.log('Converting to CSV. Report type:', reportType, 'Data:', data);
-      
-      // Helper function to format currency
+
+      // Unwrap common backend CSV wrappers
+      const root = (data && (data as any).data) ? (data as any).data : data;
+      const payload = (root && (root as any).data) ? (root as any).data : root;
+
+      // Helpers
       const formatCurrencyForCSV = (amount: number | null | undefined): string => {
-        if (amount === null || amount === undefined || isNaN(Number(amount))) {
-          return '0';
-        }
+        if (amount === null || amount === undefined || isNaN(Number(amount))) return '0';
         return Number(amount).toLocaleString('id-ID');
       };
-      
-      // Helper function to escape CSV values
       const escapeCSV = (value: string): string => {
+        if (!value) return '';
         if (value.includes(',') || value.includes('"') || value.includes('\n')) {
           return `"${value.replace(/"/g, '""')}"`;
         }
         return value;
       };
-      
-      let csvLines: string[] = [];
-      
-      // Handle Profit & Loss Statement
+
+      const csvLines: string[] = [];
+
+      // Profit & Loss
       if (reportType === 'profit-loss') {
-        const companyName = data.company?.name || 'PT. Sistem Akuntansi';
-        const period = data.period || `${data.start_date || ''} to ${data.end_date || ''}`;
-        
-        // Header
+        const companyName = payload.company?.name || 'PT. Sistem Akuntansi';
+        const period = payload.period || `${payload.start_date || ''} to ${payload.end_date || ''}`;
         csvLines.push(companyName);
         csvLines.push('PROFIT & LOSS STATEMENT');
         csvLines.push(`Period: ${period}`);
-        csvLines.push(''); // Empty line
-        
-        // Column headers
+        csvLines.push('');
         csvLines.push('Account,Amount');
-        
-        // Process sections
-        if (data.sections && Array.isArray(data.sections)) {
-          data.sections.forEach((section: any) => {
+        if (payload.sections && Array.isArray(payload.sections)) {
+          payload.sections.forEach((section: any) => {
             csvLines.push(`${escapeCSV(section.name || 'Unknown Section')},`);
-            
             if (section.items && Array.isArray(section.items)) {
               section.items.forEach((item: any) => {
                 const accountName = item.account_code ? `${item.account_code} - ${item.name}` : item.name;
@@ -926,100 +918,80 @@ const ReportsPage: React.FC = () => {
                 csvLines.push(`  ${escapeCSV(accountName)},${amount}`);
               });
             }
-            
             const totalAmount = formatCurrencyForCSV(section.total);
             csvLines.push(`Total ${escapeCSV(section.name)},${totalAmount}`);
-            csvLines.push(''); // Empty line between sections
+            csvLines.push('');
           });
         }
-        
-        // Financial metrics if available
-        if (data.financialMetrics) {
+        if ((payload as any).financialMetrics) {
           csvLines.push('FINANCIAL METRICS,');
-          csvLines.push(`Gross Profit,${formatCurrencyForCSV(data.financialMetrics.grossProfit)}`);
-          csvLines.push(`Gross Margin,${data.financialMetrics.grossProfitMargin || 0}%`);
-          csvLines.push(`Operating Income,${formatCurrencyForCSV(data.financialMetrics.operatingIncome)}`);
-          csvLines.push(`Operating Margin,${data.financialMetrics.operatingMargin || 0}%`);
-          csvLines.push(`Net Income,${formatCurrencyForCSV(data.financialMetrics.netIncome)}`);
-          csvLines.push(`Net Margin,${data.financialMetrics.netIncomeMargin || 0}%`);
+          csvLines.push(`Gross Profit,${formatCurrencyForCSV(payload.financialMetrics.grossProfit)}`);
+          csvLines.push(`Gross Margin,${payload.financialMetrics.grossProfitMargin || 0}%`);
+          csvLines.push(`Operating Income,${formatCurrencyForCSV(payload.financialMetrics.operatingIncome)}`);
+          csvLines.push(`Operating Margin,${payload.financialMetrics.operatingMargin || 0}%`);
+          csvLines.push(`Net Income,${formatCurrencyForCSV(payload.financialMetrics.netIncome)}`);
+          csvLines.push(`Net Margin,${payload.financialMetrics.netIncomeMargin || 0}%`);
         }
       }
-      
-      // Handle Balance Sheet
+      // Balance Sheet
       else if (reportType === 'balance-sheet') {
-        const companyName = data.company?.name || 'PT. Sistem Akuntansi';
-        const asOfDate = data.as_of_date || new Date().toISOString().split('T')[0];
-        
-        // Header
+        const companyName = payload.company?.name || 'PT. Sistem Akuntansi';
+        const asOfDate = payload.as_of_date || new Date().toISOString().split('T')[0];
         csvLines.push(companyName);
         csvLines.push('BALANCE SHEET');
         csvLines.push(`As of: ${asOfDate}`);
-        csvLines.push(''); // Empty line
-        
+        csvLines.push('');
         csvLines.push('Account,Amount');
-        
-        // Summary totals (support both nested SSOT format and flat format)
         csvLines.push('SUMMARY,');
-        const totalAssets = (data.assets && data.assets.total_assets !== undefined) ? data.assets.total_assets : (data.total_assets || 0);
-        const totalLiabilities = (data.liabilities && data.liabilities.total_liabilities !== undefined) ? data.liabilities.total_liabilities : (data.total_liabilities || 0);
-        const totalEquity = (data.equity && data.equity.total_equity !== undefined) ? data.equity.total_equity : (data.total_equity || 0);
+        const totalAssets = (payload.assets && payload.assets.total_assets !== undefined) ? payload.assets.total_assets : (payload.total_assets || 0);
+        const totalLiabilities = (payload.liabilities && payload.liabilities.total_liabilities !== undefined) ? payload.liabilities.total_liabilities : (payload.total_liabilities || 0);
+        const totalEquity = (payload.equity && payload.equity.total_equity !== undefined) ? payload.equity.total_equity : (payload.total_equity || 0);
         csvLines.push(`Total Assets,${formatCurrencyForCSV(totalAssets)}`);
         csvLines.push(`Total Liabilities,${formatCurrencyForCSV(totalLiabilities)}`);
         csvLines.push(`Total Equity,${formatCurrencyForCSV(totalEquity)}`);
-        csvLines.push(`Balanced,${data.is_balanced ? 'Yes' : 'No'}`);
-        
-        // Detailed breakdown if available
-        if (data.assets) {
+        csvLines.push(`Balanced,${payload.is_balanced ? 'Yes' : 'No'}`);
+        if (payload.assets) {
           csvLines.push('');
           csvLines.push('ASSETS,');
-          
-          if (data.assets.current_assets?.items) {
+          if (payload.assets.current_assets?.items) {
             csvLines.push('Current Assets,');
-            data.assets.current_assets.items.forEach((item: any) => {
+            payload.assets.current_assets.items.forEach((item: any) => {
               csvLines.push(`  ${item.account_code} - ${escapeCSV(item.account_name)},${formatCurrencyForCSV(item.amount)}`);
             });
           }
-          
-          if (data.assets.non_current_assets?.items) {
+          if (payload.assets.non_current_assets?.items) {
             csvLines.push('Non-Current Assets,');
-            data.assets.non_current_assets.items.forEach((item: any) => {
+            payload.assets.non_current_assets.items.forEach((item: any) => {
               csvLines.push(`  ${item.account_code} - ${escapeCSV(item.account_name)},${formatCurrencyForCSV(item.amount)}`);
             });
           }
         }
-        
-        if (data.liabilities?.current_liabilities?.items) {
+        if (payload.liabilities?.current_liabilities?.items) {
           csvLines.push('');
           csvLines.push('LIABILITIES,');
-          data.liabilities.current_liabilities.items.forEach((item: any) => {
+          payload.liabilities.current_liabilities.items.forEach((item: any) => {
             csvLines.push(`  ${item.account_code} - ${escapeCSV(item.account_name)},${formatCurrencyForCSV(item.amount)}`);
           });
         }
-        
-        if (data.equity?.items) {
+        if (payload.equity?.items) {
           csvLines.push('');
           csvLines.push('EQUITY,');
-          data.equity.items.forEach((item: any) => {
+          payload.equity.items.forEach((item: any) => {
             csvLines.push(`  ${item.account_code} - ${escapeCSV(item.account_name)},${formatCurrencyForCSV(item.amount)}`);
           });
         }
       }
-      
-      // Handle Trial Balance
+      // Trial Balance
       else if (reportType === 'trial-balance') {
-        const companyName = data.company?.name || 'PT. Sistem Akuntansi';
-        const reportDate = data.report_date || new Date().toISOString().split('T')[0];
-        
-        // Header
+        const companyName = payload.company?.name || 'PT. Sistem Akuntansi';
+        const reportDate = payload.report_date || new Date().toISOString().split('T')[0];
         csvLines.push(companyName);
         csvLines.push('TRIAL BALANCE');
         csvLines.push(`As of: ${reportDate}`);
-        csvLines.push(''); // Empty line
-        
+        csvLines.push('');
         csvLines.push('Account Code,Account Name,Account Type,Debit Balance,Credit Balance');
-        
-        if (data.accounts && Array.isArray(data.accounts)) {
-          data.accounts.forEach((account: any) => {
+        if (payload.accounts && Array.isArray(payload.accounts)) {
+          payload.accounts.forEach((account: any) => {
             csvLines.push([
               escapeCSV(account.account_code || ''),
               escapeCSV(account.account_name || account.name || ''),
@@ -1028,26 +1000,19 @@ const ReportsPage: React.FC = () => {
               formatCurrencyForCSV(account.credit_balance)
             ].join(','));
           });
-          
-          csvLines.push(''); // Empty line
-          csvLines.push('TOTALS,,,'+ formatCurrencyForCSV(data.total_debits) + ',' + formatCurrencyForCSV(data.total_credits));
-          csvLines.push(`Balanced: ${data.is_balanced ? 'Yes' : 'No'}`);
+          csvLines.push('');
+          csvLines.push('TOTALS,,,' + formatCurrencyForCSV(payload.total_debits) + ',' + formatCurrencyForCSV(payload.total_credits));
+          csvLines.push(`Balanced: ${payload.is_balanced ? 'Yes' : 'No'}`);
         }
       }
-      
-      // Handle Journal Entry Analysis
+      // Journal Entry Analysis
       else if (reportType === 'journal-entry-analysis') {
-        // Backend CSV meta might wrap actual data under data
-        const payload = (data && data.data && data.export_ready) ? data.data : data;
         const companyName = payload.company?.name || 'PT. Sistem Akuntansi';
         const period = `${payload.start_date || ''} to ${payload.end_date || ''}`;
-        
         csvLines.push(companyName);
         csvLines.push('JOURNAL ENTRY ANALYSIS');
         csvLines.push(`Period: ${period}`);
         csvLines.push('');
-        
-        // Summary
         csvLines.push('Metric,Value');
         const summaryRows: Array<[string, any]> = [
           ['Total Entries', payload.total_entries],
@@ -1056,12 +1021,10 @@ const ReportsPage: React.FC = () => {
           ['Reversed Entries', payload.reversed_entries],
           ['Total Amount', payload.total_amount]
         ];
-        summaryRows.forEach(([k,v]) => {
+        summaryRows.forEach(([k, v]) => {
           const val = (k.includes('Amount')) ? formatCurrencyForCSV(v) : (v ?? 0);
           csvLines.push(`${escapeCSV(k)},${val}`);
         });
-        
-        // Entries by type
         if (Array.isArray(payload.entries_by_type)) {
           csvLines.push('');
           csvLines.push('Entries By Type,,,,');
@@ -1076,16 +1039,14 @@ const ReportsPage: React.FC = () => {
           });
         }
       }
-      
-      // Handle other report types with basic structure
+      // Generic fallback
       else {
         csvLines.push('FINANCIAL REPORT');
         csvLines.push(`Report Type: ${reportType}`);
         csvLines.push('');
         csvLines.push('Property,Value');
-        
-        if (typeof data === 'object') {
-          Object.entries(data).forEach(([key, value]) => {
+        if (typeof payload === 'object') {
+          Object.entries(payload).forEach(([key, value]) => {
             let displayValue = '';
             if (typeof value === 'object' && value !== null) {
               displayValue = JSON.stringify(value);
@@ -1096,16 +1057,11 @@ const ReportsPage: React.FC = () => {
           });
         }
       }
-      
+
       // Footer
       csvLines.push('');
       csvLines.push(`Generated on: ${new Date().toLocaleString('id-ID')}`);
-      
-      const csvContent = csvLines.join('\n');
-      console.log('Professional CSV generated, lines:', csvLines.length);
-      
-      return csvContent;
-      
+      return csvLines.join('\n');
     } catch (error) {
       console.error('Error converting to CSV:', error);
       return `Error converting data to CSV format: ${error instanceof Error ? error.message : 'Unknown error'}`;

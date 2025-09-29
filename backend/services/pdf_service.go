@@ -3032,8 +3032,19 @@ func (p *PDFService) addAssetsSections(pdf *gofpdf.Fpdf, assets interface{}) {
 			pdf.Ln(6)
 			p.addAccountItems(pdf, currentAssets, "    ")
 			
-			if total, exists := assetsMap["current_assets_total"]; exists {
-				p.addTotalLine(pdf, "  Total Current Assets", total)
+			// Support both nested SSOT shape (assets.current_assets.total_current_assets)
+			// and legacy flat key (assets.current_assets_total)
+			var subtotal interface{}
+			if caMap, ok := currentAssets.(map[string]interface{}); ok {
+				if v, ok := caMap["total_current_assets"]; ok {
+					subtotal = v
+				}
+			}
+			if subtotal == nil {
+				if v, ok := assetsMap["current_assets_total"]; ok { subtotal = v }
+			}
+			if subtotal != nil {
+				p.addTotalLine(pdf, "  Total Current Assets", subtotal)
 			}
 		}
 		
@@ -3044,8 +3055,18 @@ func (p *PDFService) addAssetsSections(pdf *gofpdf.Fpdf, assets interface{}) {
 			pdf.Ln(6)
 			p.addAccountItems(pdf, nonCurrentAssets, "    ")
 			
-			if total, exists := assetsMap["non_current_assets_total"]; exists {
-				p.addTotalLine(pdf, "  Total Non-Current Assets", total)
+			// Support nested SSOT key total_non_current_assets and legacy flat key
+			var subtotal interface{}
+			if ncaMap, ok := nonCurrentAssets.(map[string]interface{}); ok {
+				if v, ok := ncaMap["total_non_current_assets"]; ok {
+					subtotal = v
+				}
+			}
+			if subtotal == nil {
+				if v, ok := assetsMap["non_current_assets_total"]; ok { subtotal = v }
+			}
+			if subtotal != nil {
+				p.addTotalLine(pdf, "  Total Non-Current Assets", subtotal)
 			}
 		}
 		
@@ -3076,8 +3097,18 @@ func (p *PDFService) addLiabilitiesSections(pdf *gofpdf.Fpdf, liabilities interf
 			pdf.Ln(6)
 			p.addAccountItems(pdf, currentLiabilities, "    ")
 			
-			if total, exists := liabilitiesMap["current_liabilities_total"]; exists {
-				p.addTotalLine(pdf, "  Total Current Liabilities", total)
+			// Support nested SSOT key total_current_liabilities and legacy flat key
+			var subtotal interface{}
+			if clMap, ok := currentLiabilities.(map[string]interface{}); ok {
+				if v, ok := clMap["total_current_liabilities"]; ok {
+					subtotal = v
+				}
+			}
+			if subtotal == nil {
+				if v, ok := liabilitiesMap["current_liabilities_total"]; ok { subtotal = v }
+			}
+			if subtotal != nil {
+				p.addTotalLine(pdf, "  Total Current Liabilities", subtotal)
 			}
 		}
 		
@@ -3088,8 +3119,18 @@ func (p *PDFService) addLiabilitiesSections(pdf *gofpdf.Fpdf, liabilities interf
 			pdf.Ln(6)
 			p.addAccountItems(pdf, nonCurrentLiabilities, "    ")
 			
-			if total, exists := liabilitiesMap["non_current_liabilities_total"]; exists {
-				p.addTotalLine(pdf, "  Total Non-Current Liabilities", total)
+			// Support nested SSOT key total_non_current_liabilities and legacy flat key
+			var subtotal interface{}
+			if nclMap, ok := nonCurrentLiabilities.(map[string]interface{}); ok {
+				if v, ok := nclMap["total_non_current_liabilities"]; ok {
+					subtotal = v
+				}
+			}
+			if subtotal == nil {
+				if v, ok := liabilitiesMap["non_current_liabilities_total"]; ok { subtotal = v }
+			}
+			if subtotal != nil {
+				p.addTotalLine(pdf, "  Total Non-Current Liabilities", subtotal)
 			}
 		}
 		
