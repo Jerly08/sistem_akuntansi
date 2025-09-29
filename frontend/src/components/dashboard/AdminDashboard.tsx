@@ -33,6 +33,7 @@ import {
   FiUsers,
   FiPlus,
 } from 'react-icons/fi';
+import AutoFitText from '@/components/common/AutoFitText';
 import {
   LineChart,
   Line,
@@ -91,15 +92,17 @@ const StatCard = ({ icon, title, stat, change, changeType }) => {
         {/* Stat content fills remaining space and truncates long text safely */}
         <Stat flex="1" minW={0} overflow="hidden">
           <StatLabel color={labelColor} noOfLines={1} title={title}>{title}</StatLabel>
-          <StatNumber 
-            fontSize={{ base: 'xl', md: '2xl' }} 
-            fontWeight="bold" 
-            color={numberColor}
-            noOfLines={1}
-            title={typeof stat === 'string' ? stat : ''}
-          >
-            {stat}
-          </StatNumber>
+          <Box mt={1}>
+            <AutoFitText 
+              value={stat as string}
+              maxFontSize={28}
+              minFontSize={16}
+              fontWeight={700}
+              color={numberColor as string}
+              title={typeof stat === 'string' ? stat : ''}
+              style={{ lineHeight: 1.1 }}
+            />
+          </Box>
           <StatHelpText noOfLines={1}>
             <StatArrow type={changeType === 'increase' ? 'increase' : 'decrease'} />
             {change}
