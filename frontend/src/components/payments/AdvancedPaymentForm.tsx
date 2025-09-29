@@ -505,33 +505,37 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
         paymentData.bill_allocations = allocations as BillAllocation[];
       }
 
-      // Balance validation - prevent payments when insufficient balance
-      const selectedAccount = cashBankAccounts.find(account => account.id === data.cash_bank_id);
-      if (selectedAccount) {
-        if (selectedAccount.balance <= 0) {
-          toast({
-            title: 'Insufficient Balance ⚠️',
-            description: `Cannot process payment. The selected account "${selectedAccount.name}" has zero or negative balance.`,
-            status: 'error',
-            duration: 8000,
-            isClosable: true,
-          });
-          return;
-        }
-        
-        if (data.amount > selectedAccount.balance) {
-          toast({
-            title: 'Insufficient Balance ⚠️', 
-            description: (
-              `Payment amount ${paymentService.formatCurrency(data.amount)} exceeds available balance ` +
-              `${paymentService.formatCurrency(selectedAccount.balance)} in account "${selectedAccount.name}". ` +
-              `Please reduce the payment amount or select a different account.`
-            ),
-            status: 'error',
-            duration: 10000,
-            isClosable: true,
-          });
-          return;
+      // Balance validation
+      // For receivable (incoming) payments, we do NOT block by current account balance
+      // For payable (outgoing) payments, ensure sufficient balance
+      if (type === 'payable') {
+        const selectedAccount = cashBankAccounts.find(account => account.id === data.cash_bank_id);
+        if (selectedAccount) {
+          if (selectedAccount.balance <= 0) {
+            toast({
+              title: 'Insufficient Balance ⚠️',
+              description: `Cannot process payment. The selected account "${selectedAccount.name}" has zero or negative balance.`,
+              status: 'error',
+              duration: 8000,
+              isClosable: true,
+            });
+            return;
+          }
+          
+          if (data.amount > selectedAccount.balance) {
+            toast({
+              title: 'Insufficient Balance ⚠️', 
+              description: (
+                `Payment amount ${paymentService.formatCurrency(data.amount)} exceeds available balance ` +
+                `${paymentService.formatCurrency(selectedAccount.balance)} in account "${selectedAccount.name}". ` +
+                `Please reduce the payment amount or select a different account.`
+              ),
+              status: 'error',
+              duration: 10000,
+              isClosable: true,
+            });
+            return;
+          }
         }
       }
       
@@ -1067,7 +1071,8 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
                 isLoading={isSubmitting || loading}
                 loadingText="Creating..."
                 isDisabled={!watchedContactId || !watchedAmount || (() => {
-                  // Check balance availability
+                  // Only enforce balance checks for payable (outgoing) payments
+                  if (type !== 'payable') return false;
                   if (!watchedCashBankId || !watchedAmount) return false;
                   
                   const selectedAccount = cashBankAccounts.find(account => account.id === watchedCashBankId);
@@ -1087,14 +1092,16 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
                 {(() => {
                   if (isSubmitting || loading) return 'Creating...';
                   
-                  // Check for balance issues
-                  const selectedAccount = cashBankAccounts.find(account => account.id === watchedCashBankId);
-                  if (selectedAccount && watchedCashBankId && watchedAmount > 0) {
-                    if (selectedAccount.balance <= 0) {
-                      return 'No Balance Available';
-                    }
-                    if (watchedAmount > selectedAccount.balance) {
-                      return 'Insufficient Balance';
+                  // Only show balance warnings for payable payments
+                  if (type === 'payable') {
+                    const selectedAccount = cashBankAccounts.find(account => account.id === watchedCashBankId);
+                    if (selectedAccount && watchedCashBankId && watchedAmount > 0) {
+                      if (selectedAccount.balance <= 0) {
+                        return 'No Balance Available';
+                      }
+                      if (watchedAmount > selectedAccount.balance) {
+                        return 'Insufficient Balance';
+                      }
                     }
                   }
                   
