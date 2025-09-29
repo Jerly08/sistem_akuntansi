@@ -428,7 +428,11 @@ class PaymentService {
   async getUnpaidInvoices(customerId: number): Promise<any[]> {
     try {
       const response = await api.get(API_ENDPOINTS.PAYMENTS.UNPAID_INVOICES(customerId));
-      return response.data || [];
+      const d = response.data;
+      if (Array.isArray(d)) return d;
+      if (Array.isArray(d?.invoices)) return d.invoices;
+      if (Array.isArray(d?.data)) return d.data;
+      return [];
     } catch (error) {
       console.error('Error fetching unpaid invoices:', error);
       return [];
@@ -439,7 +443,11 @@ class PaymentService {
   async getUnpaidBills(vendorId: number): Promise<any[]> {
     try {
       const response = await api.get(API_ENDPOINTS.PAYMENTS.UNPAID_BILLS(vendorId));
-      return response.data || [];
+      const d = response.data;
+      if (Array.isArray(d)) return d;
+      if (Array.isArray(d?.bills)) return d.bills;
+      if (Array.isArray(d?.data)) return d.data;
+      return [];
     } catch (error) {
       console.error('Error fetching unpaid bills:', error);
       return [];
