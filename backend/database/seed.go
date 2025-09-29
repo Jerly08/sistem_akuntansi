@@ -37,10 +37,11 @@ func SeedData(db *gorm.DB) {
 	// Seed Expense Categories
 	seedExpenseCategories(db)
 	
-	// Seed Cash & Bank accounts (start with zero balances)
-	seedCashBankAccounts(db)
-	
-	// Seed Company Profile
+// Seed Cash & Bank accounts (start with zero balances)
+// Disabled per request: do not create default Cash & Bank records during seed
+// seedCashBankAccounts(db)
+
+// Seed Company Profile
 	seedCompanyProfile(db)
 	
 	// Seed Report Templates
