@@ -88,10 +88,19 @@ const StatCard = ({ icon, title, stat, change, changeType }) => {
   return (
     <Card className="card">
       <CardHeader display="flex" flexDirection="row" alignItems="center" justifyContent="space-between" pb={2}>
-        <Stat>
-          <StatLabel color={labelColor}>{title}</StatLabel>
-          <StatNumber fontSize="2xl" fontWeight="bold" color={numberColor}>{stat}</StatNumber>
-          <StatHelpText>
+        {/* Stat content fills remaining space and truncates long text safely */}
+        <Stat flex="1" minW={0} overflow="hidden">
+          <StatLabel color={labelColor} noOfLines={1} title={title}>{title}</StatLabel>
+          <StatNumber 
+            fontSize={{ base: 'xl', md: '2xl' }} 
+            fontWeight="bold" 
+            color={numberColor}
+            noOfLines={1}
+            title={typeof stat === 'string' ? stat : ''}
+          >
+            {stat}
+          </StatNumber>
+          <StatHelpText noOfLines={1}>
             <StatArrow type={changeType === 'increase' ? 'increase' : 'decrease'} />
             {change}
           </StatHelpText>
@@ -104,6 +113,8 @@ const StatCard = ({ icon, title, stat, change, changeType }) => {
           borderRadius="full"
           bg={iconBgColor}
           transition="all 0.3s ease"
+          ml={4}
+          flexShrink={0}
         >
           <Icon as={icon} color={iconColor} w={6} h={6} />
         </Flex>
@@ -126,6 +137,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
     gridColor: colorMode === 'dark' ? '#495057' : '#e0e0e0',
     textColor: colorMode === 'dark' ? 'var(--text-primary)' : '#333333',
   };
+
+  // Thousands separator formatter for axes (e.g., 1000000 -> 1.000.000)
+  const formatThousands = (value: number) => new Intl.NumberFormat('id-ID').format(Number(value) || 0);
   
   if (!analytics) {
     return <Box color={colorMode === 'dark' ? 'var(--text-primary)' : 'gray.800'}>Loading analytics...</Box>;
@@ -265,6 +279,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
                 <YAxis 
                   tick={{ fill: chartColors.textColor, fontSize: 12 }}
                   axisLine={{ stroke: chartColors.gridColor }}
+                  tickFormatter={formatThousands}
                 />
                 <Tooltip 
                   contentStyle={{
@@ -302,7 +317,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
                   outerRadius={80} 
                   fill={chartColors.primary} 
                   dataKey="value" 
-                  label={{ fill: chartColors.textColor }}
+                  label={({ value }) => formatThousands(value as number)}
+                  labelLine={false}
                 >
                   {
                     topAccountsData.map((entry, index) => (
@@ -349,6 +365,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
               <YAxis 
                 tick={{ fill: chartColors.textColor, fontSize: 12 }}
                 axisLine={{ stroke: chartColors.gridColor }}
+                tickFormatter={formatThousands}
               />
               <Tooltip 
                 contentStyle={{
