@@ -44,17 +44,6 @@ func (s *CashFlowExportService) getCompanyInfo() *models.Settings {
 	return &settings
 }
 
-// detectImageType checks file signature for JPG/PNG support
-func detectImageType(path string) string {
-	f, err := os.Open(path)
-	if err != nil { return "" }
-	defer f.Close()
-	buf := make([]byte, 8)
-	if _, err := f.Read(buf); err != nil { return "" }
-	if len(buf) >= 2 && buf[0] == 0xFF && buf[1] == 0xD8 { return "JPG" }
-	if len(buf) >= 8 && buf[0] == 0x89 && buf[1] == 0x50 && buf[2] == 0x4E && buf[3] == 0x47 && buf[4] == 0x0D && buf[5] == 0x0A && buf[6] == 0x1A && buf[7] == 0x0A { return "PNG" }
-	return ""
-}
 
 // ExportToCSV exports cash flow data to CSV format
 func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, error) {

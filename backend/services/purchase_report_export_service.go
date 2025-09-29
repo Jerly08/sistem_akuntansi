@@ -4,18 +4,34 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"app-sistem-akuntansi/models"
 	"github.com/jung-kurt/gofpdf"
+	"gorm.io/gorm"
 )
 
 // PurchaseReportExportService handles export functionality for Purchase Report
-type PurchaseReportExportService struct{}
+type PurchaseReportExportService struct{ db *gorm.DB }
 
 // NewPurchaseReportExportService creates a new purchase report export service
-func NewPurchaseReportExportService() *PurchaseReportExportService {
-	return &PurchaseReportExportService{}
+func NewPurchaseReportExportService(db *gorm.DB) *PurchaseReportExportService {
+	return &PurchaseReportExportService{db: db}
+}
+
+// getCompanyInfo from settings with defaults
+func (s *PurchaseReportExportService) getCompanyInfo() *models.Settings {
+	if s.db == nil {
+		return &models.Settings{CompanyName: "PT. Sistem Akuntansi Indonesia"}
+	}
+	var settings models.Settings
+	if err := s.db.First(&settings).Error; err != nil {
+		return &models.Settings{CompanyName: "PT. Sistem Akuntansi Indonesia"}
+	}
+	return &settings
 }
 
 // ExportToCSV exports purchase report to CSV bytes (optional helper)
@@ -78,26 +94,63 @@ func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData) ([]b
 	pageW, _ := pdf.GetPageSize()
 	contentW := pageW - lm - rm
 
-	// Note: Company logo path may not be available in this data structure; header will use text info only.
+	// Company settings for consistent letterhead
+	settings := s.getCompanyInfo()
 
-	// Company info
+	// Try to render real logo at top-left
+	logoW := 35.0
+	logoPath := strings.TrimSpace(settings.CompanyLogo)
+	logoDrawn := false
+	if logoPath != "" {
+		if strings.HasPrefix(logoPath, "/") { logoPath = "." + logoPath }
+		if _, err := os.Stat(logoPath); err != nil {
+			alt := filepath.Clean("./" + strings.TrimPrefix(settings.CompanyLogo, "/"))
+			if _, err2 := os.Stat(alt); err2 == nil { logoPath = alt } else { logoPath = "" }
+		}
+		if logoPath != "" {
+			if imgType := detectImageType(logoPath); imgType != "" {
+				pdf.ImageOptions(logoPath, lm, tm, logoW, 0, false, gofpdf.ImageOptions{ImageType: imgType, ReadDpi: true}, 0, "")
+				logoDrawn = true
+			}
+		}
+	}
+	if !logoDrawn {
+		pdf.SetDrawColor(220, 220, 220)
+		pdf.SetFillColor(248, 249, 250)
+		pdf.SetLineWidth(0.3)
+		pdf.Rect(lm, tm, logoW, logoW, "FD")
+		pdf.SetFont("Arial", "B", 16)
+		pdf.SetTextColor(120, 120, 120)
+		pdf.SetXY(lm+8, tm+19)
+		pdf.CellFormat(19, 8, "</>", "", 0, "C", false, 0, "")
+		pdf.SetTextColor(0, 0, 0)
+	}
+
+	// Company info (right-aligned)
+	companyName := strings.TrimSpace(settings.CompanyName)
+	if companyName == "" { companyName = data.Company.Name }
 	pdf.SetFont("Arial", "B", 12)
-	w := pdf.GetStringWidth(data.Company.Name)
+	w := pdf.GetStringWidth(companyName)
 	pdf.SetXY(pageW-rm-w, tm)
-	pdf.Cell(w, 6, data.Company.Name)
+	pdf.Cell(w, 6, companyName)
 	pdf.SetFont("Arial", "", 9)
-	addr := strings.TrimSpace(data.Company.Address)
+	addr := strings.TrimSpace(settings.CompanyAddress)
+	if addr == "" { addr = strings.TrimSpace(data.Company.Address) }
 	if addr != "" {
 		pdf.SetXY(pageW-rm-pdf.GetStringWidth(addr), tm+8)
 		pdf.Cell(0, 4, addr)
 	}
-	if strings.TrimSpace(data.Company.Phone) != "" {
-		phone := fmt.Sprintf("Phone: %s", data.Company.Phone)
+	phoneVal := strings.TrimSpace(settings.CompanyPhone)
+	if phoneVal == "" { phoneVal = strings.TrimSpace(data.Company.Phone) }
+	if phoneVal != "" {
+		phone := fmt.Sprintf("Phone: %s", phoneVal)
 		pdf.SetXY(pageW-rm-pdf.GetStringWidth(phone), tm+14)
 		pdf.Cell(0, 4, phone)
 	}
-	if strings.TrimSpace(data.Company.Email) != "" {
-		email := fmt.Sprintf("Email: %s", data.Company.Email)
+	emailVal := strings.TrimSpace(settings.CompanyEmail)
+	if emailVal == "" { emailVal = strings.TrimSpace(data.Company.Email) }
+	if emailVal != "" {
+		email := fmt.Sprintf("Email: %s", emailVal)
 		pdf.SetXY(pageW-rm-pdf.GetStringWidth(email), tm+20)
 		pdf.Cell(0, 4, email)
 	}

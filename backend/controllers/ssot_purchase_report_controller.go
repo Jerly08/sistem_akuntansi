@@ -24,7 +24,7 @@ func NewSSOTPurchaseReportController(db *gorm.DB) *SSOTPurchaseReportController 
 	return &SSOTPurchaseReportController{
 		db:            db,
 		reportService: services.NewSSOTPurchaseReportService(db),
-		exportService: services.NewPurchaseReportExportService(),
+		exportService: services.NewPurchaseReportExportService(db),
 	}
 }
 
