@@ -96,26 +96,43 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 		glAccount = newAccount
 	}
 	
-	// Generate code
-	code := s.generateCashBankCode(request.Type)
-	
-	// Create cash/bank account
-	cashBank := &models.CashBank{
-		Code:        code,
-		Name:        request.Name,
-		Type:        request.Type,
-		AccountID:   glAccount.ID,
-		BankName:    request.BankName,
-		AccountNo:   request.AccountNo,
-		Currency:    request.Currency,
-		Balance:     0, // Will be set via opening balance transaction
-		IsActive:    true,
-		Description: request.Description,
-	}
-	
-	if err := tx.Create(cashBank).Error; err != nil {
+	// Generate code and create account with retry to avoid unique constraint conflicts
+	baseCode := s.generateCashBankCode(request.Type)
+	code := baseCode
+	var cashBank *models.CashBank
+	var createErr error
+	for retry := 0; retry < 5; retry++ {
+		cashBank = &models.CashBank{
+			Code:        code,
+			Name:        request.Name,
+			Type:        request.Type,
+			AccountID:   glAccount.ID,
+			BankName:    request.BankName,
+			AccountNo:   request.AccountNo,
+			Currency:    request.Currency,
+			Balance:     0, // Will be set via opening balance transaction
+			IsActive:    true,
+			Description: request.Description,
+		}
+		
+		createErr = tx.Create(cashBank).Error;
+		if createErr == nil {
+			break
+		}
+		// If duplicate code, regenerate and retry
+		errMsg := createErr.Error()
+		if strings.Contains(errMsg, "uni_cash_banks_code") || strings.Contains(errMsg, "duplicate key") || strings.Contains(errMsg, "23505") {
+			// Append a short suffix to ensure uniqueness and retry
+			code = fmt.Sprintf("%s-%02d", baseCode, retry+1)
+			continue
+		}
+		// Other errors: abort immediately
 		tx.Rollback()
-		return nil, err
+		return nil, createErr
+	}
+	if createErr != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to generate unique cash-bank code after retries: %w", createErr)
 	}
 	
 	// Create opening balance transaction if provided
