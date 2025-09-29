@@ -24,7 +24,7 @@ func NewSSOTCashFlowController(db *gorm.DB) *SSOTCashFlowController {
 	return &SSOTCashFlowController{
 		db:                  db,
 		ssotCashFlowService: services.NewSSOTCashFlowService(db),
-		exportService:       services.NewCashFlowExportService(),
+		exportService:       services.NewCashFlowExportService(db),
 	}
 }
 

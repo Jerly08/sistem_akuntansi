@@ -4,18 +4,56 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"app-sistem-akuntansi/models"
 	"github.com/jung-kurt/gofpdf"
+	"gorm.io/gorm"
 )
 
 // CashFlowExportService handles export functionality for Cash Flow reports
-type CashFlowExportService struct{}
+type CashFlowExportService struct{ db *gorm.DB }
 
 // NewCashFlowExportService creates a new cash flow export service
-func NewCashFlowExportService() *CashFlowExportService {
-	return &CashFlowExportService{}
+func NewCashFlowExportService(db *gorm.DB) *CashFlowExportService {
+	return &CashFlowExportService{db: db}
+}
+
+// getCompanyInfo retrieves company info from settings table, with sensible defaults
+func (s *CashFlowExportService) getCompanyInfo() *models.Settings {
+	if s.db == nil {
+		return &models.Settings{
+			CompanyName:    "PT. Sistem Akuntansi",
+			CompanyAddress: "",
+			CompanyPhone:   "",
+			CompanyEmail:   "",
+		}
+	}
+	var settings models.Settings
+	if err := s.db.First(&settings).Error; err != nil {
+		return &models.Settings{
+			CompanyName:    "PT. Sistem Akuntansi",
+			CompanyAddress: "",
+			CompanyPhone:   "",
+			CompanyEmail:   "",
+		}
+	}
+	return &settings
+}
+
+// detectImageType checks file signature for JPG/PNG support
+func detectImageType(path string) string {
+	f, err := os.Open(path)
+	if err != nil { return "" }
+	defer f.Close()
+	buf := make([]byte, 8)
+	if _, err := f.Read(buf); err != nil { return "" }
+	if len(buf) >= 2 && buf[0] == 0xFF && buf[1] == 0xD8 { return "JPG" }
+	if len(buf) >= 8 && buf[0] == 0x89 && buf[1] == 0x50 && buf[2] == 0x4E && buf[3] == 0x47 && buf[4] == 0x0D && buf[5] == 0x0A && buf[6] == 0x1A && buf[7] == 0x0A { return "PNG" }
+	return ""
 }
 
 // ExportToCSV exports cash flow data to CSV format
@@ -193,41 +231,70 @@ func (s *CashFlowExportService) ExportToPDF(data *SSOTCashFlowData) ([]byte, err
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
-// Header area and layout helpers
+	// Header area and layout helpers
 	lm, tm, rm, _ := pdf.GetMargins()
 	pageW, _ := pdf.GetPageSize()
 	contentW := pageW - lm - rm
 
-	// Letterhead placeholder on top-left to mirror invoice (logo may not be available in this service)
+	// Company settings (for logo + profile)
+	settings := s.getCompanyInfo()
+
+	// Try draw real logo at top-left; fallback to placeholder
 	logoW := 35.0
-	pdf.SetDrawColor(220, 220, 220)
-	pdf.SetFillColor(248, 249, 250)
-	pdf.SetLineWidth(0.3)
-	pdf.Rect(lm, tm, logoW, logoW, "FD")
-	pdf.SetFont("Arial", "B", 16)
-	pdf.SetTextColor(120, 120, 120)
-	pdf.SetXY(lm+8, tm+19)
-	pdf.CellFormat(19, 8, "</>", "", 0, "C", false, 0, "")
-	pdf.SetTextColor(0, 0, 0)
+	logoPath := strings.TrimSpace(settings.CompanyLogo)
+	logoDrawn := false
+	if logoPath != "" {
+		// Map web path to local path
+		if strings.HasPrefix(logoPath, "/") { logoPath = "." + logoPath }
+		// Resolve alternative
+		if _, err := os.Stat(logoPath); err != nil {
+			alt := filepath.Clean("./" + strings.TrimPrefix(settings.CompanyLogo, "/"))
+			if _, err2 := os.Stat(alt); err2 == nil { logoPath = alt } else { logoPath = "" }
+		}
+		if logoPath != "" {
+			if imgType := detectImageType(logoPath); imgType != "" {
+				pdf.ImageOptions(logoPath, lm, tm, logoW, 0, false, gofpdf.ImageOptions{ImageType: imgType, ReadDpi: true}, 0, "")
+				logoDrawn = true
+			}
+		}
+	}
+	if !logoDrawn {
+		pdf.SetDrawColor(220, 220, 220)
+		pdf.SetFillColor(248, 249, 250)
+		pdf.SetLineWidth(0.3)
+		pdf.Rect(lm, tm, logoW, logoW, "FD")
+		pdf.SetFont("Arial", "B", 16)
+		pdf.SetTextColor(120, 120, 120)
+		pdf.SetXY(lm+8, tm+19)
+		pdf.CellFormat(19, 8, "</>", "", 0, "C", false, 0, "")
+		pdf.SetTextColor(0, 0, 0)
+	}
 
 	// Company info on top-right (right aligned)
+	companyName := strings.TrimSpace(settings.CompanyName)
+	if companyName == "" { companyName = data.Company.Name }
 	pdf.SetFont("Arial", "B", 12)
-	nameW := pdf.GetStringWidth(data.Company.Name)
+	nameW := pdf.GetStringWidth(companyName)
 	pdf.SetXY(pageW-rm-nameW, tm)
-	pdf.Cell(nameW, 6, data.Company.Name)
+	pdf.Cell(nameW, 6, companyName)
 	pdf.SetFont("Arial", "", 9)
-	addr := strings.TrimSpace(data.Company.Address)
+	addr := strings.TrimSpace(settings.CompanyAddress)
+	if addr == "" { addr = strings.TrimSpace(data.Company.Address) }
 	if addr != "" {
 		pdf.SetXY(pageW-rm-pdf.GetStringWidth(addr), tm+8)
 		pdf.Cell(0, 4, addr)
 	}
-	if strings.TrimSpace(data.Company.Phone) != "" {
-		phone := fmt.Sprintf("Phone: %s", data.Company.Phone)
+	phoneVal := strings.TrimSpace(settings.CompanyPhone)
+	if phoneVal == "" { phoneVal = strings.TrimSpace(data.Company.Phone) }
+	if phoneVal != "" {
+		phone := fmt.Sprintf("Phone: %s", phoneVal)
 		pdf.SetXY(pageW-rm-pdf.GetStringWidth(phone), tm+14)
 		pdf.Cell(0, 4, phone)
 	}
-	if strings.TrimSpace(data.Company.Email) != "" {
-		email := fmt.Sprintf("Email: %s", data.Company.Email)
+	emailVal := strings.TrimSpace(settings.CompanyEmail)
+	if emailVal == "" { emailVal = strings.TrimSpace(data.Company.Email) }
+	if emailVal != "" {
+		email := fmt.Sprintf("Email: %s", emailVal)
 		pdf.SetXY(pageW-rm-pdf.GetStringWidth(email), tm+20)
 		pdf.Cell(0, 4, email)
 	}

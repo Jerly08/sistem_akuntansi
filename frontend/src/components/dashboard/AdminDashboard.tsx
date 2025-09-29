@@ -87,7 +87,7 @@ const StatCard = ({ icon, title, stat, change, changeType }) => {
   );
 
   return (
-    <Card className="card">
+    <Card className="card" p={5} minH="130px">
       <CardHeader display="flex" flexDirection="row" alignItems="center" justifyContent="space-between" pb={2}>
         {/* Stat content fills remaining space and truncates long text safely */}
         <Stat flex="1" minW={0} overflow="hidden">
@@ -95,8 +95,8 @@ const StatCard = ({ icon, title, stat, change, changeType }) => {
           <Box mt={1}>
             <AutoFitText 
               value={stat as string}
-              maxFontSize={28}
-              minFontSize={16}
+              maxFontSize={24}
+              minFontSize={14}
               fontWeight={700}
               color={numberColor as string}
               title={typeof stat === 'string' ? stat : ''}
@@ -109,8 +109,8 @@ const StatCard = ({ icon, title, stat, change, changeType }) => {
           </StatHelpText>
         </Stat>
         <Flex
-          w={12}
-          h={12}
+          w={10}
+          h={10}
           align="center"
           justify="center"
           borderRadius="full"
@@ -119,7 +119,7 @@ const StatCard = ({ icon, title, stat, change, changeType }) => {
           ml={4}
           flexShrink={0}
         >
-          <Icon as={icon} color={iconColor} w={6} h={6} />
+          <Icon as={icon} color={iconColor} w={5} h={5} />
         </Flex>
       </CardHeader>
     </Card>
