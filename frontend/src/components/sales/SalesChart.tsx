@@ -36,6 +36,7 @@ import {
   Cell
 } from 'recharts';
 import { SalesAnalytics } from '@/services/salesService';
+import { formatIDR } from '@/utils/currency';
 
 interface SalesChartProps {
   analytics: SalesAnalytics | null;
@@ -71,16 +72,11 @@ const SalesChart: React.FC<SalesChartProps> = ({ analytics }) => {
   }
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
+    return formatIDR(value, { minimumFractionDigits: 0, maximumFractionDigits: 0, showSymbol: true });
   };
 
   const formatNumber = (value: number) => {
-    return new Intl.NumberFormat('id-ID').format(value);
+    return formatIDR(value, { showSymbol: false, minimumFractionDigits: 0, maximumFractionDigits: 0 });
   };
 
   // Prepare chart data
@@ -108,6 +104,13 @@ const SalesChart: React.FC<SalesChartProps> = ({ analytics }) => {
     fill: pieColors[index % pieColors.length]
   }));
 
+  const yAxisTickFormatter = (value: number) => {
+    if (metric === 'amount') return formatNumber(value);
+    if (metric === 'sales') return formatNumber(value);
+    // growth is already in percentage units (e.g., 5 means 5%)
+    return `${Number(value).toFixed(0)}%`;
+  };
+
   const renderChart = () => {
     const dataKey = metric === 'amount' ? 'amount' : metric === 'sales' ? 'sales' : 'growth';
     const color = metric === 'growth' ? secondaryColor : primaryColor;
@@ -119,7 +122,7 @@ const SalesChart: React.FC<SalesChartProps> = ({ analytics }) => {
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
               <XAxis dataKey="period" tick={{ fill: textColor, fontSize: 12 }} />
-              <YAxis tick={{ fill: textColor, fontSize: 12 }} />
+              <YAxis tick={{ fill: textColor, fontSize: 12 }} tickFormatter={yAxisTickFormatter} />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: useColorModeValue('white', 'gray.700'),
@@ -129,7 +132,7 @@ const SalesChart: React.FC<SalesChartProps> = ({ analytics }) => {
                 formatter={(value: any) => {
                   if (metric === 'amount') return [formatCurrency(value), 'Revenue'];
                   if (metric === 'sales') return [formatNumber(value), 'Sales Count'];
-                  return [`${value.toFixed(1)}%`, 'Growth Rate'];
+                  return [`${Number(value).toFixed(1)}%`, 'Growth Rate'];
                 }}
               />
               <Legend />
@@ -148,7 +151,7 @@ const SalesChart: React.FC<SalesChartProps> = ({ analytics }) => {
             <AreaChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
               <XAxis dataKey="period" tick={{ fill: textColor, fontSize: 12 }} />
-              <YAxis tick={{ fill: textColor, fontSize: 12 }} />
+              <YAxis tick={{ fill: textColor, fontSize: 12 }} tickFormatter={yAxisTickFormatter} />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: useColorModeValue('white', 'gray.700'),
@@ -158,7 +161,7 @@ const SalesChart: React.FC<SalesChartProps> = ({ analytics }) => {
                 formatter={(value: any) => {
                   if (metric === 'amount') return [formatCurrency(value), 'Revenue'];
                   if (metric === 'sales') return [formatNumber(value), 'Sales Count'];
-                  return [`${value.toFixed(1)}%`, 'Growth Rate'];
+                  return [`${Number(value).toFixed(1)}%`, 'Growth Rate'];
                 }}
               />
               <Legend />
@@ -178,7 +181,7 @@ const SalesChart: React.FC<SalesChartProps> = ({ analytics }) => {
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
               <XAxis dataKey="period" tick={{ fill: textColor, fontSize: 12 }} />
-              <YAxis tick={{ fill: textColor, fontSize: 12 }} />
+              <YAxis tick={{ fill: textColor, fontSize: 12 }} tickFormatter={yAxisTickFormatter} />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: useColorModeValue('white', 'gray.700'),
@@ -188,7 +191,7 @@ const SalesChart: React.FC<SalesChartProps> = ({ analytics }) => {
                 formatter={(value: any) => {
                   if (metric === 'amount') return [formatCurrency(value), 'Revenue'];
                   if (metric === 'sales') return [formatNumber(value), 'Sales Count'];
-                  return [`${value.toFixed(1)}%`, 'Growth Rate'];
+                  return [`${Number(value).toFixed(1)}%`, 'Growth Rate'];
                 }}
               />
               <Legend />

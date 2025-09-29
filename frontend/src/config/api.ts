@@ -288,7 +288,8 @@ export const API_ENDPOINTS = {
     ANALYTICS: '/api/v1/payments/analytics',
     SUMMARY: '/api/v1/payments/summary',
     UNPAID_BILLS: (vendorId: number) => `/api/v1/payments/unpaid-bills/${vendorId}`,
-    UNPAID_INVOICES: (customerId: number) => `/api/v1/payments/unpaid-invoices/${customerId}`,
+    // Align with backend route: /api/v1/payments/sales/unpaid-invoices/:customer_id
+    UNPAID_INVOICES: (customerId: number) => `/api/v1/payments/sales/unpaid-invoices/${customerId}`,
     EXPORT_EXCEL: '/api/v1/payments/export/excel',
     REPORT: {
       PDF: '/api/v1/payments/report/pdf',
@@ -311,7 +312,8 @@ export const API_ENDPOINTS = {
   PAYMENTS_ANALYTICS: '/api/v1/payments/analytics', 
   PAYMENTS_SUMMARY: '/api/v1/payments/summary',
   PAYMENTS_UNPAID_BILLS: (vendorId: number) => `/api/v1/payments/unpaid-bills/${vendorId}`,
-  PAYMENTS_UNPAID_INVOICES: (customerId: number) => `/api/v1/payments/unpaid-invoices/${customerId}`,
+  // Align with backend route: /api/v1/payments/sales/unpaid-invoices/:customer_id
+  PAYMENTS_UNPAID_INVOICES: (customerId: number) => `/api/v1/payments/sales/unpaid-invoices/${customerId}`,
   PAYMENTS_EXPORT_EXCEL: '/api/v1/payments/export/excel',
   PAYMENTS_REPORT_PDF: '/api/v1/payments/report/pdf',
   PAYMENTS_BY_ID: (id: number) => `/api/v1/payments/${id}`,

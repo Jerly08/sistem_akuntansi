@@ -67,6 +67,28 @@ func (p *PDFService) getCompanyInfo() (*models.Settings, error) {
 	return &settings, nil
 }
 
+// getBankInfoForSale returns bank info to display on invoice based on sale's CashBankID.
+// If CashBankID is nil or not found, it falls back to the first active BANK account.
+func (p *PDFService) getBankInfoForSale(sale *models.Sale) (*models.CashBank, error) {
+	if p.db == nil {
+		return nil, nil
+	}
+	var bank models.CashBank
+	// Prefer the bank selected on the sale
+	if sale != nil && sale.CashBankID != nil {
+		if err := p.db.Where("id = ? AND deleted_at IS NULL", *sale.CashBankID).First(&bank).Error; err == nil {
+			if strings.ToUpper(bank.Type) == models.CashBankTypeBank {
+				return &bank, nil
+			}
+		}
+	}
+	// Fallback: first active BANK account
+	if err := p.db.Where("type = ? AND is_active = ? AND deleted_at IS NULL", models.CashBankTypeBank, true).Order("id ASC").First(&bank).Error; err != nil {
+		return nil, nil // no bank available; silently skip
+	}
+	return &bank, nil
+}
+
 // addThousandSeparators adds dots as thousand separators for Indonesian currency format
 func (p *PDFService) addThousandSeparators(s string) string {
 	// Split by decimal point if exists
@@ -509,7 +531,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	pdf.CellFormat(40, 8, p.formatRupiah(sale.TotalAmount), "", 0, "R", false, 0, "")
 	pdf.Ln(20)
 
-	// === PAYMENT TERMS SECTION ===
+// === PAYMENT TERMS SECTION ===
 	if sale.PaymentTerms != "" {
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(51, 51, 51)
@@ -517,6 +539,30 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 		pdf.SetFont("Arial", "", 9)
 		pdf.SetTextColor(102, 102, 102)
 		pdf.Cell(100, 5, sale.PaymentTerms)
+		pdf.Ln(8)
+	}
+
+	// === TRANSFER TO (Bank Info) SECTION ===
+	if bankInfo, _ := p.getBankInfoForSale(sale); bankInfo != nil {
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(51, 51, 51)
+		pdf.Cell(30, 5, "Transfer to:")
+		pdf.Ln(6)
+		// Bank Name
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(51, 51, 51)
+		pdf.Cell(30, 5, "Bank Name:")
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(102, 102, 102)
+		pdf.Cell(120, 5, strings.TrimSpace(bankInfo.BankName))
+		pdf.Ln(6)
+		// Account Number
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(51, 51, 51)
+		pdf.Cell(30, 5, "Account Number:")
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(102, 102, 102)
+		pdf.Cell(120, 5, strings.TrimSpace(bankInfo.AccountNo))
 		pdf.Ln(8)
 	}
 
@@ -774,11 +820,22 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	pdf.Cell(45, 8, p.formatRupiah(sale.TotalAmount))
 	pdf.Ln(10)
 
-	// Payment info
+// Payment info
 	if sale.PaymentTerms != "" {
 		pdf.SetFont("Arial", "", 10)
 		pdf.Cell(190, 5, fmt.Sprintf("Payment Terms: %s", sale.PaymentTerms))
 		pdf.Ln(5)
+	}
+
+	// Transfer to section (bank info)
+	if bankInfo, _ := p.getBankInfoForSale(sale); bankInfo != nil {
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(190, 6, "Transfer to:")
+		pdf.Ln(6)
+		pdf.SetFont("Arial", "", 10)
+		pdf.Cell(95, 5, fmt.Sprintf("Bank Name: %s", strings.TrimSpace(bankInfo.BankName)))
+		pdf.Cell(95, 5, fmt.Sprintf("Account Number: %s", strings.TrimSpace(bankInfo.AccountNo)))
+		pdf.Ln(6)
 	}
 
 	// Notes

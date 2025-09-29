@@ -45,16 +45,28 @@ export const StatCard: React.FC<StatCardProps> = ({
         transform: 'translateY(-2px)'
       }}
     >
-      <Flex justifyContent={'space-between'}>
-        <Box pl={{ base: 2, md: 4 }}>
-          <StatLabel fontWeight={'medium'} color={useColorModeValue('gray.600', 'gray.300')}>
+      <Flex justifyContent={'space-between'} align={'center'} gap={4}>
+        <Box pl={{ base: 2, md: 4 }} minW={0}>
+          <StatLabel 
+            fontWeight={'medium'} 
+            color={useColorModeValue('gray.600', 'gray.300')}
+            noOfLines={1}
+          >
             {title}
           </StatLabel>
-          <StatNumber fontSize={'2xl'} fontWeight={'bold'}>
+          <StatNumber 
+            fontSize={'2xl'} 
+            fontWeight={'bold'}
+            noOfLines={1}
+            overflow="hidden"
+            textOverflow="ellipsis"
+            whiteSpace="nowrap"
+            maxW="100%"
+          >
             {stat}
           </StatNumber>
           {change && (
-            <StatHelpText>
+            <StatHelpText noOfLines={1}>
               <StatArrow type={changeType} />
               {change}
             </StatHelpText>
@@ -64,6 +76,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           my={'auto'}
           color={useColorModeValue(color, 'gray.200')}
           alignContent={'center'}
+          flexShrink={0}
         >
           <Icon as={icon} w={8} h={8} />
         </Box>
