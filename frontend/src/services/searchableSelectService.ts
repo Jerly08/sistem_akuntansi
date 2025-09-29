@@ -1,4 +1,5 @@
 import api from './api';
+import { API_ENDPOINTS } from '@/config/api';
 
 // Types
 export interface Contact {
@@ -30,7 +31,7 @@ export interface ContactResult {
 }
 
 class SearchableSelectService {
-  private readonly baseUrl = '/contacts';
+  private readonly baseUrl = API_ENDPOINTS.CONTACTS; // '/api/v1/contacts'
 
   // Get contacts for selection dropdowns
   async getContacts(filters: ContactFilters = {}): Promise<Contact[]> {
