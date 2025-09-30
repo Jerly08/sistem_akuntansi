@@ -244,27 +244,35 @@ func backupCOAWithGORM(db *gorm.DB) error {
 func executeTransactionResetWithGORM(db *gorm.DB) error {
 	start := time.Now()
 	fmt.Printf("⏳ Mengeksekusi reset dengan GORM... (dimulai: %s)\n", start.Format("15:04:05"))
-	
-	// Start transaction
-	tx := db.Begin()
-	
+
+	// Start transaction with hooks disabled
+	tx := db.Session(&gorm.Session{SkipHooks: true}).Begin()
+
+	// IMPORTANT: Temporarily disable user triggers & FK enforcement inside this TX
+	// This prevents errors like: "tuple to be updated was already modified by an operation triggered by the current command"
+	if err := tx.Exec("SET LOCAL session_replication_role = 'replica'").Error; err != nil {
+		fmt.Printf("   ⚠️  Warning: Gagal set session_replication_role=replica (but continuing): %v\n", err)
+	}
+	// If any DEFERRABLE constraints exist, defer them to end of TX
+	_ = tx.Exec("SET CONSTRAINTS ALL DEFERRED").Error
+
 	// Delete data using GORM (safer, handles missing tables automatically)
 	// PENTING: Urutan delete harus mengikuti foreign key dependencies!
 	// Urutan: anak-anak tabel dulu, baru induk
-	
+
 	// ===== SSOT JOURNAL SYSTEM RESET =====
 	fmt.Println("   🔄 SSOT JOURNAL SYSTEM: Menghapus journal event logs...")
 	// SSOT Journal Event Log (audit trail)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.SSOTJournalEventLog{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete SSOTJournalEventLog error: %v\n", err)
 	}
-	
+
 	fmt.Println("   🔄 SSOT JOURNAL SYSTEM: Menghapus unified journal lines...")
 	// SSOT Journal Lines (child of unified journal entries)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.SSOTJournalLine{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete SSOTJournalLine error: %v\n", err)
 	}
-	
+
 	fmt.Println("   🔄 SSOT JOURNAL SYSTEM: Menghapus unified journal entries...")
 	// SSOT Journal Entries (main unified ledger)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.SSOTJournalEntry{}).Error; err != nil {
@@ -280,26 +288,26 @@ func executeTransactionResetWithGORM(db *gorm.DB) error {
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.SimpleSSOTJournal{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete SimpleSSOTJournal error: %v\n", err)
 	}
-	
+
 	// ===== CLASSIC JOURNAL SYSTEM RESET =====
 	fmt.Println("   📊 CLASSIC JOURNAL: Menghapus journal lines...")
 	// Classic Journal Lines (child of journal entries)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.JournalLine{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete JournalLine error: %v\n", err)
 	}
-	
+
 	fmt.Println("   🗑️  Menghapus payment allocations...")
 	// Payment allocations (referenced by sales/purchases)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.PaymentAllocation{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete PaymentAllocation error: %v\n", err)
 	}
-	
+
 	fmt.Println("   🗑️  Menghapus cash bank transactions...")
 	// Cash Bank Transactions (might be referenced by payments)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.CashBankTransaction{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete CashBankTransaction error: %v\n", err)
 	}
-	
+
 	fmt.Println("   🗑️  Menghapus sale related data...")
 	// Sales related - PROPER ORDER: child records first!
 	// 1. SaleReturnItem (child of SaleReturn)
@@ -347,7 +355,7 @@ func executeTransactionResetWithGORM(db *gorm.DB) error {
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.Purchase{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete Purchase error: %v\n", err)
 	}
-	
+
 	fmt.Println("   🗑️  Menghapus approval dan workflow data...")
 	// Approval system (hapus setelah purchase/sales yang mereference)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.ApprovalHistory{}).Error; err != nil {
@@ -399,7 +407,7 @@ func executeTransactionResetWithGORM(db *gorm.DB) error {
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.StockAlert{}).Error; err != nil {
 		fmt.Printf("   ⚠️  Warning: Delete StockAlert error: %v\n", err)
 	}
-	
+
 	fmt.Println("   🔔 NOTIFICATION SYSTEM: Menghapus notifications...")
 	// Notifications (might reference transactions or users)
 	if err := tx.Unscoped().Where("1 = 1").Delete(&models.Notification{}).Error; err != nil {
@@ -408,19 +416,25 @@ func executeTransactionResetWithGORM(db *gorm.DB) error {
 
 	fmt.Println("   🔄 Reset balance accounts ke 0...")
 	// Reset account balances
-	tx.Model(&models.Account{}).Where("id > 0").Update("balance", 0)
+	if err := tx.Model(&models.Account{}).Where("id > 0").Update("balance", 0).Error; err != nil {
+		fmt.Printf("   ⚠️  Warning: Reset balance accounts gagal: %v\n", err)
+	}
 
 	fmt.Println("   🔄 Reset balance cash banks ke 0...")
 	// Reset cash bank balances
-	tx.Model(&models.CashBank{}).Where("id > 0").Update("balance", 0)
+	if err := tx.Model(&models.CashBank{}).Where("id > 0").Update("balance", 0).Error; err != nil {
+		fmt.Printf("   ⚠️  Warning: Reset balance cash_banks gagal: %v\n", err)
+	}
 
 	fmt.Println("   🔄 Reset stock products ke 0...")
 	// Reset product stock
-	tx.Model(&models.Product{}).Where("id > 0").Update("stock", 0)
+	if err := tx.Model(&models.Product{}).Where("id > 0").Update("stock", 0).Error; err != nil {
+		fmt.Printf("   ⚠️  Warning: Reset stock products gagal: %v\n", err)
+	}
 
-	// Commit transaction
+	// Commit transaction (SET LOCAL will auto-revert here)
 	if err := tx.Commit().Error; err != nil {
-		tx.Rollback()
+		_ = tx.Rollback().Error
 		return fmt.Errorf("gagal commit reset: %v", err)
 	}
 
@@ -487,11 +501,25 @@ func executeMasterPurgeWithGORM(db *gorm.DB) error {
 
 	// 2) Reset saldo master (tanpa hapus akun)
 	fmt.Println("   🧮 Menyetel saldo COA & Cash Bank ke 0 (langkah 2/2)...")
-	if err := db.Model(&models.Account{}).Where("deleted_at IS NULL").Update("balance", 0).Error; err != nil {
+	// Lakukan dalam TX terpisah dengan hooks & triggers dimatikan untuk konsistensi
+	tx := db.Session(&gorm.Session{SkipHooks: true}).Begin()
+	if err := tx.Exec("SET LOCAL session_replication_role = 'replica'").Error; err != nil {
+		fmt.Printf("   ⚠️  Warning: Gagal set session_replication_role=replica (but continuing): %v\n", err)
+	}
+	_ = tx.Exec("SET CONSTRAINTS ALL DEFERRED").Error
+
+	if err := tx.Model(&models.Account{}).Where("deleted_at IS NULL").Update("balance", 0).Error; err != nil {
+		_ = tx.Rollback().Error
 		return fmt.Errorf("gagal reset saldo accounts: %v", err)
 	}
-	if err := db.Model(&models.CashBank{}).Where("deleted_at IS NULL").Update("balance", 0).Error; err != nil {
+	if err := tx.Model(&models.CashBank{}).Where("deleted_at IS NULL").Update("balance", 0).Error; err != nil {
+		_ = tx.Rollback().Error
 		return fmt.Errorf("gagal reset saldo cash_banks: %v", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		_ = tx.Rollback().Error
+		return fmt.Errorf("gagal commit reset saldo master: %v", err)
 	}
 
 	// Optional: Refresh MV jika ada
