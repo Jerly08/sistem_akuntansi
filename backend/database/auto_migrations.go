@@ -61,6 +61,17 @@ func RunAutoMigrations(db *gorm.DB) error {
 		log.Println("✅ Verified SSOT sync functions are installed")
 	}
 
+	// Ensure comprehensive balance sync system is installed and configured
+	log.Println("============================================")
+	log.Println("🔧 STARTING COMPREHENSIVE BALANCE SYNC SYSTEM SETUP")
+	log.Println("============================================")
+	if err := ensureBalanceSyncSystem(db); err != nil {
+		log.Printf("⚠️  BALANCE SYNC SYSTEM SETUP FAILED: %v", err)
+	} else {
+		log.Println("✅ BALANCE SYNC SYSTEM SETUP COMPLETED SUCCESSFULLY")
+	}
+	log.Println("============================================")
+
 	log.Println("✅ Auto-migrations completed")
 	return nil
 }
@@ -910,5 +921,211 @@ func ensureAccountBalancesMaterializedView(db *gorm.DB) error {
 		log.Println("ℹ️  Materialized view 'account_balances' already exists")
 	}
 	
+	return nil
+}
+
+// ensureBalanceSyncSystem ensures the comprehensive balance sync system is installed and configured
+// This is idempotent and safe to run on every startup across environments
+func ensureBalanceSyncSystem(db *gorm.DB) error {
+	log.Println("🔍 Checking balance sync system status...")
+	
+	// 1. Check if balance sync triggers exist
+	triggerStatus, err := checkBalanceSyncTriggers(db)
+	if err != nil {
+		log.Printf("⚠️  Failed to check trigger status: %v", err)
+		// Continue with installation
+	}
+	
+	// 2. Check if balance sync functions exist
+	functionStatus, err := checkBalanceSyncFunctions(db)
+	if err != nil {
+		log.Printf("⚠️  Failed to check function status: %v", err)
+		// Continue with installation
+	}
+	
+	log.Printf("📊 Current status -> Triggers: %v, Functions: %v", triggerStatus, functionStatus)
+	
+	// 3. If system is not complete, install/update it
+	if !triggerStatus || !functionStatus {
+		log.Println("🔧 Installing/updating balance sync system...")
+		if err := installBalanceSyncSystem(db); err != nil {
+			return fmt.Errorf("failed to install balance sync system: %w", err)
+		}
+	} else {
+		log.Println("✅ Balance sync system is already installed and up-to-date")
+	}
+	
+	// 4. Ensure cash bank accounts are properly configured
+	if err := ensureCashBankAccountConfiguration(db); err != nil {
+		log.Printf("⚠️  Warning: Cash bank account configuration failed: %v", err)
+		// Don't fail completely, just warn
+	}
+	
+	// 5. Perform initial balance synchronization if needed
+	if err := performInitialBalanceSync(db); err != nil {
+		log.Printf("⚠️  Warning: Initial balance sync failed: %v", err)
+		// Don't fail completely, just warn
+	}
+	
+	log.Println("✅ Balance sync system setup completed successfully")
+	return nil
+}
+
+// checkBalanceSyncTriggers checks if balance sync triggers are installed
+func checkBalanceSyncTriggers(db *gorm.DB) (bool, error) {
+	requiredTriggers := []string{
+		"trigger_recalc_cashbank_balance_insert",
+		"trigger_recalc_cashbank_balance_update", 
+		"trigger_recalc_cashbank_balance_delete",
+		"trigger_validate_account_balance",
+	}
+	
+	for _, triggerName := range requiredTriggers {
+		var count int64
+		err := db.Raw(`
+			SELECT COUNT(*) FROM information_schema.triggers 
+			WHERE trigger_name = $1
+		`, triggerName).Scan(&count).Error
+		
+		if err != nil {
+			return false, err
+		}
+		
+		if count == 0 {
+			log.Printf("   ⚠️  Missing trigger: %s", triggerName)
+			return false, nil
+		}
+	}
+	
+	return true, nil
+}
+
+// checkBalanceSyncFunctions checks if balance sync functions are installed
+func checkBalanceSyncFunctions(db *gorm.DB) (bool, error) {
+	requiredFunctions := []string{
+		"update_parent_account_balances",
+		"recalculate_cashbank_balance",
+		"validate_account_balance_consistency",
+		"manual_sync_cashbank_coa",
+		"manual_sync_all_cashbank_coa",
+		"ensure_cashbank_not_header",
+	}
+	
+	for _, functionName := range requiredFunctions {
+		var count int64
+		err := db.Raw(`
+			SELECT COUNT(*) FROM pg_proc 
+			WHERE proname = $1
+		`, functionName).Scan(&count).Error
+		
+		if err != nil {
+			return false, err
+		}
+		
+		if count == 0 {
+			log.Printf("   ⚠️  Missing function: %s", functionName)
+			return false, nil
+		}
+	}
+	
+	return true, nil
+}
+
+// installBalanceSyncSystem installs or updates the balance sync system
+func installBalanceSyncSystem(db *gorm.DB) error {
+	log.Println("📦 Installing comprehensive balance sync system...")
+	
+	// Read the comprehensive balance sync migration content
+	migrationPath := "20250930_comprehensive_auto_balance_sync.sql"
+	migrationDir, err := findMigrationDir()
+	if err != nil {
+		return fmt.Errorf("failed to find migration directory: %w", err)
+	}
+	
+	fullPath := filepath.Join(migrationDir, migrationPath)
+	content, err := ioutil.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Errorf("failed to read balance sync migration file: %w", err)
+	}
+	
+	// Parse and execute the migration using the complex parser
+	log.Printf("🔧 Executing balance sync migration: %s", migrationPath)
+	statements := parseComplexSQL(string(content))
+	
+	for i, stmt := range statements {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" || strings.HasPrefix(stmt, "--") {
+			continue
+		}
+		
+		if err := db.Exec(stmt).Error; err != nil {
+			if isAlreadyExistsError(err) {
+				log.Printf("   ℹ️  Skipped existing object in statement %d", i+1)
+				continue
+			}
+			return fmt.Errorf("failed to execute statement %d: %w\nSQL: %s", i+1, err, stmt)
+		}
+	}
+	
+	log.Println("✅ Balance sync system installed successfully")
+	return nil
+}
+
+// ensureCashBankAccountConfiguration ensures cash bank accounts are properly configured
+func ensureCashBankAccountConfiguration(db *gorm.DB) error {
+	log.Println("🏦 Ensuring cash bank account configuration...")
+	
+	// Check if we have cash banks to configure
+	var cashBankCount int64
+	if err := db.Raw("SELECT COUNT(*) FROM cash_banks WHERE deleted_at IS NULL").Scan(&cashBankCount).Error; err != nil {
+		return fmt.Errorf("failed to count cash banks: %w", err)
+	}
+	
+	if cashBankCount == 0 {
+		log.Println("   ℹ️  No cash banks found - skipping configuration")
+		return nil
+	}
+	
+	log.Printf("   📊 Found %d cash banks to configure", cashBankCount)
+	
+	// Ensure cash bank accounts are not header accounts
+	if err := db.Exec("SELECT ensure_cashbank_not_header()").Error; err != nil {
+		return fmt.Errorf("failed to ensure non-header status: %w", err)
+	}
+	
+	log.Println("✅ Cash bank account configuration completed")
+	return nil
+}
+
+// performInitialBalanceSync performs initial balance synchronization
+func performInitialBalanceSync(db *gorm.DB) error {
+	log.Println("⚖️  Performing initial balance synchronization...")
+	
+	// Check if sync functions are available
+	var funcExists bool
+	err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_proc 
+			WHERE proname = 'manual_sync_all_cashbank_coa'
+		)
+	`).Scan(&funcExists).Error
+	
+	if err != nil {
+		return fmt.Errorf("failed to check sync function: %w", err)
+	}
+	
+	if !funcExists {
+		log.Println("   ⚠️  Sync function not available - skipping initial sync")
+		return nil
+	}
+	
+	// Perform the sync
+	var syncResult string
+	err = db.Raw("SELECT manual_sync_all_cashbank_coa()").Scan(&syncResult).Error
+	if err != nil {
+		return fmt.Errorf("failed to perform initial sync: %w", err)
+	}
+	
+	log.Printf("✅ Initial sync completed: %s", syncResult)
 	return nil
 }

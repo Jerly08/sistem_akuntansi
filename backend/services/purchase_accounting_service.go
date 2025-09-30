@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 	"app-sistem-akuntansi/models"
@@ -11,6 +12,47 @@ import (
 )
 
 // Enhanced Accounting Methods for Purchase Module
+
+// sanitizeFloat ensures value is a valid, finite number within safe DB range
+// decimal(15,2) max is 999,999,999,999,999.99 (~1e15). We clamp conservatively.
+func sanitizeFloat(v float64) float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
+	const limit = 9.0e14 // conservative cap well within decimal(15,2)
+	if v > limit {
+		return limit
+	}
+	if v < -limit {
+		return -limit
+	}
+	return v
+}
+
+// clampPercent keeps percentage between 0 and 100
+func clampPercent(p float64) float64 {
+	if math.IsNaN(p) || math.IsInf(p, 0) {
+		return 0
+	}
+	if p < 0 {
+		return 0
+	}
+	if p > 100 {
+		return 100
+	}
+	return p
+}
+
+// clampNonNegative returns max(0, v)
+func clampNonNegative(v float64) float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0
+	}
+	if v < 0 {
+		return 0
+	}
+	return v
+}
 
 // setApprovalBasisAndBase determines approval basis for purchase
 func (s *PurchaseService) setApprovalBasisAndBase(purchase *models.Purchase) {
@@ -51,16 +93,21 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 		item := models.PurchaseItem{
 			ProductID:        itemReq.ProductID,
 			Quantity:         itemReq.Quantity,
-			UnitPrice:        itemReq.UnitPrice,
-			Discount:         itemReq.Discount,
-			Tax:              itemReq.Tax,
+			UnitPrice:        sanitizeFloat(clampNonNegative(itemReq.UnitPrice)),
+			Discount:         sanitizeFloat(clampNonNegative(itemReq.Discount)),
+			Tax:              sanitizeFloat(clampNonNegative(itemReq.Tax)),
 			ExpenseAccountID: itemReq.ExpenseAccountID,
 		}
 		
-		// Calculate line totals
+		// Calculate line totals with guards
 		lineSubtotal := float64(item.Quantity) * item.UnitPrice
-		item.TotalPrice = lineSubtotal - item.Discount // Remove duplicate tax addition
-		fmt.Printf("ℹ Item calculation: %d x %.2f = %.2f (Discount: %.2f, Net: %.2f)\n", 
+		// Ensure discount never exceeds line subtotal
+		if item.Discount > lineSubtotal {
+			item.Discount = lineSubtotal
+		}
+		item.TotalPrice = clampNonNegative(lineSubtotal - item.Discount) // discount reduces cost, never below 0
+		item.TotalPrice = sanitizeFloat(item.TotalPrice)
+		fmt.Printf("ℹ Item calculation: %d x %.2f = %.2f (Discount: %.2f, Net: %.2f)\n",
 			item.Quantity, item.UnitPrice, lineSubtotal, item.Discount, item.TotalPrice)
 		
 		subtotalBeforeDiscount += lineSubtotal
@@ -74,57 +121,72 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 	
 	// Calculate order-level discount
 	orderDiscountAmount := 0.0
+	// Clamp header discount percent to [0,100]
+	purchase.Discount = clampPercent(purchase.Discount)
 	if purchase.Discount > 0 {
-		orderDiscountAmount = (subtotalBeforeDiscount - itemDiscountAmount) * purchase.Discount / 100
+		baseForOrderDisc := subtotalBeforeDiscount - itemDiscountAmount
+		if baseForOrderDisc < 0 {
+			baseForOrderDisc = 0
+		}
+		orderDiscountAmount = baseForOrderDisc * purchase.Discount / 100
 	}
 	
-	// Set basic calculated fields
-	purchase.SubtotalBeforeDiscount = subtotalBeforeDiscount
-	purchase.ItemDiscountAmount = itemDiscountAmount
-	purchase.OrderDiscountAmount = orderDiscountAmount
-	purchase.NetBeforeTax = subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount
+	// Set basic calculated fields with sanitization
+	purchase.SubtotalBeforeDiscount = sanitizeFloat(clampNonNegative(subtotalBeforeDiscount))
+	purchase.ItemDiscountAmount = sanitizeFloat(clampNonNegative(itemDiscountAmount))
+	purchase.OrderDiscountAmount = sanitizeFloat(clampNonNegative(orderDiscountAmount))
+	purchase.NetBeforeTax = sanitizeFloat(clampNonNegative(subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount))
 	
 	fmt.Printf("ℹ Calculating tax additions with NetBeforeTax=%.2f\n", purchase.NetBeforeTax)
 	// Calculate tax additions (Penambahan)
 	// 1. PPN (VAT) calculation - only default to 11% if rate was not provided in request
+	purchase.PPNRate = clampPercent(purchase.PPNRate)
 	if purchase.PPNRate > 0 {
-		purchase.PPNAmount = purchase.NetBeforeTax * purchase.PPNRate / 100
+		purchase.PPNAmount = sanitizeFloat(clampNonNegative(purchase.NetBeforeTax * purchase.PPNRate / 100))
 		fmt.Printf("✅ PPN calculated: %.1f%% x %.2f = %.2f\n", purchase.PPNRate, purchase.NetBeforeTax, purchase.PPNAmount)
 	} else {
 		// If PPNRate is 0, respect it (no VAT case)
-		// Only default to 11% if this is a new purchase without explicit rate
-		purchase.PPNAmount = purchase.NetBeforeTax * purchase.PPNRate / 100 // Will be 0 if PPNRate is 0
+		purchase.PPNAmount = 0
 		fmt.Printf("ℹ PPN rate is 0%%, no VAT applied\n")
 	}
 	
-	// 2. Other tax additions
-	purchase.TotalTaxAdditions = purchase.PPNAmount + purchase.OtherTaxAdditions
+	// 2. Other tax additions (absolute amounts)
+	purchase.OtherTaxAdditions = sanitizeFloat(clampNonNegative(purchase.OtherTaxAdditions))
+	purchase.TotalTaxAdditions = sanitizeFloat(clampNonNegative(purchase.PPNAmount + purchase.OtherTaxAdditions))
 	
 	fmt.Printf("ℹ Calculating tax deductions with NetBeforeTax=%.2f\n", purchase.NetBeforeTax)
 	// Calculate tax deductions (Pemotongan)
 	// 1. PPh 21 calculation
+	purchase.PPh21Rate = clampPercent(purchase.PPh21Rate)
 	if purchase.PPh21Rate > 0 {
-		purchase.PPh21Amount = purchase.NetBeforeTax * purchase.PPh21Rate / 100
+		purchase.PPh21Amount = sanitizeFloat(clampNonNegative(purchase.NetBeforeTax * purchase.PPh21Rate / 100))
 		fmt.Printf("✅ PPh 21 calculated: %.1f%% x %.2f = %.2f\n", purchase.PPh21Rate, purchase.NetBeforeTax, purchase.PPh21Amount)
+	} else {
+		purchase.PPh21Amount = 0
 	}
 	
 	// 2. PPh 23 calculation
+	purchase.PPh23Rate = clampPercent(purchase.PPh23Rate)
 	if purchase.PPh23Rate > 0 {
-		purchase.PPh23Amount = purchase.NetBeforeTax * purchase.PPh23Rate / 100
+		purchase.PPh23Amount = sanitizeFloat(clampNonNegative(purchase.NetBeforeTax * purchase.PPh23Rate / 100))
 		fmt.Printf("✅ PPh 23 calculated: %.1f%% x %.2f = %.2f\n", purchase.PPh23Rate, purchase.NetBeforeTax, purchase.PPh23Amount)
+	} else {
+		purchase.PPh23Amount = 0
 	}
 	
+	// Absolute other tax deductions
+	purchase.OtherTaxDeductions = sanitizeFloat(clampNonNegative(purchase.OtherTaxDeductions))
 	// 3. Total tax deductions
-	purchase.TotalTaxDeductions = purchase.PPh21Amount + purchase.PPh23Amount + purchase.OtherTaxDeductions
+	purchase.TotalTaxDeductions = sanitizeFloat(clampNonNegative(purchase.PPh21Amount + purchase.PPh23Amount + purchase.OtherTaxDeductions))
 	
 	fmt.Printf("ℹ Calculating final total amount\n")
 	fmt.Printf("   NetBeforeTax: %.2f\n", purchase.NetBeforeTax)
 	fmt.Printf("   TotalTaxAdditions: %.2f\n", purchase.TotalTaxAdditions)
 	fmt.Printf("   TotalTaxDeductions: %.2f\n", purchase.TotalTaxDeductions)
-	// Calculate final total amount
+	// Calculate final total amount (never negative)
 	// Total = Net Before Tax + Tax Additions - Tax Deductions
-	purchase.TotalAmount = purchase.NetBeforeTax + purchase.TotalTaxAdditions - purchase.TotalTaxDeductions
-	fmt.Printf("✅ Final total calculated: %.2f + %.2f - %.2f = %.2f\n", 
+	purchase.TotalAmount = sanitizeFloat(clampNonNegative(purchase.NetBeforeTax + purchase.TotalTaxAdditions - purchase.TotalTaxDeductions))
+	fmt.Printf("✅ Final total calculated: %.2f + %.2f - %.2f = %.2f\n",
 		purchase.NetBeforeTax, purchase.TotalTaxAdditions, purchase.TotalTaxDeductions, purchase.TotalAmount)
 	
 	// For legacy compatibility, set TaxAmount to PPN amount
@@ -140,6 +202,9 @@ func (s *PurchaseService) calculatePurchaseTotals(purchase *models.Purchase, ite
 		purchase.PaidAmount = 0
 		purchase.OutstandingAmount = purchase.TotalAmount
 	}
+	// Final sanitize
+	purchase.PaidAmount = sanitizeFloat(clampNonNegative(purchase.PaidAmount))
+	purchase.OutstandingAmount = sanitizeFloat(clampNonNegative(purchase.OutstandingAmount))
 	
 	return nil
 }
@@ -154,8 +219,19 @@ func (s *PurchaseService) recalculatePurchaseTotals(purchase *models.Purchase) e
 	itemDiscountAmount := 0.0
 	
 	for _, item := range purchase.PurchaseItems {
+		// Sanitize item fields
+		if item.UnitPrice < 0 || math.IsNaN(item.UnitPrice) || math.IsInf(item.UnitPrice, 0) {
+			item.UnitPrice = 0
+		}
+		if item.Discount < 0 || math.IsNaN(item.Discount) || math.IsInf(item.Discount, 0) {
+			item.Discount = 0
+		}
 		lineSubtotal := float64(item.Quantity) * item.UnitPrice
-		item.TotalPrice = lineSubtotal - item.Discount // Remove duplicate tax addition
+		if item.Discount > lineSubtotal {
+			item.Discount = lineSubtotal
+		}
+		item.TotalPrice = clampNonNegative(lineSubtotal - item.Discount)
+		item.TotalPrice = sanitizeFloat(item.TotalPrice)
 		
 		subtotalBeforeDiscount += lineSubtotal
 		itemDiscountAmount += item.Discount
@@ -163,45 +239,59 @@ func (s *PurchaseService) recalculatePurchaseTotals(purchase *models.Purchase) e
 	
 	// Calculate order-level discount
 	orderDiscountAmount := 0.0
+	purchase.Discount = clampPercent(purchase.Discount)
 	if purchase.Discount > 0 {
-		orderDiscountAmount = (subtotalBeforeDiscount - itemDiscountAmount) * purchase.Discount / 100
+		baseForOrderDisc := subtotalBeforeDiscount - itemDiscountAmount
+		if baseForOrderDisc < 0 {
+			baseForOrderDisc = 0
+		}
+		orderDiscountAmount = baseForOrderDisc * purchase.Discount / 100
 	}
 	
-	// Set basic calculated fields
-	purchase.SubtotalBeforeDiscount = subtotalBeforeDiscount
-	purchase.ItemDiscountAmount = itemDiscountAmount
-	purchase.OrderDiscountAmount = orderDiscountAmount
-	purchase.NetBeforeTax = subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount
+	// Set basic calculated fields (sanitized)
+	purchase.SubtotalBeforeDiscount = sanitizeFloat(clampNonNegative(subtotalBeforeDiscount))
+	purchase.ItemDiscountAmount = sanitizeFloat(clampNonNegative(itemDiscountAmount))
+	purchase.OrderDiscountAmount = sanitizeFloat(clampNonNegative(orderDiscountAmount))
+	purchase.NetBeforeTax = sanitizeFloat(clampNonNegative(subtotalBeforeDiscount - itemDiscountAmount - orderDiscountAmount))
 	
 	// Recalculate tax additions (Penambahan)
 	// 1. PPN (VAT) calculation - only apply rate that's already set
+	purchase.PPNRate = clampPercent(purchase.PPNRate)
 	if purchase.PPNRate > 0 {
-		purchase.PPNAmount = purchase.NetBeforeTax * purchase.PPNRate / 100
+		purchase.PPNAmount = sanitizeFloat(clampNonNegative(purchase.NetBeforeTax * purchase.PPNRate / 100))
 	} else {
 		// If PPNRate is 0, respect it (no VAT case)
 		purchase.PPNAmount = 0
 	}
 	
 	// 2. Other tax additions
-	purchase.TotalTaxAdditions = purchase.PPNAmount + purchase.OtherTaxAdditions
+	purchase.OtherTaxAdditions = sanitizeFloat(clampNonNegative(purchase.OtherTaxAdditions))
+	purchase.TotalTaxAdditions = sanitizeFloat(clampNonNegative(purchase.PPNAmount + purchase.OtherTaxAdditions))
 	
 	// Recalculate tax deductions (Pemotongan)
 	// 1. PPh 21 calculation
+	purchase.PPh21Rate = clampPercent(purchase.PPh21Rate)
 	if purchase.PPh21Rate > 0 {
-		purchase.PPh21Amount = purchase.NetBeforeTax * purchase.PPh21Rate / 100
+		purchase.PPh21Amount = sanitizeFloat(clampNonNegative(purchase.NetBeforeTax * purchase.PPh21Rate / 100))
+	} else {
+		purchase.PPh21Amount = 0
 	}
 	
 	// 2. PPh 23 calculation
+	purchase.PPh23Rate = clampPercent(purchase.PPh23Rate)
 	if purchase.PPh23Rate > 0 {
-		purchase.PPh23Amount = purchase.NetBeforeTax * purchase.PPh23Rate / 100
+		purchase.PPh23Amount = sanitizeFloat(clampNonNegative(purchase.NetBeforeTax * purchase.PPh23Rate / 100))
+	} else {
+		purchase.PPh23Amount = 0
 	}
 	
 	// 3. Total tax deductions
-	purchase.TotalTaxDeductions = purchase.PPh21Amount + purchase.PPh23Amount + purchase.OtherTaxDeductions
+	purchase.OtherTaxDeductions = sanitizeFloat(clampNonNegative(purchase.OtherTaxDeductions))
+	purchase.TotalTaxDeductions = sanitizeFloat(clampNonNegative(purchase.PPh21Amount + purchase.PPh23Amount + purchase.OtherTaxDeductions))
 	
-	// Calculate final total amount
+	// Calculate final total amount (never negative)
 	// Total = Net Before Tax + Tax Additions - Tax Deductions
-	purchase.TotalAmount = purchase.NetBeforeTax + purchase.TotalTaxAdditions - purchase.TotalTaxDeductions
+	purchase.TotalAmount = sanitizeFloat(clampNonNegative(purchase.NetBeforeTax + purchase.TotalTaxAdditions - purchase.TotalTaxDeductions))
 	
 	// For legacy compatibility, set TaxAmount to PPN amount
 	purchase.TaxAmount = purchase.PPNAmount

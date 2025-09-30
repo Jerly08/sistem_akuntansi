@@ -99,14 +99,23 @@ func (esm *EnhancedSecurityMiddleware) IPWhitelist() gin.HandlerFunc {
 // Enhanced security headers middleware
 func (esm *EnhancedSecurityMiddleware) SecurityHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Add security headers
+		// For Swagger and docs endpoints, let the Swagger-specific middleware control CSP.
+		path := c.Request.URL.Path
+		skipCSP := strings.HasPrefix(path, "/swagger") || strings.HasPrefix(path, "/docs") || strings.HasPrefix(path, "/openapi")
+
+		// Add security headers (optionally skip CSP so it can be set by swaggerCSPMiddleware)
 		for header, value := range esm.securityHeaders {
+			if skipCSP && strings.EqualFold(header, "Content-Security-Policy") {
+				// Ensure any previously-set CSP is cleared for these paths so Swagger override applies cleanly
+				c.Writer.Header().Del("Content-Security-Policy")
+				continue
+			}
 			c.Header(header, value)
 		}
-		
+
 		// Remove sensitive server headers
 		c.Header("Server", "") // Hide server information
-		
+
 		c.Next()
 	}
 }
