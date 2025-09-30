@@ -246,6 +246,32 @@ const SalesPage: React.FC = () => {
     salesService.downloadInvoicePDF(sale.id, sale.invoice_number || sale.code);
   };
 
+  // Handle create receipt (PDF) when fully paid
+  const handleCreateReceipt = (sale: Sale) => {
+    if (sale.status !== 'PAID' && sale.outstanding_amount > 0) {
+      toast({
+        title: 'Not fully paid',
+        description: 'Receipt can only be created when the sale is fully paid.',
+        status: 'warning',
+        duration: 3000
+      });
+      return;
+    }
+    salesService
+      .downloadReceiptPDF(sale.id, sale.invoice_number || sale.code)
+      .then(() => {
+        handleSuccess('Receipt has been generated and downloaded', toast, 'download receipt');
+      })
+      .catch((err) => {
+        toast({
+          title: 'Failed to generate receipt',
+          description: err?.message || 'Please try again later',
+          status: 'error',
+          duration: 4000
+        });
+      });
+  };
+
   return (
     <ProtectedModule module="sales">
       <SimpleLayout>
@@ -424,6 +450,7 @@ const SalesPage: React.FC = () => {
           onPayment={canEdit ? handlePayment : undefined}
           onDelete={canDelete ? handleDelete : undefined}
           onDownloadInvoice={handleDownloadInvoice}
+          onCreateReceipt={handleCreateReceipt}
           formatCurrency={salesService.formatCurrency}
           formatDate={salesService.formatDate}
           getStatusLabel={salesService.getStatusLabel}

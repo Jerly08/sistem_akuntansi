@@ -56,6 +56,9 @@ func UpdateSwaggerDocs() {
 	
 	// Force basePath to root so paths are absolute in UI
 	swaggerDoc["basePath"] = "/"
+
+	// Apply global security (BearerAuth) and exempt public endpoints
+	applyGlobalSecurity(swaggerDoc)
 	
 	// Marshal back to JSON
 	updatedData, err := json.MarshalIndent(swaggerDoc, "", "  ")
@@ -74,6 +77,58 @@ func UpdateSwaggerDocs() {
 	updateSwaggerGoDocs(swaggerConfig)
 	
 	log.Printf("✅ Swagger docs updated dynamically: %s", swaggerConfig.GetSwaggerURL())
+}
+
+// applyGlobalSecurity sets default BearerAuth across all operations, and clears it for public endpoints.
+func applyGlobalSecurity(swaggerDoc map[string]interface{}) {
+	// Define global security requirement
+	globalSec := []interface{}{map[string]interface{}{"BearerAuth": []interface{}{}}}
+	swaggerDoc["security"] = globalSec
+
+	paths, ok := swaggerDoc["paths"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	// Public endpoints (no auth required)
+	publicPrefixes := []string{
+		"/auth/login", 
+		"/api/v1/auth/login",
+		"/auth/register",
+		"/api/v1/auth/register",
+		"/auth/refresh",
+		"/api/v1/auth/refresh",
+		"/api/v1/health",
+		"/health",
+	}
+
+	// Helper to mark operation-level security as empty (override global)
+	clearOpSecurity := func(op map[string]interface{}) {
+		op["security"] = []interface{}{}
+	}
+
+	for p, v := range paths {
+		isPublic := false
+		for _, pref := range publicPrefixes {
+			if strings.EqualFold(p, pref) {
+				isPublic = true
+				break
+			}
+		}
+		if !isPublic {
+			continue
+		}
+		// For each method under the public path, clear security
+		if m, ok := v.(map[string]interface{}); ok {
+			for _, method := range []string{"get", "post", "put", "delete", "patch", "options", "head"} {
+				if opRaw, ok := m[method]; ok {
+					if op, ok := opRaw.(map[string]interface{}); ok {
+						clearOpSecurity(op)
+					}
+				}
+			}
+		}
+	}
 }
 
 // normalizePaths updates path keys to align with actual routes used by frontend/backend

@@ -1977,7 +1977,16 @@ func (p *PDFService) GeneratePurchaseReceiptPDF(receipt *models.PurchaseReceipt)
 
 // GenerateReceiptPDF generates PDF for a single purchase receipt
 func (p *PDFService) GenerateReceiptPDF(data interface{}) ([]byte, error) {
-	// Extract receipt from interface{}
+	// If it's a sales receipt, delegate to sales receipt renderer
+	if s, ok := data.(*models.Sale); ok {
+		return p.generateSaleReceiptPDF(s)
+	}
+	if s2, ok := data.(models.Sale); ok {
+		ss := s2
+		return p.generateSaleReceiptPDF(&ss)
+	}
+
+	// Otherwise, treat as purchase receipt (existing behavior)
 	var receipt *models.PurchaseReceipt
 	switch v := data.(type) {
 	case *models.PurchaseReceipt:
@@ -2664,6 +2673,262 @@ pdf.Ln(8)
 		return nil, fmt.Errorf("failed to generate combined receipts PDF: %v", err)
 	}
 
+	return buf.Bytes(), nil
+}
+
+// ========================================
+// Sales Payment Receipt PDF (for fully paid sales)
+// ========================================
+
+// generateSaleReceiptPDF renders a payment receipt for a fully-paid sale.
+func (p *PDFService) generateSaleReceiptPDF(sale *models.Sale) ([]byte, error) {
+	if sale == nil {
+		return nil, fmt.Errorf("sale is required")
+	}
+
+	// Create new PDF document
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(15, 15, 15)
+	pdf.AddPage()
+
+	// Layout helpers
+	lm, tm, rm, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	contentW := pageW - lm - rm
+
+	// Company info
+	companyInfo, err := p.getCompanyInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company info: %v", err)
+	}
+
+	// Header with logo and company info
+	logoX := lm
+	logoY := tm
+	logoW := 35.0
+	logoAdded := false
+	if strings.TrimSpace(companyInfo.CompanyLogo) != "" {
+		path := companyInfo.CompanyLogo
+		if strings.HasPrefix(path, "/") { path = "." + path }
+		if _, err := os.Stat(path); err == nil {
+			if imgType := detectImageType(path); imgType != "" {
+				pdf.ImageOptions(path, logoX, logoY, logoW, 0, false, gofpdf.ImageOptions{ImageType: imgType, ReadDpi: true}, 0, "")
+				logoAdded = true
+			}
+		}
+	}
+	if !logoAdded {
+		pdf.SetDrawColor(220, 220, 220)
+		pdf.SetFillColor(248, 249, 250)
+		pdf.Rect(logoX, logoY, logoW, logoW, "FD")
+		pdf.SetFont("Arial", "B", 16)
+		pdf.SetTextColor(120, 120, 120)
+		pdf.SetXY(logoX+8, logoY+19)
+		pdf.CellFormat(19, 8, "</>", "", 0, "C", false, 0, "")
+		pdf.SetTextColor(0, 0, 0)
+	}
+
+	// Company text right
+	pdf.SetFont("Arial", "B", 12)
+	nameW := pdf.GetStringWidth(companyInfo.CompanyName)
+	pdf.SetXY(pageW-rm-nameW, tm)
+	pdf.Cell(nameW, 6, companyInfo.CompanyName)
+	pdf.SetFont("Arial", "", 9)
+	addrW := pdf.GetStringWidth(companyInfo.CompanyAddress)
+	pdf.SetXY(pageW-rm-addrW, tm+8)
+	pdf.Cell(addrW, 4, companyInfo.CompanyAddress)
+	phoneText := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
+	phoneW := pdf.GetStringWidth(phoneText)
+	pdf.SetXY(pageW-rm-phoneW, tm+14)
+	pdf.Cell(phoneW, 4, phoneText)
+
+	// Divider
+	pdf.SetDrawColor(238, 238, 238)
+	pdf.SetLineWidth(0.2)
+	pdf.Line(lm, tm+45, pageW-rm, tm+45)
+
+	// Title
+	pdf.SetY(tm + 55)
+	pdf.SetFont("Arial", "B", 22)
+	pdf.SetTextColor(51, 51, 51)
+	pdf.Cell(contentW, 10, "PAYMENT RECEIPT")
+	pdf.SetTextColor(0, 0, 0)
+	pdf.Ln(18)
+
+	// Receipt meta
+	receiptNumber := sale.InvoiceNumber
+	if strings.TrimSpace(receiptNumber) == "" {
+		receiptNumber = sale.Code
+	}
+	receiptNumber = fmt.Sprintf("RCT-%s", receiptNumber)
+	receiptDate := time.Now().Format("02/01/2006")
+
+	leftX := lm
+	rightX := lm + contentW - 70
+
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetX(leftX)
+	pdf.Cell(30, 5, "Receipt Number:")
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(102, 102, 102)
+	pdf.Cell(60, 5, receiptNumber)
+	pdf.SetTextColor(0, 0, 0)
+
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetX(rightX)
+	pdf.Cell(20, 5, "Date:")
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(102, 102, 102)
+	pdf.Cell(40, 5, receiptDate)
+	pdf.Ln(8)
+	pdf.SetTextColor(0, 0, 0)
+
+	// Invoice info and status
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetX(leftX)
+	pdf.Cell(30, 5, "Invoice Number:")
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(102, 102, 102)
+	inv := sale.InvoiceNumber
+	if inv == "" { inv = "-" }
+	pdf.Cell(60, 5, inv)
+	pdf.SetTextColor(0, 0, 0)
+
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetX(rightX)
+	pdf.Cell(20, 5, "Status:")
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(102, 102, 102)
+	pdf.Cell(40, 5, strings.ToUpper(sale.Status))
+	pdf.Ln(10)
+	pdf.SetTextColor(0, 0, 0)
+
+	// Customer block
+	pdf.SetFont("Arial", "B", 10)
+	pdf.SetTextColor(51, 51, 51)
+	pdf.Cell(contentW, 6, "Customer:")
+	pdf.Ln(8)
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(102, 102, 102)
+	if sale.Customer.ID != 0 {
+		pdf.Cell(contentW, 4, sale.Customer.Name)
+		pdf.Ln(5)
+		if strings.TrimSpace(sale.Customer.Address) != "" {
+			pdf.Cell(contentW, 4, sale.Customer.Address)
+			pdf.Ln(5)
+		}
+		if strings.TrimSpace(sale.Customer.Phone) != "" {
+			pdf.Cell(contentW, 4, fmt.Sprintf("Phone: %s", sale.Customer.Phone))
+			pdf.Ln(5)
+		}
+	} else {
+		pdf.Cell(contentW, 4, "Customer information not available")
+		pdf.Ln(5)
+	}
+	pdf.SetTextColor(0, 0, 0)
+	pdf.Ln(8)
+
+	// Payment summary
+	pdf.SetFont("Arial", "B", 10)
+	pdf.Cell(contentW, 6, "Payment Summary")
+	pdf.Ln(8)
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetTextColor(102, 102, 102)
+	pdf.Cell(60, 5, fmt.Sprintf("Invoice Amount: %s", p.formatRupiah(sale.TotalAmount)))
+	pdf.Ln(5)
+	pdf.Cell(60, 5, fmt.Sprintf("Total Paid: %s", p.formatRupiah(sale.PaidAmount)))
+	pdf.Ln(5)
+	pdf.Cell(60, 5, fmt.Sprintf("Outstanding: %s", p.formatRupiah(sale.OutstandingAmount)))
+	pdf.Ln(10)
+	pdf.SetTextColor(0, 0, 0)
+
+	// Items table
+	if len(sale.SaleItems) > 0 {
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(contentW, 6, "Items")
+		pdf.Ln(8)
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetFillColor(248, 249, 250)
+		pdf.SetDrawColor(160, 160, 160)
+		pdf.SetLineWidth(0.4)
+		// Column widths
+		numW := contentW * 0.08
+		itemW := contentW * 0.44
+		qtyW := contentW * 0.12
+		priceW := contentW * 0.18
+		totalW := contentW - numW - itemW - qtyW - priceW
+		if totalW < 20 { totalW = 20 }
+		pdf.CellFormat(numW, 8, "#", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(itemW, 8, "Item", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(qtyW, 8, "Qty", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(priceW, 8, "Unit Price", "1", 0, "R", true, 0, "")
+		pdf.CellFormat(totalW, 8, "Line Total", "1", 0, "R", true, 0, "")
+		pdf.Ln(8)
+		pdf.SetFont("Arial", "", 8)
+		pdf.SetTextColor(102, 102, 102)
+		for i, it := range sale.SaleItems {
+			name := "Item"
+			if it.Product.ID != 0 && strings.TrimSpace(it.Product.Name) != "" {
+				name = it.Product.Name
+			}
+			if strings.TrimSpace(it.Description) != "" {
+				// Append description if provided and name not already too long
+				if len(name) < 40 {
+					name = name + " - " + it.Description
+				}
+			}
+			if len(name) > 55 { name = name[:52] + "..." }
+			qty := fmt.Sprintf("%d", it.Quantity)
+			unitPrice := p.formatRupiah(it.UnitPrice)
+			lineTotal := it.FinalAmount
+			if lineTotal == 0 { lineTotal = it.LineTotal + it.PPNAmount - it.PPhAmount }
+			lineTxt := p.formatRupiah(lineTotal)
+			pdf.CellFormat(numW, 6, strconv.Itoa(i+1), "1", 0, "C", false, 0, "")
+			pdf.CellFormat(itemW, 6, name, "1", 0, "L", false, 0, "")
+			pdf.CellFormat(qtyW, 6, qty, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(priceW, 6, unitPrice, "1", 0, "R", false, 0, "")
+			pdf.CellFormat(totalW, 6, lineTxt, "1", 0, "R", false, 0, "")
+			pdf.Ln(6)
+		}
+		pdf.SetTextColor(0, 0, 0)
+		pdf.Ln(6)
+	}
+
+	// Payment details table (if available)
+	if len(sale.SalePayments) > 0 {
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetFillColor(248, 249, 250)
+		pdf.SetDrawColor(160, 160, 160)
+		pdf.SetLineWidth(0.4)
+		pdf.CellFormat(contentW*0.25, 8, "Date", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(contentW*0.25, 8, "Method", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(contentW*0.30, 8, "Reference", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(contentW*0.20, 8, "Amount", "1", 0, "R", true, 0, "")
+		pdf.Ln(8)
+		pdf.SetFont("Arial", "", 8)
+		pdf.SetTextColor(102, 102, 102)
+		for _, pay := range sale.SalePayments {
+			pdf.CellFormat(contentW*0.25, 6, pay.PaymentDate.Format("02/01/2006"), "1", 0, "C", false, 0, "")
+			pdf.CellFormat(contentW*0.25, 6, strings.ToUpper(pay.PaymentMethod), "1", 0, "C", false, 0, "")
+			ref := strings.TrimSpace(pay.Reference)
+			if ref == "" { ref = "-" }
+			if len(ref) > 35 { ref = ref[:32] + "..." }
+			pdf.CellFormat(contentW*0.30, 6, ref, "1", 0, "L", false, 0, "")
+			pdf.CellFormat(contentW*0.20, 6, p.formatRupiah(pay.Amount), "1", 0, "R", false, 0, "")
+			pdf.Ln(6)
+		}
+		pdf.SetTextColor(0, 0, 0)
+	}
+
+	pdf.Ln(10)
+	pdf.SetFont("Arial", "I", 8)
+	pdf.SetTextColor(153, 153, 153)
+	pdf.Cell(contentW, 4, fmt.Sprintf("Generated on %s", time.Now().Format("02/01/2006 15:04")))
+
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return nil, fmt.Errorf("failed to generate sales receipt PDF: %v", err)
+	}
 	return buf.Bytes(), nil
 }
 

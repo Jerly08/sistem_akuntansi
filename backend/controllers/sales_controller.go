@@ -739,7 +739,7 @@ func (sc *SalesController) ExportSaleInvoicePDF(c *gin.Context) {
 		return
 	}
 
-// Load sale and generate PDF via pdfService
+	// Load sale and generate PDF via pdfService
 	sale, err := sc.salesServiceV2.GetSaleByID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Sale not found"})
@@ -755,6 +755,46 @@ func (sc *SalesController) ExportSaleInvoicePDF(c *gin.Context) {
 		filename = sale.Code
 	}
 	filename = filename + ".pdf"
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+// ExportSaleReceiptPDF exports a sales payment receipt as PDF (available when fully paid)
+func (sc *SalesController) ExportSaleReceiptPDF(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid sale ID"})
+		return
+	}
+
+	// Load sale details (with payments if available)
+	sale, err := sc.salesServiceV2.GetSaleByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Sale not found"})
+		return
+	}
+
+	// Validate that sale is fully paid
+	if !(strings.EqualFold(sale.Status, models.SaleStatusPaid) || sale.OutstandingAmount == 0) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":       "Receipt can only be generated for fully paid sales",
+			"sale_status": sale.Status,
+		})
+		return
+	}
+
+	pdfBytes, genErr := sc.pdfService.GenerateReceiptPDF(sale)
+	if genErr != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": genErr.Error()})
+		return
+	}
+
+	filename := sale.InvoiceNumber
+	if filename == "" {
+		filename = sale.Code
+	}
+	filename = filename + "_receipt.pdf"
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)

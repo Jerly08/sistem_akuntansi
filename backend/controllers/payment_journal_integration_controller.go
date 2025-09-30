@@ -286,7 +286,7 @@ func (ctrl *PaymentJournalIntegrationController) GetRealTimeAccountBalances(c *g
 // @Tags Payment Integration
 // @Produce json
 // @Param payment_id query int true "Payment ID"
-// @Success 200 {object} services.PaginatedJournalResponse
+// @Success 200 {object} services.JournalResponse
 // @Failure 400 {object} map[string]string
 // @Router /api/payments/journal-entries [get]
 func (ctrl *PaymentJournalIntegrationController) GetPaymentJournalEntries(c *gin.Context) {

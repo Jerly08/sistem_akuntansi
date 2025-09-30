@@ -92,7 +92,7 @@ func (c *UnifiedJournalController) GetJournalEntry(ctx *gin.Context) {
 // @Param reference query string false "Reference search"
 // @Param page query int false "Page number" default(1)
 // @Param limit query int false "Items per page" default(20)
-// @Success 200 {object} services.PaginatedJournalResponse
+// @Success 200 {object} services.JournalResponse
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /api/v1/journals [get]

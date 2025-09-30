@@ -489,6 +489,32 @@ class SalesService {
     return response.data;
   }
 
+  async exportReceiptPDF(saleId: number): Promise<Blob> {
+    try {
+      const response = await api.get(API_ENDPOINTS.SALES_RECEIPT_PDF(saleId), {
+        responseType: 'blob',
+        headers: { Accept: 'application/pdf' },
+        params: { t: Date.now() },
+      });
+      return response.data;
+    } catch (err: any) {
+      // Try to decode JSON error from blob
+      const res = err?.response;
+      if (res && res.data instanceof Blob) {
+        try {
+          const text = await res.data.text();
+          try {
+            const json = JSON.parse(text);
+            err.message = json.error || json.message || err.message;
+          } catch {
+            err.message = text || err.message;
+          }
+        } catch {}
+      }
+      throw err;
+    }
+  }
+
   // Helper methods for frontend
   
   getStatusColor(status: string): string {
@@ -629,6 +655,24 @@ class SalesService {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading sales report PDF:', error);
+      throw error;
+    }
+  }
+
+  async downloadReceiptPDF(saleId: number, receiptName: string): Promise<void> {
+    try {
+      const blob = await this.exportReceiptPDF(saleId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const safeName = receiptName || `SALE_${saleId}`;
+      link.download = `Receipt_${safeName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading receipt PDF:', error);
       throw error;
     }
   }

@@ -49,6 +49,7 @@ interface SalesTableProps {
   onPayment?: (sale: Sale) => void;
   onDelete?: (sale: Sale) => void;
   onDownloadInvoice?: (sale: Sale) => void;
+  onCreateReceipt?: (sale: Sale) => void;
   title?: string;
   formatCurrency: (amount: number) => string;
   formatDate: (date: string) => string;
@@ -67,6 +68,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
   onPayment,
   onDelete,
   onDownloadInvoice,
+  onCreateReceipt,
   title = 'Sales Transactions',
   formatCurrency,
   formatDate,
@@ -263,6 +265,18 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                               }}
                             >
                               Download Invoice
+                            </MenuItem>
+                          )}
+                          {/* Create Receipt visible when fully paid */}
+                          {(onCreateReceipt && (sale.status === 'PAID' || sale.outstanding_amount === 0)) && (
+                            <MenuItem
+                              icon={<FiDownload />}
+                              onClick={() => {
+                                console.log('Create Receipt clicked for sale:', sale.id);
+                                onCreateReceipt(sale);
+                              }}
+                            >
+                              Create Receipt (PDF)
                             </MenuItem>
                           )}
                           {canDelete && onDelete && (

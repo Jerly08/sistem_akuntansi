@@ -103,6 +103,20 @@ func loadSwaggerJSON() ([]byte, string, error) {
 	return nil, "", fmt.Errorf("swagger spec not found (looked for docs/swagger.json and docs/swagger_comprehensive.json)")
 }
 
+// minimalSwaggerJSON returns a small, valid OpenAPI document so the UI can load even if the full spec isn't available
+func minimalSwaggerJSON() []byte {
+	return []byte(`{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sistema Akuntansi API",
+    "version": "1.0.0",
+    "description": "Minimal spec fallback so Swagger UI can load. Generate full docs with: swag init"
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "paths": {}
+}`)
+}
+
 // swaggerCSPMiddleware relaxes CSP only for Swagger UI so it can execute inline scripts
 // We set these headers BEFORE calling next handlers so they override stricter global policies
 func swaggerCSPMiddleware() gin.HandlerFunc {
@@ -582,6 +596,7 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 
 				// PDF exports
 				sales.GET("/:id/invoice/pdf", permMiddleware.CanExport("sales"), salesController.ExportSaleInvoicePDF)
+				sales.GET("/:id/receipt/pdf", permMiddleware.CanExport("sales"), salesController.ExportSaleReceiptPDF)
 				sales.GET("/report/pdf", permMiddleware.CanExport("sales"), salesController.ExportSalesReportPDF)
 
 				// Customer portal
@@ -951,15 +966,18 @@ if isDevelopmentMode() || os.Getenv("ENABLE_SWAGGER") == "true" {
 	swaggerBytes, pathUsed, err := loadSwaggerJSON()
 	if err != nil {
 		log.Printf("⚠️  Swagger spec not found: %v", err)
-	} else {
-		log.Printf("📄 Serving Swagger spec from: %s", pathUsed)
-		r.GET("/openapi/doc.json", func(c *gin.Context) {
-			c.Data(http.StatusOK, "application/json", swaggerBytes)
-		})
-		// Swagger UI endpoints using CDN assets (root-level only)
+		log.Printf("ℹ️  Serving minimal embedded spec so Swagger UI can still load. Run 'swag init' to generate full docs.")
+		swaggerBytes = minimalSwaggerJSON()
+		pathUsed = "embedded-minimal"
+	}
+	log.Printf("📄 Serving Swagger spec from: %s", pathUsed)
+	r.GET("/openapi/doc.json", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/json", swaggerBytes)
+	})
+	// Swagger UI endpoints using CDN assets (root-level only)
 	sg := r.Group("/")
 	sg.Use(swaggerCSPMiddleware()) // relax CSP for Swagger UI only
-	sg.GET("/swagger", func(c *gin.Context) { c.Redirect(http.StatusFound, "/swagger/index.html") })
+sg.GET("/swagger", func(c *gin.Context) { c.Redirect(http.StatusFound, "/swagger/index.html") })
 	sg.GET("/swagger/index.html", func(c *gin.Context) {
 		html := swaggerIndexHTML("/openapi/doc.json")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
@@ -969,9 +987,7 @@ if isDevelopmentMode() || os.Getenv("ENABLE_SWAGGER") == "true" {
 		html := swaggerIndexHTML("/openapi/doc.json")
 		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 	})
-		// Avoid favicon 404s on Swagger pages (kept for completeness)
-	sg.GET("/favicon.ico", func(c *gin.Context) { c.Status(http.StatusNoContent) })
-	}
+	// Avoid favicon 404s on Swagger pages (kept for completeness)
 }
 
 	// Debug routes for development only
