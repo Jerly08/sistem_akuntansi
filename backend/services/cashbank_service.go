@@ -97,11 +97,18 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 	}
 	
 	// Generate code and create account with retry to avoid unique constraint conflicts
-	baseCode := s.generateCashBankCode(request.Type)
-	code := baseCode
 	var cashBank *models.CashBank
 	var createErr error
-	for retry := 0; retry < 5; retry++ {
+	for retry := 0; retry < 10; retry++ {
+		// Generate fresh code on each retry to handle concurrent requests
+		code := s.generateCashBankCode(request.Type)
+		
+		// Add random suffix for better collision avoidance on retries
+		if retry > 0 {
+			randomSuffix := time.Now().UnixNano() % 1000
+			code = fmt.Sprintf("%s-R%d-%03d", code, retry, randomSuffix)
+		}
+		
 		cashBank = &models.CashBank{
 			Code:        code,
 			Name:        request.Name,
@@ -117,22 +124,28 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 		
 		createErr = tx.Create(cashBank).Error;
 		if createErr == nil {
+			log.Printf("✅ Cash bank account created successfully with code: %s (attempt %d)", code, retry+1)
 			break
 		}
-		// If duplicate code, regenerate and retry
+		
+		// Check if it's a duplicate code error
 		errMsg := createErr.Error()
 		if strings.Contains(errMsg, "uni_cash_banks_code") || strings.Contains(errMsg, "duplicate key") || strings.Contains(errMsg, "23505") {
-			// Append a short suffix to ensure uniqueness and retry
-			code = fmt.Sprintf("%s-%02d", baseCode, retry+1)
+			log.Printf("⚠️ Duplicate code detected: %s (attempt %d), retrying...", code, retry+1)
+			// Add small delay to reduce collision probability
+			time.Sleep(time.Millisecond * time.Duration(10*(retry+1)))
 			continue
 		}
+		
 		// Other errors: abort immediately
+		log.Printf("❌ Non-duplicate error occurred: %v", createErr)
 		tx.Rollback()
 		return nil, createErr
 	}
+	
 	if createErr != nil {
 		tx.Rollback()
-		return nil, fmt.Errorf("failed to generate unique cash-bank code after retries: %w", createErr)
+		return nil, fmt.Errorf("failed to generate unique cash-bank code after %d retries: %w", 10, createErr)
 	}
 	
 	// Create opening balance transaction if provided
@@ -770,8 +783,17 @@ func (s *CashBankService) generateCashBankCode(accountType string) string {
 	}
 	
 	year := time.Now().Year()
-	count, _ := s.cashBankRepo.CountByType(accountType)
-	return fmt.Sprintf("%s-%04d-%04d", prefix, year, count+1)
+	
+	// Try to get next sequence number using safer method
+	sequenceNum, err := s.cashBankRepo.GetNextSequenceNumber(accountType, year)
+	if err != nil {
+		// Fallback to count method with microsecond timestamp
+		microsecond := time.Now().UnixMicro() % 10000
+		count, _ := s.cashBankRepo.CountByType(accountType)
+		return fmt.Sprintf("%s-%04d-%04d-%04d", prefix, year, count+1, microsecond)
+	}
+	
+	return fmt.Sprintf("%s-%04d-%04d", prefix, year, sequenceNum)
 }
 
 func (s *CashBankService) generateAccountCode(accountType string) string {

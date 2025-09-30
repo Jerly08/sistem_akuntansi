@@ -2,8 +2,11 @@ package repositories
 
 import (
 	"app-sistem-akuntansi/models"
+	"fmt"
 	"gorm.io/gorm"
 	"math"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -173,13 +176,57 @@ func (r *CashBankRepository) GetBalanceSummary() (*BalanceSummary, error) {
 }
 
 // CountByType counts accounts by type for code generation
+// IMPORTANT: Excludes soft deleted records to allow code reuse
 func (r *CashBankRepository) CountByType(accountType string) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.CashBank{}).
-		Where("type = ?", accountType).
+		Where("type = ? AND deleted_at IS NULL", accountType).
 		Count(&count).Error
 	
 	return count, err
+}
+
+// GetNextSequenceNumber gets the next available sequence number for the given type and year
+// This method is more concurrent-safe than CountByType
+func (r *CashBankRepository) GetNextSequenceNumber(accountType string, year int) (int64, error) {
+	// Get the highest sequence number for this type and year
+	prefix := "CSH"
+	if accountType == models.CashBankTypeBank {
+		prefix = "BNK"
+	}
+	
+	codePattern := fmt.Sprintf("%s-%04d-%%", prefix, year)
+	
+	var maxCode string
+	err := r.db.Model(&models.CashBank{}).
+		Where("type = ? AND code LIKE ? AND deleted_at IS NULL", accountType, codePattern).
+		Order("code DESC").
+		Limit(1).
+		Pluck("code", &maxCode).Error
+	
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return 0, err
+	}
+	
+	// Extract sequence number from the code
+	if maxCode == "" {
+		return 1, nil // First record for this type and year
+	}
+	
+	// Parse the sequence number from code format: PREFIX-YYYY-NNNN or PREFIX-YYYY-NNNN-XXXX
+	parts := strings.Split(maxCode, "-")
+	if len(parts) < 3 {
+		return 1, nil // Invalid format, start from 1
+	}
+	
+	// Get the sequence part (third part)
+	sequenceStr := parts[2]
+	sequenceNum, err := strconv.ParseInt(sequenceStr, 10, 64)
+	if err != nil {
+		return 1, nil // Invalid sequence format, start from 1
+	}
+	
+	return sequenceNum + 1, nil
 }
 
 // GetCashAccounts retrieves all cash accounts
