@@ -2458,168 +2458,6 @@
         ]
       }
     },
-    "/api/v1/cash-bank/{id}": {
-      "delete": {
-        "description": "Delete a cash/bank account from the system",
-        "parameters": [
-          {
-            "description": "Cash/Bank account ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Cash/Bank account deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Cash/Bank account deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Cash/Bank account cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Cash/Bank account not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete cash/bank account",
-        "tags": [
-          "CashBank"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific cash/bank account by its ID",
-        "parameters": [
-          {
-            "description": "Cash/Bank account ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/CashBank"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Cash/Bank account not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get cash/bank account by ID",
-        "tags": [
-          "CashBank"
-        ]
-      },
-      "put": {
-        "description": "Update an existing cash/bank account",
-        "parameters": [
-          {
-            "description": "Cash/Bank account ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/CashBankUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Cash/Bank account updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/CashBank"
-                },
-                "message": {
-                  "example": "Cash/Bank account updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Cash/Bank account not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update cash/bank account",
-        "tags": [
-          "CashBank"
-        ]
-      }
-    },
     "/api/v1/contacts/{id}": {
       "delete": {
         "description": "Delete a contact from the system",
@@ -2782,330 +2620,6 @@
         ]
       }
     },
-    "/api/v1/journals/{id}": {
-      "delete": {
-        "description": "Delete a journal entry from the system (only if status is DRAFT)",
-        "parameters": [
-          {
-            "description": "Journal entry ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Journal entry deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Journal entry deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Journal entry cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Journal entry not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete journal entry",
-        "tags": [
-          "Journals"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific journal entry by its ID",
-        "parameters": [
-          {
-            "description": "Journal entry ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/JournalEntry"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Journal entry not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get journal entry by ID",
-        "tags": [
-          "Journals"
-        ]
-      },
-      "put": {
-        "description": "Update an existing journal entry (only if status is DRAFT)",
-        "parameters": [
-          {
-            "description": "Journal entry ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/JournalUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Journal entry updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/JournalEntry"
-                },
-                "message": {
-                  "example": "Journal entry updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input or journal entry cannot be updated",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Journal entry not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update journal entry",
-        "tags": [
-          "Journals"
-        ]
-      }
-    },
-    "/api/v1/payments/{id}": {
-      "delete": {
-        "description": "Delete a payment from the system",
-        "parameters": [
-          {
-            "description": "Payment ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Payment deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Payment deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Payment cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Payment not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete payment",
-        "tags": [
-          "Payments"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific payment by its ID",
-        "parameters": [
-          {
-            "description": "Payment ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Payment"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Payment not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get payment by ID",
-        "tags": [
-          "Payments"
-        ]
-      },
-      "put": {
-        "description": "Update an existing payment",
-        "parameters": [
-          {
-            "description": "Payment ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/PaymentUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Payment updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Payment"
-                },
-                "message": {
-                  "example": "Payment updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Payment not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update payment",
-        "tags": [
-          "Payments"
-        ]
-      }
-    },
     "/api/v1/products/{id}": {
       "delete": {
         "description": "Delete a product from the inventory",
@@ -3265,839 +2779,6 @@
         "summary": "Update product",
         "tags": [
           "Products"
-        ]
-      }
-    },
-    "/api/v1/purchases/{id}": {
-      "delete": {
-        "description": "Delete a purchase from the system",
-        "parameters": [
-          {
-            "description": "Purchase ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Purchase deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Purchase deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Purchase cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Purchase not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete purchase",
-        "tags": [
-          "Purchases"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific purchase by its ID",
-        "parameters": [
-          {
-            "description": "Purchase ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Purchase"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Purchase not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get purchase by ID",
-        "tags": [
-          "Purchases"
-        ]
-      },
-      "put": {
-        "description": "Update an existing purchase",
-        "parameters": [
-          {
-            "description": "Purchase ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/PurchaseUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Purchase updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Purchase"
-                },
-                "message": {
-                  "example": "Purchase updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Purchase not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update purchase",
-        "tags": [
-          "Purchases"
-        ]
-      }
-    },
-    "/api/v1/purchases/{id}/approve": {
-      "post": {
-        "description": "Approve a purchase order",
-        "parameters": [
-          {
-            "description": "Purchase ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Purchase approved successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Purchase"
-                },
-                "message": {
-                  "example": "Purchase approved successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Purchase cannot be approved",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Purchase not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Approve purchase",
-        "tags": [
-          "Purchases"
-        ]
-      }
-    },
-    "/api/v1/reports/balance-sheet": {
-      "get": {
-        "description": "Generate balance sheet report",
-        "parameters": [
-          {
-            "description": "As of date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "as_of_date",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Balance sheet report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/BalanceSheet"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid date",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate balance sheet report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/cash-flow": {
-      "get": {
-        "description": "Generate cash flow report",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "start_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "end_date",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Cash flow report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/CashFlow"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid date range",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate cash flow report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/general-ledger/{account_id}": {
-      "get": {
-        "description": "Generate general ledger report for a specific account",
-        "parameters": [
-          {
-            "description": "Account ID",
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "start_date",
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "end_date",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "General ledger report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/GeneralLedger"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid parameters",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate general ledger report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/profit-loss": {
-      "get": {
-        "description": "Generate profit and loss report",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "start_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "end_date",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Profit and loss report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/ProfitLoss"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid date range",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate profit and loss report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/trial-balance": {
-      "get": {
-        "description": "Generate trial balance report",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "start_date",
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "end_date",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Trial balance report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/TrialBalance"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid date range",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate trial balance report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/sales/{id}": {
-      "delete": {
-        "description": "Delete a sale from the system",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sale deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Sale deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Sale cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete sale",
-        "tags": [
-          "Sales"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific sale by its ID",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get sale by ID",
-        "tags": [
-          "Sales"
-        ]
-      },
-      "put": {
-        "description": "Update an existing sale",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/SaleUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sale updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "message": {
-                  "example": "Sale updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update sale",
-        "tags": [
-          "Sales"
-        ]
-      }
-    },
-    "/api/v1/sales/{id}/cancel": {
-      "post": {
-        "description": "Cancel a sale order",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sale cancelled successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "message": {
-                  "example": "Sale cancelled successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Sale cannot be cancelled",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Cancel sale",
-        "tags": [
-          "Sales"
-        ]
-      }
-    },
-    "/api/v1/sales/{id}/confirm": {
-      "post": {
-        "description": "Confirm a sale order",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sale confirmed successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "message": {
-                  "example": "Sale confirmed successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Sale cannot be confirmed",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Confirm sale",
-        "tags": [
-          "Sales"
-        ]
-      }
-    },
-    "/api/v1/sales/{id}/invoice": {
-      "post": {
-        "description": "Generate invoice for a sale",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Invoice generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "message": {
-                  "example": "Invoice generated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invoice cannot be generated",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate invoice",
-        "tags": [
-          "Sales"
         ]
       }
     },
@@ -4367,6 +3048,168 @@
           }
         },
         "summary": "Create new cash/bank account",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/{id}": {
+      "delete": {
+        "description": "Delete a cash/bank account from the system",
+        "parameters": [
+          {
+            "description": "Cash/Bank account ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash/Bank account deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Cash/Bank account deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Cash/Bank account cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Cash/Bank account not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Delete cash/bank account",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a specific cash/bank account by its ID",
+        "parameters": [
+          {
+            "description": "Cash/Bank account ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/CashBank"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Cash/Bank account not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Get cash/bank account by ID",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "put": {
+        "description": "Update an existing cash/bank account",
+        "parameters": [
+          {
+            "description": "Cash/Bank account ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CashBankUpdate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash/Bank account updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/CashBank"
+                },
+                "message": {
+                  "example": "Cash/Bank account updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Cash/Bank account not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Update cash/bank account",
         "tags": [
           "CashBank"
         ]
@@ -4651,6 +3494,168 @@
         ]
       }
     },
+    "/journals/{id}": {
+      "delete": {
+        "description": "Delete a journal entry from the system (only if status is DRAFT)",
+        "parameters": [
+          {
+            "description": "Journal entry ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal entry deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Journal entry deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Journal entry cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Journal entry not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Delete journal entry",
+        "tags": [
+          "Journals"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a specific journal entry by its ID",
+        "parameters": [
+          {
+            "description": "Journal entry ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/JournalEntry"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Journal entry not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Get journal entry by ID",
+        "tags": [
+          "Journals"
+        ]
+      },
+      "put": {
+        "description": "Update an existing journal entry (only if status is DRAFT)",
+        "parameters": [
+          {
+            "description": "Journal entry ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/JournalUpdate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal entry updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/JournalEntry"
+                },
+                "message": {
+                  "example": "Journal entry updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input or journal entry cannot be updated",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Journal entry not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Update journal entry",
+        "tags": [
+          "Journals"
+        ]
+      }
+    },
     "/payments": {
       "get": {
         "description": "Retrieve a list of all payments",
@@ -4760,6 +3765,168 @@
           }
         },
         "summary": "Create new payment",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/payments/{id}": {
+      "delete": {
+        "description": "Delete a payment from the system",
+        "parameters": [
+          {
+            "description": "Payment ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Payment deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Payment cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Payment not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Delete payment",
+        "tags": [
+          "Payments"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a specific payment by its ID",
+        "parameters": [
+          {
+            "description": "Payment ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Payment"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Payment not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Get payment by ID",
+        "tags": [
+          "Payments"
+        ]
+      },
+      "put": {
+        "description": "Update an existing payment",
+        "parameters": [
+          {
+            "description": "Payment ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/PaymentUpdate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Payment"
+                },
+                "message": {
+                  "example": "Payment updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Payment not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Update payment",
         "tags": [
           "Payments"
         ]
@@ -5080,6 +4247,506 @@
         ]
       }
     },
+    "/purchases/{id}": {
+      "delete": {
+        "description": "Delete a purchase from the system",
+        "parameters": [
+          {
+            "description": "Purchase ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Purchase deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Purchase cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Purchase not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Delete purchase",
+        "tags": [
+          "Purchases"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a specific purchase by its ID",
+        "parameters": [
+          {
+            "description": "Purchase ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Purchase"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Purchase not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Get purchase by ID",
+        "tags": [
+          "Purchases"
+        ]
+      },
+      "put": {
+        "description": "Update an existing purchase",
+        "parameters": [
+          {
+            "description": "Purchase ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/PurchaseUpdate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Purchase"
+                },
+                "message": {
+                  "example": "Purchase updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Purchase not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Update purchase",
+        "tags": [
+          "Purchases"
+        ]
+      }
+    },
+    "/purchases/{id}/approve": {
+      "post": {
+        "description": "Approve a purchase order",
+        "parameters": [
+          {
+            "description": "Purchase ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase approved successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Purchase"
+                },
+                "message": {
+                  "example": "Purchase approved successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Purchase cannot be approved",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Purchase not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Approve purchase",
+        "tags": [
+          "Purchases"
+        ]
+      }
+    },
+    "/reports/balance-sheet": {
+      "get": {
+        "description": "Generate balance sheet report",
+        "parameters": [
+          {
+            "description": "As of date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "as_of_date",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance sheet report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/BalanceSheet"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid date",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Generate balance sheet report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/cash-flow": {
+      "get": {
+        "description": "Generate cash flow report",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash flow report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/CashFlow"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid date range",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Generate cash flow report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/general-ledger/{account_id}": {
+      "get": {
+        "description": "Generate general ledger report for a specific account",
+        "parameters": [
+          {
+            "description": "Account ID",
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "General ledger report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/GeneralLedger"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Account not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Generate general ledger report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/profit-loss": {
+      "get": {
+        "description": "Generate profit and loss report",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profit and loss report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/ProfitLoss"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid date range",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Generate profit and loss report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/trial-balance": {
+      "get": {
+        "description": "Generate trial balance report",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trial balance report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/TrialBalance"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid date range",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Generate trial balance report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
     "/sales": {
       "get": {
         "description": "Retrieve a list of all sales",
@@ -5238,6 +4905,339 @@
           }
         },
         "summary": "Create new sale",
+        "tags": [
+          "Sales"
+        ]
+      }
+    },
+    "/sales/{id}": {
+      "delete": {
+        "description": "Delete a sale from the system",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Sale deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Sale cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Delete sale",
+        "tags": [
+          "Sales"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a specific sale by its ID",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Get sale by ID",
+        "tags": [
+          "Sales"
+        ]
+      },
+      "put": {
+        "description": "Update an existing sale",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SaleUpdate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "message": {
+                  "example": "Sale updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Update sale",
+        "tags": [
+          "Sales"
+        ]
+      }
+    },
+    "/sales/{id}/cancel": {
+      "post": {
+        "description": "Cancel a sale order",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale cancelled successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "message": {
+                  "example": "Sale cancelled successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Sale cannot be cancelled",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Cancel sale",
+        "tags": [
+          "Sales"
+        ]
+      }
+    },
+    "/sales/{id}/confirm": {
+      "post": {
+        "description": "Confirm a sale order",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale confirmed successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "message": {
+                  "example": "Sale confirmed successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Sale cannot be confirmed",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Confirm sale",
+        "tags": [
+          "Sales"
+        ]
+      }
+    },
+    "/sales/{id}/invoice": {
+      "post": {
+        "description": "Generate invoice for a sale",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "message": {
+                  "example": "Invoice generated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invoice cannot be generated",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "summary": "Generate invoice",
         "tags": [
           "Sales"
         ]

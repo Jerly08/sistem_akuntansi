@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"app-sistem-akuntansi/config"
 	"app-sistem-akuntansi/controllers"
 	"app-sistem-akuntansi/handlers"
 	"app-sistem-akuntansi/repositories"
@@ -249,6 +250,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
+
+	// Add root-level compatibility routes for frontend AFTER v1 group is created
+	setupFrontendCompatibilityRoutes(r, v1)
 	{
 		// 🔐 Auth routes (minimal public access)
 		auth := v1.Group("/auth")
@@ -976,9 +980,9 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 		}
 	}
 
-// Static files (templates and uploads)
-r.Static("/templates", "./templates")
-r.Static("/uploads", "./uploads")
+	// Static files (templates and uploads)
+	r.Static("/templates", "./templates")
+	r.Static("/uploads", "./uploads")
 
 // Global favicon handler to avoid 404s in all contexts (Swagger and non-Swagger)
 r.GET("/favicon.ico", func(c *gin.Context) { c.Status(http.StatusNoContent) })
@@ -1003,19 +1007,21 @@ if isDevelopmentMode() || os.Getenv("ENABLE_SWAGGER") == "true" {
 	r.GET("/openapi/doc.json", func(c *gin.Context) {
 		c.Data(http.StatusOK, "application/json", swaggerBytes)
 	})
-	// Swagger UI endpoints using CDN assets (root-level only) - TEMPORARILY DISABLED FOR ENHANCED SWAGGER
-	// sg := r.Group("/")
-	// sg.Use(swaggerCSPMiddleware()) // relax CSP for Swagger UI only
-	// sg.GET("/swagger", func(c *gin.Context) { c.Redirect(http.StatusFound, "/swagger/index.html") })
-	// sg.GET("/swagger/index.html", func(c *gin.Context) {
-	// 	html := swaggerIndexHTML("/openapi/doc.json")
-	// 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
-	// })
-	// sg.GET("/docs", func(c *gin.Context) { c.Redirect(http.StatusFound, "/docs/index.html") })
-	// sg.GET("/docs/index.html", func(c *gin.Context) {
-	// 	html := swaggerIndexHTML("/openapi/doc.json")
-	// 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
-	// })
+	// Swagger UI endpoints using Enhanced Swagger content on legacy URLs
+	sg := r.Group("/")
+	sg.Use(swaggerCSPMiddleware()) // relax CSP for Swagger UI only
+	sg.GET("/swagger", func(c *gin.Context) { c.Redirect(http.StatusFound, "/swagger/index.html") })
+	sg.GET("/swagger/index.html", func(c *gin.Context) {
+		// Use Enhanced Swagger HTML instead of basic swaggerIndexHTML
+		html := config.GetEnhancedSwaggerHTML("/openapi/enhanced-doc.json")
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+	})
+	sg.GET("/docs", func(c *gin.Context) { c.Redirect(http.StatusFound, "/docs/index.html") })
+	sg.GET("/docs/index.html", func(c *gin.Context) {
+		// Use Enhanced Swagger HTML instead of basic swaggerIndexHTML
+		html := config.GetEnhancedSwaggerHTML("/openapi/enhanced-doc.json")
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+	})
 	// Avoid favicon 404s on Swagger pages (kept for completeness)
 }
 
@@ -1037,3 +1043,346 @@ if isDevelopmentMode() || os.Getenv("ENABLE_SWAGGER") == "true" {
 		}
 	}
 }
+
+// setupFrontendCompatibilityRoutes adds root-level routes for frontend compatibility
+// These routes proxy requests to the actual /api/v1 endpoints
+func setupFrontendCompatibilityRoutes(r *gin.Engine, v1 *gin.RouterGroup) {
+	log.Println("🔗 Setting up frontend compatibility routes...")
+	
+	// Root-level routes that proxy to /api/v1 endpoints
+	// These maintain the same authentication and permission requirements
+	
+	// Accounts compatibility routes
+	r.GET("/accounts", func(c *gin.Context) {
+		// Forward to the actual /api/v1/accounts endpoint
+		c.Request.URL.Path = "/api/v1/accounts"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/accounts", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/accounts"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/accounts/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/accounts/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/accounts/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/accounts/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/accounts/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/accounts/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	// Contacts compatibility routes
+	r.GET("/contacts", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/contacts"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/contacts", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/contacts"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/contacts/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/contacts/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/contacts/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/contacts/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/contacts/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/contacts/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	// Products compatibility routes
+	r.GET("/products", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/products"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/products", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/products"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/products/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/products/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/products/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/products/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/products/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/products/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	// Users compatibility routes
+	r.GET("/users", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/users"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/users", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/users"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/users/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/users/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/users/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/users/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/users/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/users/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	// Sales compatibility routes
+	r.GET("/sales", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/sales"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/sales", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/sales"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/sales/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/sales/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/sales/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/sales/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/sales/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/sales/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.POST("/sales/:id/approve", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/sales/" + c.Param("id") + "/approve"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/sales/:id/invoice", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/sales/" + c.Param("id") + "/invoice"
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/sales/:id/cancel", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/sales/" + c.Param("id") + "/cancel"
+		r.HandleContext(c)
+	})
+	
+	// Purchase compatibility routes
+	r.GET("/purchases", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/purchases"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/purchases", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/purchases"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/purchases/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/purchases/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/purchases/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/purchases/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/purchases/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/purchases/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.POST("/purchases/:id/approve", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/purchases/" + c.Param("id") + "/approve"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/purchases/:id/receive", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/purchases/" + c.Param("id") + "/receive"
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/purchases/:id/cancel", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/purchases/" + c.Param("id") + "/cancel"
+		r.HandleContext(c)
+	})
+	
+	// Payments compatibility routes
+	r.GET("/payments", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/payments"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/payments", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/payments"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/payments/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/payments/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/payments/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/payments/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/payments/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/payments/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.POST("/payments/:id/approve", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/payments/" + c.Param("id") + "/approve"
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/payments/:id/cancel", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/payments/" + c.Param("id") + "/cancel"
+		r.HandleContext(c)
+	})
+	
+	// Cash & Bank compatibility routes
+	r.GET("/cash-bank", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/cash-bank"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/cash-bank", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/cash-bank"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/cash-bank/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/cash-bank/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/cash-bank/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/cash-bank/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/cash-bank/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/cash-bank/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.POST("/cash-bank/:id/confirm", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/cash-bank/" + c.Param("id") + "/confirm"
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/cash-bank/:id/cancel", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/cash-bank/" + c.Param("id") + "/cancel"
+		r.HandleContext(c)
+	})
+	
+	// Journals compatibility routes
+	r.GET("/journals", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/journals"
+		r.HandleContext(c)
+	})
+	
+	r.POST("/journals", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/journals"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/journals/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/journals/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.PUT("/journals/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/journals/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/journals/:id", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/journals/" + c.Param("id")
+		r.HandleContext(c)
+	})
+	
+	r.POST("/journals/:id/post", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/journals/" + c.Param("id") + "/post"
+		r.HandleContext(c)
+	})
+	
+	r.DELETE("/journals/:id/cancel", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/journals/" + c.Param("id") + "/cancel"
+		r.HandleContext(c)
+	})
+	
+	// Reports compatibility routes
+	r.GET("/reports/balance-sheet", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/reports/balance-sheet"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/reports/income-statement", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/reports/income-statement"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/reports/cash-flow", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/reports/cash-flow"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/reports/trial-balance", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/reports/trial-balance"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/reports/general-ledger", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/reports/general-ledger"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/reports/accounts-receivable", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/reports/accounts-receivable"
+		r.HandleContext(c)
+	})
+	
+	r.GET("/reports/accounts-payable", func(c *gin.Context) {
+		c.Request.URL.Path = "/api/v1/reports/accounts-payable"
+		r.HandleContext(c)
+	})
+	
+	log.Println("✅ Frontend compatibility routes configured successfully")
+}
+

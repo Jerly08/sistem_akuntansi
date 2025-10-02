@@ -286,6 +286,11 @@ window.authHelper = new SwaggerAuthHelper();
 
 // Enhanced Swagger HTML with better authentication support
 func getEnhancedSwaggerHTML(docURL string) string {
+	return GetEnhancedSwaggerHTML(docURL)
+}
+
+// GetEnhancedSwaggerHTML returns Enhanced Swagger HTML (exported version)
+func GetEnhancedSwaggerHTML(docURL string) string {
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -408,7 +413,7 @@ func getEnhancedSwaggerHTML(docURL string) string {
             plugins: [
               SwaggerUIBundle.plugins.DownloadUrl
             ],
-            layout: "StandaloneLayout",
+            layout: "BaseLayout",
             tryItOutEnabled: true,
             
 			// Enhanced request interceptor with conflict prevention
@@ -663,7 +668,7 @@ func ValidateAndFixEnhancedSwagger() (*EnhancedSwaggerConfig, error) {
 	
 	config := &EnhancedSwaggerConfig{
 		Host:                getSwaggerHost(),
-		BasePath:            "/",
+		BasePath:            "/api/v1",
 		Schemes:             []string{"http"},
 		Fixes:               []string{},
 		Errors:              []string{},
@@ -765,7 +770,7 @@ func GenerateEnhancedSwaggerSpec() map[string]interface{} {
 			},
 		},
 		"host":     getSwaggerHost(),
-		"basePath": "/",
+		"basePath": "/api/v1",
 		"schemes":  []string{"http"},
 		"securityDefinitions": map[string]interface{}{
 			"BearerAuth": map[string]interface{}{
