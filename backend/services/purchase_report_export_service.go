@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"app-sistem-akuntansi/models"
+	"app-sistem-akuntansi/utils"
 	"github.com/jung-kurt/gofpdf"
 	"gorm.io/gorm"
 )
@@ -34,31 +35,34 @@ func (s *PurchaseReportExportService) getCompanyInfo() *models.Settings {
 	return &settings
 }
 
-// ExportToCSV exports purchase report to CSV bytes (optional helper)
-func (s *PurchaseReportExportService) ExportToCSV(data *PurchaseReportData) ([]byte, error) {
+// ExportToCSV exports purchase report to CSV bytes with localization
+func (s *PurchaseReportExportService) ExportToCSV(data *PurchaseReportData, userID uint) ([]byte, error) {
+	// Get user language preference
+	language := utils.GetUserLanguageFromSettings(s.db)
 	var buf bytes.Buffer
 	w := csv.NewWriter(&buf)
 
-	// Header
-	w.Write([]string{"Purchase Report"})
+	// Header with localization
+	w.Write([]string{utils.T("purchase_report", language)})
 	w.Write([]string{data.Company.Name})
-	w.Write([]string{"Period:", data.StartDate.Format("2006-01-02"), "to", data.EndDate.Format("2006-01-02")})
-	w.Write([]string{"Generated:", data.GeneratedAt.In(time.Local).Format("2006-01-02 15:04")})
+	w.Write([]string{utils.T("period", language) + ":", data.StartDate.Format("2006-01-02"), utils.T("to", language), data.EndDate.Format("2006-01-02")})
+	w.Write([]string{utils.T("generated_on", language) + ":", data.GeneratedAt.In(time.Local).Format("2006-01-02 15:04")})
 	w.Write([]string{})
 
-	// Summary
-	w.Write([]string{"SUMMARY"})
-	w.Write([]string{"Total Purchases", fmt.Sprintf("%d", data.TotalPurchases)})
-	w.Write([]string{"Completed Purchases", fmt.Sprintf("%d", data.CompletedPurchases)})
-	w.Write([]string{"Total Amount", fmt.Sprintf("%.2f", data.TotalAmount)})
-	w.Write([]string{"Total Paid", fmt.Sprintf("%.2f", data.TotalPaid)})
-	w.Write([]string{"Outstanding Payables", fmt.Sprintf("%.2f", data.OutstandingPayables)})
+	// Summary with localization
+	w.Write([]string{utils.T("summary", language)})
+	w.Write([]string{utils.T("total_purchases", language), fmt.Sprintf("%d", data.TotalPurchases)})
+	w.Write([]string{utils.T("completed_purchases", language), fmt.Sprintf("%d", data.CompletedPurchases)})
+	w.Write([]string{utils.T("total_amount", language), fmt.Sprintf("%.2f", data.TotalAmount)})
+	w.Write([]string{utils.T("total_paid", language), fmt.Sprintf("%.2f", data.TotalPaid)})
+	w.Write([]string{utils.T("outstanding_payables", language), fmt.Sprintf("%.2f", data.OutstandingPayables)})
 	w.Write([]string{})
 
-	// Purchases by vendor (top 20)
+	// Purchases by vendor (top 20) with localization
 	if len(data.PurchasesByVendor) > 0 {
-		w.Write([]string{"PURCHASES BY VENDOR (Top 20)"})
-		w.Write([]string{"Vendor ID", "Vendor Name", "Total Purchases", "Total Amount", "Total Paid", "Outstanding", "Last Purchase", "Payment Method", "Status"})
+		w.Write([]string{utils.T("purchases_by_vendor", language)})
+		headers := utils.GetCSVHeaders("purchase_report", language)
+		w.Write(headers)
 		limit := len(data.PurchasesByVendor)
 		if limit > 20 { limit = 20 }
 		for i := 0; i < limit; i++ {
@@ -83,8 +87,10 @@ func (s *PurchaseReportExportService) ExportToCSV(data *PurchaseReportData) ([]b
 	return buf.Bytes(), nil
 }
 
-// ExportToPDF exports purchase report to PDF bytes (invoice-like)
-func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData) ([]byte, error) {
+// ExportToPDF exports purchase report to PDF bytes with localization
+func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData, userID uint) ([]byte, error) {
+	// Get user language preference
+	language := utils.GetUserLanguageFromSettings(s.db)
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(15, 15, 15)
 	pdf.SetAutoPageBreak(true, 15)
@@ -160,44 +166,44 @@ func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData) ([]b
 	pdf.SetLineWidth(0.2)
 	pdf.Line(lm, tm+45, pageW-rm, tm+45)
 
-	// Title and period
+	// Title and period with localization
 	pdf.SetY(tm + 55)
 	pdf.SetFont("Arial", "B", 18)
 	pdf.SetTextColor(51, 51, 51)
-	pdf.Cell(contentW, 10, "PURCHASE REPORT")
+	pdf.Cell(contentW, 10, utils.T("purchase_report", language))
 	pdf.SetTextColor(0, 0, 0)
 	pdf.Ln(8)
 	pdf.SetFont("Arial", "", 11)
-	pdf.Cell(contentW, 6, fmt.Sprintf("Period: %s to %s", data.StartDate.Format("2006-01-02"), data.EndDate.Format("2006-01-02")))
+	pdf.Cell(contentW, 6, fmt.Sprintf("%s: %s %s %s", utils.T("period", language), data.StartDate.Format("2006-01-02"), utils.T("to", language), data.EndDate.Format("2006-01-02")))
 	pdf.Ln(6)
-	pdf.Cell(contentW, 6, fmt.Sprintf("Generated: %s", data.GeneratedAt.In(time.Local).Format("2006-01-02 15:04")))
+	pdf.Cell(contentW, 6, fmt.Sprintf("%s: %s", utils.T("generated_on", language), data.GeneratedAt.In(time.Local).Format("2006-01-02 15:04")))
 	pdf.Ln(10)
 
-	// Summary block
+	// Summary block with localization
 	pdf.SetFont("Arial", "B", 12)
-	pdf.Cell(0, 8, "SUMMARY")
+	pdf.Cell(0, 8, utils.T("summary", language))
 	pdf.Ln(8)
 	pdf.SetFont("Arial", "", 10)
-	pdf.CellFormat(90, 6, "Total Purchases", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, utils.T("total_purchases", language), "1", 0, "L", false, 0, "")
 	pdf.CellFormat(90, 6, fmt.Sprintf("%d", data.TotalPurchases), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, "Completed Purchases", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, utils.T("completed_purchases", language), "1", 0, "L", false, 0, "")
 	pdf.CellFormat(90, 6, fmt.Sprintf("%d", data.CompletedPurchases), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, "Total Amount", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, utils.T("total_amount", language), "1", 0, "L", false, 0, "")
 	pdf.CellFormat(90, 6, formatRupiahSimple(data.TotalAmount), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, "Total Paid", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, utils.T("total_paid", language), "1", 0, "L", false, 0, "")
 	pdf.CellFormat(90, 6, formatRupiahSimple(data.TotalPaid), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, "Outstanding Payables", "1", 0, "L", false, 0, "")
+	pdf.CellFormat(90, 6, utils.T("outstanding_payables", language), "1", 0, "L", false, 0, "")
 	pdf.CellFormat(90, 6, formatRupiahSimple(data.OutstandingPayables), "1", 1, "R", false, 0, "")
 	pdf.Ln(6)
 
-	// Top vendors table (limit to fit one page)
+	// Top vendors table with localization (limit to fit one page)
 	if len(data.PurchasesByVendor) > 0 {
 		pdf.SetFont("Arial", "B", 12)
-		pdf.Cell(0, 8, "TOP VENDORS")
+		pdf.Cell(0, 8, utils.T("top_vendors", language))
 		pdf.Ln(8)
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetFillColor(220, 220, 220)
-		pdf.CellFormat(60, 7, "Vendor", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(60, 7, utils.T("vendor", language), "1", 0, "L", true, 0, "")
 		pdf.CellFormat(25, 7, "Orders", "1", 0, "C", true, 0, "")
 		pdf.CellFormat(35, 7, "Amount", "1", 0, "R", true, 0, "")
 		pdf.CellFormat(35, 7, "Paid", "1", 0, "R", true, 0, "")

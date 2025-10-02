@@ -12,25 +12,31 @@ import (
 
 	"github.com/jung-kurt/gofpdf"
 	"github.com/xuri/excelize/v2"
+	"gorm.io/gorm"
 )
 
 type ExportService interface {
-	ExportAccountsPDF(ctx context.Context) ([]byte, error)
-	ExportAccountsExcel(ctx context.Context) ([]byte, error)
+	ExportAccountsPDF(ctx context.Context, userID uint) ([]byte, error)
+	ExportAccountsExcel(ctx context.Context, userID uint) ([]byte, error)
 }
 
 type ExportServiceImpl struct {
 	accountRepo repositories.AccountRepository
+	db          *gorm.DB
 }
 
-func NewExportService(accountRepo repositories.AccountRepository) ExportService {
+func NewExportService(accountRepo repositories.AccountRepository, db *gorm.DB) ExportService {
 	return &ExportServiceImpl{
 		accountRepo: accountRepo,
+		db:          db,
 	}
 }
 
-// ExportAccountsPDF exports accounts to PDF format
-func (s *ExportServiceImpl) ExportAccountsPDF(ctx context.Context) ([]byte, error) {
+// ExportAccountsPDF exports accounts to PDF format with localization
+func (s *ExportServiceImpl) ExportAccountsPDF(ctx context.Context, userID uint) ([]byte, error) {
+	// Get user language preference
+	language := utils.GetUserLanguageFromDB(s.db, userID)
+	
 	// Get all accounts from database
 	accounts, err := s.accountRepo.FindAll(ctx)
 	if err != nil {
@@ -44,23 +50,23 @@ func (s *ExportServiceImpl) ExportAccountsPDF(ctx context.Context) ([]byte, erro
 	// Set font
 	pdf.SetFont("Arial", "B", 16)
 	
-	// Title
-	pdf.Cell(190, 10, "Chart of Accounts")
+	// Title with localization
+	pdf.Cell(190, 10, utils.T("chart_of_accounts", language))
 	pdf.Ln(15)
 
 	// Company info (you can get this from database)
 	pdf.SetFont("Arial", "", 10)
-	pdf.Cell(190, 5, fmt.Sprintf("Generated on: %s", time.Now().Format("2006-01-02 15:04:05")))
+	pdf.Cell(190, 5, fmt.Sprintf("%s: %s", utils.T("generated_on", language), time.Now().Format("2006-01-02 15:04:05")))
 	pdf.Ln(10)
 
-	// Table headers
+	// Table headers with localization
 	pdf.SetFont("Arial", "B", 10)
 	pdf.SetFillColor(220, 220, 220)
-	pdf.CellFormat(30, 8, "Code", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(60, 8, "Name", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(25, 8, "Type", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(35, 8, "Balance", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(30, 8, "Status", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(30, 8, utils.T("account_code", language), "1", 0, "C", true, 0, "")
+	pdf.CellFormat(60, 8, utils.T("account_name", language), "1", 0, "C", true, 0, "")
+	pdf.CellFormat(25, 8, utils.T("account_type", language), "1", 0, "C", true, 0, "")
+	pdf.CellFormat(35, 8, utils.T("balance", language), "1", 0, "C", true, 0, "")
+	pdf.CellFormat(30, 8, utils.T("status", language), "1", 0, "C", true, 0, "")
 	pdf.Ln(8)
 
 	// Table data
@@ -71,23 +77,23 @@ func (s *ExportServiceImpl) ExportAccountsPDF(ctx context.Context) ([]byte, erro
 		// Check if we need a new page
 		if pdf.GetY() > 270 {
 			pdf.AddPage()
-			// Re-add headers
+			// Re-add headers with localization
 			pdf.SetFont("Arial", "B", 10)
 			pdf.SetFillColor(220, 220, 220)
-			pdf.CellFormat(30, 8, "Code", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(60, 8, "Name", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(25, 8, "Type", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(35, 8, "Balance", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(30, 8, "Status", "1", 0, "C", true, 0, "")
+			pdf.CellFormat(30, 8, utils.T("account_code", language), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(60, 8, utils.T("account_name", language), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(25, 8, utils.T("account_type", language), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(35, 8, utils.T("balance", language), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(30, 8, utils.T("status", language), "1", 0, "C", true, 0, "")
 			pdf.Ln(8)
 			pdf.SetFont("Arial", "", 9)
 			pdf.SetFillColor(255, 255, 255)
 		}
 
-		// Account data
-		status := "Active"
+		// Account data with localized status
+		status := utils.T("active", language)
 		if !account.IsActive {
-			status = "Inactive"
+			status = utils.T("inactive", language)
 		}
 
 		balance := fmt.Sprintf("%.2f", account.Balance)
@@ -110,8 +116,11 @@ func (s *ExportServiceImpl) ExportAccountsPDF(ctx context.Context) ([]byte, erro
 	return buf.Bytes(), nil
 }
 
-// ExportAccountsExcel exports accounts to Excel format
-func (s *ExportServiceImpl) ExportAccountsExcel(ctx context.Context) ([]byte, error) {
+// ExportAccountsExcel exports accounts to Excel format with localization
+func (s *ExportServiceImpl) ExportAccountsExcel(ctx context.Context, userID uint) ([]byte, error) {
+	// Get user language preference
+	language := utils.GetUserLanguageFromDB(s.db, userID)
+	
 	// Get all accounts from database
 	accounts, err := s.accountRepo.FindAll(ctx)
 	if err != nil {
@@ -136,12 +145,12 @@ func (s *ExportServiceImpl) ExportAccountsExcel(ctx context.Context) ([]byte, er
 	// Set active sheet
 	f.SetActiveSheet(index)
 
-	// Set title
-	f.SetCellValue(sheetName, "A1", "Chart of Accounts")
-	f.SetCellValue(sheetName, "A2", fmt.Sprintf("Generated on: %s", time.Now().Format("2006-01-02 15:04:05")))
+	// Set title with localization
+	f.SetCellValue(sheetName, "A1", utils.T("chart_of_accounts", language))
+	f.SetCellValue(sheetName, "A2", fmt.Sprintf("%s: %s", utils.T("generated_on", language), time.Now().Format("2006-01-02 15:04:05")))
 
-	// Headers
-	headers := []string{"Code", "Name", "Type", "Category", "Balance", "Status", "Description", "Created At"}
+	// Headers with localization
+	headers := utils.GetCSVHeaders("chart_of_accounts", language)
 	for i, header := range headers {
 		cell := string(rune('A'+i)) + "4"
 		f.SetCellValue(sheetName, cell, header)
@@ -188,9 +197,9 @@ func (s *ExportServiceImpl) ExportAccountsExcel(ctx context.Context) ([]byte, er
 	for i, account := range accounts {
 		row := i + 5 // Start from row 5 (after headers)
 		
-		status := "Active"
+		status := utils.T("active", language)
 		if !account.IsActive {
-			status = "Inactive"
+			status = utils.T("inactive", language)
 		}
 
 		f.SetCellValue(sheetName, "A"+strconv.Itoa(row), account.Code)

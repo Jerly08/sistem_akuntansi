@@ -151,6 +151,30 @@ type SyncStatus struct {
 	VarianceAccounts int        `json:"variance_accounts"`
 }
 
+// Reconcile request/response types
+type ReconcileRequest struct {
+	Strategy   string `json:"strategy"`              // to_ssot | to_transactions | to_coa
+	DryRun     bool   `json:"dry_run"`
+	AccountIDs []uint `json:"account_ids"`
+}
+
+type ReconcileItem struct {
+	CashBankID      uint            `json:"cash_bank_id"`
+	COAAccountID    uint            `json:"coa_account_id"`
+	CashBankBefore  decimal.Decimal `json:"cashbank_before"`
+	COABefore       decimal.Decimal `json:"coa_before"`
+	SSOTBalance     decimal.Decimal `json:"ssot_balance"`
+	TransactionSum  decimal.Decimal `json:"transaction_sum"`
+	NewBalance      decimal.Decimal `json:"new_balance"`
+	Applied         bool            `json:"applied"`
+}
+
+type ReconcileResult struct {
+	Strategy string           `json:"strategy"`
+	DryRun   bool             `json:"dry_run"`
+	Items    []ReconcileItem  `json:"items"`
+}
+
 // ReconciliationData represents detailed reconciliation information
 type ReconciliationData struct {
 	AccountID            uint           `json:"account_id"`
@@ -492,6 +516,68 @@ func (s *CashBankIntegratedService) getJournalEntriesForAccount(accountID uint, 
 }
 
 // Helper methods
+
+// ReconcileBalances reconciles CashBank and COA balances according to strategy.
+// strategy: to_ssot (default) => set both to SSOT account_balances.current_balance
+//           to_transactions => set both to sum(cash_bank_transactions.amount)
+//           to_coa => set both to current COA balance
+func (s *CashBankIntegratedService) ReconcileBalances(req ReconcileRequest) (*ReconcileResult, error) {
+	if req.Strategy == "" {
+		req.Strategy = "to_ssot"
+	}
+	res := &ReconcileResult{Strategy: req.Strategy, DryRun: req.DryRun}
+
+	// Collect accounts to process
+	type pair struct { ID uint; AccountID uint; CB float64; COA float64 }
+	q := s.db.Table("cash_banks cb").
+		Select("cb.id as id, cb.account_id as account_id, cb.balance as cb, a.balance as coa").
+		Joins("JOIN accounts a ON a.id = cb.account_id").
+		Where("cb.deleted_at IS NULL AND a.deleted_at IS NULL")
+	if len(req.AccountIDs) > 0 {
+		q = q.Where("cb.id IN ?", req.AccountIDs)
+	}
+	var pairs []pair
+	if err := q.Scan(&pairs).Error; err != nil { return nil, err }
+
+	returnErr := s.db.Transaction(func(tx *gorm.DB) error {
+		for _, p := range pairs {
+			item := ReconcileItem{CashBankID: p.ID, COAAccountID: p.AccountID,
+				CashBankBefore: decimal.NewFromFloat(p.CB), COABefore: decimal.NewFromFloat(p.COA)}
+			var target decimal.Decimal
+
+			switch req.Strategy {
+			case "to_transactions":
+				var sum float64
+				if err := tx.Table("cash_bank_transactions").
+					Where("cash_bank_id = ? AND deleted_at IS NULL", p.ID).
+					Select("COALESCE(SUM(amount), 0)").Scan(&sum).Error; err != nil { return err }
+				item.TransactionSum = decimal.NewFromFloat(sum)
+				target = item.TransactionSum
+			case "to_coa":
+				target = item.COABefore
+			default: // to_ssot
+				var ssot struct{ CurrentBalance decimal.Decimal }
+				if err := tx.Table("account_balances").
+					Where("account_id = ?", p.AccountID).
+					Select("current_balance").Scan(&ssot).Error; err != nil { return err }
+				item.SSOTBalance = ssot.CurrentBalance
+				target = ssot.CurrentBalance
+			}
+
+			item.NewBalance = target
+			if !req.DryRun {
+				// Apply to both tables
+				if err := tx.Exec("UPDATE cash_banks SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", target.InexactFloat64(), p.ID).Error; err != nil { return err }
+				if err := tx.Exec("UPDATE accounts SET balance = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", target.InexactFloat64(), p.AccountID).Error; err != nil { return err }
+				item.Applied = true
+			}
+			res.Items = append(res.Items, item)
+		}
+		return nil
+	})
+
+	return res, returnErr
+}
 
 func (s *CashBankIntegratedService) determineReconciliationStatus(difference decimal.Decimal) string {
 	if difference.IsZero() {

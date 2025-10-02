@@ -33,6 +33,10 @@ import {
   Tooltip,
   IconButton,
   Icon,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
 } from '@chakra-ui/react';
 import {
   FiPlus,
@@ -204,18 +208,39 @@ const SalesPage: React.FC = () => {
     }
   };
 
-  // Handle bulk export
-  const handleBulkExport = async () => {
+  // Export handlers
+  const handleExportPDF = async () => {
     try {
       await salesService.downloadSalesReportPDF(
         state.filter.start_date || undefined,
-        state.filter.end_date || undefined
+        state.filter.end_date || undefined,
+        state.filter.status || undefined,
+        state.filter.search || undefined
       );
-      handleSuccess('Sales report has been downloaded', toast, 'export report');
+      handleSuccess('Sales report PDF has been downloaded', toast, 'export report');
     } catch (error: any) {
       toast({
         title: 'Export failed',
-        description: 'Failed to export sales report',
+        description: 'Failed to export sales report PDF',
+        status: 'error',
+        duration: 3000
+      });
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      await salesService.downloadSalesReportCSV(
+        state.filter.start_date || undefined,
+        state.filter.end_date || undefined,
+        state.filter.status || undefined,
+        state.filter.search || undefined
+      );
+      handleSuccess('Sales report CSV has been downloaded', toast, 'export report');
+    } catch (error: any) {
+      toast({
+        title: 'Export failed',
+        description: 'Failed to export sales report CSV',
         status: 'error',
         duration: 3000
       });
@@ -299,15 +324,21 @@ const SalesPage: React.FC = () => {
             </Tooltip>
             
             {canExport && (
-              <Button
-                leftIcon={<FiDownload />}
-                colorScheme="green"
-                variant="outline"
-                size="md"
-                onClick={handleBulkExport}
-              >
-                Export Report
-              </Button>
+              <Menu>
+                <MenuButton
+                  as={Button}
+                  leftIcon={<FiDownload />}
+                  colorScheme="green"
+                  variant="outline"
+                  size="md"
+                >
+                  Export Report
+                </MenuButton>
+                <MenuList>
+                  <MenuItem onClick={handleExportPDF}>Export PDF</MenuItem>
+                  <MenuItem onClick={handleExportCSV}>Export CSV</MenuItem>
+                </MenuList>
+              </Menu>
             )}
             
             {(canCreate || !user) && (

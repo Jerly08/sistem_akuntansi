@@ -60,10 +60,8 @@ import {
 } from '../../services/ssotBalanceSheetReportService';
 import { 
   exportAndDownloadCSV, 
-  exportAndDownloadPDF,
-  exportBalanceSheetToCSV,
-  exportBalanceSheetToPDF
-} from '../../utils/balanceSheetExportUtils';
+  exportAndDownloadPDF
+} from '../../utils/balanceSheetExportClient';
 
 interface EnhancedBalanceSheetReportProps {
   onClose?: () => void;

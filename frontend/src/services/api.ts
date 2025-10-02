@@ -1,6 +1,4 @@
 import axios from 'axios';
-import React from 'react';
-import ReactDOM from 'react-dom/client';
 import { API_ENDPOINTS } from '@/config/api';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -247,15 +245,23 @@ api.interceptors.response.use(
 );
 
 // Function to show auth expired modal
-function showAuthExpiredModal() {
+async function showAuthExpiredModal() {
 	if (authExpiredModalShown) {
 		return; // Prevent showing multiple modals
 	}
 	
 	authExpiredModalShown = true;
 	
-	// Dynamically import and show the modal
-	import('../components/auth/AuthExpiredModal').then(({ default: AuthExpiredModal }) => {
+	try {
+		// Dynamically import React and ReactDOM only when needed
+		const ReactMod = await import('react');
+		const ReactDOMClient = await import('react-dom/client');
+		const React = (ReactMod as any).default || ReactMod;
+		const ReactDOM = ReactDOMClient as any;
+
+		// Dynamically import and show the modal
+		const { default: AuthExpiredModal } = await import('../components/auth/AuthExpiredModal');
+
 		// Create a container for the modal
 		const modalRoot = document.createElement('div');
 		modalRoot.id = 'auth-expired-modal-root';
@@ -265,29 +271,28 @@ function showAuthExpiredModal() {
 		const root = ReactDOM.createRoot(modalRoot);
 		
 		// Import ChakraProvider for the modal
-		import('@chakra-ui/react').then(({ ChakraProvider }) => {
-			root.render(
-				React.createElement(ChakraProvider, null,
-					React.createElement(AuthExpiredModal, {
-						isOpen: true,
-						onLoginRedirect: () => {
-							authExpiredModalShown = false;
-							// Clean up modal
-							root.unmount();
-							document.body.removeChild(modalRoot);
-							// Redirect to login
-							window.location.href = '/login';
-						}
-					})
-				)
-			);
-		});
-	}).catch(error => {
+		const { ChakraProvider } = await import('@chakra-ui/react');
+		root.render(
+			React.createElement(ChakraProvider, null,
+				React.createElement(AuthExpiredModal, {
+					isOpen: true,
+					onLoginRedirect: () => {
+						authExpiredModalShown = false;
+						// Clean up modal
+						root.unmount();
+						document.body.removeChild(modalRoot);
+						// Redirect to login
+						window.location.href = '/login';
+					}
+				})
+			)
+		);
+	} catch (error) {
 		console.error('Failed to load AuthExpiredModal:', error);
 		authExpiredModalShown = false;
 		// Fallback to direct redirect
 		window.location.href = '/login';
-	});
+	}
 }
 
 // Export function for manual use if needed

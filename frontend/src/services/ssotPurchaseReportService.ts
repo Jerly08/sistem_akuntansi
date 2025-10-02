@@ -103,11 +103,29 @@ class SSOTPurchaseReportService {
 
       const response = await api.get(API_ENDPOINTS.SSOT_REPORTS.PURCHASE_REPORT + `?${queryParams}`);
 
-      if (response.data.status === 'success') {
-        return response.data.data;
+      const payload = response?.data ?? {};
+      const statusStr = typeof payload.status === 'string' ? payload.status.toLowerCase() : '';
+      const isSuccess = statusStr === 'success' || payload.success === true;
+
+      // Accept common success shapes
+      if (isSuccess) {
+        return (payload.data ?? payload) as SSOTPurchaseReportData;
       }
 
-      throw new Error(response.data.message || 'Failed to generate purchase report');
+      // If data exists (even without explicit success flag), treat as success
+      if (payload.data && typeof payload.data === 'object') {
+        return payload.data as SSOTPurchaseReportData;
+      }
+
+      // Heuristic: HTTP 200 with a positive message and no error field
+      if (response.status === 200 && !payload.error) {
+        const msg: string | undefined = payload.message;
+        if (msg && /generated successfully/i.test(msg)) {
+          return (payload.data ?? payload) as SSOTPurchaseReportData;
+        }
+      }
+
+      throw new Error(payload.message || payload.error?.message || 'Failed to generate purchase report');
     } catch (error: any) {
       console.error('Error generating SSOT purchase report:', error);
       if (error.response?.data?.message) {

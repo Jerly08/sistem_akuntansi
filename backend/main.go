@@ -115,6 +115,16 @@ func main() {
 	if cfg.Environment == "development" || os.Getenv("ENABLE_SWAGGER") == "true" {
 		config.UpdateSwaggerDocs()
 		config.PrintSwaggerInfo()
+		
+		// 🔧 Setup Dynamic Swagger Routes for automatic fixing (DISABLED - using Enhanced Swagger instead)
+		// log.Println("🔧 Setting up Dynamic Swagger with auto-fixing...")
+		// config.SetupDynamicSwaggerRoutes(r)
+		// log.Println("✅ Dynamic Swagger routes configured successfully!")
+		
+		// 🎆 Setup Enhanced Swagger with Authentication Support
+		log.Println("🎆 Setting up Enhanced Swagger with authentication support...")
+		config.SetupEnhancedSwaggerRoutes(r)
+		log.Println("✅ Enhanced Swagger routes configured successfully!")
 	}
 
 	// Setup routes

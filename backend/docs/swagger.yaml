@@ -3640,6 +3640,48 @@ definitions:
       total_taxable_amount:
         type: number
     type: object
+  services.ReconcileItem:
+    properties:
+      applied:
+        type: boolean
+      cash_bank_id:
+        type: integer
+      cashbank_before:
+        type: number
+      coa_account_id:
+        type: integer
+      coa_before:
+        type: number
+      new_balance:
+        type: number
+      ssot_balance:
+        type: number
+      transaction_sum:
+        type: number
+    type: object
+  services.ReconcileRequest:
+    properties:
+      account_ids:
+        items:
+          type: integer
+        type: array
+      dry_run:
+        type: boolean
+      strategy:
+        description: to_ssot | to_transactions | to_coa
+        type: string
+    type: object
+  services.ReconcileResult:
+    properties:
+      dry_run:
+        type: boolean
+      items:
+        items:
+          $ref: '#/definitions/services.ReconcileItem'
+        type: array
+      strategy:
+        type: string
+    type: object
   services.ReconciliationData:
     properties:
       account_id:
@@ -4095,100 +4137,6 @@ info:
   title: Sistema Akuntansi API
   version: "1.0"
 paths:
-  /admin/balance-health/auto-heal:
-    post:
-      consumes:
-      - application/json
-      description: Automatically detect and fix common balance synchronization issues
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Auto-healing result
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Auto-heal balance issues
-      tags:
-      - Balance Health
-  /admin/balance-health/check:
-    get:
-      consumes:
-      - application/json
-      description: Check the current health of the balance sheet and accounting equation
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Balance health status
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Check balance health status
-      tags:
-      - Balance Health
-  /admin/balance-health/detailed-report:
-    get:
-      consumes:
-      - application/json
-      description: Get detailed balance validation report with account breakdowns
-        and recommendations
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Detailed balance report
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Get detailed balance report
-      tags:
-      - Balance Health
-  /admin/balance-health/scheduled-maintenance:
-    post:
-      consumes:
-      - application/json
-      description: Perform scheduled balance maintenance and auto-healing (used by
-        cron jobs)
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Maintenance result
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal server error
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Perform scheduled maintenance
-      tags:
-      - Balance Health
   /api/admin/check-cashbank-gl-links:
     get:
       consumes:
@@ -4591,6 +4539,31 @@ paths:
       security:
       - Bearer: []
       summary: Get account transaction history
+      tags:
+      - CashBank Integration
+  /api/cashbank/integrated/reconcile:
+    post:
+      consumes:
+      - application/json
+      description: 'Reconcile balances between CashBank and COA using selected strategy:
+        to_ssot | to_transactions | to_coa'
+      parameters:
+      - description: Reconcile options
+        in: body
+        name: reconcile
+        required: true
+        schema:
+          $ref: '#/definitions/services.ReconcileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.ReconcileResult'
+      security:
+      - Bearer: []
+      summary: Reconcile Cash&Bank vs COA
       tags:
       - CashBank Integration
   /api/cashbank/integrated/summary:
@@ -5531,6 +5504,100 @@ paths:
       summary: Get purchase payments
       tags:
       - Purchases
+  /api/v1/admin/balance-health/auto-heal:
+    post:
+      consumes:
+      - application/json
+      description: Automatically detect and fix common balance synchronization issues
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Auto-healing result
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Auto-heal balance issues
+      tags:
+      - Balance Health
+  /api/v1/admin/balance-health/check:
+    get:
+      consumes:
+      - application/json
+      description: Check the current health of the balance sheet and accounting equation
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Balance health status
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Check balance health status
+      tags:
+      - Balance Health
+  /api/v1/admin/balance-health/detailed-report:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed balance validation report with account breakdowns
+        and recommendations
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Detailed balance report
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get detailed balance report
+      tags:
+      - Balance Health
+  /api/v1/admin/balance-health/scheduled-maintenance:
+    post:
+      consumes:
+      - application/json
+      description: Perform scheduled balance maintenance and auto-healing (used by
+        cron jobs)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Maintenance result
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Perform scheduled maintenance
+      tags:
+      - Balance Health
   /api/v1/admin/security/alerts:
     get:
       consumes:

@@ -286,7 +286,15 @@ func (h *AccountHandler) ImportAccounts(c *gin.Context) {
 
 // ExportAccountsPDF exports accounts to PDF
 func (h *AccountHandler) ExportAccountsPDF(c *gin.Context) {
-	pdfData, err := h.exportService.ExportAccountsPDF(c.Request.Context())
+	// Get user ID from context (assuming it's set by auth middleware)
+	userID := uint(1) // Default fallback, should be extracted from JWT/session
+	if userIDValue, exists := c.Get("userID"); exists {
+		if uid, ok := userIDValue.(uint); ok {
+			userID = uid
+		}
+	}
+	
+	pdfData, err := h.exportService.ExportAccountsPDF(c.Request.Context(), userID)
 	if err != nil {
 		if appErr := utils.GetAppError(err); appErr != nil {
 			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))
@@ -383,7 +391,15 @@ func (h *AccountHandler) GetAccountCatalog(c *gin.Context) {
 
 // ExportAccountsExcel exports accounts to Excel
 func (h *AccountHandler) ExportAccountsExcel(c *gin.Context) {
-	excelData, err := h.exportService.ExportAccountsExcel(c.Request.Context())
+	// Get user ID from context (assuming it's set by auth middleware)
+	userID := uint(1) // Default fallback, should be extracted from JWT/session
+	if userIDValue, exists := c.Get("userID"); exists {
+		if uid, ok := userIDValue.(uint); ok {
+			userID = uid
+		}
+	}
+	
+	excelData, err := h.exportService.ExportAccountsExcel(c.Request.Context(), userID)
 	if err != nil {
 		if appErr := utils.GetAppError(err); appErr != nil {
 			c.JSON(appErr.StatusCode, appErr.ToErrorResponse(""))

@@ -3,15 +3,6 @@ import 'jspdf-autotable';
 import api from '@/services/api';
 import { getImageUrl } from '@/utils/imageUrl';
 
-// Extend jsPDF type to include autoTable
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => void;
-    lastAutoTable: {
-      finalY: number;
-    };
-  }
-}
 
 export interface CompanyInfo {
   name: string;
@@ -351,9 +342,9 @@ export class PDFReportGenerator {
       }
     });
 
-    this.doc.autoTable(tableConfig);
+    (this.doc as any).autoTable(tableConfig);
 
-    return this.doc.lastAutoTable.finalY;
+    return (this.doc as any).lastAutoTable.finalY;
   }
 
   /**

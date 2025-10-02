@@ -6,14 +6,9 @@
  */
 
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { SSOTBalanceSheetData } from '../services/ssotBalanceSheetReportService';
 
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
-}
 
 /**
  * Enhanced CSV Export for Balance Sheet
@@ -185,99 +180,100 @@ export function exportBalanceSheetToPDF(
     includeAccountDetails?: boolean;
   } = {}
 ): jsPDF {
-  const { companyName, includeAccountDetails = true } = options;
-  
-  // Initialize PDF
-  const doc = new jsPDF('portrait', 'mm', 'a4');
-  const pageWidth = doc.internal.pageSize.width;
-  const pageHeight = doc.internal.pageSize.height;
-  
-  // Helper function to format currency for PDF
-  const formatCurrencyForPDF = (amount: number | null | undefined): string => {
-    if (amount === null || amount === undefined || isNaN(Number(amount))) {
-      return 'Rp 0';
-    }
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(Number(amount));
-  };
-  
-  // Set fonts
-  doc.setFont('helvetica');
-  
-  // Header section
-  let yPosition = 20;
-  
-  // Company name
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  const company = companyName || data.company?.name || 'PT. Sistem Akuntansi';
-  doc.text(company, pageWidth / 2, yPosition, { align: 'center' });
-  
-  yPosition += 10;
-  
-  // Report title
-  doc.setFontSize(14);
-  doc.text('BALANCE SHEET', pageWidth / 2, yPosition, { align: 'center' });
-  
-  yPosition += 8;
-  
-  // Date and status
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  const asOfDate = data.as_of_date || new Date().toISOString().split('T')[0];
-  doc.text(`As of: ${new Date(asOfDate).toLocaleDateString('id-ID')}`, pageWidth / 2, yPosition, { align: 'center' });
-  
-  yPosition += 6;
-  
-  // Balance status
-  const balanceStatus = data.is_balanced ? '✓ Balanced' : '✗ Not Balanced';
-  const statusColor = data.is_balanced ? [0, 128, 0] : [255, 0, 0];
-  doc.setTextColor(...statusColor);
-  doc.text(balanceStatus, pageWidth / 2, yPosition, { align: 'center' });
-  doc.setTextColor(0, 0, 0); // Reset to black
-  
-  yPosition += 15;
-  
-  // Summary table
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('FINANCIAL SUMMARY', 20, yPosition);
-  yPosition += 5;
-  
-  const summaryData = [
-    ['Total Assets', formatCurrencyForPDF(data.assets?.total_assets || data.total_assets || 0)],
-    ['Total Liabilities', formatCurrencyForPDF(data.liabilities?.total_liabilities || data.total_liabilities || 0)],
-    ['Total Equity', formatCurrencyForPDF(data.equity?.total_equity || data.total_equity || 0)],
-    ['Total Liabilities + Equity', formatCurrencyForPDF(data.total_liabilities_and_equity || 0)]
-  ];
-  
-  if (!data.is_balanced && data.balance_difference) {
-    summaryData.push(['Balance Difference', formatCurrencyForPDF(data.balance_difference)]);
-  }
-  
-  doc.autoTable({
-    startY: yPosition,
-    head: [['Category', 'Amount']],
-    body: summaryData,
-    theme: 'grid',
-    headStyles: { fillColor: [66, 139, 202], textColor: 255, fontStyle: 'bold' },
-    bodyStyles: { fontSize: 11 },
-    alternateRowStyles: { fillColor: [245, 245, 245] },
-    margin: { left: 20, right: 20 },
-    columnStyles: {
-      1: { halign: 'right' }
-    }
-  });
-  
-  yPosition = (doc as any).lastAutoTable.finalY + 10;
-  
-  if (includeAccountDetails) {
-    // Detailed breakdown
+  try {
+    const { companyName, includeAccountDetails = true } = options;
+    
+    // Initialize PDF
+    const doc = new jsPDF('portrait', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+    
+    // Helper function to format currency for PDF
+    const formatCurrencyForPDF = (amount: number | null | undefined): string => {
+      if (amount === null || amount === undefined || isNaN(Number(amount))) {
+        return 'Rp 0';
+      }
+      return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0
+      }).format(Number(amount));
+    };
+    
+    // Set fonts
+    doc.setFont('helvetica');
+    
+    // Header section
+    let yPosition = 20;
+    
+    // Company name
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    const company = companyName || data.company?.name || 'PT. Sistem Akuntansi';
+    doc.text(company, pageWidth / 2, yPosition, { align: 'center' });
+    
+    yPosition += 10;
+    
+    // Report title
+    doc.setFontSize(14);
+    doc.text('BALANCE SHEET', pageWidth / 2, yPosition, { align: 'center' });
+    
+    yPosition += 8;
+    
+    // Date and status
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    const asOfDate = data.as_of_date || new Date().toISOString().split('T')[0];
+    doc.text(`As of: ${new Date(asOfDate).toLocaleDateString('id-ID')}`, pageWidth / 2, yPosition, { align: 'center' });
+    
+    yPosition += 6;
+    
+    // Balance status
+    const balanceStatus = data.is_balanced ? '✓ Balanced' : '✗ Not Balanced';
+    const statusColor = data.is_balanced ? [0, 128, 0] : [255, 0, 0];
+    doc.setTextColor(...statusColor as any);
+    doc.text(balanceStatus, pageWidth / 2, yPosition, { align: 'center' });
+    doc.setTextColor(0, 0, 0); // Reset to black
+    
+    yPosition += 15;
+    
+    // Summary table
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
+    doc.text('FINANCIAL SUMMARY', 20, yPosition);
+    yPosition += 5;
+    
+    const summaryData = [
+      ['Total Assets', formatCurrencyForPDF(data.assets?.total_assets || data.total_assets || 0)],
+      ['Total Liabilities', formatCurrencyForPDF(data.liabilities?.total_liabilities || data.total_liabilities || 0)],
+      ['Total Equity', formatCurrencyForPDF(data.equity?.total_equity || data.total_equity || 0)],
+      ['Total Liabilities + Equity', formatCurrencyForPDF(data.total_liabilities_and_equity || 0)]
+    ];
+    
+    if (!data.is_balanced && data.balance_difference) {
+      summaryData.push(['Balance Difference', formatCurrencyForPDF(data.balance_difference)]);
+    }
+    
+    autoTable(doc, {
+      startY: yPosition,
+      head: [['Category', 'Amount']],
+      body: summaryData,
+      theme: 'grid',
+      headStyles: { fillColor: [66, 139, 202], textColor: 255, fontStyle: 'bold' },
+      bodyStyles: { fontSize: 11 },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { left: 20, right: 20 },
+      columnStyles: {
+        1: { halign: 'right' }
+      }
+    } as any);
+    
+    yPosition = (doc as any).lastAutoTable.finalY + 10;
+    
+    if (includeAccountDetails) {
+      // Detailed breakdown
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
     doc.text('DETAILED BREAKDOWN', 20, yPosition);
     yPosition += 10;
     
@@ -333,7 +329,7 @@ export function exportBalanceSheetToPDF(
       ]);
       
       if (assetsData.length > 0) {
-        doc.autoTable({
+        autoTable(doc, {
           startY: yPosition,
           head: [['Account Code', 'Account Name', 'Amount']],
           body: assetsData,
@@ -345,7 +341,7 @@ export function exportBalanceSheetToPDF(
           columnStyles: {
             2: { halign: 'right' }
           }
-        });
+        } as any);
         
         yPosition = (doc as any).lastAutoTable.finalY + 10;
       }
@@ -409,7 +405,7 @@ export function exportBalanceSheetToPDF(
       ]);
       
       if (liabilitiesData.length > 0) {
-        doc.autoTable({
+        autoTable(doc, {
           startY: yPosition,
           head: [['Account Code', 'Account Name', 'Amount']],
           body: liabilitiesData,
@@ -421,7 +417,7 @@ export function exportBalanceSheetToPDF(
           columnStyles: {
             2: { halign: 'right' }
           }
-        });
+        } as any);
         
         yPosition = (doc as any).lastAutoTable.finalY + 10;
       }
@@ -456,7 +452,7 @@ export function exportBalanceSheetToPDF(
         formatCurrencyForPDF(data.equity.total_equity || 0)
       ]);
       
-      doc.autoTable({
+      autoTable(doc, {
         startY: yPosition,
         head: [['Account Code', 'Account Name', 'Amount']],
         body: equityData,
@@ -468,87 +464,37 @@ export function exportBalanceSheetToPDF(
         columnStyles: {
           2: { halign: 'right' }
         }
-      });
+      } as any);
       
       yPosition = (doc as any).lastAutoTable.finalY + 10;
     }
-  }
-  
-  // Footer
-  const footerY = pageHeight - 20;
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Generated by Sistem Akuntansi', 20, footerY);
-  doc.text(`Generated on: ${new Date().toLocaleString('id-ID')}`, pageWidth - 20, footerY, { align: 'right' });
-  doc.text(`Data Source: ${data.enhanced ? 'SSOT Enhanced' : 'SSOT Standard'}`, pageWidth / 2, footerY, { align: 'center' });
-  
-  // Add page numbers if multiple pages
-  const pageCount = doc.getNumberOfPages();
-  if (pageCount > 1) {
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 20, footerY - 5, { align: 'right' });
+    
+    // Footer
+    const footerY = pageHeight - 20;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Generated by Sistem Akuntansi', 20, footerY);
+    doc.text(`Generated on: ${new Date().toLocaleString('id-ID')}`, pageWidth - 20, footerY, { align: 'right' });
+    doc.text(`Data Source: ${data.enhanced ? 'SSOT Enhanced' : 'SSOT Standard'}`, pageWidth / 2, footerY, { align: 'center' });
+    
+    // Add page numbers if multiple pages
+    const pageCount = doc.getNumberOfPages();
+    if (pageCount > 1) {
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth - 20, footerY - 5, { align: 'right' });
+      }
     }
-  }
-  
-  return doc;
-}
-
-/**
- * Download CSV file
- */
-export function downloadCSV(csvContent: string, filename?: string): void {
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  
-  if (link.download !== undefined) {
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename || `balance_sheet_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    
+    return doc;
+  } catch (err: any) {
+    // Provide an informative error that surfaces in the toast
+    const hint = 'Pastikan dependensi PDF terpasang dan kompatibel: jspdf >= 3 dan jspdf-autotable >= 5. Gunakan import autoTable dari "jspdf-autotable".';
+    const message = `Gagal mengekspor PDF Balance Sheet: ${err?.message || err}. ${hint}`;
+    throw new Error(message);
   }
 }
 
-/**
- * Download PDF file
- */
-export function downloadPDF(doc: jsPDF, filename?: string): void {
-  const pdfName = filename || `balance_sheet_${new Date().toISOString().split('T')[0]}.pdf`;
-  doc.save(pdfName);
-}
-
-/**
- * Export Balance Sheet as CSV and trigger download
- */
-export function exportAndDownloadCSV(
-  data: SSOTBalanceSheetData,
-  options?: {
-    includeAccountDetails?: boolean;
-    companyName?: string;
-    filename?: string;
-  }
-): void {
-  const csvContent = exportBalanceSheetToCSV(data, options);
-  downloadCSV(csvContent, options?.filename);
-}
-
-/**
- * Export Balance Sheet as PDF and trigger download
- */
-export function exportAndDownloadPDF(
-  data: SSOTBalanceSheetData,
-  options?: {
-    companyName?: string;
-    logoUrl?: string;
-    includeAccountDetails?: boolean;
-    filename?: string;
-  }
-): void {
-  const doc = exportBalanceSheetToPDF(data, options);
-  downloadPDF(doc, options?.filename);
-}
+// Note: Client-side download helpers moved to balanceSheetExportClient.ts
+// This module now only contains pure generation functions (no DOM access)

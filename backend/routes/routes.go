@@ -167,7 +167,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	
 	// Initialize repositories, services and handlers
 	accountRepo := repositories.NewAccountRepository(db)
-	exportService := services.NewExportService(accountRepo)
+	exportService := services.NewExportService(accountRepo, db)
 	accountHandler := handlers.NewAccountHandler(accountRepo, exportService)
 	
 	// Initialize startup handler for startup service monitoring
@@ -598,6 +598,7 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				sales.GET("/:id/invoice/pdf", permMiddleware.CanExport("sales"), salesController.ExportSaleInvoicePDF)
 				sales.GET("/:id/receipt/pdf", permMiddleware.CanExport("sales"), salesController.ExportSaleReceiptPDF)
 				sales.GET("/report/pdf", permMiddleware.CanExport("sales"), salesController.ExportSalesReportPDF)
+				sales.GET("/report/csv", permMiddleware.CanExport("sales"), salesController.ExportSalesReportCSV)
 
 				// Customer portal
 				sales.GET("/customer/:customer_id", middleware.RoleRequired("admin", "finance", "director"), salesController.GetCustomerSales)
@@ -607,6 +608,12 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 	// Initialize Balance Monitoring service and controller
 	balanceMonitoringService := services.NewBalanceMonitoringService(db)
 	balanceMonitoringController := controllers.NewBalanceMonitoringController(balanceMonitoringService)
+	
+	// Initialize Balance Health controller
+	balanceHealthController := controllers.NewBalanceHealthController(db)
+	
+	// Initialize FixCashBankController (using existing cashBankService)
+	fixCashBankController := controllers.NewFixCashBankController(db, cashBankService)
 	
 	// Initialize API Usage Monitoring controller
 	apiUsageController := controllers.NewAPIUsageController()
@@ -944,6 +951,28 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				security.POST("/cleanup", securityController.CleanupSecurityLogs)
 				
 			}
+			
+			// 🔧 Admin CashBank GL Links routes (admin only)
+			adminRoutes := protected.Group("/admin")
+			adminRoutes.Use(middleware.RoleRequired("admin")) // Only admins can access admin routes
+			adminRoutes.Use(enhancedSecurity.RequestMonitoring()) // Enhanced monitoring for admin routes
+			{
+				// CashBank GL account links management
+				adminRoutes.GET("/check-cashbank-gl-links", fixCashBankController.CheckCashBankGLLinks)
+				adminRoutes.POST("/fix-cashbank-gl-links", fixCashBankController.FixCashBankGLLinks)
+			}
+			
+			// 🏥 Balance Health routes (admin only)
+			balanceHealth := protected.Group("/admin/balance-health")
+			balanceHealth.Use(middleware.RoleRequired("admin")) // Only admins can access balance health
+			balanceHealth.Use(enhancedSecurity.RequestMonitoring()) // Enhanced monitoring for balance health routes
+			{
+				// Balance Health Management
+				balanceHealth.GET("/check", balanceHealthController.HealthCheck)
+				balanceHealth.POST("/auto-heal", balanceHealthController.AutoHeal)
+				balanceHealth.GET("/detailed-report", balanceHealthController.DetailedReport)
+				balanceHealth.POST("/scheduled-maintenance", balanceHealthController.ScheduledMaintenance)
+			}
 		}
 	}
 
@@ -974,19 +1003,19 @@ if isDevelopmentMode() || os.Getenv("ENABLE_SWAGGER") == "true" {
 	r.GET("/openapi/doc.json", func(c *gin.Context) {
 		c.Data(http.StatusOK, "application/json", swaggerBytes)
 	})
-	// Swagger UI endpoints using CDN assets (root-level only)
-	sg := r.Group("/")
-	sg.Use(swaggerCSPMiddleware()) // relax CSP for Swagger UI only
-sg.GET("/swagger", func(c *gin.Context) { c.Redirect(http.StatusFound, "/swagger/index.html") })
-	sg.GET("/swagger/index.html", func(c *gin.Context) {
-		html := swaggerIndexHTML("/openapi/doc.json")
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
-	})
-	sg.GET("/docs", func(c *gin.Context) { c.Redirect(http.StatusFound, "/docs/index.html") })
-	sg.GET("/docs/index.html", func(c *gin.Context) {
-		html := swaggerIndexHTML("/openapi/doc.json")
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
-	})
+	// Swagger UI endpoints using CDN assets (root-level only) - TEMPORARILY DISABLED FOR ENHANCED SWAGGER
+	// sg := r.Group("/")
+	// sg.Use(swaggerCSPMiddleware()) // relax CSP for Swagger UI only
+	// sg.GET("/swagger", func(c *gin.Context) { c.Redirect(http.StatusFound, "/swagger/index.html") })
+	// sg.GET("/swagger/index.html", func(c *gin.Context) {
+	// 	html := swaggerIndexHTML("/openapi/doc.json")
+	// 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+	// })
+	// sg.GET("/docs", func(c *gin.Context) { c.Redirect(http.StatusFound, "/docs/index.html") })
+	// sg.GET("/docs/index.html", func(c *gin.Context) {
+	// 	html := swaggerIndexHTML("/openapi/doc.json")
+	// 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+	// })
 	// Avoid favicon 404s on Swagger pages (kept for completeness)
 }
 

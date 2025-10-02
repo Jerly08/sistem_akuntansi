@@ -61,13 +61,11 @@ import { ssotTrialBalanceService, SSOTTrialBalanceData } from '../../src/service
 import { ssotGeneralLedgerService, SSOTGeneralLedgerData } from '../../src/services/ssotGeneralLedgerService';
 import { ssotJournalAnalysisService, SSOTJournalAnalysisData } from '../../src/services/ssotJournalAnalysisService';
 import { reportService, ReportParameters } from '../../src/services/reportService';
-// Import enhanced Balance Sheet export utilities
-import { 
-  exportAndDownloadCSV, 
-  exportAndDownloadPDF 
-} from '../../src/utils/balanceSheetExportUtils';
+import { ssotPurchaseReportService, SSOTPurchaseReportData } from '../../src/services/ssotPurchaseReportService';
 // Import Cash Flow Export Service
 import cashFlowExportService from '../../src/services/cashFlowExportService';
+// Import Simple Journal Entry Report
+import SimpleJournalEntryReport from '../../src/components/reports/SimpleJournalEntryReport';
 
 // Define reports data matching the UI design
 const getAvailableReports = (t: any) => [
@@ -126,6 +124,13 @@ const getAvailableReports = (t: any) => [
     description: 'Complete analysis of all journal entries showing all transactions with detailed breakdown by accounts, dates, and amounts',
     type: 'FINANCIAL',
     icon: FiDatabase
+  },
+  {
+    id: 'simple-journal-entries',
+    name: 'Journal Entry Report',
+    description: 'Simple view of journal entries with basic filtering, search capabilities, and CSV export. Perfect for quick journal entry review and verification.',
+    type: 'OPERATIONAL',
+    icon: FiBook
   }
 ];
 
@@ -215,6 +220,9 @@ const ReportsPage: React.FC = () => {
   const [ssotJAStartDate, setSSOTJAStartDate] = useState('2025-01-01');
   const [ssotJAEndDate, setSSOTJAEndDate] = useState('2025-12-31');
 
+  // State untuk Simple Journal Entry Report
+  const [simpleJournalOpen, setSimpleJournalOpen] = useState(false);
+
   // Modal and report generation states
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [selectedReport, setSelectedReport] = useState<any>(null);
@@ -261,74 +269,28 @@ const ReportsPage: React.FC = () => {
     }
   };
 
-  // Function untuk fetch SSOT Purchase Report
+// Function untuk fetch SSOT Purchase Report
   const fetchSSOTPurchaseReport = async () => {
     setSSOTPRLoading(true);
     setSSOTPRError(null);
     
     try {
-      // Get token
-      let token = null;
-      
-      if (typeof window !== 'undefined') {
-        token = localStorage.getItem('token');
-        
-        if (!token) {
-          token = localStorage.getItem('authToken') || 
-                 sessionStorage.getItem('token') || 
-                 sessionStorage.getItem('authToken');
-                 
-          if (token) {
-            localStorage.setItem('token', token);
-          }
-        }
-        
-        if (!token) {
-          const cookies = document.cookie.split(';');
-          for (let cookie of cookies) {
-            const [name, value] = cookie.trim().split('=');
-            if (name === 'token' || name === 'authToken' || name === 'access_token') {
-              token = value;
-              break;
-            }
-          }
-        }
-      }
-      
-      if (!token) {
-        throw new Error('Authentication token not found. Please login first.');
-      }
+      const data: SSOTPurchaseReportData = await ssotPurchaseReportService.generateSSOTPurchaseReport({
+        start_date: ssotPRStartDate,
+        end_date: ssotPREndDate,
+        format: 'json'
+      });
 
-      const response = await fetch(
-        `/api/v1/ssot-reports/purchase-report?start_date=${ssotPRStartDate}&end_date=${ssotPREndDate}&format=json`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
+      console.log('SSOT Purchase Report Data received:', data);
+      setSSOTPRData(data);
       
-      if (result.success && result.data) {
-        console.log('SSOT Purchase Report Data received:', result.data);
-        setSSOTPRData(result.data);
-        
-        toast({
-          title: 'Success',
-          description: 'Purchase Report generated successfully',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      } else {
-        throw new Error(result.message || 'Failed to fetch purchase report data');
-      }
+      toast({
+        title: 'Success',
+        description: 'Purchase Report generated successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
     } catch (error: any) {
       setSSOTPRError(error.message || 'Failed to generate purchase report');
       toast({
@@ -529,66 +491,20 @@ const ReportsPage: React.FC = () => {
     }
   };
 
-  // Function untuk fetch SSOT P&L Report
+// Function untuk fetch SSOT P&L Report
   const fetchSSOTPLReport = async () => {
     setSSOTPLLoading(true);
     setSSOTPLError(null);
     
     try {
-      // Get token
-      let token = null;
-      
-      if (typeof window !== 'undefined') {
-        token = localStorage.getItem('token');
-        
-        if (!token) {
-          token = localStorage.getItem('authToken') || 
-                 sessionStorage.getItem('token') || 
-                 sessionStorage.getItem('authToken');
-                 
-          if (token) {
-            localStorage.setItem('token', token);
-          }
-        }
-        
-        if (!token) {
-          const cookies = document.cookie.split(';');
-          for (let cookie of cookies) {
-            const [name, value] = cookie.trim().split('=');
-            if (name === 'token' || name === 'authToken' || name === 'access_token') {
-              token = value;
-              break;
-            }
-          }
-        }
-      }
-      
-      if (!token) {
-        throw new Error('Authentication token not found. Please login first.');
-      }
+      const result = await reportService.generateReport('profit-loss', {
+        start_date: ssotStartDate,
+        end_date: ssotEndDate,
+        format: 'json'
+      });
 
-      const response = await fetch(
-        `/api/v1/reports/ssot-profit-loss?start_date=${ssotStartDate}&end_date=${ssotEndDate}&format=json`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      if (result.status === 'success' && result.data) {
-        console.log('SSOT P&L Data received:', result.data);
-        setSSOTPLData(result.data);
-      } else {
-        throw new Error(result.message || 'Failed to fetch P&L data');
-      }
+      console.log('SSOT P&L Data received:', result);
+      setSSOTPLData(result as any);
     } catch (error) {
       console.error('Error fetching SSOT P&L report:', error);
       setSSOTPLError(error instanceof Error ? error.message : 'An error occurred');
@@ -600,6 +516,7 @@ const ReportsPage: React.FC = () => {
   // Enhanced export handlers for Balance Sheet
   const handleEnhancedCSVExport = async (balanceSheetData: SSOTBalanceSheetData) => {
     try {
+      const { exportAndDownloadCSV } = await import('../../src/utils/balanceSheetExportClient');
       exportAndDownloadCSV(balanceSheetData, {
         includeAccountDetails: true,
         companyName: balanceSheetData.company?.name || 'PT. Sistem Akuntansi',
@@ -626,6 +543,7 @@ const ReportsPage: React.FC = () => {
 
   const handleEnhancedPDFExport = async (balanceSheetData: SSOTBalanceSheetData) => {
     try {
+      const { exportAndDownloadPDF } = await import('../../src/utils/balanceSheetExportClient');
       exportAndDownloadPDF(balanceSheetData, {
         companyName: balanceSheetData.company?.name || 'PT. Sistem Akuntansi',
         includeAccountDetails: true,
@@ -757,6 +675,8 @@ const ReportsPage: React.FC = () => {
       } else if (report.id === 'journal-entry-analysis') {
         setSSOTJAOpen(true);
         await fetchSSOTJournalAnalysisReport();
+      } else if (report.id === 'simple-journal-entries') {
+        setSimpleJournalOpen(true);
       }
       
     } catch (error) {
@@ -1311,6 +1231,8 @@ const ReportsPage: React.FC = () => {
                             setSSOTGLOpen(true);
                           } else if (report.id === 'journal-entry-analysis') {
                             setSSOTJAOpen(true);
+                          } else if (report.id === 'simple-journal-entries') {
+                            setSimpleJournalOpen(true);
                           } else if (report.id === 'balance-sheet') {
                             setSSOTBSOpen(true);
                           } else if (report.id === 'cash-flow') {
@@ -4124,6 +4046,30 @@ leftIcon={<FiBook />}
               Close
             </Button>
           </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Simple Journal Entry Report Modal */}
+      <Modal isOpen={simpleJournalOpen} onClose={() => setSimpleJournalOpen(false)} size="6xl">
+        <ModalOverlay />
+        <ModalContent bg={modalContentBg}>
+          <ModalHeader>
+            <HStack>
+              <Icon as={FiBook} color="blue.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  Journal Entry Report
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
+                  Simple view with filtering and export capabilities
+                </Text>
+              </VStack>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody p={0}>
+            <SimpleJournalEntryReport onClose={() => setSimpleJournalOpen(false)} />
+          </ModalBody>
         </ModalContent>
       </Modal>
       

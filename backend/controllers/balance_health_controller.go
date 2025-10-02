@@ -28,7 +28,7 @@ func NewBalanceHealthController(db *gorm.DB) *BalanceHealthController {
 // @Success 200 {object} map[string]interface{} "Balance health status"
 // @Failure 500 {object} map[string]interface{} "Internal server error"
 // @Security BearerAuth
-// @Router /admin/balance-health/check [get]
+// @Router /api/v1/admin/balance-health/check [get]
 func (ctrl *BalanceHealthController) HealthCheck(c *gin.Context) {
 	validation, err := ctrl.balanceValidationService.ValidateRealTimeBalance()
 	if err != nil {
@@ -56,7 +56,7 @@ func (ctrl *BalanceHealthController) HealthCheck(c *gin.Context) {
 // @Success 200 {object} map[string]interface{} "Auto-healing result"
 // @Failure 500 {object} map[string]interface{} "Internal server error"
 // @Security BearerAuth
-// @Router /admin/balance-health/auto-heal [post]
+// @Router /api/v1/admin/balance-health/auto-heal [post]
 func (ctrl *BalanceHealthController) AutoHeal(c *gin.Context) {
 	result, err := ctrl.balanceValidationService.AutoHealBalanceIssues()
 	if err != nil {
@@ -91,7 +91,7 @@ func (ctrl *BalanceHealthController) AutoHeal(c *gin.Context) {
 // @Success 200 {object} map[string]interface{} "Detailed balance report"
 // @Failure 500 {object} map[string]interface{} "Internal server error"
 // @Security BearerAuth
-// @Router /admin/balance-health/detailed-report [get]
+// @Router /api/v1/admin/balance-health/detailed-report [get]
 func (ctrl *BalanceHealthController) DetailedReport(c *gin.Context) {
 	report, err := ctrl.balanceValidationService.GetDetailedValidationReport()
 	if err != nil {
@@ -118,7 +118,7 @@ func (ctrl *BalanceHealthController) DetailedReport(c *gin.Context) {
 // @Success 200 {object} map[string]interface{} "Maintenance result"
 // @Failure 500 {object} map[string]interface{} "Internal server error"
 // @Security BearerAuth
-// @Router /admin/balance-health/scheduled-maintenance [post]
+// @Router /api/v1/admin/balance-health/scheduled-maintenance [post]
 func (ctrl *BalanceHealthController) ScheduledMaintenance(c *gin.Context) {
 	err := ctrl.balanceValidationService.ScheduledHealthCheck()
 	if err != nil {

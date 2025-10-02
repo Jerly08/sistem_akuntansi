@@ -24,150 +24,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/admin/balance-health/auto-heal": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Automatically detect and fix common balance synchronization issues",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Balance Health"
-                ],
-                "summary": "Auto-heal balance issues",
-                "responses": {
-                    "200": {
-                        "description": "Auto-healing result",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/balance-health/check": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Check the current health of the balance sheet and accounting equation",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Balance Health"
-                ],
-                "summary": "Check balance health status",
-                "responses": {
-                    "200": {
-                        "description": "Balance health status",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/balance-health/detailed-report": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get detailed balance validation report with account breakdowns and recommendations",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Balance Health"
-                ],
-                "summary": "Get detailed balance report",
-                "responses": {
-                    "200": {
-                        "description": "Detailed balance report",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/balance-health/scheduled-maintenance": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Perform scheduled balance maintenance and auto-healing (used by cron jobs)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Balance Health"
-                ],
-                "summary": "Perform scheduled maintenance",
-                "responses": {
-                    "200": {
-                        "description": "Maintenance result",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/api/admin/check-cashbank-gl-links": {
             "get": {
                 "security": [
@@ -796,6 +652,45 @@ const docTemplate = `{
                             "additionalProperties": {
                                 "type": "string"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/cashbank/integrated/reconcile": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Reconcile balances between CashBank and COA using selected strategy: to_ssot | to_transactions | to_coa",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "CashBank Integration"
+                ],
+                "summary": "Reconcile Cash\u0026Bank vs COA",
+                "parameters": [
+                    {
+                        "description": "Reconcile options",
+                        "name": "reconcile",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.ReconcileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.ReconcileResult"
                         }
                     }
                 }
@@ -2256,6 +2151,150 @@ const docTemplate = `{
                             "items": {
                                 "$ref": "#/definitions/models.PurchasePayment"
                             }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/balance-health/auto-heal": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Automatically detect and fix common balance synchronization issues",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Balance Health"
+                ],
+                "summary": "Auto-heal balance issues",
+                "responses": {
+                    "200": {
+                        "description": "Auto-healing result",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/balance-health/check": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Check the current health of the balance sheet and accounting equation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Balance Health"
+                ],
+                "summary": "Check balance health status",
+                "responses": {
+                    "200": {
+                        "description": "Balance health status",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/balance-health/detailed-report": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get detailed balance validation report with account breakdowns and recommendations",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Balance Health"
+                ],
+                "summary": "Get detailed balance report",
+                "responses": {
+                    "200": {
+                        "description": "Detailed balance report",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/balance-health/scheduled-maintenance": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Perform scheduled balance maintenance and auto-healing (used by cron jobs)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Balance Health"
+                ],
+                "summary": "Perform scheduled maintenance",
+                "responses": {
+                    "200": {
+                        "description": "Maintenance result",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -10623,6 +10662,70 @@ const docTemplate = `{
                 },
                 "total_taxable_amount": {
                     "type": "number"
+                }
+            }
+        },
+        "services.ReconcileItem": {
+            "type": "object",
+            "properties": {
+                "applied": {
+                    "type": "boolean"
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "cashbank_before": {
+                    "type": "number"
+                },
+                "coa_account_id": {
+                    "type": "integer"
+                },
+                "coa_before": {
+                    "type": "number"
+                },
+                "new_balance": {
+                    "type": "number"
+                },
+                "ssot_balance": {
+                    "type": "number"
+                },
+                "transaction_sum": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.ReconcileRequest": {
+            "type": "object",
+            "properties": {
+                "account_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "strategy": {
+                    "description": "to_ssot | to_transactions | to_coa",
+                    "type": "string"
+                }
+            }
+        },
+        "services.ReconcileResult": {
+            "type": "object",
+            "properties": {
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.ReconcileItem"
+                    }
+                },
+                "strategy": {
+                    "type": "string"
                 }
             }
         },

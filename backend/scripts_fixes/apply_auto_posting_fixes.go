@@ -21,8 +21,8 @@ func main() {
 	}
 	
 	conflictFiles := []string{
-		"services\sales_double_entry_service.go",
-		"services\sales_service.go",
+		"services/sales_double_entry_service.go",
+		"services/sales_service.go",
 	}
 	
 	fmt.Printf("Moving %d conflicting files to backup...\n", len(conflictFiles))

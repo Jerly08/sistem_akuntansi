@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"bytes"
+	"encoding/csv"
 	"fmt"
 	"log"
 	"net/http"
@@ -804,6 +806,9 @@ func (sc *SalesController) ExportSaleReceiptPDF(c *gin.Context) {
 func (sc *SalesController) ExportSalesReportPDF(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
+	status := c.Query("status")
+	customerID := c.Query("customer_id")
+	search := c.Query("search")
 
 	// If no dates provided, default to last 30 days to keep report size reasonable
 	if startDate == "" && endDate == "" {
@@ -814,7 +819,7 @@ func (sc *SalesController) ExportSalesReportPDF(c *gin.Context) {
 	}
 
 // Collect sales data via service and generate PDF
-	filter := models.SalesFilter{StartDate: startDate, EndDate: endDate, Page: 1, Limit: 10000}
+	filter := models.SalesFilter{StartDate: startDate, EndDate: endDate, Status: status, CustomerID: customerID, Search: search, Page: 1, Limit: 10000}
 	res, err := sc.salesServiceV2.GetSales(filter)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -830,6 +835,98 @@ func (sc *SalesController) ExportSalesReportPDF(c *gin.Context) {
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+// ExportSalesReportCSV exports sales report as CSV
+func (sc *SalesController) ExportSalesReportCSV(c *gin.Context) {
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	// If no dates provided, default to last 30 days to keep report size reasonable
+	if startDate == "" && endDate == "" {
+		end := time.Now()
+		start := end.AddDate(0, 0, -30)
+		startDate = start.Format("2006-01-02")
+		endDate = end.Format("2006-01-02")
+	}
+
+	// Collect sales data via service
+	status := c.Query("status")
+	customerID := c.Query("customer_id")
+	search := c.Query("search")
+	filter := models.SalesFilter{StartDate: startDate, EndDate: endDate, Status: status, CustomerID: customerID, Search: search, Page: 1, Limit: 10000}
+	res, err := sc.salesServiceV2.GetSales(filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	language := "id"
+	if sc.pdfService != nil { language = sc.pdfService.Language() }
+	loc := func(key, fallback string) string {
+		t := utils.T(key, language)
+		if t == key { return fallback }
+		return t
+	}
+	// Header lines
+	_ = w.Write([]string{loc("sales_report", "SALES REPORT")})
+	_ = w.Write([]string{loc("period", "Period") + ":", startDate, loc("to", "to"), endDate})
+	_ = w.Write([]string{loc("generated_on", "Generated on") + ":", time.Now().Format("2006-01-02 15:04:05")})
+	_ = w.Write([]string{})
+
+	// Table header
+	_ = w.Write([]string{loc("date", "Date"), "Sale Code", loc("invoice_number", "Invoice No."), loc("customer", "Customer"), loc("type", "Type"), loc("status", "Status"), loc("amount", "Amount"), loc("paid", "Paid"), loc("outstanding", "Outstanding")})
+
+	var totalAmount, totalPaid, totalOutstanding float64
+	for _, sale := range res.Data {
+		dateStr := ""
+		if !sale.Date.IsZero() {
+			dateStr = sale.Date.Format("2006-01-02")
+		}
+		invoice := sale.InvoiceNumber
+		customerName := ""
+		if sale.Customer.ID != 0 {
+			customerName = sale.Customer.Name
+		}
+		_ = w.Write([]string{
+			dateStr,
+			sale.Code,
+			invoice,
+			customerName,
+			sale.Type,
+			sale.Status,
+			fmt.Sprintf("%.2f", sale.TotalAmount),
+			fmt.Sprintf("%.2f", sale.PaidAmount),
+			fmt.Sprintf("%.2f", sale.OutstandingAmount),
+		})
+		totalAmount += sale.TotalAmount
+		totalPaid += sale.PaidAmount
+		totalOutstanding += sale.OutstandingAmount
+	}
+
+	// Totals row
+	_ = w.Write([]string{strings.ToUpper(loc("total", "TOTAL")), "", "", "", "", "", fmt.Sprintf("%.2f", totalAmount), fmt.Sprintf("%.2f", totalPaid), fmt.Sprintf("%.2f", totalOutstanding)})
+	_ = w.Write([]string{})
+
+	// Summary section
+	_ = w.Write([]string{strings.ToUpper(loc("sales_summary", "SUMMARY STATISTICS"))})
+	_ = w.Write([]string{loc("total_sales", "Total Sales") + ":", fmt.Sprintf("%d", len(res.Data))})
+	_ = w.Write([]string{loc("total_amount", "Total Amount") + ":", fmt.Sprintf("%.2f", totalAmount)})
+	_ = w.Write([]string{loc("total_paid", "Total Paid") + ":", fmt.Sprintf("%.2f", totalPaid)})
+	_ = w.Write([]string{loc("outstanding", "Outstanding") + ":", fmt.Sprintf("%.2f", totalOutstanding)})
+
+	w.Flush()
+	if err := w.Error(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate CSV", "details": err.Error()})
+		return
+	}
+
+	filename := fmt.Sprintf("sales-report_%s_to_%s.csv", startDate, endDate)
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, "text/csv", buf.Bytes())
 }
 
 

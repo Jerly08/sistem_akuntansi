@@ -250,22 +250,66 @@ func (jm *JWTManager) GenerateTokenPair(user models.User, deviceInfo, ipAddress 
 // Enhanced JWT middleware with blacklist checking and session validation
 func (jm *JWTManager) AuthRequired() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Enhanced header debugging
 		authHeader := c.GetHeader("Authorization")
+		
+		// Debug: Log all headers for troubleshooting
+		if gin.Mode() == gin.DebugMode {
+			fmt.Printf("🔍 [JWT DEBUG] Path: %s\n", c.Request.URL.Path)
+			fmt.Printf("🔍 [JWT DEBUG] Method: %s\n", c.Request.Method)
+			fmt.Printf("🔍 [JWT DEBUG] Authorization Header: '%s'\n", authHeader)
+			
+			// Log all headers containing 'auth' (case insensitive)
+			for key, values := range c.Request.Header {
+				if strings.Contains(strings.ToLower(key), "auth") {
+					fmt.Printf("🔍 [JWT DEBUG] Header %s: %v\n", key, values)
+				}
+			}
+		}
+		
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
+			// Enhanced error response with debugging info
+			errorResponse := gin.H{
 				"error": "Authorization header required",
 				"code":  "AUTH_HEADER_MISSING",
-			})
+				"message": "Please include 'Authorization: Bearer <token>' header in your request",
+			}
+			
+			// Add debug info in development mode
+			if gin.Mode() == gin.DebugMode {
+				errorResponse["debug"] = gin.H{
+					"path":           c.Request.URL.Path,
+					"method":         c.Request.Method,
+					"user_agent":     c.GetHeader("User-Agent"),
+					"content_type":   c.GetHeader("Content-Type"),
+					"all_headers":    len(c.Request.Header),
+					"expected_format": "Authorization: Bearer <your-jwt-token>",
+				}
+			}
+			
+			c.JSON(http.StatusUnauthorized, errorResponse)
 			c.Abort()
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
-			c.JSON(http.StatusUnauthorized, gin.H{
+			// Enhanced format error response
+			errorResponse := gin.H{
 				"error": "Invalid authorization header format",
 				"code":  "INVALID_AUTH_FORMAT",
-			})
+				"message": "Authorization header must start with 'Bearer ' followed by the token",
+			}
+			
+			if gin.Mode() == gin.DebugMode {
+				errorResponse["debug"] = gin.H{
+					"received_header": authHeader,
+					"expected_format": "Bearer <your-jwt-token>",
+					"header_length":   len(authHeader),
+				}
+			}
+			
+			c.JSON(http.StatusUnauthorized, errorResponse)
 			c.Abort()
 			return
 		}

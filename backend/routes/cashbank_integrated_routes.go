@@ -65,6 +65,11 @@ func SetupCashBankIntegratedRoutes(
 		integrated.GET("/accounts/:id/transactions", 
 			permissionMiddleware.CanView("cash_bank"), 
 			integratedController.GetAccountTransactionHistory)
+
+		// Reconcile all balances (admin action)
+		integrated.POST("/reconcile", 
+			permissionMiddleware.CanEdit("cash_bank"),
+			integratedController.Reconcile)
 	}
 }
 

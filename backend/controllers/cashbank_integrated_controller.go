@@ -256,4 +256,28 @@ func (c *CashBankIntegratedController) GetAccountTransactionHistory(ctx *gin.Con
 	})
 }
 
+// Reconcile cash/bank balances vs COA/SSOT
+// @Summary Reconcile Cash&Bank vs COA
+// @Description Reconcile balances between CashBank and COA using selected strategy: to_ssot | to_transactions | to_coa
+// @Tags CashBank Integration
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param reconcile body services.ReconcileRequest true "Reconcile options"
+// @Success 200 {object} services.ReconcileResult
+// @Router /api/cashbank/integrated/reconcile [post]
+func (c *CashBankIntegratedController) Reconcile(ctx *gin.Context) {
+	var req services.ReconcileRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"status":"error","message":"invalid request","error":err.Error()})
+		return
+	}
+	res, err := c.integratedService.ReconcileBalances(req)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"status":"error","message":"reconcile failed","error":err.Error()})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"status":"success","data":res})
+}
+
 // Helper methods - removed obsolete methods as service layer now handles pagination and reconciliation

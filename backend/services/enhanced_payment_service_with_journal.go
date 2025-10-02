@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"strings"
 
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
@@ -198,6 +199,14 @@ func (eps *EnhancedPaymentServiceWithJournal) CreatePaymentWithJournal(req *Paym
 			return fmt.Errorf("failed to finalize payment: %w", err)
 		}
 
+		// Step 8: Reflect movement in Cash & Bank module (keeps UI Kas/Bank in sync)
+		// IMPORTANT: We only update cash_banks and insert a transaction record.
+		// We DO NOT create another journal here to avoid double-posting because the SSOT journal above
+		// already debits/credits the GL bank account.
+		if err := eps.applyCashBankMovement(tx, cashBank, contact.Type, req.Amount, payment, req.Date); err != nil {
+			return fmt.Errorf("failed to update Cash & Bank balances: %w", err)
+		}
+
 		// Build response
 		response.Payment = payment
 		response.JournalResult = journalResult
@@ -356,6 +365,52 @@ func (eps *EnhancedPaymentServiceWithJournal) ReversePayment(paymentID uint, rea
 }
 
 // Helper methods
+
+// applyCashBankMovement updates cash_banks.balance and records a CashBankTransaction for the payment
+// without generating additional journal entries (SSOT already handled journal posting).
+func (eps *EnhancedPaymentServiceWithJournal) applyCashBankMovement(
+	tx *gorm.DB,
+	cashBank *models.CashBank,
+	contactType string,
+	amount float64,
+	payment *models.Payment,
+	date time.Time,
+) error {
+	movement := amount
+	refType := "PAYMENT"
+	if strings.ToUpper(contactType) == "CUSTOMER" {
+		// Incoming money
+		movement = amount
+		refType = "PAYMENT_RECEIVED"
+	} else if strings.ToUpper(contactType) == "VENDOR" {
+		// Outgoing money
+		movement = -amount
+		refType = "PAYMENT_MADE"
+	}
+
+	// Update balance
+	newBalance := cashBank.Balance + movement
+	cashBank.Balance = newBalance
+	if err := tx.Save(cashBank).Error; err != nil {
+		return fmt.Errorf("save cash bank: %w", err)
+	}
+
+	// Insert transaction row for Cash&Bank UI/history
+	txRow := &models.CashBankTransaction{
+		CashBankID:      cashBank.ID,
+		ReferenceType:   refType,
+		ReferenceID:     payment.ID,
+		Amount:          movement,
+		BalanceAfter:    newBalance,
+		TransactionDate: date,
+		Notes:           fmt.Sprintf("%s %s", refType, payment.Code),
+	}
+	if err := tx.Create(txRow).Error; err != nil {
+		return fmt.Errorf("create cashbank transaction: %w", err)
+	}
+
+	return nil
+}
 
 // autoDetectPaymentMethod determines payment method based on contact type
 func (eps *EnhancedPaymentServiceWithJournal) autoDetectPaymentMethod(contactType string) string {

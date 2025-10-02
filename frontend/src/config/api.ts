@@ -124,6 +124,7 @@ export const API_ENDPOINTS = {
   SALES_INVOICE_PDF: (id: number) => `/api/v1/sales/${id}/invoice/pdf`,
   SALES_RECEIPT_PDF: (id: number) => `/api/v1/sales/${id}/receipt/pdf`,
   SALES_REPORT_PDF: '/api/v1/sales/report/pdf',
+  SALES_REPORT_CSV: '/api/v1/sales/report/csv',
   SALES_CUSTOMER: (customerId: number) => `/api/v1/sales/customer/${customerId}`,
   SALES_CUSTOMER_INVOICES: (customerId: number) => `/api/v1/sales/customer/${customerId}/invoices`,
   

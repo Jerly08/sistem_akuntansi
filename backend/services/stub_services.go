@@ -295,6 +295,8 @@ type PDFServiceInterface interface {
 	GenerateSSOTProfitLossPDF(ssotData interface{}) ([]byte, error)
 	GenerateJournalAnalysisPDF(journalData interface{}, startDate, endDate string) ([]byte, error)
 	GenerateSalesSummaryPDF(summary interface{}) ([]byte, error)
+	// Language returns current language based on settings
+	Language() string
 }
 
 type CashBankJournalRequest struct {

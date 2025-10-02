@@ -55,7 +55,9 @@ import {
   FiUser,
   FiFileText,
   FiTrendingUp,
-  FiAlertCircle
+  FiAlertCircle,
+  FiInfo,
+  FiHelpCircle
 } from 'react-icons/fi';
 import { ssotJournalService, SSOTJournalEntry, SSOTJournalLine } from '@/services/ssotJournalService';
 import { useBalanceMonitor, useWebSocketConnection } from '@/contexts/WebSocketContext';
@@ -339,58 +341,79 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
             <VStack align="start" spacing={1}>
               <Text>Journal Entry Details</Text>
               <HStack spacing={3}>
-                <Text fontSize="sm" color="gray.500">
-                  {journal.entry_number}
-                </Text>
-                <Badge colorScheme={getStatusColor(journal.status)} variant="solid">
-                  {journal.status}
-                </Badge>
-                {showRealTimeMonitor && (
-                  <Badge 
-                    colorScheme={isConnected ? 'green' : 'red'} 
-                    variant="outline"
-                    fontSize="xs"
-                  >
-                    {isConnected ? 'Live Updates' : 'Offline'}
+                <Tooltip label="Unique identifier for this journal entry. Used for tracking and referencing." hasArrow placement="top">
+                  <Text fontSize="sm" color="gray.500" cursor="help">
+                    {journal.entry_number}
+                  </Text>
+                </Tooltip>
+                <Tooltip 
+                  label={`Status: ${journal.status}. ${journal.status === 'DRAFT' ? 'Entry is editable and not yet posted to accounts.' : journal.status === 'POSTED' ? 'Entry is finalized and affects account balances.' : 'Entry has been reversed and no longer affects balances.'}`} 
+                  hasArrow 
+                  placement="top"
+                >
+                  <Badge colorScheme={getStatusColor(journal.status)} variant="solid" cursor="help">
+                    {journal.status}
                   </Badge>
+                </Tooltip>
+                {showRealTimeMonitor && (
+                  <Tooltip 
+                    label={isConnected ? 'Real-time balance monitoring is active. Balance updates are live.' : 'Real-time monitoring is disconnected. Balance data may be outdated.'} 
+                    hasArrow 
+                    placement="top"
+                  >
+                    <Badge 
+                      colorScheme={isConnected ? 'green' : 'red'} 
+                      variant="outline"
+                      fontSize="xs"
+                      cursor="help"
+                    >
+                      {isConnected ? 'Live Updates' : 'Offline'}
+                    </Badge>
+                  </Tooltip>
                 )}
               </HStack>
             </VStack>
 
             <HStack spacing={2}>
               {journal.status === 'DRAFT' && onPost && (
-                <Button
-                  size="sm"
-                  colorScheme="green"
-                  leftIcon={<FiCheck />}
-                  onClick={handlePostJournal}
-                  isLoading={isProcessing}
-                >
-                  Post
-                </Button>
+                <Tooltip label="Post this journal entry to make it permanent and update account balances. Once posted, the entry cannot be edited." hasArrow placement="bottom">
+                  <Button
+                    size="sm"
+                    colorScheme="green"
+                    leftIcon={<FiCheck />}
+                    onClick={handlePostJournal}
+                    isLoading={isProcessing}
+                  >
+                    Post
+                  </Button>
+                </Tooltip>
               )}
               
               {journal.status === 'POSTED' && onReverse && (
-                <Button
-                  size="sm"
-                  colorScheme="orange"
-                  leftIcon={<FiX />}
-                  onClick={handleReverseJournal}
-                  isLoading={isProcessing}
-                >
-                  Reverse
-                </Button>
+                <Tooltip label="Create a reversing entry to undo the effects of this posted journal entry. This will restore previous account balances." hasArrow placement="bottom">
+                  <Button
+                    size="sm"
+                    colorScheme="orange"
+                    leftIcon={<FiX />}
+                    onClick={handleReverseJournal}
+                    isLoading={isProcessing}
+                  >
+                    Reverse
+                  </Button>
+                </Tooltip>
               )}
               
               {onEdit && journal.status === 'DRAFT' && (
-                <Button
-                  size="sm"
-                  colorScheme="blue"
-                  leftIcon={<FiEdit />}
-                  onClick={() => onEdit(journal)}
-                >
-                  Edit
-                </Button>
+                <Tooltip label="Edit this draft journal entry. You can modify accounts, amounts, and descriptions before posting." hasArrow placement="bottom">
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    leftIcon={<FiEdit />}
+                    onClick={() => onEdit(journal)}
+                  >
+                    Edit
+                  </Button>
+                </Tooltip>
               )}
             </HStack>
           </HStack>
@@ -401,10 +424,20 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
         <ModalBody>
           <Tabs>
             <TabList>
-              <Tab>Entry Details</Tab>
-              <Tab>Journal Lines</Tab>
-              {showRealTimeMonitor && <Tab>Real-time Balances</Tab>}
-              <Tab>Audit Trail</Tab>
+              <Tooltip label="View basic information, financial summary, and entry metadata" hasArrow placement="top">
+                <Tab>Entry Details</Tab>
+              </Tooltip>
+              <Tooltip label="Detailed breakdown of all debit and credit lines in this journal entry" hasArrow placement="top">
+                <Tab>Journal Lines</Tab>
+              </Tooltip>
+              {showRealTimeMonitor && (
+                <Tooltip label="Live account balances and impact analysis from this journal entry" hasArrow placement="top">
+                  <Tab>Real-time Balances</Tab>
+                </Tooltip>
+              )}
+              <Tooltip label="Complete audit history showing who created, posted, or reversed this entry" hasArrow placement="top">
+                <Tab>Audit Trail</Tab>
+              </Tooltip>
             </TabList>
 
             <TabPanels>
@@ -441,17 +474,34 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                         )}
                         
                         <Box>
-                          <Text fontSize="sm" fontWeight="medium" color="gray.500">Auto Generated</Text>
+                          <HStack spacing={1}>
+                            <Text fontSize="sm" fontWeight="medium" color="gray.500">Auto Generated</Text>
+                            <Tooltip label="Indicates whether this journal entry was automatically generated by the system (e.g., from sales, purchases) or manually created by a user." hasArrow placement="top">
+                              <Box cursor="help">
+                                <FiInfo size={12} color="gray.400" />
+                              </Box>
+                            </Tooltip>
+                          </HStack>
                           <Badge colorScheme={journal.is_auto_generated ? 'blue' : 'gray'}>
                             {journal.is_auto_generated ? 'Yes' : 'No'}
                           </Badge>
                         </Box>
                         
                         <Box>
-                          <Text fontSize="sm" fontWeight="medium" color="gray.500">Balanced</Text>
-                          <Badge colorScheme={journal.is_balanced ? 'green' : 'red'}>
-                            {journal.is_balanced ? 'Yes' : 'No'}
-                          </Badge>
+                          <HStack spacing={1}>
+                            <Text fontSize="sm" fontWeight="medium" color="gray.500">Balanced</Text>
+                            <Tooltip label="A balanced entry has equal total debits and credits. Unbalanced entries cannot be posted and need correction." hasArrow placement="top">
+                              <Box cursor="help">
+                                <FiInfo size={12} color="gray.400" />
+                              </Box>
+                            </Tooltip>
+                          </HStack>
+                          <HStack spacing={2}>
+                            <Badge colorScheme={journal.is_balanced ? 'green' : 'red'}>
+                              {journal.is_balanced ? 'Yes' : 'No'}
+                            </Badge>
+                            {journal.is_balanced ? <FiCheck size={14} color="green" /> : <FiAlertCircle size={14} color="red" />}
+                          </HStack>
                         </Box>
                       </SimpleGrid>
                       
@@ -476,29 +526,53 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                     </CardHeader>
                     <CardBody>
                       <HStack spacing={8}>
-                        <Stat>
-                          <StatLabel>Total Debit</StatLabel>
-                          <StatNumber color="blue.600">
-                            {formatCurrency(journal.total_debit)}
-                          </StatNumber>
-                        </Stat>
+                        <Tooltip label="Total amount of debits in this journal entry. Debits increase asset and expense accounts, decrease liability and revenue accounts." hasArrow placement="top">
+                          <Stat cursor="help">
+                            <StatLabel>
+                              <HStack spacing={1}>
+                                <Text>Total Debit</Text>
+                                <FiInfo size={12} color="gray.400" />
+                              </HStack>
+                            </StatLabel>
+                            <StatNumber color="blue.600">
+                              {formatCurrency(journal.total_debit)}
+                            </StatNumber>
+                          </Stat>
+                        </Tooltip>
                         
-                        <Stat>
-                          <StatLabel>Total Credit</StatLabel>
-                          <StatNumber color="green.600">
-                            {formatCurrency(journal.total_credit)}
-                          </StatNumber>
-                        </Stat>
+                        <Tooltip label="Total amount of credits in this journal entry. Credits decrease asset and expense accounts, increase liability and revenue accounts." hasArrow placement="top">
+                          <Stat cursor="help">
+                            <StatLabel>
+                              <HStack spacing={1}>
+                                <Text>Total Credit</Text>
+                                <FiInfo size={12} color="gray.400" />
+                              </HStack>
+                            </StatLabel>
+                            <StatNumber color="green.600">
+                              {formatCurrency(journal.total_credit)}
+                            </StatNumber>
+                          </Stat>
+                        </Tooltip>
                         
-                        <Stat>
-                          <StatLabel>Difference</StatLabel>
-                          <StatNumber color={journal.is_balanced ? 'green.600' : 'red.600'}>
-                            {formatCurrency(Math.abs(journal.total_debit - journal.total_credit))}
-                          </StatNumber>
-                          <StatHelpText>
-                            {journal.is_balanced ? 'Balanced' : 'Not Balanced'}
-                          </StatHelpText>
-                        </Stat>
+                        <Tooltip label={`Difference between total debits and credits. A balanced journal entry has zero difference. ${journal.is_balanced ? 'This entry is properly balanced.' : 'This entry is unbalanced and needs correction before posting.'}`} hasArrow placement="top">
+                          <Stat cursor="help">
+                            <StatLabel>
+                              <HStack spacing={1}>
+                                <Text>Difference</Text>
+                                <FiInfo size={12} color="gray.400" />
+                              </HStack>
+                            </StatLabel>
+                            <StatNumber color={journal.is_balanced ? 'green.600' : 'red.600'}>
+                              {formatCurrency(Math.abs(journal.total_debit - journal.total_credit))}
+                            </StatNumber>
+                            <StatHelpText>
+                              <HStack spacing={1}>
+                                <Text>{journal.is_balanced ? 'Balanced' : 'Not Balanced'}</Text>
+                                {journal.is_balanced ? <FiCheck size={14} color="green" /> : <FiAlertCircle size={14} color="red" />}
+                              </HStack>
+                            </StatHelpText>
+                          </Stat>
+                        </Tooltip>
                       </HStack>
                     </CardBody>
                   </Card>
@@ -515,12 +589,24 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                     <Table variant="simple">
                       <Thead bg={headerBg}>
                         <Tr>
-                          <Th>Line #</Th>
-                          <Th>Account</Th>
-                          <Th>Description</Th>
-                          <Th>Debit</Th>
-                          <Th>Credit</Th>
-                          <Th>Balance Impact</Th>
+                          <Tooltip label="Sequential line number within this journal entry" hasArrow placement="top">
+                            <Th cursor="help">Line #</Th>
+                          </Tooltip>
+                          <Tooltip label="The account affected by this journal line, including account code and name" hasArrow placement="top">
+                            <Th cursor="help">Account</Th>
+                          </Tooltip>
+                          <Tooltip label="Description of the transaction for this specific line" hasArrow placement="top">
+                            <Th cursor="help">Description</Th>
+                          </Tooltip>
+                          <Tooltip label="Debit amount for this line. Debits increase assets/expenses, decrease liabilities/equity/revenue" hasArrow placement="top">
+                            <Th cursor="help">Debit</Th>
+                          </Tooltip>
+                          <Tooltip label="Credit amount for this line. Credits decrease assets/expenses, increase liabilities/equity/revenue" hasArrow placement="top">
+                            <Th cursor="help">Credit</Th>
+                          </Tooltip>
+                          <Tooltip label="How this journal line will impact the account's balance when posted" hasArrow placement="top">
+                            <Th cursor="help">Balance Impact</Th>
+                          </Tooltip>
                         </Tr>
                       </Thead>
                       <Tbody>
@@ -595,11 +681,21 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                         <Table variant="simple">
                           <Thead bg={headerBg}>
                             <Tr>
-                              <Th>Account</Th>
-                              <Th>Current Balance</Th>
-                              <Th>Balance Type</Th>
-                              <Th>Last Updated</Th>
-                              <Th>Journal Impact</Th>
+                              <Tooltip label="Account code and name affected by this journal entry" hasArrow placement="top">
+                                <Th cursor="help">Account</Th>
+                              </Tooltip>
+                              <Tooltip label="Current real-time balance of this account" hasArrow placement="top">
+                                <Th cursor="help">Current Balance</Th>
+                              </Tooltip>
+                              <Tooltip label="Balance type: DEBIT (positive balance for assets/expenses) or CREDIT (positive balance for liabilities/equity/revenue)" hasArrow placement="top">
+                                <Th cursor="help">Balance Type</Th>
+                              </Tooltip>
+                              <Tooltip label="Last time the balance was updated in the system" hasArrow placement="top">
+                                <Th cursor="help">Last Updated</Th>
+                              </Tooltip>
+                              <Tooltip label="How this journal entry will affect the account balance when posted" hasArrow placement="top">
+                                <Th cursor="help">Journal Impact</Th>
+                              </Tooltip>
                             </Tr>
                           </Thead>
                           <Tbody>
@@ -626,9 +722,18 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                                     </Text>
                                   </Td>
                                   <Td>
-                                    <Badge colorScheme={balanceInfo.balance_type === 'DEBIT' ? 'blue' : 'green'}>
-                                      {balanceInfo.balance_type}
-                                    </Badge>
+                                    <Tooltip 
+                                      label={`${balanceInfo.balance_type} balance type. ${balanceInfo.balance_type === 'DEBIT' ? 'DEBIT accounts (Assets, Expenses) have positive balances when they increase.' : 'CREDIT accounts (Liabilities, Equity, Revenue) have positive balances when they increase.'}`}
+                                      hasArrow 
+                                      placement="top"
+                                    >
+                                      <Badge 
+                                        colorScheme={balanceInfo.balance_type === 'DEBIT' ? 'blue' : 'green'}
+                                        cursor="help"
+                                      >
+                                        {balanceInfo.balance_type}
+                                      </Badge>
+                                    </Tooltip>
                                   </Td>
                                   <Td>
                                     <Text fontSize="xs" color="gray.500">
@@ -665,63 +770,79 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                   </CardHeader>
                   <CardBody>
                     <VStack spacing={4} align="stretch">
-                      <HStack spacing={4}>
-                        <FiUser />
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" fontWeight="medium">Created by</Text>
-                          <Text fontSize="sm" color="gray.600">User ID: {journal.created_by}</Text>
-                          <Text fontSize="xs" color="gray.500">
-                            {new Date(journal.created_at).toLocaleString()}
-                          </Text>
-                        </VStack>
-                      </HStack>
+                      <Tooltip label="Initial creation of this journal entry. All journal entries start in DRAFT status when created." hasArrow placement="left">
+                        <HStack spacing={4} cursor="help" p={2} borderRadius="md" _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                          <Box color="blue.500">
+                            <FiUser />
+                          </Box>
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="sm" fontWeight="medium">Created by</Text>
+                            <Text fontSize="sm" color="gray.600">User ID: {journal.created_by}</Text>
+                            <Text fontSize="xs" color="gray.500">
+                              {new Date(journal.created_at).toLocaleString()}
+                            </Text>
+                          </VStack>
+                        </HStack>
+                      </Tooltip>
 
                       {journal.posted_by && (
                         <>
                           <Divider />
-                          <HStack spacing={4}>
-                            <FiCheck />
-                            <VStack align="start" spacing={0}>
-                              <Text fontSize="sm" fontWeight="medium">Posted by</Text>
-                              <Text fontSize="sm" color="gray.600">User ID: {journal.posted_by}</Text>
-                              {journal.posted_at && (
-                                <Text fontSize="xs" color="gray.500">
-                                  {new Date(journal.posted_at).toLocaleString()}
-                                </Text>
-                              )}
-                            </VStack>
-                          </HStack>
+                          <Tooltip label="Journal entry was posted, making it permanent and updating account balances. Posted entries cannot be edited, only reversed." hasArrow placement="left">
+                            <HStack spacing={4} cursor="help" p={2} borderRadius="md" _hover={{ bg: useColorModeValue('green.50', 'green.900') }}>
+                              <Box color="green.500">
+                                <FiCheck />
+                              </Box>
+                              <VStack align="start" spacing={0}>
+                                <Text fontSize="sm" fontWeight="medium">Posted by</Text>
+                                <Text fontSize="sm" color="gray.600">User ID: {journal.posted_by}</Text>
+                                {journal.posted_at && (
+                                  <Text fontSize="xs" color="gray.500">
+                                    {new Date(journal.posted_at).toLocaleString()}
+                                  </Text>
+                                )}
+                              </VStack>
+                            </HStack>
+                          </Tooltip>
                         </>
                       )}
 
                       {journal.reversed_by && (
                         <>
                           <Divider />
-                          <HStack spacing={4}>
-                            <FiX />
-                            <VStack align="start" spacing={0}>
-                              <Text fontSize="sm" fontWeight="medium">Reversed by</Text>
-                              <Text fontSize="sm" color="gray.600">User ID: {journal.reversed_by}</Text>
-                              {journal.reversed_at && (
-                                <Text fontSize="xs" color="gray.500">
-                                  {new Date(journal.reversed_at).toLocaleString()}
-                                </Text>
-                              )}
-                            </VStack>
-                          </HStack>
+                          <Tooltip label="Journal entry was reversed, creating an opposite entry to undo its effects on account balances. The original entry is preserved for audit purposes." hasArrow placement="left">
+                            <HStack spacing={4} cursor="help" p={2} borderRadius="md" _hover={{ bg: useColorModeValue('orange.50', 'orange.900') }}>
+                              <Box color="orange.500">
+                                <FiX />
+                              </Box>
+                              <VStack align="start" spacing={0}>
+                                <Text fontSize="sm" fontWeight="medium">Reversed by</Text>
+                                <Text fontSize="sm" color="gray.600">User ID: {journal.reversed_by}</Text>
+                                {journal.reversed_at && (
+                                  <Text fontSize="xs" color="gray.500">
+                                    {new Date(journal.reversed_at).toLocaleString()}
+                                  </Text>
+                                )}
+                              </VStack>
+                            </HStack>
+                          </Tooltip>
                         </>
                       )}
 
                       <Divider />
-                      <HStack spacing={4}>
-                        <FiClock />
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" fontWeight="medium">Last updated</Text>
-                          <Text fontSize="xs" color="gray.500">
-                            {new Date(journal.updated_at).toLocaleString()}
-                          </Text>
-                        </VStack>
-                      </HStack>
+                      <Tooltip label="Most recent modification timestamp for this journal entry, including any status changes." hasArrow placement="left">
+                        <HStack spacing={4} cursor="help" p={2} borderRadius="md" _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                          <Box color="gray.500">
+                            <FiClock />
+                          </Box>
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="sm" fontWeight="medium">Last updated</Text>
+                            <Text fontSize="xs" color="gray.500">
+                              {new Date(journal.updated_at).toLocaleString()}
+                            </Text>
+                          </VStack>
+                        </HStack>
+                      </Tooltip>
                     </VStack>
                   </CardBody>
                 </Card>

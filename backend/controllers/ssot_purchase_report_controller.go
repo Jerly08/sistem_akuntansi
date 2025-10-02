@@ -114,7 +114,15 @@ func (c *SSOTPurchaseReportController) GetPurchaseReport(ctx *gin.Context) {
 			Timestamp: time.Now(),
 		})
 	case "pdf":
-		pdfBytes, err := c.exportService.ExportToPDF(report)
+		// Get user ID from context (assuming it's set by auth middleware)
+		userID := uint(1) // Default fallback, should be extracted from JWT/session
+		if userIDValue, exists := ctx.Get("userID"); exists {
+			if uid, ok := userIDValue.(uint); ok {
+				userID = uid
+			}
+		}
+		
+		pdfBytes, err := c.exportService.ExportToPDF(report, userID)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, GetPurchaseReportResponse{Success:false, Message:"Failed to generate PDF", Error: err.Error(), Timestamp: time.Now()})
 			return

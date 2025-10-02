@@ -9,11 +9,6 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { SSOTTrialBalanceData } from '../services/ssotTrialBalanceService';
 
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
-}
 
 /**
  * Enhanced CSV Export for Trial Balance
@@ -191,7 +186,7 @@ export function exportTrialBalanceToPDF(
     ['Status', data.is_balanced ? 'Balanced' : 'Not Balanced']
   ];
   
-  doc.autoTable({
+  (doc as any).autoTable({
     startY: yPosition,
     head: [['Category', 'Amount']],
     body: summaryData,

@@ -108,6 +108,9 @@ func main() {
 	if cfg.Environment == "development" || os.Getenv("ENABLE_SWAGGER") == "true" {
 		config.UpdateSwaggerDocs()
 		config.PrintSwaggerInfo()
+		
+		// Setup enhanced dynamic Swagger routes with authentication support
+		config.SetupEnhancedSwaggerRoutes(r)
 	}
 
 	// Setup routes

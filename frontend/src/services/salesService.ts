@@ -478,13 +478,29 @@ class SalesService {
     }
   }
 
-  async exportSalesReportPDF(startDate?: string, endDate?: string): Promise<Blob> {
+  async exportSalesReportPDF(startDate?: string, endDate?: string, status?: string, search?: string): Promise<Blob> {
     const params = new URLSearchParams();
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
+    if (status) params.append('status', status);
+    if (search) params.append('search', search);
     
     const response = await api.get(`${API_ENDPOINTS.SALES_REPORT_PDF}?${params}`, {
       responseType: 'blob'
+    });
+    return response.data;
+  }
+
+  async exportSalesReportCSV(startDate?: string, endDate?: string, status?: string, search?: string): Promise<Blob> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (status) params.append('status', status);
+    if (search) params.append('search', search);
+
+    const response = await api.get(`${API_ENDPOINTS.SALES_REPORT_CSV}?${params}`, {
+      responseType: 'blob',
+      headers: { Accept: 'text/csv' }
     });
     return response.data;
   }
@@ -641,9 +657,9 @@ class SalesService {
     }
   }
 
-  async downloadSalesReportPDF(startDate?: string, endDate?: string): Promise<void> {
+  async downloadSalesReportPDF(startDate?: string, endDate?: string, status?: string, search?: string): Promise<void> {
     try {
-      const blob = await this.exportSalesReportPDF(startDate, endDate);
+      const blob = await this.exportSalesReportPDF(startDate, endDate, status, search);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -655,6 +671,24 @@ class SalesService {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading sales report PDF:', error);
+      throw error;
+    }
+  }
+
+  async downloadSalesReportCSV(startDate?: string, endDate?: string, status?: string, search?: string): Promise<void> {
+    try {
+      const blob = await this.exportSalesReportCSV(startDate, endDate, status, search);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const filename = `Sales_Report_${startDate || 'all'}_to_${endDate || 'all'}.csv`;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading sales report CSV:', error);
       throw error;
     }
   }

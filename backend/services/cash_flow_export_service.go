@@ -10,12 +10,15 @@ import (
 	"time"
 
 	"app-sistem-akuntansi/models"
+	"app-sistem-akuntansi/utils"
 	"github.com/jung-kurt/gofpdf"
 	"gorm.io/gorm"
 )
 
 // CashFlowExportService handles export functionality for Cash Flow reports
-type CashFlowExportService struct{ db *gorm.DB }
+type CashFlowExportService struct{ 
+	db *gorm.DB 
+}
 
 // NewCashFlowExportService creates a new cash flow export service
 func NewCashFlowExportService(db *gorm.DB) *CashFlowExportService {
@@ -45,38 +48,40 @@ func (s *CashFlowExportService) getCompanyInfo() *models.Settings {
 }
 
 
-// ExportToCSV exports cash flow data to CSV format
-func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, error) {
+// ExportToCSV exports cash flow data to CSV format with localization
+func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData, userID uint) ([]byte, error) {
+	// Get user language preference
+	language := utils.GetUserLanguageFromSettings(s.db)
 	var buf bytes.Buffer
 	writer := csv.NewWriter(&buf)
 
-	// Write header information
-	writer.Write([]string{"Cash Flow Statement"})
+	// Write header information with localization
+	writer.Write([]string{utils.T("cash_flow_statement", language)})
 	writer.Write([]string{data.Company.Name})
-	writer.Write([]string{"Period:", data.StartDate.Format("02/01/2006") + " - " + data.EndDate.Format("02/01/2006")})
-	writer.Write([]string{"Generated:", data.GeneratedAt.Format("02/01/2006 15:04")})
+	writer.Write([]string{utils.T("period", language) + ":", data.StartDate.Format("02/01/2006") + " - " + data.EndDate.Format("02/01/2006")})
+	writer.Write([]string{utils.T("generated_on", language) + ":", data.GeneratedAt.Format("02/01/2006 15:04")})
 	writer.Write([]string{}) // Empty row
 
-	// CSV Headers
-	headers := []string{"Activity Type", "Category", "Account Code", "Account Name", "Amount", "Type"}
+	// CSV Headers with localization
+	headers := utils.GetCSVHeaders("cash_flow", language)
 	writer.Write(headers)
 
-	// Operating Activities
-	writer.Write([]string{"OPERATING ACTIVITIES", "", "", "", "", ""})
+	// Operating Activities with localization
+	writer.Write([]string{utils.T("operating_activities", language), "", "", "", "", ""})
 	
-	// Net Income
+	// Net Income with localization
 	writer.Write([]string{
 		"Operating",
-		"Net Income",
+		utils.T("net_income", language),
 		"",
-		"Net Income",
+		utils.T("net_income", language),
 		s.formatAmount(data.OperatingActivities.NetIncome),
 		"base",
 	})
 
-	// Adjustments
+	// Adjustments with localization
 	if len(data.OperatingActivities.Adjustments.Items) > 0 {
-		writer.Write([]string{"Operating", "Adjustments for Non-Cash Items", "", "", "", ""})
+		writer.Write([]string{"Operating", utils.T("adjustments_non_cash", language), "", "", "", ""})
 		for _, item := range data.OperatingActivities.Adjustments.Items {
 			writer.Write([]string{
 				"Operating",
@@ -89,7 +94,7 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 		}
 		writer.Write([]string{
 			"Operating",
-			"Total Adjustments",
+			utils.T("total", language) + " " + utils.T("adjustments_non_cash", language),
 			"",
 			"",
 			s.formatAmount(data.OperatingActivities.Adjustments.TotalAdjustments),
@@ -97,9 +102,9 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 		})
 	}
 
-	// Working Capital Changes
+	// Working Capital Changes with localization
 	if len(data.OperatingActivities.WorkingCapitalChanges.Items) > 0 {
-		writer.Write([]string{"Operating", "Changes in Working Capital", "", "", "", ""})
+		writer.Write([]string{"Operating", utils.T("working_capital_changes", language), "", "", "", ""})
 		for _, item := range data.OperatingActivities.WorkingCapitalChanges.Items {
 			writer.Write([]string{
 				"Operating",
@@ -112,7 +117,7 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 		}
 		writer.Write([]string{
 			"Operating",
-			"Total Working Capital Changes",
+			utils.T("total", language) + " " + utils.T("working_capital_changes", language),
 			"",
 			"",
 			s.formatAmount(data.OperatingActivities.WorkingCapitalChanges.TotalWorkingCapitalChanges),
@@ -122,7 +127,7 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 
 	writer.Write([]string{
 		"Operating",
-		"NET CASH FROM OPERATING ACTIVITIES",
+		utils.T("net_cash_operating", language),
 		"",
 		"",
 		s.formatAmount(data.OperatingActivities.TotalOperatingCashFlow),
@@ -130,8 +135,8 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 	})
 	writer.Write([]string{}) // Empty row
 
-	// Investing Activities
-	writer.Write([]string{"INVESTING ACTIVITIES", "", "", "", "", ""})
+	// Investing Activities with localization
+	writer.Write([]string{utils.T("investing_activities", language), "", "", "", "", ""})
 	if len(data.InvestingActivities.Items) > 0 {
 		for _, item := range data.InvestingActivities.Items {
 			writer.Write([]string{
@@ -146,7 +151,7 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 	}
 	writer.Write([]string{
 		"Investing",
-		"NET CASH FROM INVESTING ACTIVITIES",
+		utils.T("net_cash_investing", language),
 		"",
 		"",
 		s.formatAmount(data.InvestingActivities.TotalInvestingCashFlow),
@@ -154,8 +159,8 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 	})
 	writer.Write([]string{}) // Empty row
 
-	// Financing Activities
-	writer.Write([]string{"FINANCING ACTIVITIES", "", "", "", "", ""})
+	// Financing Activities with localization
+	writer.Write([]string{utils.T("financing_activities", language), "", "", "", "", ""})
 	if len(data.FinancingActivities.Items) > 0 {
 		for _, item := range data.FinancingActivities.Items {
 			writer.Write([]string{
@@ -170,7 +175,7 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 	}
 	writer.Write([]string{
 		"Financing",
-		"NET CASH FROM FINANCING ACTIVITIES",
+		utils.T("net_cash_financing", language),
 		"",
 		"",
 		s.formatAmount(data.FinancingActivities.TotalFinancingCashFlow),
@@ -178,11 +183,11 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 	})
 	writer.Write([]string{}) // Empty row
 
-	// Summary
-	writer.Write([]string{"CASH FLOW SUMMARY", "", "", "", "", ""})
+	// Summary with localization
+	writer.Write([]string{utils.T("cash_flow_summary", language), "", "", "", "", ""})
 	writer.Write([]string{
 		"Summary",
-		"Cash at Beginning of Period",
+		utils.T("cash_beginning", language),
 		"",
 		"",
 		s.formatAmount(data.CashAtBeginning),
@@ -190,7 +195,7 @@ func (s *CashFlowExportService) ExportToCSV(data *SSOTCashFlowData) ([]byte, err
 	})
 	writer.Write([]string{
 		"Summary",
-		"Net Cash Flow",
+		utils.T("net_cash_flow", language),
 		"",
 		"",
 		s.formatAmount(data.NetCashFlow),
