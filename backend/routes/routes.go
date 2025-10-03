@@ -662,12 +662,15 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				log.Printf("✅ Legacy payment routes disabled - using SalesJournalServiceV2 consistent flow only")
 			}
 			
-			// ✅ NEW: Setup SSOT Payment routes with journal integration (prevents double posting)
-			SetupSSOTPaymentRoutes(protected, db, jwtManager)
+		// ✅ NEW: Setup SSOT Payment routes with journal integration (prevents double posting)
+		SetupSSOTPaymentRoutes(protected, db, jwtManager)
 
-			// 📄 Export-only compatibility routes for Payments (safe, read-only)
-			// These endpoints restore PDF/Excel exports without enabling legacy write routes
-			paymentExports := protected.Group("/payments")
+		// 📄 Setup Receipt routes
+		SetupReceiptRoutes(protected, db, jwtManager)
+
+		// 📄 Export-only compatibility routes for Payments (safe, read-only)
+		// These endpoints restore PDF/Excel exports without enabling legacy write routes
+		paymentExports := protected.Group("/payments")
 			{
 				paymentExports.GET("/report/pdf", permMiddleware.CanExport("payments"), paymentController.ExportPaymentReportPDF)
 				paymentExports.GET("/export/excel", permMiddleware.CanExport("payments"), paymentController.ExportPaymentReportExcel)

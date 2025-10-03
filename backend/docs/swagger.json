@@ -1,5 +1,5 @@
 {
-  "basePath": "/",
+  "basePath": "/api/v1",
   "consumes": [
     "application/json"
   ],
@@ -954,10 +954,18 @@
     },
     "Payment": {
       "properties": {
+        "account_number": {
+          "description": "Bank account number",
+          "type": "string"
+        },
         "amount": {
           "description": "Payment amount",
           "format": "double",
           "type": "number"
+        },
+        "bank_name": {
+          "description": "Bank name for bank transfers",
+          "type": "string"
         },
         "cash_bank_id": {
           "description": "Cash/Bank account ID",
@@ -991,6 +999,17 @@
         "payment_date": {
           "description": "Payment date",
           "format": "date",
+          "type": "string"
+        },
+        "payment_method": {
+          "description": "Payment method",
+          "enum": [
+            "CASH",
+            "BANK_TRANSFER",
+            "CHEQUE",
+            "CREDIT_CARD",
+            "GIRO"
+          ],
           "type": "string"
         },
         "payment_number": {
@@ -1070,6 +1089,18 @@
         "payment_date": {
           "description": "Payment date",
           "format": "date",
+          "type": "string"
+        },
+        "payment_method": {
+          "description": "Payment method",
+          "enum": [
+            "CASH",
+            "BANK_TRANSFER",
+            "CHEQUE",
+            "CREDIT_CARD",
+            "GIRO"
+          ],
+          "example": "BANK_TRANSFER",
           "type": "string"
         },
         "payment_type": {
@@ -1654,6 +1685,100 @@
       },
       "type": "object"
     },
+    "Receipt": {
+      "properties": {
+        "amount": {
+          "description": "Receipt amount",
+          "format": "double",
+          "type": "number"
+        },
+        "created_at": {
+          "description": "Creation timestamp",
+          "format": "date-time",
+          "type": "string"
+        },
+        "date": {
+          "description": "Receipt date",
+          "format": "date",
+          "type": "string"
+        },
+        "id": {
+          "description": "Receipt ID",
+          "type": "integer"
+        },
+        "notes": {
+          "description": "Receipt notes",
+          "type": "string"
+        },
+        "payment_id": {
+          "description": "Associated payment ID",
+          "type": "integer"
+        },
+        "receipt_number": {
+          "description": "Receipt number",
+          "type": "string"
+        },
+        "updated_at": {
+          "description": "Last update timestamp",
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_number",
+        "payment_id",
+        "date",
+        "amount"
+      ],
+      "type": "object"
+    },
+    "ReceiptCreate": {
+      "properties": {
+        "amount": {
+          "description": "Receipt amount",
+          "format": "double",
+          "type": "number"
+        },
+        "date": {
+          "description": "Receipt date",
+          "format": "date",
+          "type": "string"
+        },
+        "notes": {
+          "description": "Receipt notes",
+          "type": "string"
+        },
+        "payment_id": {
+          "description": "Associated payment ID",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "payment_id",
+        "date",
+        "amount"
+      ],
+      "type": "object"
+    },
+    "ReceiptUpdate": {
+      "properties": {
+        "amount": {
+          "description": "Receipt amount",
+          "format": "double",
+          "type": "number"
+        },
+        "date": {
+          "description": "Receipt date",
+          "format": "date",
+          "type": "string"
+        },
+        "notes": {
+          "description": "Receipt notes",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "ReportAccount": {
       "properties": {
         "account_code": {
@@ -1712,8 +1837,24 @@
           "description": "Sale notes",
           "type": "string"
         },
+        "other_tax_amount": {
+          "description": "Other tax amount",
+          "format": "double",
+          "type": "number"
+        },
         "paid_amount": {
           "description": "Amount received",
+          "format": "double",
+          "type": "number"
+        },
+        "ppn_amount": {
+          "description": "PPN tax amount",
+          "format": "double",
+          "type": "number"
+        },
+        "ppn_rate": {
+          "description": "PPN tax rate percentage",
+          "example": 11,
           "format": "double",
           "type": "number"
         },
@@ -1794,6 +1935,12 @@
         "notes": {
           "description": "Sale notes",
           "type": "string"
+        },
+        "ppn_rate": {
+          "description": "PPN tax rate percentage",
+          "example": 11,
+          "format": "double",
+          "type": "number"
         },
         "sale_date": {
           "description": "Sale date",
@@ -2146,6 +2293,9 @@
   "paths": {
     "/accounts": {
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a list of all chart of accounts",
         "parameters": [
           {
@@ -2191,6 +2341,9 @@
             "type": "boolean"
           }
         ],
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
             "description": "Successful operation",
@@ -2234,12 +2387,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get all accounts",
         "tags": [
           "Accounts"
         ]
       },
       "post": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Create a new account in the chart of accounts",
         "parameters": [
           {
@@ -2250,6 +2411,9 @@
               "$ref": "#/definitions/AccountCreate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "201": {
@@ -2290,14 +2454,22 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Create new account",
         "tags": [
           "Accounts"
         ]
       }
     },
-    "/api/v1/accounts/{id}": {
+    "/accounts/{id}": {
       "delete": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Delete an account from the chart of accounts",
         "parameters": [
           {
@@ -2307,6 +2479,9 @@
             "required": true,
             "type": "integer"
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2344,12 +2519,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Delete account",
         "tags": [
           "Accounts"
         ]
       },
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a specific account by its ID",
         "parameters": [
           {
@@ -2359,6 +2542,9 @@
             "required": true,
             "type": "integer"
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2389,12 +2575,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get account by ID",
         "tags": [
           "Accounts"
         ]
       },
       "put": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Update an existing account",
         "parameters": [
           {
@@ -2412,6 +2606,9 @@
               "$ref": "#/definitions/AccountUpdate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2452,14 +2649,847 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Update account",
         "tags": [
           "Accounts"
         ]
       }
     },
-    "/api/v1/cash-bank/{id}": {
+    "/cash-bank": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve a list of all cash and bank accounts",
+        "parameters": [
+          {
+            "default": 1,
+            "description": "Page number",
+            "in": "query",
+            "minimum": 1,
+            "name": "page",
+            "type": "integer"
+          },
+          {
+            "default": 10,
+            "description": "Number of items per page",
+            "in": "query",
+            "maximum": 100,
+            "minimum": 1,
+            "name": "limit",
+            "type": "integer"
+          },
+          {
+            "description": "Filter by account type",
+            "enum": [
+              "CASH",
+              "BANK",
+              "PETTY_CASH"
+            ],
+            "in": "query",
+            "name": "type",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "items": {
+                    "$ref": "#/definitions/CashBank"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get all cash and bank accounts",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create a new cash or bank account",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CashBankCreate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Cash/Bank account created successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/CashBank"
+                },
+                "message": {
+                  "example": "Cash/Bank account created successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create new cash/bank account",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/accounts": {
+      "get": {
+        "description": "Retrieve a list of all cash and bank accounts",
+        "parameters": [
+          {
+            "default": 1,
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "type": "integer"
+          },
+          {
+            "default": 10,
+            "description": "Number of items per page",
+            "in": "query",
+            "name": "limit",
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "items": {
+                    "$ref": "#/definitions/CashBank"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get all cash/bank accounts",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create a new cash or bank account",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CashBankCreate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Cash/Bank account created successfully",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create cash/bank account",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/accounts/{id}": {
       "delete": {
+        "description": "Delete a cash/bank account",
+        "parameters": [
+          {
+            "description": "Cash/Bank account ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash/Bank account deleted successfully",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete cash/bank account",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a specific cash/bank account by its ID",
+        "parameters": [
+          {
+            "description": "Cash/Bank account ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "$ref": "#/definitions/CashBank"
+            }
+          },
+          "404": {
+            "description": "Cash/Bank account not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get cash/bank account by ID",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing cash/bank account",
+        "parameters": [
+          {
+            "description": "Cash/Bank account ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/CashBankUpdate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash/Bank account updated successfully",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update cash/bank account",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/reports/balance-summary": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve cash/bank information",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/CashBank"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful operation"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get cash/bank data",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create new cash/bank entry",
+        "produces": [
+          "application/json"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashBankCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Created successfully"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create cash/bank entry",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/reports/payment-accounts": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve cash/bank information",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/CashBank"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful operation"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get cash/bank data",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create new cash/bank entry",
+        "produces": [
+          "application/json"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashBankCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Created successfully"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create cash/bank entry",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/transactions/deposit": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve cash/bank information",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/CashBank"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful operation"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get cash/bank data",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create new cash/bank entry",
+        "produces": [
+          "application/json"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashBankCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Created successfully"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create cash/bank entry",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/transactions/transfer": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve cash/bank information",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/CashBank"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful operation"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get cash/bank data",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create new cash/bank entry",
+        "produces": [
+          "application/json"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashBankCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Created successfully"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create cash/bank entry",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/transactions/withdrawal": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve cash/bank information",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/CashBank"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful operation"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get cash/bank data",
+        "tags": [
+          "CashBank"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create new cash/bank entry",
+        "produces": [
+          "application/json"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashBankCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Created successfully"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create cash/bank entry",
+        "tags": [
+          "CashBank"
+        ]
+      }
+    },
+    "/cash-bank/{id}": {
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Delete a cash/bank account from the system",
         "parameters": [
           {
@@ -2469,6 +3499,9 @@
             "required": true,
             "type": "integer"
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2506,12 +3539,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Delete cash/bank account",
         "tags": [
           "CashBank"
         ]
       },
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a specific cash/bank account by its ID",
         "parameters": [
           {
@@ -2521,6 +3562,9 @@
             "required": true,
             "type": "integer"
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2551,12 +3595,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get cash/bank account by ID",
         "tags": [
           "CashBank"
         ]
       },
       "put": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Update an existing cash/bank account",
         "parameters": [
           {
@@ -2574,6 +3626,9 @@
               "$ref": "#/definitions/CashBankUpdate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2614,14 +3669,139 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Update cash/bank account",
         "tags": [
           "CashBank"
         ]
       }
     },
-    "/api/v1/contacts/{id}": {
+    "/contacts": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve a list of all contacts (customers, vendors, employees)",
+        "parameters": [
+          {
+            "default": 1,
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "type": "integer"
+          },
+          {
+            "default": 10,
+            "description": "Number of items per page",
+            "in": "query",
+            "name": "limit",
+            "type": "integer"
+          },
+          {
+            "description": "Filter by contact type",
+            "enum": [
+              "CUSTOMER",
+              "VENDOR",
+              "EMPLOYEE"
+            ],
+            "in": "query",
+            "name": "type",
+            "type": "string"
+          },
+          {
+            "description": "Filter by active status",
+            "in": "query",
+            "name": "is_active",
+            "type": "boolean"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "$ref": "#/components/schemas/Contact"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "example": "success",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful operation"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get all contacts",
+        "tags": [
+          "Contacts"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create a new contact (customer, vendor, or employee)",
+        "produces": [
+          "application/json"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Contact created successfully"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create new contact",
+        "tags": [
+          "Contacts"
+        ]
+      }
+    },
+    "/contacts/{id}": {
       "delete": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Delete a contact from the system",
         "parameters": [
           {
@@ -2631,6 +3811,9 @@
             "required": true,
             "type": "integer"
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2668,12 +3851,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Delete contact",
         "tags": [
           "Contacts"
         ]
       },
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a specific contact by its ID",
         "parameters": [
           {
@@ -2683,6 +3874,9 @@
             "required": true,
             "type": "integer"
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2713,12 +3907,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get contact by ID",
         "tags": [
           "Contacts"
         ]
       },
       "put": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Update an existing contact",
         "parameters": [
           {
@@ -2736,6 +3938,9 @@
               "$ref": "#/definitions/ContactUpdate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -2776,1747 +3981,12 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Update contact",
-        "tags": [
-          "Contacts"
-        ]
-      }
-    },
-    "/api/v1/journals/{id}": {
-      "delete": {
-        "description": "Delete a journal entry from the system (only if status is DRAFT)",
-        "parameters": [
-          {
-            "description": "Journal entry ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Journal entry deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Journal entry deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Journal entry cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Journal entry not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete journal entry",
-        "tags": [
-          "Journals"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific journal entry by its ID",
-        "parameters": [
-          {
-            "description": "Journal entry ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/JournalEntry"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Journal entry not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get journal entry by ID",
-        "tags": [
-          "Journals"
-        ]
-      },
-      "put": {
-        "description": "Update an existing journal entry (only if status is DRAFT)",
-        "parameters": [
-          {
-            "description": "Journal entry ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/JournalUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Journal entry updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/JournalEntry"
-                },
-                "message": {
-                  "example": "Journal entry updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input or journal entry cannot be updated",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Journal entry not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update journal entry",
-        "tags": [
-          "Journals"
-        ]
-      }
-    },
-    "/api/v1/payments/{id}": {
-      "delete": {
-        "description": "Delete a payment from the system",
-        "parameters": [
-          {
-            "description": "Payment ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Payment deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Payment deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Payment cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Payment not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete payment",
-        "tags": [
-          "Payments"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific payment by its ID",
-        "parameters": [
-          {
-            "description": "Payment ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Payment"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Payment not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get payment by ID",
-        "tags": [
-          "Payments"
-        ]
-      },
-      "put": {
-        "description": "Update an existing payment",
-        "parameters": [
-          {
-            "description": "Payment ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/PaymentUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Payment updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Payment"
-                },
-                "message": {
-                  "example": "Payment updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Payment not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update payment",
-        "tags": [
-          "Payments"
-        ]
-      }
-    },
-    "/api/v1/products/{id}": {
-      "delete": {
-        "description": "Delete a product from the inventory",
-        "parameters": [
-          {
-            "description": "Product ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Product deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Product has transactions and cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Product not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete product",
-        "tags": [
-          "Products"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific product by its ID",
-        "parameters": [
-          {
-            "description": "Product ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Product"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Product not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get product by ID",
-        "tags": [
-          "Products"
-        ]
-      },
-      "put": {
-        "description": "Update an existing product",
-        "parameters": [
-          {
-            "description": "Product ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/ProductUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Product"
-                },
-                "message": {
-                  "example": "Product updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Product not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update product",
-        "tags": [
-          "Products"
-        ]
-      }
-    },
-    "/api/v1/purchases/{id}": {
-      "delete": {
-        "description": "Delete a purchase from the system",
-        "parameters": [
-          {
-            "description": "Purchase ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Purchase deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Purchase deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Purchase cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Purchase not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete purchase",
-        "tags": [
-          "Purchases"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific purchase by its ID",
-        "parameters": [
-          {
-            "description": "Purchase ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Purchase"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Purchase not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get purchase by ID",
-        "tags": [
-          "Purchases"
-        ]
-      },
-      "put": {
-        "description": "Update an existing purchase",
-        "parameters": [
-          {
-            "description": "Purchase ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/PurchaseUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Purchase updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Purchase"
-                },
-                "message": {
-                  "example": "Purchase updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Purchase not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update purchase",
-        "tags": [
-          "Purchases"
-        ]
-      }
-    },
-    "/api/v1/purchases/{id}/approve": {
-      "post": {
-        "description": "Approve a purchase order",
-        "parameters": [
-          {
-            "description": "Purchase ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Purchase approved successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Purchase"
-                },
-                "message": {
-                  "example": "Purchase approved successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Purchase cannot be approved",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Purchase not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Approve purchase",
-        "tags": [
-          "Purchases"
-        ]
-      }
-    },
-    "/api/v1/reports/balance-sheet": {
-      "get": {
-        "description": "Generate balance sheet report",
-        "parameters": [
-          {
-            "description": "As of date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "as_of_date",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Balance sheet report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/BalanceSheet"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid date",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate balance sheet report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/cash-flow": {
-      "get": {
-        "description": "Generate cash flow report",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "start_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "end_date",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Cash flow report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/CashFlow"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid date range",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate cash flow report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/general-ledger/{account_id}": {
-      "get": {
-        "description": "Generate general ledger report for a specific account",
-        "parameters": [
-          {
-            "description": "Account ID",
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "start_date",
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "end_date",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "General ledger report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/GeneralLedger"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid parameters",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate general ledger report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/profit-loss": {
-      "get": {
-        "description": "Generate profit and loss report",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "start_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "end_date",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Profit and loss report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/ProfitLoss"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid date range",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate profit and loss report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/trial-balance": {
-      "get": {
-        "description": "Generate trial balance report",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "start_date",
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "format": "date",
-            "in": "query",
-            "name": "end_date",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Trial balance report generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/TrialBalance"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid date range",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate trial balance report",
-        "tags": [
-          "Reports"
-        ]
-      }
-    },
-    "/api/v1/sales/{id}": {
-      "delete": {
-        "description": "Delete a sale from the system",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sale deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Sale deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Sale cannot be deleted",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete sale",
-        "tags": [
-          "Sales"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific sale by its ID",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get sale by ID",
-        "tags": [
-          "Sales"
-        ]
-      },
-      "put": {
-        "description": "Update an existing sale",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/SaleUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sale updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "message": {
-                  "example": "Sale updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update sale",
-        "tags": [
-          "Sales"
-        ]
-      }
-    },
-    "/api/v1/sales/{id}/cancel": {
-      "post": {
-        "description": "Cancel a sale order",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sale cancelled successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "message": {
-                  "example": "Sale cancelled successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Sale cannot be cancelled",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Cancel sale",
-        "tags": [
-          "Sales"
-        ]
-      }
-    },
-    "/api/v1/sales/{id}/confirm": {
-      "post": {
-        "description": "Confirm a sale order",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Sale confirmed successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "message": {
-                  "example": "Sale confirmed successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Sale cannot be confirmed",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Confirm sale",
-        "tags": [
-          "Sales"
-        ]
-      }
-    },
-    "/api/v1/sales/{id}/invoice": {
-      "post": {
-        "description": "Generate invoice for a sale",
-        "parameters": [
-          {
-            "description": "Sale ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Invoice generated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Sale"
-                },
-                "message": {
-                  "example": "Invoice generated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invoice cannot be generated",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Sale not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Generate invoice",
-        "tags": [
-          "Sales"
-        ]
-      }
-    },
-    "/api/v1/users/{id}": {
-      "delete": {
-        "description": "Delete a user from the system",
-        "parameters": [
-          {
-            "description": "User ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User deleted successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "User deleted successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Delete user",
-        "tags": [
-          "Users"
-        ]
-      },
-      "get": {
-        "description": "Retrieve a specific user by their ID",
-        "parameters": [
-          {
-            "description": "User ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/User"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get user by ID",
-        "tags": [
-          "Users"
-        ]
-      },
-      "put": {
-        "description": "Update an existing user's information",
-        "parameters": [
-          {
-            "description": "User ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/UserUpdate"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User updated successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/User"
-                },
-                "message": {
-                  "example": "User updated successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "User not found",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Update user",
-        "tags": [
-          "Users"
-        ]
-      }
-    },
-    "/cash-bank": {
-      "get": {
-        "description": "Retrieve a list of all cash and bank accounts",
-        "parameters": [
-          {
-            "default": 1,
-            "description": "Page number",
-            "in": "query",
-            "minimum": 1,
-            "name": "page",
-            "type": "integer"
-          },
-          {
-            "default": 10,
-            "description": "Number of items per page",
-            "in": "query",
-            "maximum": 100,
-            "minimum": 1,
-            "name": "limit",
-            "type": "integer"
-          },
-          {
-            "description": "Filter by account type",
-            "enum": [
-              "CASH",
-              "BANK",
-              "PETTY_CASH"
-            ],
-            "in": "query",
-            "name": "type",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "$ref": "#/definitions/CashBank"
-                  },
-                  "type": "array"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get all cash and bank accounts",
-        "tags": [
-          "CashBank"
-        ]
-      },
-      "post": {
-        "description": "Create a new cash or bank account",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/CashBankCreate"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Cash/Bank account created successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/CashBank"
-                },
-                "message": {
-                  "example": "Cash/Bank account created successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Create new cash/bank account",
-        "tags": [
-          "CashBank"
-        ]
-      }
-    },
-    "/contacts": {
-      "get": {
-        "description": "Retrieve a list of all contacts (customers, vendors, employees)",
-        "parameters": [
-          {
-            "default": 1,
-            "description": "Page number",
-            "in": "query",
-            "minimum": 1,
-            "name": "page",
-            "type": "integer"
-          },
-          {
-            "default": 10,
-            "description": "Number of items per page",
-            "in": "query",
-            "maximum": 100,
-            "minimum": 1,
-            "name": "limit",
-            "type": "integer"
-          },
-          {
-            "description": "Filter by contact type",
-            "enum": [
-              "CUSTOMER",
-              "VENDOR",
-              "EMPLOYEE"
-            ],
-            "in": "query",
-            "name": "type",
-            "type": "string"
-          },
-          {
-            "description": "Filter by active status",
-            "in": "query",
-            "name": "is_active",
-            "type": "boolean"
-          },
-          {
-            "description": "Search by contact name or code",
-            "in": "query",
-            "name": "search",
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "$ref": "#/definitions/Contact"
-                  },
-                  "type": "array"
-                },
-                "pagination": {
-                  "properties": {
-                    "limit": {
-                      "type": "integer"
-                    },
-                    "page": {
-                      "type": "integer"
-                    },
-                    "total": {
-                      "type": "integer"
-                    },
-                    "total_pages": {
-                      "type": "integer"
-                    }
-                  },
-                  "type": "object"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Get all contacts",
-        "tags": [
-          "Contacts"
-        ]
-      },
-      "post": {
-        "description": "Create a new contact (customer, vendor, or employee)",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/ContactCreate"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Contact created successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "$ref": "#/definitions/Contact"
-                },
-                "message": {
-                  "example": "Contact created successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid input",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "409": {
-            "description": "Contact code already exists",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          }
-        },
-        "summary": "Create new contact",
         "tags": [
           "Contacts"
         ]
@@ -4524,6 +3994,9 @@
     },
     "/journals": {
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a list of all journal entries",
         "parameters": [
           {
@@ -4569,6 +4042,9 @@
             "type": "string"
           }
         ],
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
             "description": "Successful operation",
@@ -4595,12 +4071,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get all journal entries",
         "tags": [
           "Journals"
         ]
       },
       "post": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Create a new journal entry",
         "parameters": [
           {
@@ -4611,6 +4095,9 @@
               "$ref": "#/definitions/JournalCreate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "201": {
@@ -4645,7 +4132,207 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Create new journal entry",
+        "tags": [
+          "Journals"
+        ]
+      }
+    },
+    "/journals/{id}": {
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Delete a journal entry from the system (only if status is DRAFT)",
+        "parameters": [
+          {
+            "description": "Journal entry ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal entry deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Journal entry deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Journal entry cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Journal entry not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete journal entry",
+        "tags": [
+          "Journals"
+        ]
+      },
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve a specific journal entry by its ID",
+        "parameters": [
+          {
+            "description": "Journal entry ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/JournalEntry"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Journal entry not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get journal entry by ID",
+        "tags": [
+          "Journals"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing journal entry (only if status is DRAFT)",
+        "parameters": [
+          {
+            "description": "Journal entry ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/JournalUpdate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal entry updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/JournalEntry"
+                },
+                "message": {
+                  "example": "Journal entry updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input or journal entry cannot be updated",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Journal entry not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update journal entry",
         "tags": [
           "Journals"
         ]
@@ -4653,6 +4340,9 @@
     },
     "/payments": {
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a list of all payments",
         "parameters": [
           {
@@ -4683,6 +4373,9 @@
             "type": "string"
           }
         ],
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
             "description": "Successful operation",
@@ -4709,12 +4402,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get all payments",
         "tags": [
           "Payments"
         ]
       },
       "post": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Create a new payment",
         "parameters": [
           {
@@ -4725,6 +4426,9 @@
               "$ref": "#/definitions/PaymentCreate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "201": {
@@ -4759,7 +4463,207 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Create new payment",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/payments/{id}": {
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Delete a payment from the system",
+        "parameters": [
+          {
+            "description": "Payment ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Payment deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Payment cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Payment not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete payment",
+        "tags": [
+          "Payments"
+        ]
+      },
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve a specific payment by its ID",
+        "parameters": [
+          {
+            "description": "Payment ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Payment"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Payment not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get payment by ID",
+        "tags": [
+          "Payments"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing payment",
+        "parameters": [
+          {
+            "description": "Payment ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/PaymentUpdate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Payment"
+                },
+                "message": {
+                  "example": "Payment updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Payment not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update payment",
         "tags": [
           "Payments"
         ]
@@ -4767,6 +4671,9 @@
     },
     "/products": {
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a list of all products",
         "parameters": [
           {
@@ -4811,6 +4718,9 @@
             "type": "string"
           }
         ],
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
             "description": "Successful operation",
@@ -4854,12 +4764,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get all products",
         "tags": [
           "Products"
         ]
       },
       "post": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Create a new product in the inventory",
         "parameters": [
           {
@@ -4870,6 +4788,9 @@
               "$ref": "#/definitions/ProductCreate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "201": {
@@ -4910,7 +4831,207 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Create new product",
+        "tags": [
+          "Products"
+        ]
+      }
+    },
+    "/products/{id}": {
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Delete a product from the inventory",
+        "parameters": [
+          {
+            "description": "Product ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Product deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Product deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Product has transactions and cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Product not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete product",
+        "tags": [
+          "Products"
+        ]
+      },
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve a specific product by its ID",
+        "parameters": [
+          {
+            "description": "Product ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Product"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Product not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get product by ID",
+        "tags": [
+          "Products"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing product",
+        "parameters": [
+          {
+            "description": "Product ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ProductUpdate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Product updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Product"
+                },
+                "message": {
+                  "example": "Product updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Product not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update product",
         "tags": [
           "Products"
         ]
@@ -4918,6 +5039,9 @@
     },
     "/purchases": {
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a list of all purchases",
         "parameters": [
           {
@@ -4981,6 +5105,9 @@
             "type": "string"
           }
         ],
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
             "description": "Successful operation",
@@ -5024,12 +5151,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get all purchases",
         "tags": [
           "Purchases"
         ]
       },
       "post": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Create a new purchase order",
         "parameters": [
           {
@@ -5040,6 +5175,9 @@
               "$ref": "#/definitions/PurchaseCreate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "201": {
@@ -5074,14 +5212,822 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Create new purchase",
         "tags": [
           "Purchases"
         ]
       }
     },
+    "/purchases/{id}": {
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Delete a purchase from the system",
+        "parameters": [
+          {
+            "description": "Purchase ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Purchase deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Purchase cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Purchase not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete purchase",
+        "tags": [
+          "Purchases"
+        ]
+      },
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve a specific purchase by its ID",
+        "parameters": [
+          {
+            "description": "Purchase ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Purchase"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Purchase not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get purchase by ID",
+        "tags": [
+          "Purchases"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing purchase",
+        "parameters": [
+          {
+            "description": "Purchase ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/PurchaseUpdate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Purchase"
+                },
+                "message": {
+                  "example": "Purchase updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Purchase not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update purchase",
+        "tags": [
+          "Purchases"
+        ]
+      }
+    },
+    "/purchases/{id}/approve": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Approve a purchase order",
+        "parameters": [
+          {
+            "description": "Purchase ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase approved successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Purchase"
+                },
+                "message": {
+                  "example": "Purchase approved successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Purchase cannot be approved",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Purchase not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Approve purchase",
+        "tags": [
+          "Purchases"
+        ]
+      }
+    },
+    "/receipts": {
+      "get": {
+        "description": "Retrieve a list of all receipts",
+        "parameters": [
+          {
+            "default": 1,
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "type": "integer"
+          },
+          {
+            "default": 10,
+            "description": "Number of items per page",
+            "in": "query",
+            "name": "limit",
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "items": {
+                    "$ref": "#/definitions/Receipt"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get all receipts",
+        "tags": [
+          "Receipts"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create a new receipt",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ReceiptCreate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Receipt created successfully",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create receipt",
+        "tags": [
+          "Receipts"
+        ]
+      }
+    },
+    "/receipts/{id}": {
+      "delete": {
+        "description": "Delete a receipt",
+        "parameters": [
+          {
+            "description": "Receipt ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Receipt deleted successfully",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete receipt",
+        "tags": [
+          "Receipts"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a specific receipt by its ID",
+        "parameters": [
+          {
+            "description": "Receipt ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "$ref": "#/definitions/Receipt"
+            }
+          },
+          "404": {
+            "description": "Receipt not found"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get receipt by ID",
+        "tags": [
+          "Receipts"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing receipt",
+        "parameters": [
+          {
+            "description": "Receipt ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ReceiptUpdate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Receipt updated successfully",
+            "schema": {
+              "$ref": "#/definitions/ApiResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update receipt",
+        "tags": [
+          "Receipts"
+        ]
+      }
+    },
+    "/reports/balance-sheet": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate balance sheet report",
+        "parameters": [
+          {
+            "description": "As of date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "as_of_date",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance sheet report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/BalanceSheet"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid date",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate balance sheet report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/cash-flow": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate cash flow report",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash flow report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/CashFlow"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid date range",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate cash flow report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/general-ledger/{account_id}": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate general ledger report for a specific account",
+        "parameters": [
+          {
+            "description": "Account ID",
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "General ledger report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/GeneralLedger"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Account not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate general ledger report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/profit-loss": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate profit and loss report",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Profit and loss report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/ProfitLoss"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid date range",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate profit and loss report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/trial-balance": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate trial balance report",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Trial balance report generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/TrialBalance"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid date range",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate trial balance report",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
     "/sales": {
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a list of all sales",
         "parameters": [
           {
@@ -5144,6 +6090,9 @@
             "type": "string"
           }
         ],
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
             "description": "Successful operation",
@@ -5187,12 +6136,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get all sales",
         "tags": [
           "Sales"
         ]
       },
       "post": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Create a new sale order",
         "parameters": [
           {
@@ -5203,6 +6160,9 @@
               "$ref": "#/definitions/SaleCreate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "201": {
@@ -5237,14 +6197,517 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Create new sale",
         "tags": [
           "Sales"
         ]
       }
     },
+    "/sales/{id}": {
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Delete a sale from the system",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Sale deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Sale cannot be deleted",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete sale",
+        "tags": [
+          "Sales"
+        ]
+      },
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve a specific sale by its ID",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get sale by ID",
+        "tags": [
+          "Sales"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing sale",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/SaleUpdate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "message": {
+                  "example": "Sale updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update sale",
+        "tags": [
+          "Sales"
+        ]
+      }
+    },
+    "/sales/{id}/cancel": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Cancel a sale order",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale cancelled successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "message": {
+                  "example": "Sale cancelled successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Sale cannot be cancelled",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Cancel sale",
+        "tags": [
+          "Sales"
+        ]
+      }
+    },
+    "/sales/{id}/confirm": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Confirm a sale order",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale confirmed successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "message": {
+                  "example": "Sale confirmed successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Sale cannot be confirmed",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Confirm sale",
+        "tags": [
+          "Sales"
+        ]
+      }
+    },
+    "/sales/{id}/invoice": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate invoice for a sale",
+        "parameters": [
+          {
+            "description": "Sale ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice generated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Sale"
+                },
+                "message": {
+                  "example": "Invoice generated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invoice cannot be generated",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Sale not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate invoice",
+        "tags": [
+          "Sales"
+        ]
+      }
+    },
+    "/ssot-payments": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve payment information",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful operation"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get payment data",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/ssot-payments/{id}": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve payment information",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful operation"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get payment data",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/ultra-fast-payments": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve payment information",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful operation"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get payment data",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
     "/users": {
       "get": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Retrieve a list of all users with pagination",
         "parameters": [
           {
@@ -5283,6 +6746,9 @@
             "name": "is_active",
             "type": "boolean"
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
@@ -5327,12 +6793,20 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Get all users",
         "tags": [
           "Users"
         ]
       },
       "post": {
+        "consumes": [
+          "application/json"
+        ],
         "description": "Create a new user in the system",
         "parameters": [
           {
@@ -5343,6 +6817,9 @@
               "$ref": "#/definitions/UserCreate"
             }
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "201": {
@@ -5383,7 +6860,201 @@
             }
           }
         },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "summary": "Create new user",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/users/{id}": {
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Delete a user from the system",
+        "parameters": [
+          {
+            "description": "User ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "User deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "User deleted successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete user",
+        "tags": [
+          "Users"
+        ]
+      },
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve a specific user by their ID",
+        "parameters": [
+          {
+            "description": "User ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/User"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get user by ID",
+        "tags": [
+          "Users"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing user's information",
+        "parameters": [
+          {
+            "description": "User ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/UserUpdate"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "User updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/User"
+                },
+                "message": {
+                  "example": "User updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update user",
         "tags": [
           "Users"
         ]
@@ -5403,7 +7074,7 @@
   ],
   "securityDefinitions": {
     "BearerAuth": {
-      "description": "JWT authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+      "description": "JWT token for authentication. Format: Bearer {token}",
       "in": "header",
       "name": "Authorization",
       "type": "apiKey"
