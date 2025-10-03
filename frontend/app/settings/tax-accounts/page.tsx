@@ -177,8 +177,68 @@ const TaxAccountSettingsPage: React.FC = () => {
       ]);
 
       if (settingsRes.data.success) {
-        setSettings(settingsRes.data.data);
-        setFormData(settingsRes.data.data);
+        const settingsData = settingsRes.data.data;
+        setSettings(settingsData);
+        
+        // Helper function to parse account JSON strings
+        const parseAccount = (accountData: any) => {
+          if (!accountData) return null;
+          if (typeof accountData === 'string') {
+            try {
+              return JSON.parse(accountData);
+            } catch (e) {
+              console.error('Failed to parse account data:', e);
+              return null;
+            }
+          }
+          return accountData; // Already an object
+        };
+        
+        // Transform the settings data to match form field names
+        const formDataTransformed = {
+          ...settingsData,
+          // Parse account objects from JSON strings
+          sales_receivable_account: parseAccount(settingsData.sales_receivable_account),
+          sales_cash_account: parseAccount(settingsData.sales_cash_account),
+          sales_bank_account: parseAccount(settingsData.sales_bank_account),
+          sales_revenue_account: parseAccount(settingsData.sales_revenue_account),
+          sales_output_vat_account: parseAccount(settingsData.sales_output_vat_account),
+          purchase_payable_account: parseAccount(settingsData.purchase_payable_account),
+          purchase_cash_account: parseAccount(settingsData.purchase_cash_account),
+          purchase_bank_account: parseAccount(settingsData.purchase_bank_account),
+          purchase_input_vat_account: parseAccount(settingsData.purchase_input_vat_account),
+          purchase_expense_account: parseAccount(settingsData.purchase_expense_account),
+          withholding_tax21_account: parseAccount(settingsData.withholding_tax21_account),
+          withholding_tax23_account: parseAccount(settingsData.withholding_tax23_account),
+          withholding_tax25_account: parseAccount(settingsData.withholding_tax25_account),
+          tax_payable_account: parseAccount(settingsData.tax_payable_account),
+          inventory_account: parseAccount(settingsData.inventory_account),
+          cogs_account: parseAccount(settingsData.cogs_account),
+          
+          // Sales account IDs
+          sales_receivable_account_id: parseAccount(settingsData.sales_receivable_account)?.id,
+          sales_cash_account_id: parseAccount(settingsData.sales_cash_account)?.id,
+          sales_bank_account_id: parseAccount(settingsData.sales_bank_account)?.id,
+          sales_revenue_account_id: parseAccount(settingsData.sales_revenue_account)?.id,
+          sales_output_vat_account_id: parseAccount(settingsData.sales_output_vat_account)?.id,
+          
+          // Purchase account IDs
+          purchase_payable_account_id: parseAccount(settingsData.purchase_payable_account)?.id,
+          purchase_cash_account_id: parseAccount(settingsData.purchase_cash_account)?.id,
+          purchase_bank_account_id: parseAccount(settingsData.purchase_bank_account)?.id,
+          purchase_input_vat_account_id: parseAccount(settingsData.purchase_input_vat_account)?.id,
+          purchase_expense_account_id: parseAccount(settingsData.purchase_expense_account)?.id,
+          
+          // Optional account IDs
+          withholding_tax21_account_id: parseAccount(settingsData.withholding_tax21_account)?.id,
+          withholding_tax23_account_id: parseAccount(settingsData.withholding_tax23_account)?.id,
+          withholding_tax25_account_id: parseAccount(settingsData.withholding_tax25_account)?.id,
+          tax_payable_account_id: parseAccount(settingsData.tax_payable_account)?.id,
+          inventory_account_id: parseAccount(settingsData.inventory_account)?.id,
+          cogs_account_id: parseAccount(settingsData.cogs_account)?.id
+        };
+        
+        setFormData(formDataTransformed);
       }
 
       if (accountsRes.data.success) {
@@ -240,12 +300,18 @@ const TaxAccountSettingsPage: React.FC = () => {
       'purchase_expense'
     ];
 
+    console.log('Validating form data:', formData);
+    
     requiredFields.forEach(field => {
-      if (!formData[`${field}_account_id`]) {
+      const fieldValue = formData[`${field}_account_id`];
+      console.log(`Checking field ${field}_account_id:`, fieldValue);
+      
+      if (!fieldValue) {
         errors[field] = `${field.replace(/_/g, ' ')} account is required`;
       }
     });
 
+    console.log('Validation errors:', errors);
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -327,7 +393,69 @@ const TaxAccountSettingsPage: React.FC = () => {
   };
 
   const handleCancel = () => {
-    setFormData(settings || {});
+    if (settings) {
+      // Helper function to parse account JSON strings
+      const parseAccount = (accountData: any) => {
+        if (!accountData) return null;
+        if (typeof accountData === 'string') {
+          try {
+            return JSON.parse(accountData);
+          } catch (e) {
+            console.error('Failed to parse account data:', e);
+            return null;
+          }
+        }
+        return accountData; // Already an object
+      };
+      
+      // Transform the settings data to match form field names
+      const formDataTransformed = {
+        ...settings,
+        // Parse account objects from JSON strings
+        sales_receivable_account: parseAccount(settings.sales_receivable_account),
+        sales_cash_account: parseAccount(settings.sales_cash_account),
+        sales_bank_account: parseAccount(settings.sales_bank_account),
+        sales_revenue_account: parseAccount(settings.sales_revenue_account),
+        sales_output_vat_account: parseAccount(settings.sales_output_vat_account),
+        purchase_payable_account: parseAccount(settings.purchase_payable_account),
+        purchase_cash_account: parseAccount(settings.purchase_cash_account),
+        purchase_bank_account: parseAccount(settings.purchase_bank_account),
+        purchase_input_vat_account: parseAccount(settings.purchase_input_vat_account),
+        purchase_expense_account: parseAccount(settings.purchase_expense_account),
+        withholding_tax21_account: parseAccount(settings.withholding_tax21_account),
+        withholding_tax23_account: parseAccount(settings.withholding_tax23_account),
+        withholding_tax25_account: parseAccount(settings.withholding_tax25_account),
+        tax_payable_account: parseAccount(settings.tax_payable_account),
+        inventory_account: parseAccount(settings.inventory_account),
+        cogs_account: parseAccount(settings.cogs_account),
+        
+        // Sales account IDs
+        sales_receivable_account_id: parseAccount(settings.sales_receivable_account)?.id,
+        sales_cash_account_id: parseAccount(settings.sales_cash_account)?.id,
+        sales_bank_account_id: parseAccount(settings.sales_bank_account)?.id,
+        sales_revenue_account_id: parseAccount(settings.sales_revenue_account)?.id,
+        sales_output_vat_account_id: parseAccount(settings.sales_output_vat_account)?.id,
+        
+        // Purchase account IDs
+        purchase_payable_account_id: parseAccount(settings.purchase_payable_account)?.id,
+        purchase_cash_account_id: parseAccount(settings.purchase_cash_account)?.id,
+        purchase_bank_account_id: parseAccount(settings.purchase_bank_account)?.id,
+        purchase_input_vat_account_id: parseAccount(settings.purchase_input_vat_account)?.id,
+        purchase_expense_account_id: parseAccount(settings.purchase_expense_account)?.id,
+        
+        // Optional account IDs
+        withholding_tax21_account_id: parseAccount(settings.withholding_tax21_account)?.id,
+        withholding_tax23_account_id: parseAccount(settings.withholding_tax23_account)?.id,
+        withholding_tax25_account_id: parseAccount(settings.withholding_tax25_account)?.id,
+        tax_payable_account_id: parseAccount(settings.tax_payable_account)?.id,
+        inventory_account_id: parseAccount(settings.inventory_account)?.id,
+        cogs_account_id: parseAccount(settings.cogs_account)?.id
+      };
+      
+      setFormData(formDataTransformed);
+    } else {
+      setFormData({});
+    }
     setHasChanges(false);
     setValidationErrors({});
   };

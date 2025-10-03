@@ -11123,7 +11123,7 @@
         ]
       }
     },
-    "/api/v1/reports/ssot-profit-loss": {
+    "/reports/ssot-profit-loss": {
       "get": {
         "consumes": [
           "application/json"
@@ -11197,7 +11197,7 @@
         ]
       }
     },
-    "/api/v1/reports/ssot/balance-sheet": {
+    "/reports/ssot/balance-sheet": {
       "get": {
         "consumes": [
           "application/json"
@@ -11262,7 +11262,7 @@
         ]
       }
     },
-    "/api/v1/reports/ssot/balance-sheet/account-details": {
+    "/reports/ssot/balance-sheet/account-details": {
       "get": {
         "consumes": [
           "application/json"
@@ -11325,7 +11325,7 @@
         ]
       }
     },
-    "/api/v1/reports/ssot/cash-flow": {
+    "/reports/ssot/cash-flow": {
       "get": {
         "consumes": [
           "application/json"
