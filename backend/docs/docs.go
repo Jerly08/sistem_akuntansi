@@ -2156,6 +2156,389 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/settings/tax-accounts": {
+            "get": {
+                "description": "Retrieve the currently active tax account settings",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Get current tax account settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new tax account configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Create new tax account settings",
+                "parameters": [
+                    {
+                        "description": "Tax account settings data",
+                        "name": "settings",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/settings/tax-accounts/all": {
+            "get": {
+                "description": "Retrieve all tax account settings for administration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Get all tax account settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/settings/tax-accounts/available-accounts": {
+            "get": {
+                "description": "Retrieve available accounts that can be used for tax account configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Get available accounts",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by account category",
+                        "name": "category",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.AccountResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/settings/tax-accounts/refresh-cache": {
+            "post": {
+                "description": "Refresh the tax account settings cache",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Refresh cache",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/settings/tax-accounts/suggestions": {
+            "get": {
+                "description": "Get suggested accounts for tax account configuration setup",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Get account suggestions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/settings/tax-accounts/validate": {
+            "post": {
+                "description": "Validate the tax account configuration before saving",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Validate tax account configuration",
+                "parameters": [
+                    {
+                        "description": "Tax account settings data",
+                        "name": "settings",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/settings/tax-accounts/{id}": {
+            "put": {
+                "description": "Update an existing tax account configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Update tax account settings",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Settings ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Tax account settings data",
+                        "name": "settings",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/settings/tax-accounts/{id}/activate": {
+            "post": {
+                "description": "Activate a specific tax account configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Settings"
+                ],
+                "summary": "Activate tax account settings",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Settings ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/balance-health/auto-heal": {
             "post": {
                 "security": [
@@ -5551,6 +5934,63 @@ const docTemplate = `{
                 }
             }
         },
+        "models.AccountResponse": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "number",
+                    "example": 5000000
+                },
+                "category": {
+                    "type": "string",
+                    "example": "current_asset"
+                },
+                "code": {
+                    "type": "string",
+                    "example": "1100-001"
+                },
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-15T09:30:00Z"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Kas untuk keperluan operasional harian"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_active": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "is_header": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "level": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Kas Kecil"
+                },
+                "parent_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "type": {
+                    "type": "string",
+                    "example": "asset"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "example": "2024-01-15T09:30:00Z"
+                }
+            }
+        },
         "models.ApprovalAction": {
             "type": "object",
             "properties": {
@@ -6067,6 +6507,48 @@ const docTemplate = `{
                 "status": {
                     "type": "string",
                     "example": "error"
+                }
+            }
+        },
+        "models.InvoiceType": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "e.g., \"STA-C\", \"STA-B\"",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "User who created this type",
+                    "type": "integer"
+                },
+                "creator": {
+                    "description": "Relations",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.User"
+                        }
+                    ]
+                },
+                "description": {
+                    "description": "Optional description",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "description": "Active status",
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "e.g., \"Corporate Sales\", \"Retail Sales\"",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
@@ -7229,6 +7711,12 @@ const docTemplate = `{
                 "invoice_number": {
                     "type": "string"
                 },
+                "invoice_type": {
+                    "$ref": "#/definitions/models.InvoiceType"
+                },
+                "invoice_type_id": {
+                    "type": "integer"
+                },
                 "net_before_tax": {
                     "description": "Enhanced tax configuration (similar to Purchase model)",
                     "type": "number"
@@ -7769,6 +8257,249 @@ const docTemplate = `{
                 }
             }
         },
+        "models.TaxAccountSettingsCreateRequest": {
+            "type": "object",
+            "required": [
+                "purchase_bank_account_id",
+                "purchase_cash_account_id",
+                "purchase_expense_account_id",
+                "purchase_input_vat_account_id",
+                "purchase_payable_account_id",
+                "sales_bank_account_id",
+                "sales_cash_account_id",
+                "sales_output_vat_account_id",
+                "sales_receivable_account_id",
+                "sales_revenue_account_id"
+            ],
+            "properties": {
+                "apply_to_all_companies": {
+                    "description": "Configuration flags",
+                    "type": "boolean"
+                },
+                "cogs_account_id": {
+                    "type": "integer"
+                },
+                "inventory_account_id": {
+                    "description": "Inventory Account (optional)",
+                    "type": "integer"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "purchase_bank_account_id": {
+                    "type": "integer"
+                },
+                "purchase_cash_account_id": {
+                    "type": "integer"
+                },
+                "purchase_expense_account_id": {
+                    "type": "integer"
+                },
+                "purchase_input_vat_account_id": {
+                    "type": "integer"
+                },
+                "purchase_payable_account_id": {
+                    "description": "Purchase Account Configuration",
+                    "type": "integer"
+                },
+                "sales_bank_account_id": {
+                    "type": "integer"
+                },
+                "sales_cash_account_id": {
+                    "type": "integer"
+                },
+                "sales_output_vat_account_id": {
+                    "type": "integer"
+                },
+                "sales_receivable_account_id": {
+                    "description": "Sales Account Configuration",
+                    "type": "integer"
+                },
+                "sales_revenue_account_id": {
+                    "type": "integer"
+                },
+                "tax_payable_account_id": {
+                    "type": "integer"
+                },
+                "withholding_tax21_account_id": {
+                    "description": "Other Tax Accounts (optional)",
+                    "type": "integer"
+                },
+                "withholding_tax23_account_id": {
+                    "type": "integer"
+                },
+                "withholding_tax25_account_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.TaxAccountSettingsResponse": {
+            "type": "object",
+            "properties": {
+                "apply_to_all_companies": {
+                    "type": "boolean"
+                },
+                "cogs_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "inventory_account": {
+                    "description": "Inventory Account (optional)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.AccountResponse"
+                        }
+                    ]
+                },
+                "is_active": {
+                    "description": "Configuration flags",
+                    "type": "boolean"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "purchase_bank_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "purchase_cash_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "purchase_expense_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "purchase_input_vat_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "purchase_payable_account": {
+                    "description": "Purchase Account Configuration",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.AccountResponse"
+                        }
+                    ]
+                },
+                "sales_bank_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "sales_cash_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "sales_output_vat_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "sales_receivable_account": {
+                    "description": "Sales Account Configuration",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.AccountResponse"
+                        }
+                    ]
+                },
+                "sales_revenue_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "tax_payable_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by_user": {
+                    "description": "Metadata",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.UserResponse"
+                        }
+                    ]
+                },
+                "withholding_tax21_account": {
+                    "description": "Other Tax Accounts (optional)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.AccountResponse"
+                        }
+                    ]
+                },
+                "withholding_tax23_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "withholding_tax25_account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                }
+            }
+        },
+        "models.TaxAccountSettingsUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "apply_to_all_companies": {
+                    "type": "boolean"
+                },
+                "cogs_account_id": {
+                    "type": "integer"
+                },
+                "inventory_account_id": {
+                    "description": "Inventory Account (optional)",
+                    "type": "integer"
+                },
+                "is_active": {
+                    "description": "Configuration flags",
+                    "type": "boolean"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "purchase_bank_account_id": {
+                    "type": "integer"
+                },
+                "purchase_cash_account_id": {
+                    "type": "integer"
+                },
+                "purchase_expense_account_id": {
+                    "type": "integer"
+                },
+                "purchase_input_vat_account_id": {
+                    "type": "integer"
+                },
+                "purchase_payable_account_id": {
+                    "description": "Purchase Account Configuration",
+                    "type": "integer"
+                },
+                "sales_bank_account_id": {
+                    "type": "integer"
+                },
+                "sales_cash_account_id": {
+                    "type": "integer"
+                },
+                "sales_output_vat_account_id": {
+                    "type": "integer"
+                },
+                "sales_receivable_account_id": {
+                    "description": "Sales Account Configuration",
+                    "type": "integer"
+                },
+                "sales_revenue_account_id": {
+                    "type": "integer"
+                },
+                "tax_payable_account_id": {
+                    "type": "integer"
+                },
+                "withholding_tax21_account_id": {
+                    "description": "Other Tax Accounts (optional)",
+                    "type": "integer"
+                },
+                "withholding_tax23_account_id": {
+                    "type": "integer"
+                },
+                "withholding_tax25_account_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.User": {
             "type": "object",
             "properties": {
@@ -7842,6 +8573,11 @@ const docTemplate = `{
                 "is_active": {
                     "type": "boolean",
                     "example": true
+                },
+                "name": {
+                    "description": "For compatibility with tax_account_settings",
+                    "type": "string",
+                    "example": "John Doe"
                 },
                 "role": {
                     "type": "string",
@@ -11397,7 +12133,7 @@ var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
-	Schemes:          []string{"http", "https"},
+	Schemes:          []string{"http"},
 	Title:            "Sistema Akuntansi API",
 	Description:      "API untuk aplikasi sistem akuntansi yang komprehensif dengan fitur lengkap manajemen keuangan, inventory, sales, purchases, dan reporting.",
 	InfoInstanceName: "swagger",
