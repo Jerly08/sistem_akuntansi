@@ -1158,6 +1158,57 @@ definitions:
       vendor_id:
         type: integer
     type: object
+  models.PurchaseCreateRequest:
+    properties:
+      bank_account_id:
+        description: Required if payment_method is CASH or TRANSFER
+        type: integer
+      credit_account_id:
+        description: Required if payment_method is CREDIT
+        type: integer
+      date:
+        type: string
+      discount:
+        type: number
+      due_date:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/models.PurchaseItemRequest'
+        minItems: 1
+        type: array
+      notes:
+        type: string
+      other_tax_additions:
+        type: number
+      other_tax_deductions:
+        type: number
+      payment_method:
+        description: Payment method fields
+        type: string
+      payment_reference:
+        type: string
+      pph21_rate:
+        description: Tax deductions (Pemotongan) - using pointers to distinguish null
+          vs zero
+        type: number
+      pph23_rate:
+        description: nil = 0%, explicit value otherwise
+        type: number
+      ppn_rate:
+        description: Tax additions (Penambahan) - using pointers to distinguish null
+          vs zero
+        type: number
+      tax:
+        description: Legacy tax field (for backward compatibility - ignored in calculation)
+        type: number
+      vendor_id:
+        type: integer
+    required:
+    - date
+    - items
+    - vendor_id
+    type: object
   models.PurchaseItem:
     properties:
       created_at:
@@ -1190,6 +1241,27 @@ definitions:
         type: number
       updated_at:
         type: string
+    type: object
+  models.PurchaseItemRequest:
+    properties:
+      discount:
+        type: number
+      expense_account_id:
+        type: integer
+      product_id:
+        type: integer
+      quantity:
+        minimum: 1
+        type: integer
+      tax:
+        type: number
+      unit_price:
+        minimum: 0
+        type: number
+    required:
+    - product_id
+    - quantity
+    - unit_price
     type: object
   models.PurchasePayment:
     properties:
@@ -1229,6 +1301,50 @@ definitions:
       user:
         $ref: '#/definitions/models.User'
       user_id:
+        type: integer
+    type: object
+  models.PurchaseUpdateRequest:
+    properties:
+      bank_account_id:
+        type: integer
+      credit_account_id:
+        type: integer
+      date:
+        type: string
+      discount:
+        type: number
+      due_date:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/models.PurchaseItemRequest'
+        type: array
+      notes:
+        type: string
+      other_tax_additions:
+        type: number
+      other_tax_deductions:
+        type: number
+      payment_method:
+        description: Payment method fields
+        type: string
+      payment_reference:
+        type: string
+      pph21_rate:
+        description: Tax deductions (Pemotongan) - pointers to distinguish null vs
+          zero
+        type: number
+      pph23_rate:
+        description: double pointer for update operations
+        type: number
+      ppn_rate:
+        description: Tax additions (Penambahan) - pointers to distinguish null vs
+          zero
+        type: number
+      tax:
+        description: Legacy tax field (for backward compatibility - ignored in calculation)
+        type: number
+      vendor_id:
         type: integer
     type: object
   models.RefreshTokenRequest:
@@ -1545,6 +1661,86 @@ definitions:
       valid_until:
         type: string
     type: object
+  models.SaleCreateRequest:
+    properties:
+      billing_address:
+        type: string
+      cash_bank_id:
+        type: integer
+      currency:
+        type: string
+      customer_id:
+        type: integer
+      date:
+        type: string
+      discount_percent:
+        type: number
+      due_date:
+        type: string
+      exchange_rate:
+        type: number
+      internal_notes:
+        type: string
+      invoice_type_id:
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/models.SaleItemRequest'
+        minItems: 1
+        type: array
+      notes:
+        type: string
+      other_tax_additions:
+        description: Other tax additions
+        type: number
+      other_tax_deductions:
+        description: Other tax deductions
+        type: number
+      payment_method:
+        type: string
+      payment_method_type:
+        description: CASH, BANK, CREDIT
+        type: string
+      payment_terms:
+        type: string
+      pph_percent:
+        type: number
+      pph_type:
+        type: string
+      pph21_rate:
+        description: PPh 21 percentage
+        type: number
+      pph23_rate:
+        description: PPh 23 percentage
+        type: number
+      ppn_percent:
+        description: Legacy tax fields (for backward compatibility)
+        type: number
+      ppn_rate:
+        description: Enhanced tax configuration (similar to Purchase model)
+        type: number
+      reference:
+        type: string
+      sales_person_id:
+        type: integer
+      shipping_address:
+        type: string
+      shipping_cost:
+        type: number
+      shipping_method:
+        type: string
+      shipping_taxable:
+        type: boolean
+      type:
+        type: string
+      valid_until:
+        type: string
+    required:
+    - customer_id
+    - date
+    - items
+    - type
+    type: object
   models.SaleItem:
     properties:
       created_at:
@@ -1599,6 +1795,39 @@ definitions:
         type: number
       updated_at:
         type: string
+    type: object
+  models.SaleItemRequest:
+    properties:
+      description:
+        type: string
+      discount:
+        description: Legacy fields for backward compatibility
+        type: number
+      discount_amount:
+        type: number
+      discount_percent:
+        type: number
+      product_id:
+        type: integer
+      quantity:
+        description: Accept float from frontend
+        minimum: 1
+        type: number
+      revenue_account_id:
+        type: integer
+      tax:
+        type: number
+      tax_account_id:
+        type: integer
+      taxable:
+        type: boolean
+      unit_price:
+        minimum: 0
+        type: number
+    required:
+    - product_id
+    - quantity
+    - unit_price
     type: object
   models.SalePayment:
     properties:
@@ -1710,6 +1939,72 @@ definitions:
       updated_at:
         type: string
     type: object
+  models.SaleUpdateRequest:
+    properties:
+      billing_address:
+        type: string
+      cash_bank_id:
+        type: integer
+      customer_id:
+        type: integer
+      date:
+        type: string
+      discount_percent:
+        type: number
+      due_date:
+        type: string
+      internal_notes:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/models.SaleItemRequest'
+        type: array
+      notes:
+        type: string
+      other_tax_additions:
+        description: Other tax additions
+        type: number
+      other_tax_deductions:
+        description: Other tax deductions
+        type: number
+      payment_method:
+        type: string
+      payment_method_type:
+        description: CASH, BANK, CREDIT
+        type: string
+      payment_terms:
+        type: string
+      pph_percent:
+        type: number
+      pph_type:
+        type: string
+      pph21_rate:
+        description: PPh 21 percentage
+        type: number
+      pph23_rate:
+        description: PPh 23 percentage
+        type: number
+      ppn_percent:
+        description: Legacy tax fields (for backward compatibility)
+        type: number
+      ppn_rate:
+        description: Enhanced tax configuration (similar to Purchase model)
+        type: number
+      reference:
+        type: string
+      sales_person_id:
+        type: integer
+      shipping_address:
+        type: string
+      shipping_cost:
+        type: number
+      shipping_method:
+        type: string
+      shipping_taxable:
+        type: boolean
+      valid_until:
+        type: string
+    type: object
   models.SecurityIncident:
     properties:
       client_ip:
@@ -1754,6 +2049,13 @@ definitions:
         type: string
       user_id:
         type: integer
+    type: object
+  models.StockValidationRequest:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.SaleItemRequest'
+        type: array
     type: object
   models.SystemAlert:
     properties:
@@ -5664,85 +5966,6 @@ paths:
       summary: Get unpaid invoices
       tags:
       - Payments
-  /api/purchases/{id}/for-payment:
-    get:
-      consumes:
-      - application/json
-      description: Get purchase details formatted for payment processing
-      parameters:
-      - description: Purchase ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - Bearer: []
-      summary: Get purchase for payment
-      tags:
-      - Purchases
-  /api/purchases/{id}/integrated-payment:
-    post:
-      consumes:
-      - application/json
-      description: Create payment record in both Purchase and Payment Management systems
-      parameters:
-      - description: Purchase ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Payment details
-        in: body
-        name: payment
-        required: true
-        schema:
-          $ref: '#/definitions/models.APIResponse'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - Bearer: []
-      summary: Create integrated payment for purchase
-      tags:
-      - Purchases
-  /api/purchases/{id}/payments:
-    get:
-      consumes:
-      - application/json
-      description: Get all payments for a specific purchase
-      parameters:
-      - description: Purchase ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/models.PurchasePayment'
-            type: array
-      security:
-      - Bearer: []
-      summary: Get purchase payments
-      tags:
-      - Purchases
   /api/v1/admin/balance-health/auto-heal:
     post:
       consumes:
@@ -6361,6 +6584,375 @@ paths:
       summary: Get journal summary
       tags:
       - Journal
+  /api/v1/purchases:
+    get:
+      consumes:
+      - application/json
+      description: Get paginated list of purchases with filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Purchase status filter
+        in: query
+        name: status
+        type: string
+      - description: Vendor ID filter
+        in: query
+        name: vendor_id
+        type: string
+      - description: Start date filter (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date filter (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Search term
+        in: query
+        name: search
+        type: string
+      - description: Approval status filter
+        in: query
+        name: approval_status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get all purchases
+      tags:
+      - Purchases
+    post:
+      consumes:
+      - application/json
+      description: Create a new purchase request
+      parameters:
+      - description: Purchase data
+        in: body
+        name: purchase
+        required: true
+        schema:
+          $ref: '#/definitions/models.PurchaseCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Purchase'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Create new purchase
+      tags:
+      - Purchases
+  /api/v1/purchases/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a purchase (with permission checks)
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Delete purchase
+      tags:
+      - Purchases
+    get:
+      consumes:
+      - application/json
+      description: Get a single purchase by ID
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Purchase'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get purchase by ID
+      tags:
+      - Purchases
+    put:
+      consumes:
+      - application/json
+      description: Update an existing purchase
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Purchase update data
+        in: body
+        name: purchase
+        required: true
+        schema:
+          $ref: '#/definitions/models.PurchaseUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Purchase'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Update purchase
+      tags:
+      - Purchases
+  /api/v1/purchases/{id}/approve:
+    post:
+      consumes:
+      - application/json
+      description: Approve a purchase in the workflow
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Approve purchase
+      tags:
+      - Purchases
+  /api/v1/purchases/{id}/for-payment:
+    get:
+      consumes:
+      - application/json
+      description: Get purchase details formatted for payment processing
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get purchase for payment
+      tags:
+      - Purchases
+  /api/v1/purchases/{id}/integrated-payment:
+    post:
+      consumes:
+      - application/json
+      description: Create payment record in both Purchase and Payment Management systems
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Payment details
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/models.APIResponse'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Create integrated payment for purchase
+      tags:
+      - Purchases
+  /api/v1/purchases/{id}/payments:
+    get:
+      consumes:
+      - application/json
+      description: Get all payments for a specific purchase
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.PurchasePayment'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get purchase payments
+      tags:
+      - Purchases
+  /api/v1/purchases/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      description: Reject a purchase in the workflow
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Reject purchase
+      tags:
+      - Purchases
+  /api/v1/purchases/{id}/submit-approval:
+    post:
+      consumes:
+      - application/json
+      description: Submit a purchase for approval workflow
+      parameters:
+      - description: Purchase ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Submit purchase for approval
+      tags:
+      - Purchases
   /api/v1/reports/optimized/balance-sheet:
     get:
       consumes:
@@ -6660,6 +7252,332 @@ paths:
       summary: Get list of supported PSAK standards
       tags:
       - PSAK Reports
+  /api/v1/sales:
+    get:
+      consumes:
+      - application/json
+      description: Get paginated list of sales with filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Sales status filter
+        in: query
+        name: status
+        type: string
+      - description: Customer ID filter
+        in: query
+        name: customer_id
+        type: string
+      - description: Start date filter (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date filter (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Search term
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get all sales
+      tags:
+      - Sales
+    post:
+      consumes:
+      - application/json
+      description: Create a new sale
+      parameters:
+      - description: Sale data
+        in: body
+        name: sale
+        required: true
+        schema:
+          $ref: '#/definitions/models.SaleCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Sale'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Create new sale
+      tags:
+      - Sales
+  /api/v1/sales/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a sale
+      parameters:
+      - description: Sale ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Delete sale
+      tags:
+      - Sales
+    get:
+      consumes:
+      - application/json
+      description: Get a single sale by ID
+      parameters:
+      - description: Sale ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Sale'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get sale by ID
+      tags:
+      - Sales
+    put:
+      consumes:
+      - application/json
+      description: Update an existing sale
+      parameters:
+      - description: Sale ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Sale update data
+        in: body
+        name: sale
+        required: true
+        schema:
+          $ref: '#/definitions/models.SaleUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Sale'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Update sale
+      tags:
+      - Sales
+  /api/v1/sales/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel a sale with reason
+      parameters:
+      - description: Sale ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Cancel request with reason
+        in: body
+        name: request
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Cancel sale
+      tags:
+      - Sales
+  /api/v1/sales/{id}/confirm:
+    post:
+      consumes:
+      - application/json
+      description: Confirm a sale (changes status to CONFIRMED)
+      parameters:
+      - description: Sale ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Confirm sale
+      tags:
+      - Sales
+  /api/v1/sales/{id}/invoice:
+    post:
+      consumes:
+      - application/json
+      description: Create an invoice from a sale
+      parameters:
+      - description: Sale ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Create invoice from sale
+      tags:
+      - Sales
+  /api/v1/sales/validate-stock:
+    post:
+      consumes:
+      - application/json
+      description: Validate stock levels for items in the sales create form without
+        creating a sale
+      parameters:
+      - description: Stock validation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.StockValidationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Validate stock for sale
+      tags:
+      - Sales
   /api/v1/settings/tax-accounts:
     get:
       consumes:

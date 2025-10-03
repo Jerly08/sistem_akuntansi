@@ -34,7 +34,24 @@ func NewSalesController(salesServiceV2 *services.SalesServiceV2, paymentService 
 
 // Sales Management
 
-// GetSales gets all sales with pagination and filters
+// GetSales godoc
+// @Summary Get all sales
+// @Description Get paginated list of sales with filters
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(10)
+// @Param status query string false "Sales status filter"
+// @Param customer_id query string false "Customer ID filter"
+// @Param start_date query string false "Start date filter (YYYY-MM-DD)"
+// @Param end_date query string false "End date filter (YYYY-MM-DD)"
+// @Param search query string false "Search term"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/sales [get]
 func (sc *SalesController) GetSales(c *gin.Context) {
 	log.Printf("📋 Getting sales list with filters")
 	
@@ -94,7 +111,18 @@ utils.SendPaginatedSuccess(c,
 		int64(result.Total))
 }
 
-// GetSale gets a single sale by ID
+// GetSale godoc
+// @Summary Get sale by ID
+// @Description Get a single sale by ID
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Sale ID"
+// @Success 200 {object} models.Sale
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
+// @Router /api/v1/sales/{id} [get]
 func (sc *SalesController) GetSale(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -127,7 +155,18 @@ func (sc *SalesController) GetSale(c *gin.Context) {
 	utils.SendSuccess(c, "Sale retrieved successfully", sale)
 }
 
-// ValidateSaleStock validates stock levels for items in the sales create form without creating a sale
+// ValidateSaleStock godoc
+// @Summary Validate stock for sale
+// @Description Validate stock levels for items in the sales create form without creating a sale
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body models.StockValidationRequest true "Stock validation request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/sales/validate-stock [post]
 func (sc *SalesController) ValidateSaleStock(c *gin.Context) {
 	var req models.StockValidationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -146,7 +185,19 @@ func (sc *SalesController) ValidateSaleStock(c *gin.Context) {
 	utils.SendSuccess(c, "Stock validation completed", res)
 }
 
-// CreateSale creates a new sale
+// CreateSale godoc
+// @Summary Create new sale
+// @Description Create a new sale
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param sale body models.SaleCreateRequest true "Sale data"
+// @Success 201 {object} models.Sale
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/sales [post]
 func (sc *SalesController) CreateSale(c *gin.Context) {
 	log.Printf("🎆 Creating new sale")
 	
@@ -202,7 +253,19 @@ func (sc *SalesController) CreateSale(c *gin.Context) {
 	utils.SendCreated(c, "Sale created successfully", sale)
 }
 
-// UpdateSale updates an existing sale
+// UpdateSale godoc
+// @Summary Update sale
+// @Description Update an existing sale
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Sale ID"
+// @Param sale body models.SaleUpdateRequest true "Sale update data"
+// @Success 200 {object} models.Sale
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/sales/{id} [put]
 func (sc *SalesController) UpdateSale(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -227,7 +290,18 @@ func (sc *SalesController) UpdateSale(c *gin.Context) {
 	c.JSON(http.StatusOK, sale)
 }
 
-// DeleteSale deletes a sale
+// DeleteSale godoc
+// @Summary Delete sale
+// @Description Delete a sale
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Sale ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/sales/{id} [delete]
 func (sc *SalesController) DeleteSale(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -246,7 +320,18 @@ func (sc *SalesController) DeleteSale(c *gin.Context) {
 
 // Sales Status Management
 
-// ConfirmSale confirms a sale (changes status to CONFIRMED)
+// ConfirmSale godoc
+// @Summary Confirm sale
+// @Description Confirm a sale (changes status to CONFIRMED)
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Sale ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/sales/{id}/confirm [post]
 func (sc *SalesController) ConfirmSale(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -268,7 +353,18 @@ func (sc *SalesController) ConfirmSale(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Sale confirmed successfully"})
 }
 
-// InvoiceSale creates an invoice from a sale
+// InvoiceSale godoc
+// @Summary Create invoice from sale
+// @Description Create an invoice from a sale
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Sale ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/sales/{id}/invoice [post]
 func (sc *SalesController) InvoiceSale(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -287,7 +383,19 @@ func (sc *SalesController) InvoiceSale(c *gin.Context) {
 	c.JSON(http.StatusOK, invoice)
 }
 
-// CancelSale cancels a sale
+// CancelSale godoc
+// @Summary Cancel sale
+// @Description Cancel a sale with reason
+// @Tags Sales
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Sale ID"
+// @Param request body map[string]interface{} false "Cancel request with reason"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/sales/{id}/cancel [post]
 func (sc *SalesController) CancelSale(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {

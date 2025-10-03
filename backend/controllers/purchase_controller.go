@@ -27,7 +27,24 @@ func NewPurchaseController(purchaseService *services.PurchaseService, paymentSer
 
 // Purchase CRUD Operations
 
-// GetPurchases returns paginated list of purchases with filters
+// GetPurchases godoc
+// @Summary Get all purchases
+// @Description Get paginated list of purchases with filters
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page" default(10)
+// @Param status query string false "Purchase status filter"
+// @Param vendor_id query string false "Vendor ID filter"
+// @Param start_date query string false "Start date filter (YYYY-MM-DD)"
+// @Param end_date query string false "End date filter (YYYY-MM-DD)"
+// @Param search query string false "Search term"
+// @Param approval_status query string false "Approval status filter"
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/purchases [get]
 func (pc *PurchaseController) GetPurchases(c *gin.Context) {
 	// Parse query parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -66,7 +83,18 @@ func (pc *PurchaseController) GetPurchases(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// GetPurchase returns a single purchase by ID
+// GetPurchase godoc
+// @Summary Get purchase by ID
+// @Description Get a single purchase by ID
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Success 200 {object} models.Purchase
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
+// @Router /api/v1/purchases/{id} [get]
 func (pc *PurchaseController) GetPurchase(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -83,7 +111,18 @@ func (pc *PurchaseController) GetPurchase(c *gin.Context) {
 	c.JSON(http.StatusOK, purchase)
 }
 
-// CreatePurchase creates a new purchase request
+// CreatePurchase godoc
+// @Summary Create new purchase
+// @Description Create a new purchase request
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param purchase body models.PurchaseCreateRequest true "Purchase data"
+// @Success 201 {object} models.Purchase
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/purchases [post]
 func (pc *PurchaseController) CreatePurchase(c *gin.Context) {
 	var request models.PurchaseCreateRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
@@ -108,7 +147,19 @@ func (pc *PurchaseController) CreatePurchase(c *gin.Context) {
 	c.JSON(http.StatusCreated, purchase)
 }
 
-// UpdatePurchase updates an existing purchase
+// UpdatePurchase godoc
+// @Summary Update purchase
+// @Description Update an existing purchase
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Param purchase body models.PurchaseUpdateRequest true "Purchase update data"
+// @Success 200 {object} models.Purchase
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/purchases/{id} [put]
 func (pc *PurchaseController) UpdatePurchase(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -133,7 +184,20 @@ func (pc *PurchaseController) UpdatePurchase(c *gin.Context) {
 	c.JSON(http.StatusOK, purchase)
 }
 
-// DeletePurchase deletes a purchase
+// DeletePurchase godoc
+// @Summary Delete purchase
+// @Description Delete a purchase (with permission checks)
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 403 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/purchases/{id} [delete]
 func (pc *PurchaseController) DeletePurchase(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -175,7 +239,18 @@ func (pc *PurchaseController) DeletePurchase(c *gin.Context) {
 
 // Approval Operations
 
-// SubmitForApproval submits a purchase for approval
+// SubmitForApproval godoc
+// @Summary Submit purchase for approval
+// @Description Submit a purchase for approval workflow
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/purchases/{id}/submit-approval [post]
 func (pc *PurchaseController) SubmitForApproval(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -194,7 +269,18 @@ func (pc *PurchaseController) SubmitForApproval(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Purchase submitted for approval"})
 }
 
-// ApprovePurchase approves a purchase
+// ApprovePurchase godoc
+// @Summary Approve purchase
+// @Description Approve a purchase in the workflow
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/purchases/{id}/approve [post]
 func (pc *PurchaseController) ApprovePurchase(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -245,7 +331,18 @@ func (pc *PurchaseController) ApprovePurchase(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// RejectPurchase rejects a purchase
+// RejectPurchase godoc
+// @Summary Reject purchase
+// @Description Reject a purchase in the workflow
+// @Tags Purchases
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Purchase ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/purchases/{id}/reject [post]
 func (pc *PurchaseController) RejectPurchase(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -643,7 +740,7 @@ func (pc *PurchaseController) GetPendingApprovals(c *gin.Context) {
 // @Security Bearer
 // @Param id path int true "Purchase ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/purchases/{id}/for-payment [get]
+// @Router /api/v1/purchases/{id}/for-payment [get]
 func (pc *PurchaseController) GetPurchaseForPayment(c *gin.Context) {
 	purchaseID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -702,7 +799,7 @@ func (pc *PurchaseController) GetPurchaseForPayment(c *gin.Context) {
 // @Param id path int true "Purchase ID"
 // @Param payment body models.APIResponse true "Payment details"
 // @Success 200 {object} map[string]interface{}
-// @Router /api/purchases/{id}/integrated-payment [post]
+// @Router /api/v1/purchases/{id}/integrated-payment [post]
 func (pc *PurchaseController) CreateIntegratedPayment(c *gin.Context) {
 	purchaseID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -768,7 +865,7 @@ func (pc *PurchaseController) CreateIntegratedPayment(c *gin.Context) {
 // @Security Bearer
 // @Param id path int true "Purchase ID"
 // @Success 200 {array} models.PurchasePayment
-// @Router /api/purchases/{id}/payments [get]
+// @Router /api/v1/purchases/{id}/payments [get]
 func (pc *PurchaseController) GetPurchasePayments(c *gin.Context) {
 	purchaseID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {

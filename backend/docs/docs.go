@@ -2031,131 +2031,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/purchases/{id}/for-payment": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get purchase details formatted for payment processing",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Purchases"
-                ],
-                "summary": "Get purchase for payment",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Purchase ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/purchases/{id}/integrated-payment": {
-            "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Create payment record in both Purchase and Payment Management systems",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Purchases"
-                ],
-                "summary": "Create integrated payment for purchase",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Purchase ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Payment details",
-                        "name": "payment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.APIResponse"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/purchases/{id}/payments": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get all payments for a specific purchase",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Purchases"
-                ],
-                "summary": "Get purchase payments",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Purchase ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.PurchasePayment"
-                            }
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/admin/balance-health/auto-heal": {
             "post": {
                 "security": [
@@ -3106,6 +2981,582 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/purchases": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get paginated list of purchases with filters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Get all purchases",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Purchase status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Vendor ID filter",
+                        "name": "vendor_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date filter (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date filter (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search term",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Approval status filter",
+                        "name": "approval_status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a new purchase request",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Create new purchase",
+                "parameters": [
+                    {
+                        "description": "Purchase data",
+                        "name": "purchase",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PurchaseCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Purchase"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/purchases/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get a single purchase by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Get purchase by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Purchase"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update an existing purchase",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Update purchase",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Purchase update data",
+                        "name": "purchase",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.PurchaseUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Purchase"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete a purchase (with permission checks)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Delete purchase",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/purchases/{id}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Approve a purchase in the workflow",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Approve purchase",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/purchases/{id}/for-payment": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get purchase details formatted for payment processing",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Get purchase for payment",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/purchases/{id}/integrated-payment": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create payment record in both Purchase and Payment Management systems",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Create integrated payment for purchase",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Payment details",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/purchases/{id}/payments": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get all payments for a specific purchase",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Get purchase payments",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.PurchasePayment"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/purchases/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Reject a purchase in the workflow",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Reject purchase",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/purchases/{id}/submit-approval": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Submit a purchase for approval workflow",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Purchases"
+                ],
+                "summary": "Submit purchase for approval",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Purchase ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/reports/optimized/balance-sheet": {
             "get": {
                 "description": "Generate balance sheet using materialized view for optimal performance",
@@ -3592,6 +4043,512 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sales": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get paginated list of sales with filters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Get all sales",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sales status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Customer ID filter",
+                        "name": "customer_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date filter (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date filter (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search term",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a new sale",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Create new sale",
+                "parameters": [
+                    {
+                        "description": "Sale data",
+                        "name": "sale",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.SaleCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.Sale"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sales/validate-stock": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Validate stock levels for items in the sales create form without creating a sale",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Validate stock for sale",
+                "parameters": [
+                    {
+                        "description": "Stock validation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.StockValidationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sales/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get a single sale by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Get sale by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Sale ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Sale"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update an existing sale",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Update sale",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Sale ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Sale update data",
+                        "name": "sale",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.SaleUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Sale"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete a sale",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Delete sale",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Sale ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sales/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Cancel a sale with reason",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Cancel sale",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Sale ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Cancel request with reason",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sales/{id}/confirm": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Confirm a sale (changes status to CONFIRMED)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Confirm sale",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Sale ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/sales/{id}/invoice": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create an invoice from a sale",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Sales"
+                ],
+                "summary": "Create invoice from sale",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Sale ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
                         }
                     }
                 }
@@ -7303,6 +8260,75 @@ const docTemplate = `{
                 }
             }
         },
+        "models.PurchaseCreateRequest": {
+            "type": "object",
+            "required": [
+                "date",
+                "items",
+                "vendor_id"
+            ],
+            "properties": {
+                "bank_account_id": {
+                    "description": "Required if payment_method is CASH or TRANSFER",
+                    "type": "integer"
+                },
+                "credit_account_id": {
+                    "description": "Required if payment_method is CREDIT",
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "discount": {
+                    "type": "number"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/models.PurchaseItemRequest"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "other_tax_additions": {
+                    "type": "number"
+                },
+                "other_tax_deductions": {
+                    "type": "number"
+                },
+                "payment_method": {
+                    "description": "Payment method fields",
+                    "type": "string"
+                },
+                "payment_reference": {
+                    "type": "string"
+                },
+                "pph21_rate": {
+                    "description": "Tax deductions (Pemotongan) - using pointers to distinguish null vs zero",
+                    "type": "number"
+                },
+                "pph23_rate": {
+                    "description": "nil = 0%, explicit value otherwise",
+                    "type": "number"
+                },
+                "ppn_rate": {
+                    "description": "Tax additions (Penambahan) - using pointers to distinguish null vs zero",
+                    "type": "number"
+                },
+                "tax": {
+                    "description": "Legacy tax field (for backward compatibility - ignored in calculation)",
+                    "type": "number"
+                },
+                "vendor_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.PurchaseItem": {
             "type": "object",
             "properties": {
@@ -7352,6 +8378,36 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "models.PurchaseItemRequest": {
+            "type": "object",
+            "required": [
+                "product_id",
+                "quantity",
+                "unit_price"
+            ],
+            "properties": {
+                "discount": {
+                    "type": "number"
+                },
+                "expense_account_id": {
+                    "type": "integer"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "tax": {
+                    "type": "number"
+                },
+                "unit_price": {
+                    "type": "number",
+                    "minimum": 0
                 }
             }
         },
@@ -7413,6 +8469,67 @@ const docTemplate = `{
                     "$ref": "#/definitions/models.User"
                 },
                 "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.PurchaseUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "bank_account_id": {
+                    "type": "integer"
+                },
+                "credit_account_id": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "discount": {
+                    "type": "number"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.PurchaseItemRequest"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "other_tax_additions": {
+                    "type": "number"
+                },
+                "other_tax_deductions": {
+                    "type": "number"
+                },
+                "payment_method": {
+                    "description": "Payment method fields",
+                    "type": "string"
+                },
+                "payment_reference": {
+                    "type": "string"
+                },
+                "pph21_rate": {
+                    "description": "Tax deductions (Pemotongan) - pointers to distinguish null vs zero",
+                    "type": "number"
+                },
+                "pph23_rate": {
+                    "description": "double pointer for update operations",
+                    "type": "number"
+                },
+                "ppn_rate": {
+                    "description": "Tax additions (Penambahan) - pointers to distinguish null vs zero",
+                    "type": "number"
+                },
+                "tax": {
+                    "description": "Legacy tax field (for backward compatibility - ignored in calculation)",
+                    "type": "number"
+                },
+                "vendor_id": {
                     "type": "integer"
                 }
             }
@@ -7879,6 +8996,121 @@ const docTemplate = `{
                 }
             }
         },
+        "models.SaleCreateRequest": {
+            "type": "object",
+            "required": [
+                "customer_id",
+                "date",
+                "items",
+                "type"
+            ],
+            "properties": {
+                "billing_address": {
+                    "type": "string"
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "discount_percent": {
+                    "type": "number"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "exchange_rate": {
+                    "type": "number"
+                },
+                "internal_notes": {
+                    "type": "string"
+                },
+                "invoice_type_id": {
+                    "type": "integer"
+                },
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/models.SaleItemRequest"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "other_tax_additions": {
+                    "description": "Other tax additions",
+                    "type": "number"
+                },
+                "other_tax_deductions": {
+                    "description": "Other tax deductions",
+                    "type": "number"
+                },
+                "payment_method": {
+                    "type": "string"
+                },
+                "payment_method_type": {
+                    "description": "CASH, BANK, CREDIT",
+                    "type": "string"
+                },
+                "payment_terms": {
+                    "type": "string"
+                },
+                "pph21_rate": {
+                    "description": "PPh 21 percentage",
+                    "type": "number"
+                },
+                "pph23_rate": {
+                    "description": "PPh 23 percentage",
+                    "type": "number"
+                },
+                "pph_percent": {
+                    "type": "number"
+                },
+                "pph_type": {
+                    "type": "string"
+                },
+                "ppn_percent": {
+                    "description": "Legacy tax fields (for backward compatibility)",
+                    "type": "number"
+                },
+                "ppn_rate": {
+                    "description": "Enhanced tax configuration (similar to Purchase model)",
+                    "type": "number"
+                },
+                "reference": {
+                    "type": "string"
+                },
+                "sales_person_id": {
+                    "type": "integer"
+                },
+                "shipping_address": {
+                    "type": "string"
+                },
+                "shipping_cost": {
+                    "type": "number"
+                },
+                "shipping_method": {
+                    "type": "string"
+                },
+                "shipping_taxable": {
+                    "type": "boolean"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "valid_until": {
+                    "type": "string"
+                }
+            }
+        },
         "models.SaleItem": {
             "type": "object",
             "properties": {
@@ -7956,6 +9188,53 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "models.SaleItemRequest": {
+            "type": "object",
+            "required": [
+                "product_id",
+                "quantity",
+                "unit_price"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "discount": {
+                    "description": "Legacy fields for backward compatibility",
+                    "type": "number"
+                },
+                "discount_amount": {
+                    "type": "number"
+                },
+                "discount_percent": {
+                    "type": "number"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "quantity": {
+                    "description": "Accept float from frontend",
+                    "type": "number",
+                    "minimum": 1
+                },
+                "revenue_account_id": {
+                    "type": "integer"
+                },
+                "tax": {
+                    "type": "number"
+                },
+                "tax_account_id": {
+                    "type": "integer"
+                },
+                "taxable": {
+                    "type": "boolean"
+                },
+                "unit_price": {
+                    "type": "number",
+                    "minimum": 0
                 }
             }
         },
@@ -8131,6 +9410,102 @@ const docTemplate = `{
                 }
             }
         },
+        "models.SaleUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "billing_address": {
+                    "type": "string"
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "customer_id": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "discount_percent": {
+                    "type": "number"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "internal_notes": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.SaleItemRequest"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "other_tax_additions": {
+                    "description": "Other tax additions",
+                    "type": "number"
+                },
+                "other_tax_deductions": {
+                    "description": "Other tax deductions",
+                    "type": "number"
+                },
+                "payment_method": {
+                    "type": "string"
+                },
+                "payment_method_type": {
+                    "description": "CASH, BANK, CREDIT",
+                    "type": "string"
+                },
+                "payment_terms": {
+                    "type": "string"
+                },
+                "pph21_rate": {
+                    "description": "PPh 21 percentage",
+                    "type": "number"
+                },
+                "pph23_rate": {
+                    "description": "PPh 23 percentage",
+                    "type": "number"
+                },
+                "pph_percent": {
+                    "type": "number"
+                },
+                "pph_type": {
+                    "type": "string"
+                },
+                "ppn_percent": {
+                    "description": "Legacy tax fields (for backward compatibility)",
+                    "type": "number"
+                },
+                "ppn_rate": {
+                    "description": "Enhanced tax configuration (similar to Purchase model)",
+                    "type": "number"
+                },
+                "reference": {
+                    "type": "string"
+                },
+                "sales_person_id": {
+                    "type": "integer"
+                },
+                "shipping_address": {
+                    "type": "string"
+                },
+                "shipping_cost": {
+                    "type": "number"
+                },
+                "shipping_method": {
+                    "type": "string"
+                },
+                "shipping_taxable": {
+                    "type": "boolean"
+                },
+                "valid_until": {
+                    "type": "string"
+                }
+            }
+        },
         "models.SecurityIncident": {
             "type": "object",
             "properties": {
@@ -8197,6 +9572,17 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "models.StockValidationRequest": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.SaleItemRequest"
+                    }
                 }
             }
         },
