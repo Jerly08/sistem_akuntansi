@@ -786,7 +786,23 @@ func (sc *SalesController) ExportSaleReceiptPDF(c *gin.Context) {
 		return
 	}
 
-	pdfBytes, genErr := sc.pdfService.GenerateReceiptPDF(sale)
+	// Get current user ID for signature
+	userIDInterface, exists := c.Get("user_id")
+	var userID uint = 0
+	if exists {
+		if uid, ok := userIDInterface.(uint); ok {
+			userID = uid
+		}
+	}
+
+	// Generate PDF with user context for proper signature
+	var pdfBytes []byte
+	var genErr error
+	if userID > 0 {
+		pdfBytes, genErr = sc.pdfService.GenerateReceiptPDFWithUser(sale, userID)
+	} else {
+		pdfBytes, genErr = sc.pdfService.GenerateReceiptPDF(sale)
+	}
 	if genErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": genErr.Error()})
 		return

@@ -107,6 +107,14 @@ export const API_ENDPOINTS = {
   // Contacts (with /api/v1 prefix)
   CONTACTS: '/api/v1/contacts',
   
+  // Invoice Types (with /api/v1 prefix)
+  INVOICE_TYPES: '/api/v1/invoice-types',
+  INVOICE_TYPES_ACTIVE: '/api/v1/invoice-types/active',
+  INVOICE_TYPES_BY_ID: (id: number) => `/api/v1/invoice-types/${id}`,
+  INVOICE_TYPES_TOGGLE: (id: number) => `/api/v1/invoice-types/${id}/toggle`,
+  INVOICE_TYPES_PREVIEW_NUMBER: '/api/v1/invoice-types/preview-number',
+  INVOICE_TYPES_COUNTER_HISTORY: (id: number) => `/api/v1/invoice-types/${id}/counter-history`,
+
   // Sales (with /api/v1 prefix)
   SALES: '/api/v1/sales',
   SALES_BY_ID: (id: number) => `/api/v1/sales/${id}`,

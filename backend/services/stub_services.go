@@ -285,6 +285,7 @@ type PDFServiceInterface interface {
 	GeneratePaymentReportPDF(data interface{}) ([]byte, error)
 	GeneratePaymentDetailPDF(payment interface{}) ([]byte, error)
 	GenerateReceiptPDF(receipt interface{}) ([]byte, error)
+	GenerateReceiptPDFWithUser(receipt interface{}, userID uint) ([]byte, error)
 	GenerateAllReceiptsPDF(receipts interface{}) ([]byte, error)
 
 	// Additional report exports used by controllers

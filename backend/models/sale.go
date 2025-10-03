@@ -11,6 +11,7 @@ type Sale struct {
 	CustomerID         uint            `json:"customer_id" gorm:"not null;index"`
 	UserID             uint            `json:"user_id" gorm:"not null;index"`
 	SalesPersonID      *uint           `json:"sales_person_id" gorm:"index"`
+	InvoiceTypeID      *uint           `json:"invoice_type_id" gorm:"index"`
 	Type               string          `json:"type" gorm:"size:20;default:'INVOICE'"` // QUOTATION, ORDER, INVOICE
 	Date               time.Time       `json:"date"`
 	DueDate            time.Time       `json:"due_date"`
@@ -73,6 +74,7 @@ type Sale struct {
 	Customer     Contact       `json:"customer" gorm:"foreignKey:CustomerID"`
 	User         User          `json:"user" gorm:"foreignKey:UserID"`
 	SalesPerson  *Contact      `json:"sales_person" gorm:"foreignKey:SalesPersonID"`
+	InvoiceType  *InvoiceType  `json:"invoice_type" gorm:"foreignKey:InvoiceTypeID"`
 	SaleItems    []SaleItem    `json:"sale_items" gorm:"foreignKey:SaleID"`
 	SalePayments []SalePayment `json:"sale_payments" gorm:"foreignKey:SaleID"`
 	SaleReturns  []SaleReturn  `json:"sale_returns" gorm:"foreignKey:SaleID"`
@@ -150,6 +152,7 @@ type SalesFilter struct {
 type SaleCreateRequest struct {
 	CustomerID       uint                `json:"customer_id" binding:"required"`
 	SalesPersonID    *uint               `json:"sales_person_id"`
+	InvoiceTypeID    *uint               `json:"invoice_type_id"`
 	Type             string              `json:"type" binding:"required"`
 	Date             time.Time           `json:"date" binding:"required"`
 	DueDate          time.Time           `json:"due_date"`

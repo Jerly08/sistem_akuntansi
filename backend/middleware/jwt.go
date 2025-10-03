@@ -257,12 +257,15 @@ func (jm *JWTManager) AuthRequired() gin.HandlerFunc {
 		if gin.Mode() == gin.DebugMode {
 			fmt.Printf("🔍 [JWT DEBUG] Path: %s\n", c.Request.URL.Path)
 			fmt.Printf("🔍 [JWT DEBUG] Method: %s\n", c.Request.Method)
-			fmt.Printf("🔍 [JWT DEBUG] Authorization Header: '%s'\n", authHeader)
+			// Do not log raw Authorization headers; redact value if present
+			if authHeader != "" {
+				fmt.Printf("🔍 [JWT DEBUG] Authorization Header: [REDACTED]\n")
+			}
 			
-			// Log all headers containing 'auth' (case insensitive)
-			for key, values := range c.Request.Header {
+			// Log only header names containing 'auth' (case insensitive) with redacted values
+			for key := range c.Request.Header {
 				if strings.Contains(strings.ToLower(key), "auth") {
-					fmt.Printf("🔍 [JWT DEBUG] Header %s: %v\n", key, values)
+					fmt.Printf("🔍 [JWT DEBUG] Header %s: [REDACTED]\n", key)
 				}
 			}
 		}

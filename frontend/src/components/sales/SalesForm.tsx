@@ -60,6 +60,7 @@ import salesService, {
   SaleItemRequest,
   SaleItemUpdateRequest 
 } from '@/services/salesService';
+import invoiceTypeService, { InvoiceType } from '@/services/invoiceTypeService';
 import ErrorHandler, { ParsedValidationError } from '@/utils/errorHandler';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -73,6 +74,7 @@ interface SalesFormProps {
 interface FormData {
   customer_id: number;
   sales_person_id?: number;
+  invoice_type_id?: number;
   type: string;
   date: string;
   due_date?: string;
@@ -127,6 +129,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const [salesPersons, setSalesPersons] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [cashBankAccounts, setCashBankAccounts] = useState<any[]>([]);
+  const [invoiceTypes, setInvoiceTypes] = useState<InvoiceType[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [validationError, setValidationError] = useState<ParsedValidationError | null>(null);
   const toast = useToast();
@@ -307,7 +310,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
       console.log('SalesForm: Starting to load form data...');
       
       // Load all data concurrently with proper error handling
-      const [customersResult, productsResult, salesPersonsResult, accountsResult, cashBankResult] = await Promise.allSettled([
+      const [customersResult, productsResult, salesPersonsResult, accountsResult, cashBankResult, invoiceTypesResult] = await Promise.allSettled([
         // Load customers
         (async () => {
           console.log('SalesForm: Loading customers...');
@@ -356,6 +359,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
           const cashBankService = await import('@/services/cashbankService');
           const result = await cashBankService.default.getCashBankAccounts();
           console.log('SalesForm: Cash & bank accounts loaded:', result?.length || 0);
+          return result;
+        })(),
+        
+        // Load invoice types
+        (async () => {
+          console.log('SalesForm: Loading invoice types...');
+          const invoiceTypeService = await import('@/services/invoiceTypeService');
+          const result = await invoiceTypeService.default.getInvoiceTypes();
+          console.log('SalesForm: Invoice types loaded:', result?.length || 0);
           return result;
         })()
       ]);
@@ -406,6 +418,14 @@ const SalesForm: React.FC<SalesFormProps> = ({
         setCashBankAccounts([]);
       }
 
+      // Process invoice types
+      if (invoiceTypesResult.status === 'fulfilled' && Array.isArray(invoiceTypesResult.value)) {
+        setInvoiceTypes(invoiceTypesResult.value);
+      } else {
+        console.warn('Failed to load invoice types:', invoiceTypesResult.status === 'rejected' ? invoiceTypesResult.reason : 'No data');
+        setInvoiceTypes([]);
+      }
+
     } catch (error: any) {
       console.error('Error loading form data:', error);
       toast({
@@ -424,6 +444,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
     reset({
       customer_id: saleData.customer_id,
       sales_person_id: saleData.sales_person_id,
+      invoice_type_id: saleData.invoice_type_id,
       type: saleData.type,
       date: saleData.date.split('T')[0],
       due_date: saleData.due_date ? saleData.due_date.split('T')[0] : undefined,
@@ -1058,6 +1079,31 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         </Select>
                         <FormHelperText color={textColor}>
                           Assign a sales representative (optional)
+                        </FormHelperText>
+                      </FormControl>
+
+                      <FormControl>
+                        <FormLabel>Invoice Type</FormLabel>
+                        <Select
+                          {...register('invoice_type_id', {
+                            setValueAs: value => value ? parseInt(value) : undefined
+                          })}
+                          bg={inputBg}
+                          _focus={{ bg: inputFocusBg }}
+                          isDisabled={loadingData}
+                        >
+                          <option value="">
+                            {loadingData ? 'Loading invoice types...' : 
+                             invoiceTypes.length === 0 ? 'No invoice types available' : 'Select invoice type'}
+                          </option>
+                          {invoiceTypes.map(invoiceType => (
+                            <option key={invoiceType.id} value={invoiceType.id}>
+                              {invoiceType.name} ({invoiceType.code})
+                            </option>
+                          ))}
+                        </Select>
+                        <FormHelperText color={textColor}>
+                          Choose invoice type for custom numbering format (optional)
                         </FormHelperText>
                       </FormControl>
                   </HStack>

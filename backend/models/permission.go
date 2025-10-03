@@ -9,7 +9,7 @@ import (
 type ModulePermissionRecord struct {
 	ID          uint           `json:"id" gorm:"primaryKey;table:module_permissions"`
 	UserID      uint           `json:"user_id" gorm:"not null;index"`
-	Module      string         `json:"module" gorm:"not null;size:50;index"` // accounts, products, contacts, assets, sales, purchases, payments, cash_bank
+	Module      string         `json:"module" gorm:"not null;size:50;index"` // accounts, products, contacts, assets, sales, purchases, payments, cash_bank, settings
 	CanView     bool           `json:"can_view" gorm:"default:false"`
 	CanCreate   bool           `json:"can_create" gorm:"default:false"`
 	CanEdit     bool           `json:"can_edit" gorm:"default:false"`
@@ -46,7 +46,7 @@ type ModulePermission struct {
 // GetDefaultPermissions returns default permissions based on role
 func GetDefaultPermissions(role string) map[string]*ModulePermission {
 	permissions := make(map[string]*ModulePermission)
-	modules := []string{"accounts", "products", "contacts", "assets", "sales", "purchases", "payments", "cash_bank", "reports"}
+	modules := []string{"accounts", "products", "contacts", "assets", "sales", "purchases", "payments", "cash_bank", "reports", "settings"}
 	
 	switch role {
 	case "admin":
@@ -71,6 +71,16 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanCreate:  true,
 					CanEdit:    true,
 					CanDelete:  false,
+					CanApprove: true,
+					CanExport:  true,
+				}
+			} else if module == "settings" {
+				// Finance roles need settings access for invoice types and financial configuration
+				permissions[module] = &ModulePermission{
+					CanView:    true,
+					CanCreate:  true,  // Can create invoice types
+					CanEdit:    true,  // Can edit invoice types
+					CanDelete:  false, // Cannot delete settings for safety
 					CanApprove: true,
 					CanExport:  true,
 				}
@@ -188,6 +198,16 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanCreate:  true,  // ✅ Allow creating for operational modules
 					CanEdit:    true,  // ✅ Allow editing for operational modules (needed for receipts)
 					CanDelete:  false, // Still no delete access for safety
+					CanApprove: true,
+					CanExport:  true,
+				}
+			} else if module == "settings" {
+				// Directors need settings access for system configuration and invoice types
+				permissions[module] = &ModulePermission{
+					CanView:    true,
+					CanCreate:  true,  // Can create invoice types and settings
+					CanEdit:    true,  // Can edit system settings
+					CanDelete:  false, // Cannot delete settings for safety
 					CanApprove: true,
 					CanExport:  true,
 				}

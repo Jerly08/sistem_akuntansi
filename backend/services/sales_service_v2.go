@@ -12,12 +12,13 @@ import (
 
 // SalesServiceV2 handles all sales operations with clean business logic
 type SalesServiceV2 struct {
-	db                  *gorm.DB
-	salesRepo           *repositories.SalesRepository
-	salesJournalService *SalesJournalServiceV2
-	stockService        *StockService
-	notificationService *NotificationService
-	settingsService     *SettingsService
+	db                   *gorm.DB
+	salesRepo            *repositories.SalesRepository
+	salesJournalService  *SalesJournalServiceV2
+	stockService         *StockService
+	notificationService  *NotificationService
+	settingsService      *SettingsService
+	invoiceNumberService *InvoiceNumberService
 }
 
 // NewSalesServiceV2 creates a new instance of SalesServiceV2
@@ -28,14 +29,16 @@ func NewSalesServiceV2(
 	stockService *StockService,
 	notificationService *NotificationService,
 	settingsService *SettingsService,
+	invoiceNumberService *InvoiceNumberService,
 ) *SalesServiceV2 {
 return &SalesServiceV2{
-		db:                  db,
-		salesRepo:           salesRepo,
-		salesJournalService: salesJournalService,
-		stockService:        stockService,
-		notificationService: notificationService,
-		settingsService:     settingsService,
+		db:                   db,
+		salesRepo:            salesRepo,
+		salesJournalService:  salesJournalService,
+		stockService:         stockService,
+		notificationService:  notificationService,
+		settingsService:      settingsService,
+		invoiceNumberService: invoiceNumberService,
 	}
 }
 
@@ -74,6 +77,7 @@ func (s *SalesServiceV2) CreateSale(request models.SaleCreateRequest, userID uin
 		CustomerID:        request.CustomerID,
 		UserID:            userID,
 		SalesPersonID:     request.SalesPersonID,
+		InvoiceTypeID:     request.InvoiceTypeID,
 		Type:              request.Type,
 		Status:            "DRAFT", // Always start with DRAFT
 		Date:              request.Date,
@@ -379,7 +383,20 @@ func (s *SalesServiceV2) CreateInvoice(saleID uint, userID uint) (*models.Sale, 
 
 	oldStatus := sale.Status
 	sale.Status = "INVOICED"
-	sale.InvoiceNumber = s.generateInvoiceNumber()
+	
+	// Generate invoice number using new service
+	if sale.InvoiceTypeID != nil {
+		invoiceResp, err := s.invoiceNumberService.GenerateInvoiceNumber(*sale.InvoiceTypeID, sale.Date)
+		if err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to generate invoice number: %v", err)
+		}
+		sale.InvoiceNumber = invoiceResp.InvoiceNumber
+	} else {
+		// Fallback to old method if no invoice type specified
+		sale.InvoiceNumber = s.generateInvoiceNumber()
+	}
+	
 	sale.UpdatedAt = time.Now()
 
 	if err := tx.Save(&sale).Error; err != nil {

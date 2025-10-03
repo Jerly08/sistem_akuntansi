@@ -31,6 +31,18 @@ type User struct {
 	Purchases        []Purchase `json:"-" gorm:"foreignKey:UserID"`
 }
 
+// GetDisplayName returns a formatted display name for the user
+func (u *User) GetDisplayName() string {
+	if u.FirstName != "" && u.LastName != "" {
+		return u.FirstName + " " + u.LastName
+	} else if u.FirstName != "" {
+		return u.FirstName
+	} else if u.LastName != "" {
+		return u.LastName
+	}
+	return u.Username
+}
+
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required"`
 	Password string `json:"password" binding:"required"`

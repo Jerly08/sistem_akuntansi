@@ -102,8 +102,26 @@ func (p *PDFService) numberToIndonesianWords(n int64) string {
 }
 
 // getFinanceSignatoryName finds an active user with finance role to sign the receipt
+// If currentUserID is provided and that user is finance, use them. Otherwise fallback to first finance user.
 func (p *PDFService) getFinanceSignatoryName() string {
+	return p.getFinanceSignatoryNameWithUser(0) // Default: no specific user
+}
+
+// getFinanceSignatoryNameWithUser allows specifying a current user ID
+func (p *PDFService) getFinanceSignatoryNameWithUser(currentUserID uint) string {
 	if p.db == nil { return "" }
+	
+	// If currentUserID is provided, check if that user is an active finance user
+	if currentUserID > 0 {
+		var currentUser models.User
+		if err := p.db.Where("id = ? AND role = ? AND is_active = ?", currentUserID, "finance", true).First(&currentUser).Error; err == nil {
+			full := strings.TrimSpace(strings.TrimSpace(currentUser.FirstName+" "+currentUser.LastName))
+			if full != "" { return full }
+			if strings.TrimSpace(currentUser.Username) != "" { return currentUser.Username }
+		}
+	}
+	
+	// Fallback: find any active finance user (ordered by ID)
 	var u models.User
 	if err := p.db.Where("role = ? AND is_active = ?", "finance", true).Order("id ASC").First(&u).Error; err == nil {
 		full := strings.TrimSpace(strings.TrimSpace(u.FirstName+" "+u.LastName))
@@ -2094,13 +2112,18 @@ func (p *PDFService) GeneratePurchaseReceiptPDF(receipt *models.PurchaseReceipt)
 
 // GenerateReceiptPDF generates PDF for a single purchase receipt
 func (p *PDFService) GenerateReceiptPDF(data interface{}) ([]byte, error) {
-	// If it's a sales receipt, delegate to sales receipt renderer
+	return p.GenerateReceiptPDFWithUser(data, 0) // Default: no specific user
+}
+
+// GenerateReceiptPDFWithUser generates PDF for a receipt with specific user context
+func (p *PDFService) GenerateReceiptPDFWithUser(data interface{}, userID uint) ([]byte, error) {
+	// If it's a sales receipt, delegate to sales receipt renderer with user context
 	if s, ok := data.(*models.Sale); ok {
-		return p.generateSaleReceiptPDF(s)
+		return p.generateSaleReceiptPDFWithUser(s, userID)
 	}
 	if s2, ok := data.(models.Sale); ok {
 		ss := s2
-		return p.generateSaleReceiptPDF(&ss)
+		return p.generateSaleReceiptPDFWithUser(&ss, userID)
 	}
 
 	// Otherwise, treat as purchase receipt (existing behavior)
@@ -2799,6 +2822,11 @@ pdf.Ln(8)
 
 // generateSaleReceiptPDF renders a payment receipt in Indonesian KWITANSI style for a fully-paid sale.
 func (p *PDFService) generateSaleReceiptPDF(sale *models.Sale) ([]byte, error) {
+	return p.generateSaleReceiptPDFWithUser(sale, 0) // Default: no specific user
+}
+
+// generateSaleReceiptPDFWithUser renders a payment receipt with specific user context for signature
+func (p *PDFService) generateSaleReceiptPDFWithUser(sale *models.Sale, userID uint) ([]byte, error) {
 	if sale == nil {
 		return nil, fmt.Errorf("sale is required")
 	}
@@ -2877,7 +2905,7 @@ func (p *PDFService) generateSaleReceiptPDF(sale *models.Sale) ([]byte, error) {
 	pdf.Line(lm, tm+45, pageW-rm, tm+45)
 
 	// Move content down to make space for header - optimized for closer positioning
-	pdf.SetY(tm + 60) // Reduced from 75 to 60 to bring content closer to header
+	pdf.SetY(tm + 42) // Further reduced from 50 to 42 to bring title much closer to header
 
 	// Get localization helper
 	language := utils.GetUserLanguageFromSettings(p.db)
@@ -2897,7 +2925,7 @@ func (p *PDFService) generateSaleReceiptPDF(sale *models.Sale) ([]byte, error) {
 	cx := lm + (contentW-titleWidth)/2
 	pdf.SetLineWidth(0.3)
 	pdf.Line(cx, pdf.GetY(), cx+titleWidth, pdf.GetY())
-	pdf.Ln(25) // Increased to 25 points for optimal space below title
+	pdf.Ln(15) // Reduced from 18 to 15 points for tighter spacing below title
 
 	// Field layout sizes
 	labelW := 45.0
@@ -2949,40 +2977,44 @@ func (p *PDFService) generateSaleReceiptPDF(sale *models.Sale) ([]byte, error) {
 
 	pdf.Ln(8)
 
-	// Amount Rp. / Jumlah Rp. + amount box
+	// === REVISED LAYOUT: Amount Rp (Left) + Signature (Right) - No Overlap ===
+	currentY := pdf.GetY()
+	
+	// LEFT COLUMN: Amount Rp. / Jumlah Rp. + amount box (smaller width)
+	pdf.SetXY(lm, currentY)
 	pdf.SetFont("Times", "B", 14)
 	amountRpLabel := loc("amount_rp", "Amount Rp.")
 	pdf.CellFormat(35, 12, amountRpLabel, "", 0, "L", false, 0, "")
 	pdf.SetFillColor(220, 220, 220)
-	boxW := 120.0
-	pdf.Rect(lm+40, pdf.GetY()-2, boxW, 14, "F")
-	pdf.SetXY(lm+40, pdf.GetY()-2)
-	pdf.SetFont("Times", "", 16)
-	pdf.CellFormat(boxW, 14, utils.FormatRupiah(amount), "1", 1, "C", false, 0, "")
+	boxW := 85.0 // Reduced from 120 to 85 to prevent overlap
+	pdf.Rect(lm+40, currentY-2, boxW, 14, "F")
+	pdf.SetXY(lm+40, currentY-2)
+	pdf.SetFont("Times", "", 14) // Slightly smaller font to fit
+	pdf.CellFormat(boxW, 14, utils.FormatRupiah(amount), "1", 0, "C", false, 0, "")
 
-	// Right side: place, date, and signature
-	pdf.Ln(4)
-	pdf.SetFont("Times", "", 12)
+	// RIGHT COLUMN: place, date, and signature (better positioned)
+	pdf.SetFont("Times", "", 11) // Slightly smaller for better fit
 	city := p.getCompanyCity(companyInfo.CompanyAddress)
 	dateStr := utils.NewDateUtils().FormatDateWithIndonesianMonth(time.Now())
-	rightX := lm + contentW - 80
-	pdf.SetXY(rightX, pdf.GetY())
-	pdf.CellFormat(80, 6, fmt.Sprintf("%s, %s", city, dateStr), "", 1, "L", false, 0, "")
-	pdf.SetXY(rightX, pdf.GetY())
+	rightX := lm + boxW + 50 // Start after the amount box with some margin
+	pdf.SetXY(rightX, currentY)
+	pdf.CellFormat(80, 6, fmt.Sprintf("%s, %s", city, dateStr), "", 0, "L", false, 0, "")
+	pdf.SetXY(rightX, currentY+6)
 	receivedByLabel := loc("received_by", "Received by")
-	pdf.CellFormat(80, 6, receivedByLabel + ",", "", 1, "L", false, 0, "")
+	pdf.CellFormat(80, 6, receivedByLabel + ",", "", 0, "L", false, 0, "")
 
-	// Space for signature
-	sigTopY := pdf.GetY()
-	pdf.Ln(18)
-	financeName := p.getFinanceSignatoryName()
+	// Signature line and name (positioned to avoid overlap)
+	financeName := p.getFinanceSignatoryNameWithUser(userID)
 	if strings.TrimSpace(financeName) == "" { financeName = "Finance" }
-	lineW := 70.0
-	lineX := lm + contentW - lineW
-	pdf.Line(lineX, sigTopY+18, lineX+lineW-5, sigTopY+18)
-	pdf.SetXY(lineX, sigTopY+20)
-	pdf.SetFont("Times", "", 12)
-	pdf.CellFormat(lineW-5, 6, financeName, "", 1, "C", false, 0, "")
+	lineW := 60.0 // Slightly smaller signature line
+	lineX := rightX
+	pdf.Line(lineX, currentY+25, lineX+lineW, currentY+25)
+	pdf.SetXY(lineX, currentY+27)
+	pdf.SetFont("Times", "", 11)
+	pdf.CellFormat(lineW, 6, financeName, "", 0, "C", false, 0, "")
+	
+	// Move to next line after both columns
+	pdf.SetY(currentY + 35)
 
 	// Footer subtle line
 	pdf.Ln(4)

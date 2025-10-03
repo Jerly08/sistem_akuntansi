@@ -74,6 +74,7 @@ const modules = [
   { key: 'purchases', label: 'Purchases', description: 'Purchase Orders & Receipts' },
   { key: 'payments', label: 'Payments', description: 'Payment Processing' },
   { key: 'cash_bank', label: 'Cash & Bank', description: 'Cash & Bank Management' },
+  { key: 'settings', label: 'Settings', description: 'System Settings & Invoice Types Management' },
 ];
 
 const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user, token }) => {

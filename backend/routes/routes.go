@@ -531,8 +531,12 @@ salesJournalServiceV2 := services.NewSalesJournalServiceV2(db, journalRepo, coaS
 			// Initialize Settings Service for sales code generation
 			settingsService := services.NewSettingsService(db)
 			
+			// Initialize Invoice services
+			invoiceNumberService := services.NewInvoiceNumberService(db)
+			invoiceTypeService := services.NewInvoiceTypeService(db)
+			
 			// Initialize Sales Service V2 (clean implementation with proper status-based journal posting)
-			salesServiceV2 := services.NewSalesServiceV2(db, salesRepo, salesJournalServiceV2, stockService, notificationService, settingsService)
+			salesServiceV2 := services.NewSalesServiceV2(db, salesRepo, salesJournalServiceV2, stockService, notificationService, settingsService, invoiceNumberService)
 
 	// Initialize Payment repositories, services and controllers
 	paymentRepo := repositories.NewPaymentRepository(db)
@@ -607,6 +611,29 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				// Customer portal
 				sales.GET("/customer/:customer_id", middleware.RoleRequired("admin", "finance", "director"), salesController.GetCustomerSales)
 				sales.GET("/customer/:customer_id/invoices", middleware.RoleRequired("admin", "finance", "director"), salesController.GetCustomerInvoices)
+			}
+
+			// Initialize Invoice Type Controller
+			invoiceTypeController := controllers.NewInvoiceTypeController(invoiceTypeService, invoiceNumberService)
+			
+			// Invoice Types Management routes
+			invoiceTypes := protected.Group("/invoice-types")
+			{
+				// Basic CRUD operations
+				invoiceTypes.GET("", permMiddleware.CanView("settings"), invoiceTypeController.GetInvoiceTypes)
+				invoiceTypes.GET("/active", permMiddleware.CanView("sales"), invoiceTypeController.GetActiveInvoiceTypes) // For dropdowns
+				invoiceTypes.GET("/:id", permMiddleware.CanView("settings"), invoiceTypeController.GetInvoiceType)
+				invoiceTypes.POST("", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.CreateInvoiceType)
+				invoiceTypes.PUT("/:id", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.UpdateInvoiceType)
+				invoiceTypes.DELETE("/:id", middleware.RoleRequired("admin"), invoiceTypeController.DeleteInvoiceType)
+				
+				// Status management
+				invoiceTypes.POST("/:id/toggle", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.ToggleInvoiceType)
+				
+				// Invoice numbering utilities
+				invoiceTypes.POST("/preview-number", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.PreviewInvoiceNumber)
+				invoiceTypes.GET("/:id/preview", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.PreviewInvoiceNumberByID)
+				invoiceTypes.GET("/:id/counter-history", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.GetCounterHistory)
 			}
 
 	// Initialize Balance Monitoring service and controller

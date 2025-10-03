@@ -9,6 +9,7 @@ import EnhancedSalesTable from '@/components/sales/EnhancedSalesTable';
 import EnhancedStatsCards from '@/components/sales/EnhancedStatsCards';
 import SalesForm from '@/components/sales/SalesForm';
 import PaymentForm from '@/components/sales/PaymentForm';
+import InvoiceTypeManagement from '@/components/invoicetype/InvoiceTypeManagement';
 import salesService, { Sale, SalesFilter } from '@/services/salesService';
 import {
   Box,
@@ -37,6 +38,12 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
 } from '@chakra-ui/react';
 import {
   FiPlus,
@@ -45,6 +52,7 @@ import {
   FiRefreshCw,
   FiFilter,
   FiBarChart,
+  FiSettings,
 } from 'react-icons/fi';
 import {
   handleLoadingError,
@@ -68,6 +76,7 @@ const SalesPage: React.FC = () => {
   
   const { isOpen: isFormOpen, onOpen: onFormOpen, onClose: onFormClose } = useDisclosure();
   const { isOpen: isPaymentOpen, onOpen: onPaymentOpen, onClose: onPaymentClose } = useDisclosure();
+  const { isOpen: isInvoiceTypesOpen, onOpen: onInvoiceTypesOpen, onClose: onInvoiceTypesClose } = useDisclosure();
   
   // Theme-aware colors
   const headingColor = useColorModeValue('gray.800', 'var(--text-primary)');
@@ -323,6 +332,17 @@ const SalesPage: React.FC = () => {
               />
             </Tooltip>
             
+            <Button
+              leftIcon={<FiSettings />}
+              colorScheme="purple"
+              variant="outline"
+              size="md"
+              onClick={onInvoiceTypesOpen}
+              title="Manage Invoice Types"
+            >
+              Invoice Types
+            </Button>
+            
             {canExport && (
               <Menu>
                 <MenuButton
@@ -506,6 +526,28 @@ const SalesPage: React.FC = () => {
         onSave={handlePaymentSave}
         sale={state.selectedSale}
       />
+      
+      {/* Invoice Types Management Modal */}
+      <Modal 
+        isOpen={isInvoiceTypesOpen} 
+        onClose={onInvoiceTypesClose} 
+        size="6xl"
+        scrollBehavior="inside"
+      >
+        <ModalOverlay />
+        <ModalContent maxH="90vh">
+          <ModalHeader>
+            <HStack>
+              <FiSettings />
+              <Text>Invoice Types Management</Text>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody p={0}>
+            <InvoiceTypeManagement />
+          </ModalBody>
+        </ModalContent>
+      </Modal>
       </SimpleLayout>
     </ProtectedModule>
   );
