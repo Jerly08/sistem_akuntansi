@@ -42,7 +42,8 @@ import {
   Image,
   Stack
 } from '@chakra-ui/react';
-import { FiHome, FiSettings, FiGlobe, FiCalendar, FiDollarSign, FiSave, FiX } from 'react-icons/fi';
+import { FiHome, FiSettings, FiGlobe, FiCalendar, FiDollarSign, FiSave, FiX, FiCreditCard, FiTrendingUp } from 'react-icons/fi';
+import Link from 'next/link';
 
 interface SystemSettings {
   id?: number;
@@ -94,6 +95,7 @@ const SettingsPage: React.FC = () => {
   const blueColor = useColorModeValue('blue.500', 'blue.300');
   const greenColor = useColorModeValue('green.500', 'green.300');
   const purpleColor = useColorModeValue('purple.500', 'purple.300');
+  const orangeColor = useColorModeValue('orange.500', 'orange.300');
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -290,7 +292,7 @@ const SettingsPage: React.FC = () => {
             </Alert>
           )}
           
-          <SimpleGrid columns={[1, 1, 2, 3]} spacing={6} width="full">
+          <SimpleGrid columns={[1, 1, 2, 2]} spacing={6} width="full">
             {/* Company Information Card */}
             <Card border="1px" borderColor="gray.200" boxShadow="md">
               <CardHeader>
@@ -585,6 +587,85 @@ const SettingsPage: React.FC = () => {
                       _focus={{ bg: 'white', borderColor: 'blue.500' }}
                     />
                   </FormControl>
+                </VStack>
+              </CardBody>
+            </Card>
+            
+            {/* Tax Account Configuration Card */}
+            <Card border="1px" borderColor="gray.200" boxShadow="md">
+              <CardHeader>
+                <HStack spacing={3}>
+                  <Icon as={FiCreditCard} boxSize={6} color={orangeColor} />
+                  <Heading size="md">{t('settings.taxAccountConfig')}</Heading>
+                </HStack>
+              </CardHeader>
+              <CardBody>
+                <VStack spacing={4} alignItems="start">
+                  <Text fontSize="sm" color="gray.600" mb={2}>
+                    Configure account mappings for sales and purchase transactions, including tax accounts and payment methods.
+                  </Text>
+                  
+                  <Alert status="info" variant="left-accent" size="sm">
+                    <AlertIcon />
+                    <AlertDescription fontSize="sm">
+                      Set up proper account mappings to ensure accurate financial reporting and tax calculations.
+                    </AlertDescription>
+                  </Alert>
+                  
+                  <VStack spacing={3} width="full" alignItems="start">
+                    <HStack justify="space-between" width="full">
+                      <VStack alignItems="start" spacing={1}>
+                        <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                          Sales Accounts
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          Receivable, Cash, Bank, Revenue, Output VAT
+                        </Text>
+                      </VStack>
+                      <Icon as={FiTrendingUp} color="green.500" boxSize={4} />
+                    </HStack>
+                    
+                    <Divider />
+                    
+                    <HStack justify="space-between" width="full">
+                      <VStack alignItems="start" spacing={1}>
+                        <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                          Purchase Accounts
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          Payable, Cash, Bank, Input VAT, Expenses
+                        </Text>
+                      </VStack>
+                      <Icon as={FiCreditCard} color="purple.500" boxSize={4} />
+                    </HStack>
+                    
+                    <Divider />
+                    
+                    <HStack justify="space-between" width="full">
+                      <VStack alignItems="start" spacing={1}>
+                        <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                          Tax & Other Accounts
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          Withholding Tax (PPh 21, 23, 25), Inventory, COGS
+                        </Text>
+                      </VStack>
+                      <Icon as={FiDollarSign} color="orange.500" boxSize={4} />
+                    </HStack>
+                  </VStack>
+                  
+                  <Link href="/settings/tax-accounts">
+                    <Button
+                      colorScheme="orange"
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<FiSettings />}
+                      width="full"
+                      _hover={{ bg: 'orange.50' }}
+                    >
+                      Configure Tax Accounts
+                    </Button>
+                  </Link>
                 </VStack>
               </CardBody>
             </Card>

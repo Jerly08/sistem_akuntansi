@@ -84,6 +84,7 @@
     "purchaseNextNumber": "Nomor Purchase Order Berikutnya",
     "paymentReceivablePrefix": "Prefix Pembayaran Masuk",
     "paymentPayablePrefix": "Prefix Pembayaran Keluar",
+    "taxAccountConfig": "Konfigurasi Akun Pajak",
     "updateSuccess": "Pengaturan berhasil diperbarui",
     "updateError": "Gagal memperbarui pengaturan",
     "tooltips": {

@@ -35,7 +35,7 @@ func NewTaxAccountController(
 // @Success 200 {object} models.TaxAccountSettingsResponse
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts [get]
+// @Router /api/v1/settings/tax-accounts [get]
 func (c *TaxAccountController) GetCurrentSettings(ctx *gin.Context) {
 	settings, err := c.taxAccountService.GetSettings()
 	if err != nil {
@@ -61,7 +61,7 @@ func (c *TaxAccountController) GetCurrentSettings(ctx *gin.Context) {
 // @Produce json
 // @Success 200 {array} models.TaxAccountSettingsResponse
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts/all [get]
+// @Router /api/v1/settings/tax-accounts/all [get]
 func (c *TaxAccountController) GetAllSettings(ctx *gin.Context) {
 	settings, err := c.taxAccountService.GetAllSettings()
 	if err != nil {
@@ -93,7 +93,7 @@ func (c *TaxAccountController) GetAllSettings(ctx *gin.Context) {
 // @Success 201 {object} models.TaxAccountSettingsResponse
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts [post]
+// @Router /api/v1/settings/tax-accounts [post]
 func (c *TaxAccountController) CreateSettings(ctx *gin.Context) {
 	var req models.TaxAccountSettingsCreateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -142,7 +142,7 @@ func (c *TaxAccountController) CreateSettings(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts/{id} [put]
+// @Router /api/v1/settings/tax-accounts/{id} [put]
 func (c *TaxAccountController) UpdateSettings(ctx *gin.Context) {
 	idParam := ctx.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -199,7 +199,7 @@ func (c *TaxAccountController) UpdateSettings(ctx *gin.Context) {
 // @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts/{id}/activate [post]
+// @Router /api/v1/settings/tax-accounts/{id}/activate [post]
 func (c *TaxAccountController) ActivateSettings(ctx *gin.Context) {
 	idParam := ctx.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -244,7 +244,7 @@ func (c *TaxAccountController) ActivateSettings(ctx *gin.Context) {
 // @Param category query string false "Filter by account category"
 // @Success 200 {array} models.AccountResponse
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts/available-accounts [get]
+// @Router /api/v1/settings/tax-accounts/available-accounts [get]
 func (c *TaxAccountController) GetAvailableAccounts(ctx *gin.Context) {
 	// Get query parameters
 	accountType := ctx.Query("type")
@@ -300,7 +300,7 @@ func (c *TaxAccountController) GetAvailableAccounts(ctx *gin.Context) {
 // @Param settings body models.TaxAccountSettingsCreateRequest true "Tax account settings data"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts/validate [post]
+// @Router /api/v1/settings/tax-accounts/validate [post]
 func (c *TaxAccountController) ValidateAccountConfiguration(ctx *gin.Context) {
 	var req models.TaxAccountSettingsCreateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -354,7 +354,7 @@ func (c *TaxAccountController) ValidateAccountConfiguration(ctx *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts/refresh-cache [post]
+// @Router /api/v1/settings/tax-accounts/refresh-cache [post]
 func (c *TaxAccountController) RefreshCache(ctx *gin.Context) {
 	err := c.taxAccountService.RefreshCache()
 	if err != nil {
@@ -379,7 +379,7 @@ func (c *TaxAccountController) RefreshCache(ctx *gin.Context) {
 // @Produce json
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/settings/tax-accounts/suggestions [get]
+// @Router /api/v1/settings/tax-accounts/suggestions [get]
 func (c *TaxAccountController) GetAccountSuggestions(ctx *gin.Context) {
 	// Define account type mappings for suggestions
 	suggestions := map[string]interface{}{

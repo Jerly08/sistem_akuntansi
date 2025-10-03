@@ -84,6 +84,7 @@
     "purchaseNextNumber": "Next Purchase Order Number",
     "paymentReceivablePrefix": "Payment Received Prefix",
     "paymentPayablePrefix": "Payment Made Prefix",
+    "taxAccountConfig": "Tax Account Configuration",
     "updateSuccess": "Settings updated successfully",
     "updateError": "Failed to update settings",
     "tooltips": {
