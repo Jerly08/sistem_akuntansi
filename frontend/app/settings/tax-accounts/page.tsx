@@ -300,18 +300,13 @@ const TaxAccountSettingsPage: React.FC = () => {
       'purchase_expense'
     ];
 
-    console.log('Validating form data:', formData);
-    
     requiredFields.forEach(field => {
       const fieldValue = formData[`${field}_account_id`];
-      console.log(`Checking field ${field}_account_id:`, fieldValue);
       
       if (!fieldValue) {
         errors[field] = `${field.replace(/_/g, ' ')} account is required`;
       }
     });
-
-    console.log('Validation errors:', errors);
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
