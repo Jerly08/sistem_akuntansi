@@ -36,6 +36,7 @@ type LoginData struct {
 // UserResponse represents user data in responses
 type UserResponse struct {
 	ID        uint       `json:"id" example:"1"`
+	Name      string     `json:"name" example:"John Doe"` // For compatibility with tax_account_settings
 	Username  string     `json:"username" example:"john_doe"`
 	Email     string     `json:"email" example:"john@example.com"`
 	FullName  string     `json:"full_name" example:"John Doe"`

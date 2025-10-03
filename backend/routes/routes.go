@@ -635,6 +635,9 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				invoiceTypes.GET("/:id/preview", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.PreviewInvoiceNumberByID)
 				invoiceTypes.GET("/:id/counter-history", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.GetCounterHistory)
 			}
+			
+			// 📄 Setup Invoice routes
+			SetupInvoiceRoutes(protected, db)
 
 	// Initialize Balance Monitoring service and controller
 	balanceMonitoringService := services.NewBalanceMonitoringService(db)

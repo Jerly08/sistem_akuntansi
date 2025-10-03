@@ -1685,6 +1685,412 @@
       },
       "type": "object"
     },
+    "Invoice": {
+      "properties": {
+        "id": {
+          "description": "Invoice ID",
+          "type": "integer"
+        },
+        "code": {
+          "description": "Invoice code/number",
+          "type": "string"
+        },
+        "customer_id": {
+          "description": "Customer contact ID",
+          "type": "integer"
+        },
+        "customer": {
+          "$ref": "#/definitions/Contact",
+          "description": "Customer information"
+        },
+        "user_id": {
+          "description": "User ID who created the invoice",
+          "type": "integer"
+        },
+        "user": {
+          "$ref": "#/definitions/User",
+          "description": "User information"
+        },
+        "date": {
+          "description": "Invoice date",
+          "format": "date-time",
+          "type": "string"
+        },
+        "due_date": {
+          "description": "Payment due date",
+          "format": "date-time",
+          "type": "string"
+        },
+        "subtotal_before_discount": {
+          "description": "Subtotal before discount",
+          "format": "double",
+          "type": "number"
+        },
+        "discount": {
+          "description": "Discount amount",
+          "format": "double",
+          "type": "number"
+        },
+        "subtotal_after_discount": {
+          "description": "Subtotal after discount",
+          "format": "double",
+          "type": "number"
+        },
+        "tax_amount": {
+          "description": "Tax amount",
+          "format": "double",
+          "type": "number"
+        },
+        "total_amount": {
+          "description": "Total amount",
+          "format": "double",
+          "type": "number"
+        },
+        "ppn_rate": {
+          "description": "PPN tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "pph21_rate": {
+          "description": "PPh21 tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "pph23_rate": {
+          "description": "PPh23 tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "other_tax_additions": {
+          "description": "Other tax additions",
+          "format": "double",
+          "type": "number"
+        },
+        "other_tax_deductions": {
+          "description": "Other tax deductions",
+          "format": "double",
+          "type": "number"
+        },
+        "payment_method": {
+          "description": "Payment method",
+          "enum": [
+            "CASH",
+            "BANK_TRANSFER",
+            "CREDIT",
+            "DEBIT",
+            "CHECK"
+          ],
+          "type": "string"
+        },
+        "payment_reference": {
+          "description": "Payment reference",
+          "type": "string"
+        },
+        "bank_account_id": {
+          "description": "Bank account ID",
+          "type": "integer"
+        },
+        "paid_amount": {
+          "description": "Amount already paid",
+          "format": "double",
+          "type": "number"
+        },
+        "outstanding_amount": {
+          "description": "Outstanding amount",
+          "format": "double",
+          "type": "number"
+        },
+        "status": {
+          "description": "Invoice status",
+          "enum": [
+            "DRAFT",
+            "SENT",
+            "PAID",
+            "PARTIALLY_PAID",
+            "OVERDUE",
+            "CANCELLED"
+          ],
+          "type": "string"
+        },
+        "notes": {
+          "description": "Invoice notes",
+          "type": "string"
+        },
+        "invoice_items": {
+          "description": "Invoice items",
+          "items": {
+            "$ref": "#/definitions/InvoiceItem"
+          },
+          "type": "array"
+        },
+        "created_at": {
+          "description": "Creation timestamp",
+          "format": "date-time",
+          "type": "string"
+        },
+        "updated_at": {
+          "description": "Last update timestamp",
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "customer_id",
+        "user_id",
+        "date",
+        "due_date",
+        "total_amount"
+      ],
+      "type": "object"
+    },
+    "InvoiceItem": {
+      "properties": {
+        "id": {
+          "description": "Invoice item ID",
+          "type": "integer"
+        },
+        "invoice_id": {
+          "description": "Invoice ID",
+          "type": "integer"
+        },
+        "product_id": {
+          "description": "Product ID",
+          "type": "integer"
+        },
+        "product": {
+          "$ref": "#/definitions/Product",
+          "description": "Product information"
+        },
+        "quantity": {
+          "description": "Quantity",
+          "type": "integer"
+        },
+        "unit_price": {
+          "description": "Unit price",
+          "format": "double",
+          "type": "number"
+        },
+        "total_price": {
+          "description": "Total price",
+          "format": "double",
+          "type": "number"
+        },
+        "description": {
+          "description": "Item description",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Creation timestamp",
+          "format": "date-time",
+          "type": "string"
+        },
+        "updated_at": {
+          "description": "Last update timestamp",
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "invoice_id",
+        "product_id",
+        "quantity",
+        "unit_price",
+        "total_price"
+      ],
+      "type": "object"
+    },
+    "InvoiceCreateRequest": {
+      "properties": {
+        "customer_id": {
+          "description": "Customer contact ID",
+          "type": "integer"
+        },
+        "date": {
+          "description": "Invoice date",
+          "format": "date-time",
+          "type": "string"
+        },
+        "due_date": {
+          "description": "Payment due date",
+          "format": "date-time",
+          "type": "string"
+        },
+        "discount": {
+          "description": "Discount amount",
+          "format": "double",
+          "type": "number"
+        },
+        "payment_method": {
+          "description": "Payment method",
+          "enum": [
+            "CASH",
+            "BANK_TRANSFER",
+            "CREDIT",
+            "DEBIT",
+            "CHECK"
+          ],
+          "type": "string"
+        },
+        "payment_reference": {
+          "description": "Payment reference",
+          "type": "string"
+        },
+        "bank_account_id": {
+          "description": "Bank account ID",
+          "type": "integer"
+        },
+        "ppn_rate": {
+          "description": "PPN tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "pph21_rate": {
+          "description": "PPh21 tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "pph23_rate": {
+          "description": "PPh23 tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "other_tax_additions": {
+          "description": "Other tax additions",
+          "format": "double",
+          "type": "number"
+        },
+        "other_tax_deductions": {
+          "description": "Other tax deductions",
+          "format": "double",
+          "type": "number"
+        },
+        "notes": {
+          "description": "Invoice notes",
+          "type": "string"
+        },
+        "items": {
+          "description": "Invoice items",
+          "items": {
+            "$ref": "#/definitions/InvoiceItemCreateRequest"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "customer_id",
+        "date",
+        "due_date",
+        "items"
+      ],
+      "type": "object"
+    },
+    "InvoiceItemCreateRequest": {
+      "properties": {
+        "product_id": {
+          "description": "Product ID",
+          "type": "integer"
+        },
+        "quantity": {
+          "description": "Quantity",
+          "type": "integer"
+        },
+        "unit_price": {
+          "description": "Unit price",
+          "format": "double",
+          "type": "number"
+        },
+        "description": {
+          "description": "Item description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "product_id",
+        "quantity",
+        "unit_price"
+      ],
+      "type": "object"
+    },
+    "InvoiceUpdateRequest": {
+      "properties": {
+        "customer_id": {
+          "description": "Customer contact ID",
+          "type": "integer"
+        },
+        "date": {
+          "description": "Invoice date",
+          "format": "date-time",
+          "type": "string"
+        },
+        "due_date": {
+          "description": "Payment due date",
+          "format": "date-time",
+          "type": "string"
+        },
+        "discount": {
+          "description": "Discount amount",
+          "format": "double",
+          "type": "number"
+        },
+        "payment_method": {
+          "description": "Payment method",
+          "enum": [
+            "CASH",
+            "BANK_TRANSFER",
+            "CREDIT",
+            "DEBIT",
+            "CHECK"
+          ],
+          "type": "string"
+        },
+        "payment_reference": {
+          "description": "Payment reference",
+          "type": "string"
+        },
+        "bank_account_id": {
+          "description": "Bank account ID",
+          "type": "integer"
+        },
+        "ppn_rate": {
+          "description": "PPN tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "pph21_rate": {
+          "description": "PPh21 tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "pph23_rate": {
+          "description": "PPh23 tax rate",
+          "format": "double",
+          "type": "number"
+        },
+        "other_tax_additions": {
+          "description": "Other tax additions",
+          "format": "double",
+          "type": "number"
+        },
+        "other_tax_deductions": {
+          "description": "Other tax deductions",
+          "format": "double",
+          "type": "number"
+        },
+        "notes": {
+          "description": "Invoice notes",
+          "type": "string"
+        },
+        "items": {
+          "description": "Invoice items",
+          "items": {
+            "$ref": "#/definitions/InvoiceItemCreateRequest"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
     "Receipt": {
       "properties": {
         "amount": {
@@ -6668,6 +7074,443 @@
         "summary": "Get payment data",
         "tags": [
           "Payments"
+        ]
+      }
+    },
+    "/invoices": {
+      "get": {
+        "description": "Retrieve a list of all invoices with filtering and pagination",
+        "parameters": [
+          {
+            "default": 1,
+            "description": "Page number",
+            "in": "query",
+            "name": "page",
+            "type": "integer"
+          },
+          {
+            "default": 10,
+            "description": "Number of items per page",
+            "in": "query",
+            "name": "limit",
+            "type": "integer"
+          },
+          {
+            "description": "Filter by status",
+            "enum": [
+              "DRAFT",
+              "SENT",
+              "PAID",
+              "PARTIALLY_PAID",
+              "OVERDUE",
+              "CANCELLED"
+            ],
+            "in": "query",
+            "name": "status",
+            "type": "string"
+          },
+          {
+            "description": "Filter by customer ID",
+            "in": "query",
+            "name": "customer_id",
+            "type": "string"
+          },
+          {
+            "description": "Filter start date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "start_date",
+            "type": "string"
+          },
+          {
+            "description": "Filter end date (YYYY-MM-DD)",
+            "format": "date",
+            "in": "query",
+            "name": "end_date",
+            "type": "string"
+          },
+          {
+            "description": "Search term for invoice code or customer name",
+            "in": "query",
+            "name": "search",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "items": {
+                    "$ref": "#/definitions/Invoice"
+                  },
+                  "type": "array"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get all invoices",
+        "tags": [
+          "Invoices"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create a new invoice",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/InvoiceCreateRequest"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Invoice created successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Invoice"
+                },
+                "message": {
+                  "example": "Invoice created successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "User not authenticated",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Create invoice",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/invoices/generate-code": {
+      "post": {
+        "description": "Generate a new invoice code",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice code generated successfully",
+            "schema": {
+              "properties": {
+                "code": {
+                  "example": "INV-20240101-001",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate invoice code",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/invoices/format-currency": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Format currency amount",
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "properties": {
+                "amount": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "amount"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Currency formatted successfully",
+            "schema": {
+              "properties": {
+                "formatted": {
+                  "example": "Rp 1.000.000,00",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Format currency",
+        "tags": [
+          "Invoices"
+        ]
+      }
+    },
+    "/invoices/{id}": {
+      "delete": {
+        "description": "Delete an invoice",
+        "parameters": [
+          {
+            "description": "Invoice ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice deleted successfully",
+            "schema": {
+              "properties": {
+                "message": {
+                  "example": "Invoice deleted successfully",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid invoice ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Delete invoice",
+        "tags": [
+          "Invoices"
+        ]
+      },
+      "get": {
+        "description": "Retrieve a specific invoice by its ID",
+        "parameters": [
+          {
+            "description": "Invoice ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Invoice"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid invoice ID",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Invoice not found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get invoice by ID",
+        "tags": [
+          "Invoices"
+        ]
+      },
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing invoice",
+        "parameters": [
+          {
+            "description": "Invoice ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "in": "body",
+            "name": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/InvoiceUpdateRequest"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice updated successfully",
+            "schema": {
+              "properties": {
+                "data": {
+                  "$ref": "#/definitions/Invoice"
+                },
+                "message": {
+                  "example": "Invoice updated successfully",
+                  "type": "string"
+                },
+                "status": {
+                  "example": "success",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "User not authenticated",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Update invoice",
+        "tags": [
+          "Invoices"
         ]
       }
     },
