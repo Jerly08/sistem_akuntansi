@@ -40,3 +40,16 @@ func (s *COAService) GetAll() ([]models.COA, error) {
 	err := s.db.Find(&coas).Error
 	return coas, err
 }
+
+// GetAccountsWithFilter retrieves accounts with filters
+func (s *COAService) GetAccountsWithFilter(filter map[string]interface{}) ([]models.Account, error) {
+	var accounts []models.Account
+	query := s.db.Where("deleted_at IS NULL")
+	
+	for key, value := range filter {
+		query = query.Where(key+" = ?", value)
+	}
+	
+	err := query.Order("code ASC").Find(&accounts).Error
+	return accounts, err
+}

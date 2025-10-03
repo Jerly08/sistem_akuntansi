@@ -29,6 +29,28 @@ func RunAutoMigrations(db *gorm.DB) error {
 		// Don't fail completely, just warn
 	}
 	
+	// Verify and fix invoice types system (handles PC differences)
+	log.Println("============================================")
+	log.Println("🔍 VERIFYING INVOICE TYPES SYSTEM")
+	log.Println("============================================")
+	if err := ensureInvoiceTypesSystem(db); err != nil {
+		log.Printf("⚠️  Invoice types system verification failed: %v", err)
+	} else {
+		log.Println("✅ Invoice types system verified and ready")
+	}
+	log.Println("============================================")
+	
+	// Ensure tax account settings table exists (handles PC differences)
+	log.Println("============================================")
+	log.Println("📈 VERIFYING TAX ACCOUNT SETTINGS TABLE")
+	log.Println("============================================")
+	if err := ensureTaxAccountSettingsTable(db); err != nil {
+		log.Printf("⚠️  Tax account settings table verification failed: %v", err)
+	} else {
+		log.Println("✅ Tax account settings table verified and ready")
+	}
+	log.Println("============================================")
+
 	// Get migration files
 	migrationFiles, err := getMigrationFiles()
 	if err != nil {
@@ -1127,5 +1149,437 @@ func performInitialBalanceSync(db *gorm.DB) error {
 	}
 	
 	log.Printf("✅ Initial sync completed: %s", syncResult)
+	return nil
+}
+
+// ensureInvoiceTypesSystem ensures invoice types system is properly installed
+// This handles cases where PC differences cause missing tables or inconsistent migration logs
+func ensureInvoiceTypesSystem(db *gorm.DB) error {
+	log.Println("🧾 Checking invoice types system...")
+	
+	// Step 1: Check if invoice_types table exists
+	var invoiceTypesExists bool
+	err := db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invoice_types')").Scan(&invoiceTypesExists).Error
+	if err != nil {
+		return fmt.Errorf("failed to check invoice_types table: %w", err)
+	}
+	
+	// Step 2: Check if invoice_counters table exists
+	var invoiceCountersExists bool
+	err = db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invoice_counters')").Scan(&invoiceCountersExists).Error
+	if err != nil {
+		return fmt.Errorf("failed to check invoice_counters table: %w", err)
+	}
+	
+	// Step 3: Check if sales table has invoice_type_id column
+	var salesInvoiceTypeExists bool
+	err = db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'sales' AND column_name = 'invoice_type_id'
+		)
+	`).Scan(&salesInvoiceTypeExists).Error
+	if err != nil {
+		return fmt.Errorf("failed to check sales.invoice_type_id column: %w", err)
+	}
+	
+	log.Printf("   📊 System status:")
+	log.Printf("      - invoice_types table: %t", invoiceTypesExists)
+	log.Printf("      - invoice_counters table: %t", invoiceCountersExists)
+	log.Printf("      - sales.invoice_type_id column: %t", salesInvoiceTypeExists)
+	
+	// Step 4: If invoice_types exists but invoice_counters doesn't, create it
+	if invoiceTypesExists && !invoiceCountersExists {
+		log.Println("🔧 Creating missing invoice_counters table...")
+		if err := createInvoiceCountersTable(db); err != nil {
+			return fmt.Errorf("failed to create invoice_counters table: %w", err)
+		}
+		log.Println("✅ Created invoice_counters table successfully")
+	}
+	
+	// Step 5: If invoice_types doesn't exist but we have migration logs, run the migration
+	if !invoiceTypesExists {
+		log.Println("🔧 Invoice types table missing - checking migration status...")
+		
+		// Check if we have 037 migration file
+		migrationDir, err := findMigrationDir()
+		if err != nil {
+			log.Printf("⚠️  Could not find migration directory: %v", err)
+		} else {
+			migration037Path := filepath.Join(migrationDir, "037_add_invoice_types_system.sql")
+			if _, err := os.Stat(migration037Path); err == nil {
+				log.Println("🔄 Running 037 migration to create invoice types system...")
+				if err := runMigration(db, "037_add_invoice_types_system.sql"); err != nil {
+					log.Printf("⚠️  Failed to run 037 migration: %v", err)
+				} else {
+					log.Println("✅ Invoice types system created via migration")
+				}
+			} else {
+				log.Println("⚠️  037 migration file not found")
+			}
+		}
+	}
+	
+	// Step 6: Verify helper functions exist
+	if invoiceTypesExists && invoiceCountersExists {
+		log.Println("🔧 Ensuring helper functions exist...")
+		if err := ensureInvoiceNumberFunctions(db); err != nil {
+			log.Printf("⚠️  Failed to create helper functions: %v", err)
+		} else {
+			log.Println("✅ Helper functions verified")
+		}
+	}
+	
+	// Step 7: Clean up failed migration logs that might cause issues
+	log.Println("🧹 Cleaning up failed migration logs...")
+	result := db.Exec(`
+		DELETE FROM migration_logs 
+		WHERE migration_name LIKE '%037%' AND status = 'FAILED'
+	`)
+	if result.Error != nil {
+		log.Printf("⚠️  Could not clean up failed migrations: %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("✅ Cleaned up %d failed migration logs", result.RowsAffected)
+	}
+	
+	// Step 8: Ensure success migration log exists if system is working
+	if invoiceTypesExists && invoiceCountersExists && salesInvoiceTypeExists {
+		log.Println("🔧 Ensuring migration success status...")
+		
+		var successExists bool
+		err = db.Raw(`
+			SELECT EXISTS (
+				SELECT 1 FROM migration_logs 
+				WHERE migration_name = '037_add_invoice_types_system.sql' AND status = 'SUCCESS'
+			)
+		`).Scan(&successExists).Error
+		
+		if err != nil {
+			log.Printf("⚠️  Could not check success status: %v", err)
+		} else if !successExists {
+			// Insert success record
+			err = db.Exec(`
+				INSERT INTO migration_logs (migration_name, status, message, executed_at)
+				VALUES ('037_add_invoice_types_system.sql', 'SUCCESS', 'Invoice types system verified and working', NOW())
+				ON CONFLICT (migration_name) DO UPDATE SET 
+					status = 'SUCCESS', 
+					message = 'Invoice types system verified and working',
+					executed_at = NOW()
+			`).Error
+			
+			if err != nil {
+				log.Printf("⚠️  Could not insert success record: %v", err)
+			} else {
+				log.Println("✅ Marked 037 migration as SUCCESS")
+			}
+		}
+	}
+	
+	log.Println("✅ Invoice types system verification completed")
+	return nil
+}
+
+// ensureTaxAccountSettingsTable ensures tax_account_settings table exists (PostgreSQL compatible)
+func ensureTaxAccountSettingsTable(db *gorm.DB) error {
+	log.Println("📊 Checking tax account settings table...")
+	
+	// Check if table exists
+	var tableExists bool
+	err := db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tax_account_settings')").Scan(&tableExists).Error
+	if err != nil {
+		return fmt.Errorf("failed to check tax_account_settings table: %w", err)
+	}
+	
+	if tableExists {
+		log.Println("✅ Tax account settings table already exists")
+		return nil
+	}
+	
+	log.Println("🔧 Creating tax_account_settings table...")
+	
+	// Create table with PostgreSQL syntax
+	createTableSQL := `
+		CREATE TABLE IF NOT EXISTS tax_account_settings (
+			id BIGSERIAL PRIMARY KEY,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL DEFAULT NULL,
+
+			-- Sales Account Configuration (required)
+			sales_receivable_account_id BIGINT NOT NULL,
+			sales_cash_account_id BIGINT NOT NULL,
+			sales_bank_account_id BIGINT NOT NULL,
+			sales_revenue_account_id BIGINT NOT NULL,
+			sales_output_vat_account_id BIGINT NOT NULL,
+
+			-- Purchase Account Configuration (required)
+			purchase_payable_account_id BIGINT NOT NULL,
+			purchase_cash_account_id BIGINT NOT NULL,
+			purchase_bank_account_id BIGINT NOT NULL,
+			purchase_input_vat_account_id BIGINT NOT NULL,
+			purchase_expense_account_id BIGINT NOT NULL,
+
+			-- Other Tax Accounts (optional)
+			withholding_tax21_account_id BIGINT NULL DEFAULT NULL,
+			withholding_tax23_account_id BIGINT NULL DEFAULT NULL,
+			withholding_tax25_account_id BIGINT NULL DEFAULT NULL,
+			tax_payable_account_id BIGINT NULL DEFAULT NULL,
+
+			-- Inventory Account (optional)
+			inventory_account_id BIGINT NULL DEFAULT NULL,
+			cogs_account_id BIGINT NULL DEFAULT NULL,
+
+			-- Configuration flags
+			is_active BOOLEAN DEFAULT TRUE,
+			apply_to_all_companies BOOLEAN DEFAULT TRUE,
+
+			-- Metadata
+			updated_by BIGINT NOT NULL,
+			notes TEXT NULL
+		)
+	`
+	
+	err = db.Exec(createTableSQL).Error
+	if err != nil {
+		return fmt.Errorf("failed to create tax_account_settings table: %w", err)
+	}
+	
+	// Create indexes
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_tax_account_settings_deleted_at ON tax_account_settings(deleted_at)",
+		"CREATE INDEX IF NOT EXISTS idx_tax_account_settings_is_active ON tax_account_settings(is_active)",
+		"CREATE INDEX IF NOT EXISTS idx_tax_account_settings_updated_by ON tax_account_settings(updated_by)",
+	}
+	
+	for _, indexSQL := range indexes {
+		if err := db.Exec(indexSQL).Error; err != nil {
+			log.Printf("⚠️  Failed to create index: %v", err)
+		}
+	}
+	
+	// Insert default configuration
+	defaultConfigSQL := `
+		INSERT INTO tax_account_settings (
+			sales_receivable_account_id,
+			sales_cash_account_id,
+			sales_bank_account_id,
+			sales_revenue_account_id,
+			sales_output_vat_account_id,
+			purchase_payable_account_id,
+			purchase_cash_account_id,
+			purchase_bank_account_id,
+			purchase_input_vat_account_id,
+			purchase_expense_account_id,
+			is_active,
+			apply_to_all_companies,
+			updated_by,
+			notes
+		) 
+		SELECT 
+			-- Sales accounts (based on typical account codes)
+			COALESCE((SELECT id FROM accounts WHERE code = '1201' AND deleted_at IS NULL LIMIT 1), 1) as sales_receivable_account_id,
+			COALESCE((SELECT id FROM accounts WHERE code = '1101' AND deleted_at IS NULL LIMIT 1), 1) as sales_cash_account_id,
+			COALESCE((SELECT id FROM accounts WHERE code = '1102' AND deleted_at IS NULL LIMIT 1), 1) as sales_bank_account_id,
+			COALESCE((SELECT id FROM accounts WHERE code = '4101' AND deleted_at IS NULL LIMIT 1), 1) as sales_revenue_account_id,
+			COALESCE((SELECT id FROM accounts WHERE code = '2103' AND deleted_at IS NULL LIMIT 1), 1) as sales_output_vat_account_id,
+			
+			-- Purchase accounts
+			COALESCE((SELECT id FROM accounts WHERE code = '2001' AND deleted_at IS NULL LIMIT 1), 1) as purchase_payable_account_id,
+			COALESCE((SELECT id FROM accounts WHERE code = '1101' AND deleted_at IS NULL LIMIT 1), 1) as purchase_cash_account_id,
+			COALESCE((SELECT id FROM accounts WHERE code = '1102' AND deleted_at IS NULL LIMIT 1), 1) as purchase_bank_account_id,
+			COALESCE((SELECT id FROM accounts WHERE code = '2102' AND deleted_at IS NULL LIMIT 1), 1) as purchase_input_vat_account_id,
+			COALESCE((SELECT id FROM accounts WHERE code = '5001' AND deleted_at IS NULL LIMIT 1), 1) as purchase_expense_account_id,
+			
+			-- Configuration
+			TRUE as is_active,
+			TRUE as apply_to_all_companies,
+			1 as updated_by, -- System user
+			'Default configuration created by auto-migration system' as notes
+		WHERE NOT EXISTS (SELECT 1 FROM tax_account_settings WHERE is_active = TRUE)
+	`
+	
+	result := db.Exec(defaultConfigSQL)
+	if result.Error != nil {
+		log.Printf("⚠️  Failed to insert default config: %v", result.Error)
+	} else {
+		log.Printf("✅ Inserted %d default tax account configuration", result.RowsAffected)
+	}
+	
+	log.Println("✅ Tax account settings table created successfully")
+	return nil
+}
+
+// createInvoiceCountersTable creates the invoice_counters table with all required components
+func createInvoiceCountersTable(db *gorm.DB) error {
+	// Create table
+	createTableSQL := `
+		CREATE TABLE IF NOT EXISTS invoice_counters (
+			id BIGSERIAL PRIMARY KEY,
+			invoice_type_id BIGINT NOT NULL,
+			year INTEGER NOT NULL,
+			counter INTEGER NOT NULL DEFAULT 0,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			
+			UNIQUE(invoice_type_id, year),
+			CONSTRAINT fk_invoice_counters_invoice_type_id 
+				FOREIGN KEY (invoice_type_id) REFERENCES invoice_types(id) 
+				ON DELETE CASCADE ON UPDATE CASCADE
+		)
+	`
+	
+	err := db.Exec(createTableSQL).Error
+	if err != nil {
+		return fmt.Errorf("failed to create table: %w", err)
+	}
+	
+	// Create indexes
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_invoice_counters_invoice_type_id ON invoice_counters(invoice_type_id)",
+		"CREATE INDEX IF NOT EXISTS idx_invoice_counters_year ON invoice_counters(year)",
+	}
+	
+	for _, indexSQL := range indexes {
+		if err := db.Exec(indexSQL).Error; err != nil {
+			log.Printf("⚠️  Failed to create index: %v", err)
+		}
+	}
+	
+	// Add comments
+	comments := []string{
+		"COMMENT ON TABLE invoice_counters IS 'Counter tracking for invoice numbering per type per year'",
+		"COMMENT ON COLUMN invoice_counters.invoice_type_id IS 'Foreign key to invoice_types'",
+		"COMMENT ON COLUMN invoice_counters.year IS 'Year for counter (e.g., 2025)'",
+		"COMMENT ON COLUMN invoice_counters.counter IS 'Current counter value for this type/year'",
+	}
+	
+	for _, commentSQL := range comments {
+		db.Exec(commentSQL) // Don't fail on comment errors
+	}
+	
+	// Initialize counters for existing invoice types
+	initSQL := `
+		INSERT INTO invoice_counters (invoice_type_id, year, counter, created_at, updated_at)
+		SELECT id, EXTRACT(YEAR FROM NOW()), 0, NOW(), NOW()
+		FROM invoice_types
+		WHERE is_active = TRUE
+		ON CONFLICT (invoice_type_id, year) DO NOTHING
+	`
+	
+	result := db.Exec(initSQL)
+	if result.Error != nil {
+		log.Printf("⚠️  Failed to initialize counters: %v", result.Error)
+	} else {
+		log.Printf("✅ Initialized %d counters", result.RowsAffected)
+	}
+	
+	return nil
+}
+
+// ensureInvoiceNumberFunctions creates the helper functions for invoice numbering
+func ensureInvoiceNumberFunctions(db *gorm.DB) error {
+	// Create get_next_invoice_number function
+	getNextFunc := `
+		CREATE OR REPLACE FUNCTION get_next_invoice_number(invoice_type_id_param BIGINT)
+		RETURNS TEXT AS $$
+		DECLARE
+			current_year INTEGER;
+			next_counter INTEGER;
+			invoice_code TEXT;
+			roman_month TEXT;
+			result_number TEXT;
+		BEGIN
+			current_year := EXTRACT(YEAR FROM NOW());
+			
+			-- Get invoice type code
+			SELECT code INTO invoice_code FROM invoice_types WHERE id = invoice_type_id_param;
+			IF invoice_code IS NULL THEN
+				RAISE EXCEPTION 'Invoice type not found with ID: %', invoice_type_id_param;
+			END IF;
+			
+			-- Get and increment counter atomically
+			INSERT INTO invoice_counters (invoice_type_id, year, counter)
+			VALUES (invoice_type_id_param, current_year, 1)
+			ON CONFLICT (invoice_type_id, year) 
+			DO UPDATE SET counter = invoice_counters.counter + 1;
+			
+			-- Get the updated counter
+			SELECT counter INTO next_counter 
+			FROM invoice_counters 
+			WHERE invoice_type_id = invoice_type_id_param AND year = current_year;
+			
+			-- Convert month to Roman numerals
+			roman_month := CASE EXTRACT(MONTH FROM NOW())
+				WHEN 1 THEN 'I' WHEN 2 THEN 'II' WHEN 3 THEN 'III' WHEN 4 THEN 'IV'
+				WHEN 5 THEN 'V' WHEN 6 THEN 'VI' WHEN 7 THEN 'VII' WHEN 8 THEN 'VIII'
+				WHEN 9 THEN 'IX' WHEN 10 THEN 'X' WHEN 11 THEN 'XI' WHEN 12 THEN 'XII'
+			END;
+			
+			-- Format: 0001/STA-C/X-2025
+			result_number := LPAD(next_counter::TEXT, 4, '0') || '/' || 
+							 invoice_code || '/' || 
+							 roman_month || '-' || current_year;
+			
+			RETURN result_number;
+		END;
+		$$ LANGUAGE plpgsql;
+	`
+	
+	err := db.Exec(getNextFunc).Error
+	if err != nil {
+		return fmt.Errorf("failed to create get_next_invoice_number function: %w", err)
+	}
+	
+	// Create preview_next_invoice_number function
+	previewFunc := `
+		CREATE OR REPLACE FUNCTION preview_next_invoice_number(invoice_type_id_param BIGINT)
+		RETURNS TEXT AS $$
+		DECLARE
+			current_year INTEGER;
+			next_counter INTEGER;
+			invoice_code TEXT;
+			roman_month TEXT;
+			result_number TEXT;
+		BEGIN
+			current_year := EXTRACT(YEAR FROM NOW());
+			
+			-- Get invoice type code
+			SELECT code INTO invoice_code FROM invoice_types WHERE id = invoice_type_id_param;
+			IF invoice_code IS NULL THEN
+				RAISE EXCEPTION 'Invoice type not found with ID: %', invoice_type_id_param;
+			END IF;
+			
+			-- Get current counter (without incrementing)
+			SELECT COALESCE(counter, 0) + 1 INTO next_counter
+			FROM invoice_counters 
+			WHERE invoice_type_id = invoice_type_id_param AND year = current_year;
+			
+			-- If no counter exists, next would be 1
+			IF next_counter IS NULL THEN
+				next_counter := 1;
+			END IF;
+			
+			-- Convert month to Roman numerals
+			roman_month := CASE EXTRACT(MONTH FROM NOW())
+				WHEN 1 THEN 'I' WHEN 2 THEN 'II' WHEN 3 THEN 'III' WHEN 4 THEN 'IV'
+				WHEN 5 THEN 'V' WHEN 6 THEN 'VI' WHEN 7 THEN 'VII' WHEN 8 THEN 'VIII'
+				WHEN 9 THEN 'IX' WHEN 10 THEN 'X' WHEN 11 THEN 'XI' WHEN 12 THEN 'XII'
+			END;
+			
+			-- Format: 0001/STA-C/X-2025
+			result_number := LPAD(next_counter::TEXT, 4, '0') || '/' || 
+							 invoice_code || '/' || 
+							 roman_month || '-' || current_year;
+			
+			RETURN result_number;
+		END;
+		$$ LANGUAGE plpgsql;
+	`
+	
+	err = db.Exec(previewFunc).Error
+	if err != nil {
+		return fmt.Errorf("failed to create preview_next_invoice_number function: %w", err)
+	}
+	
 	return nil
 }
