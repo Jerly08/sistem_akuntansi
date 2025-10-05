@@ -686,6 +686,10 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 			{
 				// Summary statistics for payments (matches Swagger: GET /api/v1/payments/summary)
 				paymentsCompat.GET("/summary", permMiddleware.CanView("payments"), paymentController.GetPaymentSummary)
+				// Admin-only delete (compatibility with legacy Swagger; use SSOT reverse for safer rollback)
+				paymentsCompat.DELETE("/:id", middleware.RoleRequired("admin"), paymentController.DeletePayment)
+				// Cancel payment (edit permissions)
+				paymentsCompat.POST("/:id/cancel", permMiddleware.CanEdit("payments"), paymentController.CancelPayment)
 				// Unpaid invoices for receivable payment form
 				paymentsCompat.GET("/sales/unpaid-invoices/:customer_id", permMiddleware.CanView("payments"), paymentController.GetSalesUnpaidInvoices)
 				// Alias without /sales prefix (as documented in Swagger)

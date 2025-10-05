@@ -63,7 +63,11 @@ import {
   Tab,
   TabPanel,
   Link,
-  Icon
+  Icon,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem
 } from '@chakra-ui/react';
 import { 
   FiPlus, 
@@ -387,6 +391,8 @@ const PurchasesPage: React.FC = () => {
     status: '',
     approval_status: '',
     search: '',
+    start_date: '',
+    end_date: '',
     page: 1,
     limit: 10,
   });
@@ -936,6 +942,37 @@ const PurchasesPage: React.FC = () => {
       duration: 2000,
       isClosable: true,
     });
+  };
+
+  // Export handlers (aligned with Sales/Payments)
+  const handleExportPDF = async () => {
+    try {
+      await purchaseService.downloadPurchasesPDF({
+        status: filters.status || undefined,
+        approval_status: filters.approval_status || undefined,
+        start_date: filters.start_date || undefined,
+        end_date: filters.end_date || undefined,
+        search: filters.search || undefined
+      });
+      toast({ title: 'Success', description: 'Purchase report PDF has been downloaded', status: 'success', duration: 3000 });
+    } catch (error: any) {
+      toast({ title: 'Export failed', description: error?.message || 'Failed to export purchases PDF', status: 'error', duration: 3000 });
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      await purchaseService.downloadPurchasesCSV({
+        status: filters.status || undefined,
+        approval_status: filters.approval_status || undefined,
+        start_date: filters.start_date || undefined,
+        end_date: filters.end_date || undefined,
+        search: filters.search || undefined
+      });
+      toast({ title: 'Success', description: 'Purchase report CSV has been downloaded', status: 'success', duration: 3000 });
+    } catch (error: any) {
+      toast({ title: 'Export failed', description: error?.message || 'Failed to export purchases CSV', status: 'error', duration: 3000 });
+    }
   };
 
   // Handle purchase submission for approval
@@ -2504,6 +2541,15 @@ const handleCreate = async () => {
                 >
                   Refresh
                 </Button>
+                <Menu>
+                  <MenuButton as={Button} leftIcon={<FiDownload />} variant="outline" size="md">
+                    Export
+                  </MenuButton>
+                  <MenuList>
+                    <MenuItem icon={<FiFileText />} onClick={handleExportPDF}>Export PDF Report</MenuItem>
+                    <MenuItem icon={<FiDownload />} onClick={handleExportCSV}>Export CSV Report</MenuItem>
+                  </MenuList>
+                </Menu>
                 {/* New Purchase button only for Employee role */}
                 {normalizeRole(user?.role as any) === 'employee' && (
                   <Button
@@ -2974,6 +3020,33 @@ const handleCreate = async () => {
                     }}
                   />
                 </FormControl>
+
+                <SimpleGrid columns={2} spacing={4} w="100%">
+                  <FormControl>
+                    <FormLabel fontSize="sm" fontWeight="semibold" color={textPrimary} mb={2}>Start Date</FormLabel>
+                    <Input
+                      type="date"
+                      value={filters.start_date || ''}
+                      onChange={(e) => handleFilterChange({ start_date: e.target.value })}
+                      bg={modalBg}
+                      borderColor={borderColor}
+                      _hover={{ borderColor: inputHoverBorder }}
+                      _focus={{ borderColor: inputFocusBorder, boxShadow: inputFocusShadow }}
+                    />
+                  </FormControl>
+                  <FormControl>
+                    <FormLabel fontSize="sm" fontWeight="semibold" color={textPrimary} mb={2}>End Date</FormLabel>
+                    <Input
+                      type="date"
+                      value={filters.end_date || ''}
+                      onChange={(e) => handleFilterChange({ end_date: e.target.value })}
+                      bg={modalBg}
+                      borderColor={borderColor}
+                      _hover={{ borderColor: inputHoverBorder }}
+                      _focus={{ borderColor: inputFocusBorder, boxShadow: inputFocusShadow }}
+                    />
+                  </FormControl>
+                </SimpleGrid>
                 
                 <FormControl>
                   <FormLabel 
