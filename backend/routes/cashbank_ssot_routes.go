@@ -18,8 +18,11 @@ func SetupCashBankSSOTRoutes(v1 *gin.RouterGroup, db *gorm.DB, jwtManager *middl
 	// Initialize services  
 	cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
 	
+	// Initialize services depending on repositories
+	accountService := services.NewAccountService(accountRepo)
+	
 	// Initialize handler
-	cashBankHandler := handlers.NewCashBankHandler(cashBankService)
+	cashBankHandler := handlers.NewCashBankHandler(cashBankService, accountService)
 	
 	// Initialize Permission Middleware
 	permMiddleware := middleware.NewPermissionMiddleware(db)
@@ -51,6 +54,11 @@ func SetupCashBankSSOTRoutes(v1 *gin.RouterGroup, db *gorm.DB, jwtManager *middl
 			transactions.POST("/withdrawal", permMiddleware.CanCreate("cash_bank"), cashBankHandler.ProcessWithdrawal)
 			transactions.POST("/transfer", permMiddleware.CanCreate("cash_bank"), cashBankHandler.ProcessTransfer)
 		}
+
+		// Compatibility routes without /transactions prefix (as documented in Swagger)
+		cashBankGroup.POST("/deposit", permMiddleware.CanCreate("cash_bank"), cashBankHandler.ProcessDeposit)
+		cashBankGroup.POST("/withdrawal", permMiddleware.CanCreate("cash_bank"), cashBankHandler.ProcessWithdrawal)
+		cashBankGroup.POST("/transfer", permMiddleware.CanCreate("cash_bank"), cashBankHandler.ProcessTransfer)
 		
 		// Reporting and Summary
 		reports := cashBankGroup.Group("/reports")
@@ -58,6 +66,19 @@ func SetupCashBankSSOTRoutes(v1 *gin.RouterGroup, db *gorm.DB, jwtManager *middl
 			reports.GET("/balance-summary", permMiddleware.CanView("cash_bank"), cashBankHandler.GetBalanceSummary)
 			reports.GET("/payment-accounts", permMiddleware.CanView("cash_bank"), cashBankHandler.GetPaymentAccounts)
 		}
+
+		// Backward-compatibility routes (documented path without /reports prefix)
+		cashBankGroup.GET("/balance-summary", permMiddleware.CanView("cash_bank"), cashBankHandler.GetBalanceSummary)
+		cashBankGroup.GET("/payment-accounts", permMiddleware.CanView("cash_bank"), cashBankHandler.GetPaymentAccounts)
+		cashBankGroup.GET("/deposit-source-accounts", permMiddleware.CanView("cash_bank"), cashBankHandler.GetDepositSourceAccounts)
+cashBankGroup.GET("/revenue-accounts", permMiddleware.CanView("cash_bank"), func(c *gin.Context) {
+			accounts, err := accountService.GetRevenueAccounts(c.Request.Context())
+			if err != nil {
+				c.JSON(500, gin.H{"error": "Failed to retrieve revenue accounts", "details": err.Error()})
+				return
+			}
+			c.JSON(200, gin.H{"success": true, "data": accounts})
+		})
 		
 		// SSOT Integration and Validation
 		ssot := cashBankGroup.Group("/ssot")

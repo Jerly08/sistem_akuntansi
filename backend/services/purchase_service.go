@@ -1987,3 +1987,8 @@ func (s *PurchaseService) GetPurchaseJournalEntries(purchaseID uint) ([]models.S
 
 	return entries, nil
 }
+
+// GetDB returns the database connection for external services
+func (s *PurchaseService) GetDB() *gorm.DB {
+	return s.db
+}

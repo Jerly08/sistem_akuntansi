@@ -103,6 +103,12 @@ type BSAccountItem struct {
 
 // GenerateSSOTBalanceSheet generates Balance Sheet statement from SSOT journal system
 func (s *SSOTBalanceSheetService) GenerateSSOTBalanceSheet(asOfDate string) (*SSOTBalanceSheetData, error) {
+	// Default to end of current fiscal year if parameter is empty
+	if strings.TrimSpace(asOfDate) == "" {
+		settingsSvc := NewSettingsService(s.db)
+		_, fyEnd, err := settingsSvc.GetCurrentFiscalYearRange()
+		if err == nil { asOfDate = fyEnd }
+	}
 	// Parse date
 	asOf, err := time.Parse("2006-01-02", asOfDate)
 	if err != nil {

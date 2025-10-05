@@ -52,6 +52,7 @@ import cashbankService from '@/services/cashbankService';
 import accountService from '@/services/accountService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Account } from '@/types/account';
+import { formatIDR, parseIDR } from '@/utils/currency';
 
 interface CashBankFormProps {
   isOpen: boolean;
@@ -501,10 +502,22 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                   <NumberInput
                                     {...field}
                                     min={0}
-                                    precision={2}
+                                    precision={0}
+                                    format={(value) => {
+                                      if (!value || value === '0') return 'Rp 0';
+                                      const numValue = parseFloat(String(value));
+                                      return formatIDR(numValue);
+                                    }}
+                                    parse={(value) => {
+                                      const parsed = parseIDR(value);
+                                      return parsed.toString();
+                                    }}
                                     onChange={(_, value) => field.onChange(value || 0)}
                                   >
-                                    <NumberInputField />
+                                    <NumberInputField 
+                                      placeholder="Rp 0"
+                                      textAlign="left"
+                                    />
                                     <NumberInputStepper>
                                       <NumberIncrementStepper />
                                       <NumberDecrementStepper />

@@ -684,8 +684,12 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 			// These are safe GET endpoints and do not perform any write operations
 			paymentsCompat := protected.Group("/payments")
 			{
+				// Summary statistics for payments (matches Swagger: GET /api/v1/payments/summary)
+				paymentsCompat.GET("/summary", permMiddleware.CanView("payments"), paymentController.GetPaymentSummary)
 				// Unpaid invoices for receivable payment form
 				paymentsCompat.GET("/sales/unpaid-invoices/:customer_id", permMiddleware.CanView("payments"), paymentController.GetSalesUnpaidInvoices)
+				// Alias without /sales prefix (as documented in Swagger)
+				paymentsCompat.GET("/unpaid-invoices/:customer_id", permMiddleware.CanView("payments"), paymentController.GetSalesUnpaidInvoices)
 				// Unpaid bills for payable payment form
 				paymentsCompat.GET("/unpaid-bills/:vendor_id", permMiddleware.CanView("payments"), paymentController.GetUnpaidBills)
 			}
@@ -739,6 +743,10 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				// Analytics and reporting dengan permission checks
 				purchases.GET("/summary", permMiddleware.CanView("purchases"), purchaseController.GetPurchasesSummary)
 				purchases.GET("/pending-approvals", permMiddleware.CanApprove("purchases"), purchaseController.GetPendingApprovals)
+				
+				// Export routes dengan permission checks
+				purchases.GET("/export/pdf", permMiddleware.CanExport("purchases"), purchaseController.ExportPurchasesReportPDF)
+				purchases.GET("/export/csv", permMiddleware.CanExport("purchases"), purchaseController.ExportPurchasesReportCSV)
 				purchases.GET("/dashboard", permMiddleware.CanView("purchases"), purchaseController.GetPurchaseDashboard)
 				purchases.GET("/vendor/:vendor_id/summary", permMiddleware.CanView("purchases"), purchaseController.GetVendorPurchaseSummary)
 				

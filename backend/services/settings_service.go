@@ -453,7 +453,7 @@ func (s *SettingsService) normalizeFiscalYearStart(input string) string {
 	in := strings.TrimSpace(strings.ToLower(input))
 	// Accept formats: "mm/dd/yyyy", "mm/dd", "dd/mm/yyyy", month name + day
 	months := []string{"january","february","march","april","may","june","july","august","september","october","november","december"}
-for _, m := range months {
+	for _, m := range months {
 		if strings.Contains(in, m) {
 			// e.g., "january 1" -> capitalize
 			return strings.Title(m) + " " + extractDay(in)
@@ -473,6 +473,72 @@ for _, m := range months {
 	}
 	// Fallback
 	return "January 1"
+}
+
+// GetCurrentFiscalYearRange returns ISO start and end date for the current fiscal year based on settings
+func (s *SettingsService) GetCurrentFiscalYearRange() (string, string, error) {
+	settings, err := s.GetSettings()
+	if err != nil {
+		return "", "", err
+	}
+	startISO, endISO := computeFiscalYearRangeISO(time.Now(), settings.FiscalYearStart)
+	return startISO, endISO, nil
+}
+
+// computeFiscalYearRangeISO computes fiscal year start/end ISO strings using a reference date and a Month Day string (e.g., "January 1")
+func computeFiscalYearRangeISO(ref time.Time, fiscalStart string) (string, string) {
+	months := map[string]int{
+		"january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+		"july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+	}
+	fs := strings.TrimSpace(strings.ToLower(fiscalStart))
+	// Normalize common formats like "January 1" or "01/01"
+	month := 1
+	day := 1
+	// Month name
+	for name, idx := range months {
+		if strings.HasPrefix(fs, name) {
+			month = idx
+			day = toFirstNumber(fs)
+			break
+		}
+	}
+	// If not matched, try numeric
+	if month == 1 && day == 1 && !strings.HasPrefix(fs, "january") {
+		parts := strings.FieldsFunc(fs, func(r rune) bool { return r == '/' || r == '-' || r == ' ' })
+		if len(parts) >= 2 {
+			m := toInt(parts[0])
+			d := toInt(parts[1])
+			if m >= 1 && m <= 12 && d >= 1 && d <= 31 {
+				month = m
+				day = d
+			}
+		}
+	}
+	// Determine year boundaries relative to reference date
+	y := ref.Year()
+	fyStartThisYear := time.Date(y, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	var start time.Time
+	if ref.Before(fyStartThisYear) {
+		start = time.Date(y-1, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	} else {
+		start = fyStartThisYear
+	}
+	nextStart := start.AddDate(1, 0, 0)
+	end := nextStart.AddDate(0, 0, -1)
+	startISO := start.Format("2006-01-02")
+	endISO := end.Format("2006-01-02")
+	return startISO, endISO
+}
+
+// toFirstNumber extracts the first number from string or returns 1
+func toFirstNumber(s string) int {
+	for i := 1; i <= 31; i++ {
+		if strings.Contains(s, fmt.Sprintf("%d", i)) {
+			return i
+		}
+	}
+	return 1
 }
 
 func extractDay(s string) string {

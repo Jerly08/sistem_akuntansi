@@ -292,15 +292,6 @@ const getAccountColumns = (
             >
               Transfer Funds
             </MenuItem>
-            <MenuItem 
-              icon={<FiSettings />} 
-              onClick={() => onReconcile?.(row)}
-              color="purple.600"
-              fontSize="sm"
-              isDisabled={!row.is_active}
-            >
-              Check Reconciliation
-            </MenuItem>
             <MenuDivider />
             <MenuItem 
               icon={<FiTrash2 />} 
@@ -699,9 +690,9 @@ const CashBankPage: React.FC = () => {
     handleWithdraw, 
     handleTransfer, 
     handleDelete,
+    handleReconcile,
     textColor,
-    mutedTextColor,
-    handleReconcile
+    mutedTextColor
   );
 
   if (loading) {
@@ -720,15 +711,6 @@ const CashBankPage: React.FC = () => {
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">{t('cashBank.title')}</Heading>
           <HStack spacing={3}>
-            <Button
-              leftIcon={<FiSettings />}
-              onClick={handleGlobalReconcile}
-              colorScheme="purple"
-              variant="outline"
-              size="sm"
-            >
-              Bank Reconciliation
-            </Button>
             <Button
               colorScheme="blue"
               leftIcon={<FiPlus />}

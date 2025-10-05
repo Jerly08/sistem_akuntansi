@@ -110,6 +110,15 @@ type CFSectionItem struct {
 
 // GenerateSSOTCashFlow generates Cash Flow statement from SSOT journal system
 func (s *SSOTCashFlowService) GenerateSSOTCashFlow(startDate, endDate string) (*SSOTCashFlowData, error) {
+	// Default to current fiscal year when parameters are empty
+	if strings.TrimSpace(startDate) == "" || strings.TrimSpace(endDate) == "" {
+		settingsSvc := NewSettingsService(s.db)
+		fyStart, fyEnd, err := settingsSvc.GetCurrentFiscalYearRange()
+		if err == nil {
+			if strings.TrimSpace(startDate) == "" { startDate = fyStart }
+			if strings.TrimSpace(endDate) == "" { endDate = fyEnd }
+		}
+	}
 	// Parse dates
 	start, err := time.Parse("2006-01-02", startDate)
 	if err != nil {

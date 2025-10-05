@@ -1178,7 +1178,7 @@ func (pc *PurchaseController) GetPurchaseJournalEntries(c *gin.Context) {
 	entries, err := pc.purchaseService.GetPurchaseJournalEntries(uint(id))
 	if err != nil {
 		log.Printf("⚠️ GetPurchaseJournalEntries failed for purchase %d: %v. Returning empty result.", id, err)
-		c.JSON(http.StatusOK, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 			"purchase_id": id,
 			"journal_entries": []interface{}{},
 			"count": 0,
@@ -1193,4 +1193,250 @@ func (pc *PurchaseController) GetPurchaseJournalEntries(c *gin.Context) {
 		"journal_entries": entries,
 		"count": len(entries),
 	})
+}
+
+// Export Operations
+
+// ExportPurchasesReportPDF exports purchases report as PDF with filtering support
+func (pc *PurchaseController) ExportPurchasesReportPDF(c *gin.Context) {
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	status := c.Query("status")
+	vendorID := c.Query("vendor_id")
+	search := c.Query("search")
+	approvalStatus := c.Query("approval_status")
+
+	// If no dates provided, default to last 30 days to keep report size reasonable
+	if startDate == "" && endDate == "" {
+		end := time.Now()
+		start := end.AddDate(0, 0, -30)
+		startDate = start.Format("2006-01-02")
+		endDate = end.Format("2006-01-02")
+	}
+
+	// Build filter with all parameters to match current filtering behavior
+	filter := models.PurchaseFilter{
+		Status:           status,
+		VendorID:         vendorID,
+		StartDate:        startDate,
+		EndDate:          endDate,
+		Search:           search,
+		ApprovalStatus:   approvalStatus,
+		Page:             1,
+		Limit:            10000, // Large limit for export
+	}
+
+	// Get filtered purchases
+	result, err := pc.purchaseService.GetPurchases(filter)
+	if err != nil {
+		log.Printf("❌ Error getting purchases for PDF export: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve purchases for export", "details": err.Error()})
+		return
+	}
+
+	// Initialize purchase report export service
+	exportService := services.NewPurchaseReportExportService(pc.purchaseService.GetDB())
+
+	// Convert purchases to report data format
+reportData := &services.PurchaseReportData{
+		Company: services.CompanyInfo{
+			Name:    "PT. Sistem Akuntansi Indonesia",
+			Address: "Jakarta, Indonesia",
+			Phone:   "+62-21-1234567",
+			Email:   "info@akuntansi.id",
+		},
+		StartDate:           parseDate(startDate),
+		EndDate:             parseDate(endDate),
+		GeneratedAt:         time.Now(),
+		TotalPurchases:      int64(len(result.Data)),
+		CompletedPurchases:  countCompletedPurchases(result.Data),
+		TotalAmount:         calculateTotalAmount(result.Data),
+		TotalPaid:           calculateTotalPaid(result.Data),
+		OutstandingPayables: calculateOutstandingPayables(result.Data),
+		PurchasesByVendor:   groupPurchasesByVendor(result.Data),
+	}
+
+	// Generate PDF
+	userID := c.MustGet("user_id").(uint)
+	pdfBytes, err := exportService.ExportToPDF(reportData, userID)
+	if err != nil {
+		log.Printf("❌ Error generating purchases PDF: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate purchases PDF", "details": err.Error()})
+		return
+	}
+
+	// Set response headers
+	filename := fmt.Sprintf("purchases-report_%s_to_%s.pdf", startDate, endDate)
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
+}
+
+// ExportPurchasesReportCSV exports purchases report as CSV with filtering support
+func (pc *PurchaseController) ExportPurchasesReportCSV(c *gin.Context) {
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	status := c.Query("status")
+	vendorID := c.Query("vendor_id")
+	search := c.Query("search")
+	approvalStatus := c.Query("approval_status")
+
+	// If no dates provided, default to last 30 days to keep report size reasonable
+	if startDate == "" && endDate == "" {
+		end := time.Now()
+		start := end.AddDate(0, 0, -30)
+		startDate = start.Format("2006-01-02")
+		endDate = end.Format("2006-01-02")
+	}
+
+	// Build filter with all parameters to match current filtering behavior
+	filter := models.PurchaseFilter{
+		Status:           status,
+		VendorID:         vendorID,
+		StartDate:        startDate,
+		EndDate:          endDate,
+		Search:           search,
+		ApprovalStatus:   approvalStatus,
+		Page:             1,
+		Limit:            10000, // Large limit for export
+	}
+
+	// Get filtered purchases
+	result, err := pc.purchaseService.GetPurchases(filter)
+	if err != nil {
+		log.Printf("❌ Error getting purchases for CSV export: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve purchases for export", "details": err.Error()})
+		return
+	}
+
+	// Initialize purchase report export service
+	exportService := services.NewPurchaseReportExportService(pc.purchaseService.GetDB())
+
+	// Convert purchases to report data format
+reportData := &services.PurchaseReportData{
+		Company: services.CompanyInfo{
+			Name:    "PT. Sistem Akuntansi Indonesia",
+			Address: "Jakarta, Indonesia",
+			Phone:   "+62-21-1234567",
+			Email:   "info@akuntansi.id",
+		},
+		StartDate:           parseDate(startDate),
+		EndDate:             parseDate(endDate),
+		GeneratedAt:         time.Now(),
+		TotalPurchases:      int64(len(result.Data)),
+		CompletedPurchases:  countCompletedPurchases(result.Data),
+		TotalAmount:         calculateTotalAmount(result.Data),
+		TotalPaid:           calculateTotalPaid(result.Data),
+		OutstandingPayables: calculateOutstandingPayables(result.Data),
+		PurchasesByVendor:   groupPurchasesByVendor(result.Data),
+	}
+
+	// Generate CSV
+	userID := c.MustGet("user_id").(uint)
+	csvBytes, err := exportService.ExportToCSV(reportData, userID)
+	if err != nil {
+		log.Printf("❌ Error generating purchases CSV: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate purchases CSV", "details": err.Error()})
+		return
+	}
+
+	// Set response headers
+	filename := fmt.Sprintf("purchases-report_%s_to_%s.csv", startDate, endDate)
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Data(http.StatusOK, "text/csv", csvBytes)
+}
+
+// Helper functions for export functionality
+
+// parseDate parses date string, returns current time if empty
+func parseDate(dateStr string) time.Time {
+	if dateStr == "" {
+		return time.Now()
+	}
+	parsed, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return time.Now()
+	}
+	return parsed
+}
+
+// countCompletedPurchases counts purchases with status COMPLETED
+func countCompletedPurchases(purchases []models.Purchase) int64 {
+	count := 0
+	for _, p := range purchases {
+		if p.Status == models.PurchaseStatusCompleted || p.Status == models.PurchaseStatusPaid {
+			count++
+		}
+	}
+	return int64(count)
+}
+
+// calculateTotalAmount calculates total amount of all purchases
+func calculateTotalAmount(purchases []models.Purchase) float64 {
+	total := 0.0
+	for _, p := range purchases {
+		total += p.TotalAmount
+	}
+	return total
+}
+
+// calculateTotalPaid calculates total paid amount of all purchases
+func calculateTotalPaid(purchases []models.Purchase) float64 {
+	total := 0.0
+	for _, p := range purchases {
+		total += p.PaidAmount
+	}
+	return total
+}
+
+// calculateOutstandingPayables calculates total outstanding payables
+func calculateOutstandingPayables(purchases []models.Purchase) float64 {
+	total := 0.0
+	for _, p := range purchases {
+		total += p.OutstandingAmount
+	}
+	return total
+}
+
+// groupPurchasesByVendor groups purchases by vendor for reporting
+func groupPurchasesByVendor(purchases []models.Purchase) []services.VendorPurchaseSummary {
+vendorMap := make(map[uint64]*services.VendorPurchaseSummary)
+	
+	for _, p := range purchases {
+		if p.Vendor.ID == 0 {
+			continue
+		}
+		
+vendorID := uint64(p.Vendor.ID)
+		if existing, ok := vendorMap[vendorID]; ok {
+existing.TotalPurchases += 1
+			existing.TotalAmount += p.TotalAmount
+			existing.TotalPaid += p.PaidAmount
+			existing.Outstanding += p.OutstandingAmount
+			if p.Date.After(existing.LastPurchaseDate) {
+				existing.LastPurchaseDate = p.Date
+			}
+		} else {
+vendorMap[vendorID] = &services.VendorPurchaseSummary{
+				VendorID:          vendorID,
+				VendorName:        p.Vendor.Name,
+TotalPurchases:    1, // int64 will be set below
+				TotalAmount:       p.TotalAmount,
+				TotalPaid:         p.PaidAmount,
+				Outstanding:       p.OutstandingAmount,
+				LastPurchaseDate:  p.Date,
+				PaymentMethod:     p.PaymentMethod,
+				Status:            p.Status,
+			}
+		}
+	}
+	
+	// Convert map to slice
+result := make([]services.VendorPurchaseSummary, 0, len(vendorMap))
+	for _, vendor := range vendorMap {
+		result = append(result, *vendor)
+	}
+	
+	return result
 }

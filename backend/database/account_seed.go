@@ -13,8 +13,8 @@ func SeedAccounts(db *gorm.DB) error {
 		// ASSETS (1xxx)
 		{Code: "1000", Name: "ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 1, IsHeader: true, IsActive: true},
 		{Code: "1100", Name: "CURRENT ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
-		{Code: "1101", Name: "Kas", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		// Removed default bank accounts from seed per request (1102-1105)
+		{Code: "1101", Name: "Kas", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: true, IsActive: true, Balance: 0},
+		{Code: "1102", Name: "Bank", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: true, IsActive: true, Balance: 0},
 		{Code: "1200", Name: "ACCOUNTS RECEIVABLE", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
 		{Code: "1201", Name: "Piutang Usaha", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "1301", Name: "Persediaan Barang Dagangan", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
@@ -90,7 +90,7 @@ func SeedAccounts(db *gorm.DB) error {
 	parentChildMap := map[string]string{
 		"1100": "1000", // CURRENT ASSETS -> ASSETS
 		"1101": "1100", // Kas -> CURRENT ASSETS
-		// Removed default bank accounts (1102-1105) from seed mapping per request
+		"1102": "1100", // Bank -> CURRENT ASSETS
 		"1200": "1100", // ACCOUNTS RECEIVABLE -> CURRENT ASSETS
 		"1201": "1200", // Piutang Usaha -> ACCOUNTS RECEIVABLE
 		"1301": "1100", // Persediaan Barang Dagangan -> CURRENT ASSETS

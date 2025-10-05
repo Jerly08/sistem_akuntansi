@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import SimpleLayout from '@/components/layout/SimpleLayout';
 import { useTranslation } from '@/hooks/useTranslation';
 import SalesSummaryModal from '@/components/reports/SalesSummaryModal';
@@ -61,6 +61,8 @@ import { ssotTrialBalanceService, SSOTTrialBalanceData } from '../../src/service
 import { ssotGeneralLedgerService, SSOTGeneralLedgerData } from '../../src/services/ssotGeneralLedgerService';
 import { ssotJournalAnalysisService, SSOTJournalAnalysisData } from '../../src/services/ssotJournalAnalysisService';
 import { reportService, ReportParameters } from '../../src/services/reportService';
+import api from '@/services/api';
+import { API_ENDPOINTS } from '@/config/api';
 import { ssotPurchaseReportService, SSOTPurchaseReportData } from '../../src/services/ssotPurchaseReportService';
 // Import Cash Flow Export Service
 import cashFlowExportService from '../../src/services/cashFlowExportService';
@@ -134,6 +136,33 @@ const getAvailableReports = (t: any) => [
   }
 ];
 
+// Helpers to compute fiscal year range from Settings.fiscal_year_start
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const toISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function computeFiscalRangeFromString(fyStart: string): {startISO: string, endISO: string} {
+  const lower = (fyStart||'January 1').toLowerCase();
+  let m = 1, d = 1;
+  const idx = MONTHS.findIndex(mm => lower.startsWith(mm.toLowerCase()));
+  if (idx >= 0) {
+    const match = lower.match(/(\d{1,2})/);
+    d = Math.min(Math.max(parseInt(match?.[1]||'1',10),1),31);
+    m = idx+1;
+  } else {
+    const parts = lower.split(/[-/\s]/).filter(Boolean);
+    if (parts.length>=2) {
+      const mm = parseInt(parts[0],10); const dd = parseInt(parts[1],10);
+      if (mm>=1&&mm<=12&&dd>=1&&dd<=31) { m=mm; d=dd; }
+    }
+  }
+  const today = new Date();
+  const thisYearStart = new Date(Date.UTC(today.getFullYear(), m-1, d));
+  let start = thisYearStart;
+  if (today.getTime() < thisYearStart.getTime()) start = new Date(Date.UTC(today.getFullYear()-1, m-1, d));
+  const nextStart = new Date(Date.UTC(start.getUTCFullYear()+1, m-1, d));
+  const end = new Date(nextStart.getTime() - 24*60*60*1000);
+  return { startISO: toISO(new Date(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())), endISO: toISO(new Date(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())) };
+}
+
 const ReportsPage: React.FC = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
@@ -158,58 +187,54 @@ const ReportsPage: React.FC = () => {
   const [ssotPLData, setSSOTPLData] = useState<any>(null);
   const [ssotPLLoading, setSSOTPLLoading] = useState(false);
   const [ssotPLError, setSSOTPLError] = useState<string | null>(null);
-  const [ssotStartDate, setSSOTStartDate] = useState('2025-01-01');
-  const [ssotEndDate, setSSOTEndDate] = useState('2025-12-31');
+  const [ssotStartDate, setSSOTStartDate] = useState('');
+  const [ssotEndDate, setSSOTEndDate] = useState('');
 
   // State untuk SSOT Balance Sheet
   const [ssotBSOpen, setSSOTBSOpen] = useState(false);
   const [ssotBSData, setSSOTBSData] = useState<SSOTBalanceSheetData | null>(null);
   const [ssotBSLoading, setSSOTBSLoading] = useState(false);
   const [ssotBSError, setSSOTBSError] = useState<string | null>(null);
-  const [ssotAsOfDate, setSSOTAsOfDate] = useState(new Date().toISOString().split('T')[0]);
+  const [ssotAsOfDate, setSSOTAsOfDate] = useState('');
 
   // State untuk SSOT Cash Flow
   const [ssotCFOpen, setSSOTCFOpen] = useState(false);
   const [ssotCFData, setSSOTCFData] = useState<SSOTCashFlowData | null>(null);
   const [ssotCFLoading, setSSOTCFLoading] = useState(false);
   const [ssotCFError, setSSOTCFError] = useState<string | null>(null);
-  const [ssotCFStartDate, setSSOTCFStartDate] = useState(() => {
-    const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    return firstDayOfMonth.toISOString().split('T')[0];
-  });
-  const [ssotCFEndDate, setSSOTCFEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [ssotCFStartDate, setSSOTCFStartDate] = useState('');
+  const [ssotCFEndDate, setSSOTCFEndDate] = useState('');
 
   // State untuk SSOT Sales Summary
   const [ssotSSOpen, setSSOTSSOpen] = useState(false);
   const [ssotSSData, setSSOTSSData] = useState<SSOTSalesSummaryData | null>(null);
   const [ssotSSLoading, setSSOTSSLoading] = useState(false);
   const [ssotSSError, setSSOTSSError] = useState<string | null>(null);
-  const [ssotSSStartDate, setSSOTSSStartDate] = useState('2025-01-01');
-  const [ssotSSEndDate, setSSOTSSEndDate] = useState('2025-12-31');
+  const [ssotSSStartDate, setSSOTSSStartDate] = useState('');
+  const [ssotSSEndDate, setSSOTSSEndDate] = useState('');
 
   // State untuk SSOT Purchase Report
   const [ssotPROpen, setSSOTPROpen] = useState(false);
   const [ssotPRData, setSSOTPRData] = useState<any>(null);
   const [ssotPRLoading, setSSOTPRLoading] = useState(false);
   const [ssotPRError, setSSOTPRError] = useState<string | null>(null);
-  const [ssotPRStartDate, setSSOTPRStartDate] = useState('2025-01-01');
-  const [ssotPREndDate, setSSOTPREndDate] = useState('2025-12-31');
+  const [ssotPRStartDate, setSSOTPRStartDate] = useState('');
+  const [ssotPREndDate, setSSOTPREndDate] = useState('');
 
   // State untuk SSOT Trial Balance
   const [ssotTBOpen, setSSOTTBOpen] = useState(false);
   const [ssotTBData, setSSOTTBData] = useState<SSOTTrialBalanceData | null>(null);
   const [ssotTBLoading, setSSOTTBLoading] = useState(false);
   const [ssotTBError, setSSOTTBError] = useState<string | null>(null);
-  const [ssotTBAsOfDate, setSSOTTBAsOfDate] = useState(new Date().toISOString().split('T')[0]);
+  const [ssotTBAsOfDate, setSSOTTBAsOfDate] = useState('');
 
   // State untuk SSOT General Ledger
   const [ssotGLOpen, setSSOTGLOpen] = useState(false);
   const [ssotGLData, setSSOTGLData] = useState<SSOTGeneralLedgerData | null>(null);
   const [ssotGLLoading, setSSOTGLLoading] = useState(false);
   const [ssotGLError, setSSOTGLError] = useState<string | null>(null);
-  const [ssotGLStartDate, setSSOTGLStartDate] = useState('2025-01-01');
-  const [ssotGLEndDate, setSSOTGLEndDate] = useState('2025-12-31');
+  const [ssotGLStartDate, setSSOTGLStartDate] = useState('');
+  const [ssotGLEndDate, setSSOTGLEndDate] = useState('');
   const [ssotGLAccountId, setSSOTGLAccountId] = useState<string>('');
 
   // State untuk SSOT Journal Analysis
@@ -217,8 +242,8 @@ const ReportsPage: React.FC = () => {
   const [ssotJAData, setSSOTJAData] = useState<SSOTJournalAnalysisData | null>(null);
   const [ssotJALoading, setSSOTJALoading] = useState(false);
   const [ssotJAError, setSSOTJAError] = useState<string | null>(null);
-  const [ssotJAStartDate, setSSOTJAStartDate] = useState('2025-01-01');
-  const [ssotJAEndDate, setSSOTJAEndDate] = useState('2025-12-31');
+  const [ssotJAStartDate, setSSOTJAStartDate] = useState('');
+  const [ssotJAEndDate, setSSOTJAEndDate] = useState('');
 
   // State untuk Simple Journal Entry Report
   const [simpleJournalOpen, setSimpleJournalOpen] = useState(false);
@@ -232,6 +257,48 @@ const ReportsPage: React.FC = () => {
   const resetParams = () => {
     setReportParams({});
   };
+
+  // Load settings to default all report ranges to current fiscal year
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const resp = await api.get(API_ENDPOINTS.SETTINGS);
+        const fyStartStr: string = resp.data?.data?.fiscal_year_start || 'January 1';
+        const range = computeFiscalRangeFromString(fyStartStr);
+        // Set for PL
+        setSSOTStartDate(range.startISO); setSSOTEndDate(range.endISO);
+        // Balance Sheet as-of -> fiscal year end
+        setSSOTAsOfDate(range.endISO);
+        // Cash Flow
+        setSSOTCFStartDate(range.startISO); setSSOTCFEndDate(range.endISO);
+        // Sales Summary
+        setSSOTSSStartDate(range.startISO); setSSOTSSEndDate(range.endISO);
+        // Purchase Report
+        setSSOTPRStartDate(range.startISO); setSSOTPREndDate(range.endISO);
+        // Trial Balance as-of
+        setSSOTTBAsOfDate(range.endISO);
+        // General Ledger
+        setSSOTGLStartDate(range.startISO); setSSOTGLEndDate(range.endISO);
+        // Journal Analysis
+        setSSOTJAStartDate(range.startISO); setSSOTJAEndDate(range.endISO);
+      } catch (e) {
+        // Fallback to current calendar year
+        const today = new Date();
+        const start = new Date(today.getFullYear(),0,1);
+        const end = new Date(today.getFullYear(),11,31);
+        const s = toISO(start), eiso = toISO(end);
+        setSSOTStartDate(s); setSSOTEndDate(eiso);
+        setSSOTAsOfDate(eiso);
+        setSSOTCFStartDate(s); setSSOTCFEndDate(eiso);
+        setSSOTSSStartDate(s); setSSOTSSEndDate(eiso);
+        setSSOTPRStartDate(s); setSSOTPREndDate(eiso);
+        setSSOTTBAsOfDate(eiso);
+        setSSOTGLStartDate(s); setSSOTGLEndDate(eiso);
+        setSSOTJAStartDate(s); setSSOTJAEndDate(eiso);
+      }
+    };
+    load();
+  }, []);
 
   // Function untuk fetch SSOT Sales Summary Report
   const fetchSSOTSalesSummaryReport = async () => {

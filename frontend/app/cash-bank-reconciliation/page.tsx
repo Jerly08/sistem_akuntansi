@@ -247,6 +247,7 @@ const CashBankReconciliationPage: React.FC = () => {
     switch (status) {
       case 'never_reconciled':
         return {
+          status: 'error' as const,
           color: 'red',
           icon: FiAlertTriangle,
           label: 'Never Reconciled',
@@ -254,6 +255,7 @@ const CashBankReconciliationPage: React.FC = () => {
         };
       case 'needs_attention':
         return {
+          status: 'warning' as const,
           color: 'orange',
           icon: FiAlertTriangle,
           label: 'Needs Attention',
@@ -261,6 +263,7 @@ const CashBankReconciliationPage: React.FC = () => {
         };
       case 'recent':
         return {
+          status: 'info' as const,
           color: 'yellow',
           icon: FiSettings,
           label: 'Recent',
@@ -268,6 +271,7 @@ const CashBankReconciliationPage: React.FC = () => {
         };
       case 'up_to_date':
         return {
+          status: 'success' as const,
           color: 'green',
           icon: FiCheckCircle,
           label: 'Up to Date',
@@ -275,6 +279,7 @@ const CashBankReconciliationPage: React.FC = () => {
         };
       default:
         return {
+          status: 'info' as const,
           color: 'gray',
           icon: FiSettings,
           label: 'Unknown',
@@ -343,7 +348,7 @@ const CashBankReconciliationPage: React.FC = () => {
         {/* Reconciliation Status Alert */}
         {financeData?.bank_reconciliation && statusInfo && (
           <Alert 
-            status={statusInfo.color as any} 
+            status={statusInfo.status}
             mb={6}
             borderRadius="lg"
           >

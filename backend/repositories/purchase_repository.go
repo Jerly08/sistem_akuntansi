@@ -101,8 +101,11 @@ func (r *PurchaseRepository) FindWithFilter(filter models.PurchaseFilter) ([]mod
 	}
 
 	if filter.Search != "" {
-		query = query.Where("code ILIKE ? OR notes ILIKE ?", 
-			"%"+filter.Search+"%", "%"+filter.Search+"%")
+		like := "%" + filter.Search + "%"
+		// Join contacts to allow searching by vendor name/code as well
+		query = query.Joins("LEFT JOIN contacts ON contacts.id = purchases.vendor_id").
+			Where("purchases.code ILIKE ? OR purchases.notes ILIKE ? OR contacts.name ILIKE ? OR contacts.code ILIKE ?",
+				like, like, like, like)
 	}
 
 	if filter.ApprovalStatus != "" {

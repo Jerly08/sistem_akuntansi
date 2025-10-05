@@ -608,8 +608,10 @@ func (s *SalesServiceV2) GetSales(filter models.SalesFilter) (*models.SalesResul
 	}
 	if filter.Search != "" {
 		searchPattern := "%" + filter.Search + "%"
-		query = query.Where("invoice_number LIKE ? OR code LIKE ? OR reference LIKE ?", 
-			searchPattern, searchPattern, searchPattern)
+		// Join contacts to allow searching by customer name as well
+		query = query.Joins("LEFT JOIN contacts ON contacts.id = sales.customer_id").
+			Where("sales.invoice_number ILIKE ? OR sales.code ILIKE ? OR sales.reference ILIKE ? OR contacts.name ILIKE ?",
+				searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 
 	// Count total

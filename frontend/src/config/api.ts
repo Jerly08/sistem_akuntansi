@@ -74,6 +74,8 @@ export const API_ENDPOINTS = {
   PURCHASES_MATCHING: (id: number) => `/api/v1/purchases/${id}/matching`,
   PURCHASES_VALIDATE_MATCHING: (id: number) => `/api/v1/purchases/${id}/validate-matching`,
   PURCHASES_JOURNAL_ENTRIES: (id: number) => `/api/v1/purchases/${id}/journal-entries`,
+  PURCHASES_EXPORT_PDF: '/api/v1/purchases/export/pdf',
+  PURCHASES_EXPORT_CSV: '/api/v1/purchases/export/csv',
   
   // Assets (with /api/v1 prefix) - with nested structure
   ASSETS: {

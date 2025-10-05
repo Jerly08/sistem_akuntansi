@@ -40,10 +40,95 @@ import {
   Button,
   ButtonGroup,
   Image,
-  Stack
+  Stack,
+  InputGroup,
+  InputLeftElement,
+  FormHelperText
 } from '@chakra-ui/react';
 import { FiHome, FiSettings, FiGlobe, FiCalendar, FiDollarSign, FiSave, FiX, FiCreditCard, FiTrendingUp } from 'react-icons/fi';
 import Link from 'next/link';
+
+// Helper for converting fiscal year formats between backend and date input
+const MONTHS = [
+  'January','February','March','April','May','June','July','August','September','October','November','December'
+];
+
+function monthDayStringToISO(src: string): string {
+  if (!src) return '';
+  const lower = src.trim().toLowerCase();
+  // Month name + day (e.g., "january 1")
+  const monthIdx = MONTHS.findIndex(m => lower.startsWith(m.toLowerCase()));
+  if (monthIdx >= 0) {
+    const dayMatch = lower.match(/(\d{1,2})/);
+    const day = Math.min(Math.max(parseInt(dayMatch?.[1] || '1', 10), 1), 31);
+    const year = new Date().getFullYear();
+    const mm = String(monthIdx + 1).padStart(2, '0');
+    const dd = String(day).padStart(2, '0');
+    return `${year}-${mm}-${dd}`;
+  }
+  // Fallback: try parsing any other date-like string
+  const d = new Date(src);
+  if (!isNaN(d.getTime())) {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return '';
+}
+
+function isoToMonthDayString(iso: string): string {
+  if (!iso) return '';
+  const parts = iso.split('-');
+  if (parts.length < 3) return '';
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (!m || !d || m < 1 || m > 12) return '';
+  return `${MONTHS[m - 1]} ${d}`;
+}
+
+// Format an ISO date string to a selected display format
+function formatDateISO(iso: string, format: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  switch (format) {
+    case 'DD/MM/YYYY':
+      return `${dd}/${mm}/${yyyy}`;
+    case 'MM/DD/YYYY':
+      return `${mm}/${dd}/${yyyy}`;
+    case 'DD-MM-YYYY':
+      return `${dd}-${mm}-${yyyy}`;
+    default:
+      return `${yyyy}-${mm}-${dd}`; // 'YYYY-MM-DD'
+  }
+}
+
+// Compute current fiscal year range from a selected month-day (ISO)
+function computeFiscalRange(currentISO: string): { startISO: string; endISO: string } | null {
+  if (!currentISO) return null;
+  const base = new Date(currentISO);
+  if (isNaN(base.getTime())) return null;
+  const month = base.getMonth();
+  const day = base.getDate();
+
+  const today = new Date();
+  const thisYearStart = new Date(Date.UTC(today.getFullYear(), month, day));
+  let start = thisYearStart;
+  if (today.getTime() < thisYearStart.getTime()) {
+    // fiscal year started last year
+    start = new Date(Date.UTC(today.getFullYear() - 1, month, day));
+  }
+  // End date: day before next year's start
+  const nextStart = new Date(Date.UTC(start.getUTCFullYear() + 1, month, day));
+  const end = new Date(nextStart.getTime() - 24 * 60 * 60 * 1000);
+
+  const toISO = (dt: Date) => `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+  return { startISO: toISO(start), endISO: toISO(end) };
+}
 
 interface SystemSettings {
   id?: number;
@@ -90,6 +175,8 @@ const SettingsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Local UI state for date input binding (ISO format required by <input type="date">)
+  const [fiscalStartISO, setFiscalStartISO] = useState<string>('');
   
   // Move useColorModeValue to top level to fix hooks order
   const blueColor = useColorModeValue('blue.500', 'blue.300');
@@ -104,6 +191,8 @@ const SettingsPage: React.FC = () => {
       if (response.data.success) {
         setSettings(response.data.data);
         setFormData(response.data.data);
+        // derive ISO date for UI
+        setFiscalStartISO(monthDayStringToISO(response.data.data?.fiscal_year_start));
         setHasChanges(false);
         // Sync language from settings
         if (response.data.data.language && response.data.data.language !== language) {
@@ -121,6 +210,13 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     fetchSettings();
   }, []);
+
+  // Keep ISO date in sync when settings are populated later
+  useEffect(() => {
+    if (settings) {
+      setFiscalStartISO(prev => prev || monthDayStringToISO(settings.fiscal_year_start));
+    }
+  }, [settings]);
 
   const handleLanguageChange = async (newLanguage: string) => {
     if (newLanguage === 'id' || newLanguage === 'en') {
@@ -444,14 +540,39 @@ const SettingsPage: React.FC = () => {
                     <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
                       {t('settings.fiscalYearStart')}
                     </FormLabel>
-                    <Input
-                      type="date"
-                      value={formData?.fiscal_year_start || settings?.fiscal_year_start || ''}
-                      onChange={(e) => handleFormChange('fiscal_year_start', e.target.value)}
-                      variant="filled"
-                      _hover={{ bg: 'gray.100' }}
-                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                    />
+                    <InputGroup>
+                      <InputLeftElement pointerEvents="none">
+                        <Icon as={FiCalendar} color="gray.500" />
+                      </InputLeftElement>
+                      <Input
+                        type="date"
+                        value={fiscalStartISO}
+                        onChange={(e) => {
+                          const iso = e.target.value;
+                          setFiscalStartISO(iso);
+                          // store normalized form for backend
+                          handleFormChange('fiscal_year_start', isoToMonthDayString(iso));
+                        }}
+                        variant="filled"
+                        _hover={{ bg: 'gray.100' }}
+                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                      />
+                    </InputGroup>
+                    <FormHelperText fontSize="xs" color="gray.600">
+                      {language === 'id'
+                        ? 'Hanya hari dan bulan yang digunakan. Tahun akan ditentukan otomatis untuk periode fiskal.'
+                        : 'Only day and month are used. The year is determined automatically for the fiscal period.'}
+                    </FormHelperText>
+                    {(() => {
+                      const fmt = formData?.date_format || settings?.date_format || 'YYYY-MM-DD';
+                      const range = computeFiscalRange(fiscalStartISO);
+                      if (!range) return null;
+                      return (
+                        <Text mt={1} fontSize="xs" color="gray.700">
+                          {language === 'id' ? 'Periode fiskal saat ini:' : 'Current fiscal period:'} {formatDateISO(range.startISO, fmt)} — {formatDateISO(range.endISO, fmt)}
+                        </Text>
+                      );
+                    })()}
                   </FormControl>
                   <Divider />
                   

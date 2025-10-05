@@ -86,7 +86,7 @@ export default function DashboardPage() {
       case 'inventory_manager':
         return <InventoryManagerDashboard />;
       case 'director':
-        return <DirectorDashboard />;
+        return <DirectorDashboard analytics={analytics} />;
       case 'employee':
         return <EmployeeDashboard />;
       default:

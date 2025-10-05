@@ -11,11 +11,13 @@ import (
 
 type CashBankHandler struct {
 	cashBankService *services.CashBankService
+	accountService  services.AccountService
 }
 
-func NewCashBankHandler(cashBankService *services.CashBankService) *CashBankHandler {
+func NewCashBankHandler(cashBankService *services.CashBankService, accountService services.AccountService) *CashBankHandler {
 	return &CashBankHandler{
 		cashBankService: cashBankService,
+		accountService:  accountService,
 	}
 }
 
@@ -251,11 +253,34 @@ func (h *CashBankHandler) GetBalanceSummary(c *gin.Context) {
 func (h *CashBankHandler) GetPaymentAccounts(c *gin.Context) {
 	accounts, err := h.cashBankService.GetPaymentAccounts()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("Failed to get payment accounts", err))
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("Failed to retrieve payment accounts", err))
 		return
 	}
-
+	
 	c.JSON(http.StatusOK, utils.SuccessResponse("Payment accounts retrieved successfully", accounts))
+}
+
+// GetDepositSourceAccounts handles GET /api/cash-bank/deposit-source-accounts
+func (h *CashBankHandler) GetDepositSourceAccounts(c *gin.Context) {
+	if h.accountService == nil {
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("Account service not available", nil))
+		return
+	}
+	// Fetch revenue and equity accounts via account service
+	revenue, err := h.accountService.GetRevenueAccounts(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("Failed to retrieve revenue accounts", err))
+		return
+	}
+	equity, err := h.accountService.GetEquityAccounts(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("Failed to retrieve equity accounts", err))
+		return
+	}
+	c.JSON(http.StatusOK, utils.SuccessResponse("Deposit source accounts retrieved successfully", gin.H{
+		"revenue": revenue,
+		"equity":  equity,
+	}))
 }
 
 // ReconcileAccount handles POST /api/cash-bank/accounts/:id/reconcile

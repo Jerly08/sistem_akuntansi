@@ -311,6 +311,116 @@ class PurchaseService {
       maximumFractionDigits: 0
     }).format(amount);
   }
+
+  // Export functionality
+  
+  async exportPurchasesPDF(filters?: PurchaseFilterParams): Promise<Blob> {
+    try {
+      const params = new URLSearchParams();
+      
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.vendor_id) params.append('vendor_id', filters.vendor_id);
+      if (filters?.start_date) params.append('start_date', filters.start_date);
+      if (filters?.end_date) params.append('end_date', filters.end_date);
+      if (filters?.search) params.append('search', filters.search);
+      if (filters?.approval_status) params.append('approval_status', filters.approval_status);
+      if (filters?.requires_approval !== undefined) params.append('requires_approval', filters.requires_approval.toString());
+
+      const response = await api.get(`${API_ENDPOINTS.PURCHASES_EXPORT_PDF}?${params}`, {
+        responseType: 'blob',
+        headers: { Accept: 'application/pdf' }
+      });
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('Error exporting purchases PDF:', error);
+      throw new Error(error.response?.data?.error || 'Failed to export purchases PDF');
+    }
+  }
+
+  async exportPurchasesCSV(filters?: PurchaseFilterParams): Promise<Blob> {
+    try {
+      const params = new URLSearchParams();
+      
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.vendor_id) params.append('vendor_id', filters.vendor_id);
+      if (filters?.start_date) params.append('start_date', filters.start_date);
+      if (filters?.end_date) params.append('end_date', filters.end_date);
+      if (filters?.search) params.append('search', filters.search);
+      if (filters?.approval_status) params.append('approval_status', filters.approval_status);
+      if (filters?.requires_approval !== undefined) params.append('requires_approval', filters.requires_approval.toString());
+
+      const response = await api.get(`${API_ENDPOINTS.PURCHASES_EXPORT_CSV}?${params}`, {
+        responseType: 'blob',
+        headers: { Accept: 'text/csv' }
+      });
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('Error exporting purchases CSV:', error);
+      throw new Error(error.response?.data?.error || 'Failed to export purchases CSV');
+    }
+  }
+
+  // Download helper methods
+  
+  async downloadPurchasesPDF(filters?: PurchaseFilterParams): Promise<void> {
+    try {
+      const blob = await this.exportPurchasesPDF(filters);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Create filename based on filters
+      let filename = 'purchases-report';
+      if (filters?.start_date && filters?.end_date) {
+        filename += `_${filters.start_date}_to_${filters.end_date}`;
+      } else if (filters?.start_date) {
+        filename += `_from_${filters.start_date}`;
+      } else if (filters?.end_date) {
+        filename += `_until_${filters.end_date}`;
+      }
+      filename += '.pdf';
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Error downloading purchases PDF:', error);
+      throw error;
+    }
+  }
+
+  async downloadPurchasesCSV(filters?: PurchaseFilterParams): Promise<void> {
+    try {
+      const blob = await this.exportPurchasesCSV(filters);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      
+      // Create filename based on filters
+      let filename = 'purchases-report';
+      if (filters?.start_date && filters?.end_date) {
+        filename += `_${filters.start_date}_to_${filters.end_date}`;
+      } else if (filters?.start_date) {
+        filename += `_from_${filters.start_date}`;
+      } else if (filters?.end_date) {
+        filename += `_until_${filters.end_date}`;
+      }
+      filename += '.csv';
+      
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Error downloading purchases CSV:', error);
+      throw error;
+    }
+  }
 }
 
 const purchaseService = new PurchaseService();

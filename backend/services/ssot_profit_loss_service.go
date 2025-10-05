@@ -110,6 +110,15 @@ type PLSectionItem struct {
 
 // GenerateSSOTProfitLoss generates P&L statement from SSOT journal system
 func (s *SSOTProfitLossService) GenerateSSOTProfitLoss(startDate, endDate string) (*SSOTProfitLossData, error) {
+	// Default to current fiscal year when parameters are empty
+	if strings.TrimSpace(startDate) == "" || strings.TrimSpace(endDate) == "" {
+		settingsSvc := NewSettingsService(s.db)
+		fyStart, fyEnd, err := settingsSvc.GetCurrentFiscalYearRange()
+		if err == nil {
+			if strings.TrimSpace(startDate) == "" { startDate = fyStart }
+			if strings.TrimSpace(endDate) == "" { endDate = fyEnd }
+		}
+	}
 	// Parse dates
 	start, err := time.Parse("2006-01-02", startDate)
 	if err != nil {
@@ -121,7 +130,7 @@ func (s *SSOTProfitLossService) GenerateSSOTProfitLoss(startDate, endDate string
 		return nil, fmt.Errorf("invalid end date format: %v", err)
 	}
 	
-// Get account balances from SSOT journal entries (with data source flag)
+	// Get account balances from SSOT journal entries (with data source flag)
 	accountBalances, source, err := s.getAccountBalancesFromSSOT(startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account balances: %v", err)

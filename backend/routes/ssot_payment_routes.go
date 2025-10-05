@@ -38,26 +38,34 @@ func SetupSSOTPaymentRoutes(router *gin.RouterGroup, db *gorm.DB, jwtManager *mi
 	// Initialize permission middleware
 	permissionMiddleware := middleware.NewPermissionMiddleware(db)
 
-	// SSOT Payment routes - replaces legacy payment routes
-	ssotPayments := router.Group("/payments/ssot")
-	ssotPayments.Use(middleware.PaymentRateLimit()) // Apply rate limiting
-	if middleware.GlobalAuditLogger != nil {
-		ssotPayments.Use(middleware.GlobalAuditLogger.PaymentAuditMiddleware()) // Apply audit logging
-	}
-	{
-		// SSOT Payment CRUD operations with journal integration
-		ssotPayments.POST("/receivable", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreateReceivablePayment)
-		ssotPayments.POST("/payable", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreatePayablePayment)
-		ssotPayments.GET("/:id", permissionMiddleware.CanView("payments"), ssotPaymentController.GetPaymentWithJournal)
-		ssotPayments.POST("/:id/reverse", permissionMiddleware.CanEdit("payments"), ssotPaymentController.ReversePayment)
-
-		// Journal integration endpoints
-		ssotPayments.POST("/preview-journal", permissionMiddleware.CanView("payments"), ssotPaymentController.PreviewPaymentJournal)
-		ssotPayments.GET("/:id/balance-updates", permissionMiddleware.CanView("payments"), ssotPaymentController.GetAccountBalanceUpdates)
+		// SSOT Payment routes - replaces legacy payment routes
+		ssotPayments := router.Group("/payments/ssot")
+		ssotPayments.Use(middleware.PaymentRateLimit()) // Apply rate limiting
+		if middleware.GlobalAuditLogger != nil {
+			ssotPayments.Use(middleware.GlobalAuditLogger.PaymentAuditMiddleware()) // Apply audit logging
+		}
+		{
+			// SSOT Payment CRUD operations with journal integration
+			ssotPayments.POST("/receivable", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreateReceivablePayment)
+			ssotPayments.POST("/payable", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreatePayablePayment)
+			ssotPayments.GET("/:id", permissionMiddleware.CanView("payments"), ssotPaymentController.GetPaymentWithJournal)
+			ssotPayments.POST("/:id/reverse", permissionMiddleware.CanEdit("payments"), ssotPaymentController.ReversePayment)
 		
-		// Legacy compatibility (deprecated - returns guidance)
-		ssotPayments.GET("", permissionMiddleware.CanView("payments"), ssotPaymentController.GetPayments)
-	}
+			// Journal integration endpoints
+			ssotPayments.POST("/preview-journal", permissionMiddleware.CanView("payments"), ssotPaymentController.PreviewPaymentJournal)
+			ssotPayments.GET("/:id/balance-updates", permissionMiddleware.CanView("payments"), ssotPaymentController.GetAccountBalanceUpdates)
+			
+			// Legacy compatibility (deprecated - returns guidance)
+			ssotPayments.GET("", permissionMiddleware.CanView("payments"), ssotPaymentController.GetPayments)
+		}
+
+		// Backward-compatibility route to match Swagger-documented path
+	router.POST("/payments/preview-journal", permissionMiddleware.CanView("payments"), ssotPaymentController.PreviewPaymentJournal)
+	// Aliases for with-journal and account updates
+	router.GET("/payments/:id/with-journal", permissionMiddleware.CanView("payments"), ssotPaymentController.GetPaymentWithJournal)
+	router.GET("/payments/:id/account-updates", permissionMiddleware.CanView("payments"), ssotPaymentController.GetAccountBalanceUpdates)
+	// Alias for reverse
+	router.POST("/payments/:id/reverse", permissionMiddleware.CanEdit("payments"), ssotPaymentController.ReversePayment)
 
 	// Mark legacy payment routes as deprecated by adding a redirect route
 	legacyPayments := router.Group("/payments")

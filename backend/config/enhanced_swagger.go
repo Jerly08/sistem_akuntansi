@@ -659,41 +659,8 @@ func GetEnhancedSwaggerHTML(docURL string) string {
 				// Start auto-authorization with slight delay
 				setTimeout(() => attemptAutoAuth(), 100);
 				
-				// Remove any Quick Start elements after Swagger loads
-				setTimeout(() => {
-					// Remove info description sections completely
-					const infoDescriptions = document.querySelectorAll('.swagger-ui .info .description, .info .description');
-					infoDescriptions.forEach(el => {
-						try { el.remove(); } catch(e) { el.style.display = 'none'; }
-					});
-					
-					// Remove any element containing Quick Start text
-					const allElements = document.querySelectorAll('*');
-					allElements.forEach(el => {
-						if (el.textContent && el.textContent.toLowerCase().includes('quick start')) {
-							try { el.remove(); } catch(e) { el.style.display = 'none'; }
-						}
-					});
-					
-					// Remove background colored elements that might contain Quick Start
-					const bgElements = document.querySelectorAll('[style*="background"]');
-					bgElements.forEach(el => {
-						if (el.textContent && (el.textContent.toLowerCase().includes('quick') || el.textContent.toLowerCase().includes('start'))) {
-							try { el.remove(); } catch(e) { el.style.display = 'none'; }
-						}
-					});
-				}, 2000);
-				
-				// Additional cleanup after 5 seconds
-				setTimeout(() => {
-					const moreElements = document.querySelectorAll('*');
-					moreElements.forEach(el => {
-						if (el.textContent && (el.textContent.toLowerCase().includes('quick start') || 
-							(el.textContent.toLowerCase().includes('quick') && el.textContent.toLowerCase().includes('start')))) {
-							try { el.remove(); } catch(e) { el.style.display = 'none'; }
-						}
-					});
-				}, 5000);
+				// DOM aggressive cleanup disabled to prevent blank screen after a few seconds.
+				// If you want to hide specific sections, target them precisely and avoid wildcard removals.
             }
           });
         })
@@ -710,6 +677,32 @@ func GetEnhancedSwaggerHTML(docURL string) string {
   </script>
 </body>
 </html>`, getAuthenticationHelperJS(), docURL, docURL)
+}
+
+// getBasicSwaggerHTML returns a minimal Swagger UI page without custom helpers
+func getBasicSwaggerHTML(docURL string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Swagger UI - Basic</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>html,body,#swagger{height:100%%;margin:0;padding:0}</style>
+</head>
+<body>
+  <div id="swagger"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = function() {
+      try {
+        window.ui = SwaggerUIBundle({ url: '%s', dom_id: '#swagger' });
+      } catch (e) {
+        document.getElementById('swagger').innerHTML = '<div style="padding:16px;color:red;">⚠️ Failed to initialize Swagger UI: ' + e.message + '</div>';
+      }
+    };
+  </script>
+</body>
+</html>`, docURL)
 }
 
 // Enhanced Swagger fixing rules with more comprehensive patterns
@@ -1307,6 +1300,18 @@ func SetupEnhancedSwaggerRoutes(r *gin.Engine) {
 	// Also serve on /swagger-enhanced for alternative access
 	swaggerGroup.GET("/swagger-enhanced", func(c *gin.Context) {
 		c.Redirect(302, "/enhanced-swagger/index.html")
+	})
+
+	// Basic minimal Swagger UI (fallback if enhanced UI causes issues)
+	swaggerGroup.GET("/swagger/basic.html", func(c *gin.Context) {
+		basic := getBasicSwaggerHTML("/openapi/enhanced-doc.json")
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(200, basic)
+	})
+	swaggerGroup.GET("/docs/basic.html", func(c *gin.Context) {
+		basic := getBasicSwaggerHTML("/openapi/enhanced-doc.json")
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(200, basic)
 	})
 	
 	// Serve diagnostic tool for AUTH_HEADER_MISSING debugging

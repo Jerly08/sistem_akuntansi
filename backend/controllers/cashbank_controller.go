@@ -351,7 +351,7 @@ func (c *CashBankController) GetBalanceSummary(ctx *gin.Context) {
 // @Success 200 {array} models.Account
 // @Router /api/cashbank/revenue-accounts [get]
 func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
-	accounts, err := c.accountService.GetRevenueAccounts(ctx)
+	accounts, err := c.accountService.GetRevenueAccounts(ctx.Request.Context())
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to retrieve revenue accounts",
@@ -374,7 +374,7 @@ func (c *CashBankController) GetRevenueAccounts(ctx *gin.Context) {
 // @Router /api/cashbank/deposit-source-accounts [get]
 func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
 	// Get revenue accounts
-	revenueAccounts, err := c.accountService.GetRevenueAccounts(ctx)
+revenueAccounts, err := c.accountService.GetRevenueAccounts(ctx.Request.Context())
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to retrieve revenue accounts",
@@ -384,7 +384,7 @@ func (c *CashBankController) GetDepositSourceAccounts(ctx *gin.Context) {
 	}
 	
 	// Get equity accounts
-	equityAccounts, err := c.accountService.GetEquityAccounts(ctx)
+equityAccounts, err := c.accountService.GetEquityAccounts(ctx.Request.Context())
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to retrieve equity accounts",
