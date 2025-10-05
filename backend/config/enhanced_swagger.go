@@ -23,6 +23,125 @@ type EnhancedSwaggerConfig struct {
 	SecurityDefinitions map[string]interface{}
 }
 
+// publicSwaggerAllowedExact lists exact path entries we want to keep visible in public docs
+var publicSwaggerAllowedExact = map[string]struct{}{
+	// Auth & health
+	"/api/v1/health":      {},
+	"/api/v1/auth/login": {},
+
+	// Sales
+	"/api/v1/sales":                 {},
+	"/api/v1/sales/{id}":            {},
+	"/api/v1/sales/{id}/confirm":    {},
+	"/api/v1/sales/{id}/invoice":    {},
+	"/api/v1/sales/{id}/cancel":     {},
+	"/api/v1/sales/validate-stock":  {},
+	"/api/v1/sales/{id}/invoice/pdf": {}, // may not exist in spec but safe to allow
+	"/api/v1/sales/{id}/receipt/pdf": {},
+	"/api/v1/sales/report/pdf":      {},
+	"/api/v1/sales/report/csv":      {},
+
+	// Purchases
+	"/api/v1/purchases":                        {},
+	"/api/v1/purchases/{id}":                   {},
+	"/api/v1/purchases/{id}/approve":           {},
+	"/api/v1/purchases/{id}/reject":            {},
+	"/api/v1/purchases/{id}/submit-approval":   {},
+	"/api/v1/purchases/{id}/receive":           {},
+	"/api/v1/purchases/{id}/integrated-payment": {},
+	"/api/v1/purchases/{id}/payments":          {},
+	"/api/v1/purchases/{id}/for-payment":       {},
+	"/api/v1/purchases/{id}/cancel":            {},
+
+	// Payments (SSOT preferred if present; also include safe exports and details)
+	"/api/v1/payments/ssot/receivable":       {},
+	"/api/v1/payments/ssot/payable":          {},
+	"/api/v1/payments/ssot/{id}":             {},
+	"/api/v1/payments/ssot/{id}/reverse":     {},
+	"/api/v1/payments/ssot/preview-journal":  {},
+	"/api/v1/payments/ssot/{id}/balance-updates": {},
+	"/api/v1/payments/summary":                {},
+	"/api/v1/payments/report/pdf":             {},
+	"/api/v1/payments/export/excel":           {},
+	"/api/v1/payments/unpaid-bills/{vendor_id}":    {},
+	"/api/v1/payments/unpaid-invoices/{customer_id}": {},
+	"/api/v1/payments/{id}":                         {},
+	"/api/v1/payments/{id}/pdf":                    {},
+	"/api/v1/payments/{id}/cancel":                 {},
+	"/api/v1/payments/{id}/with-journal":           {},
+	"/api/v1/payments/{id}/account-updates":        {},
+	"/api/v1/payments/preview-journal":             {},
+
+	// Cash & Bank, Accounts, Products, Contacts, Users (supporting lists and CRUD)
+	"/api/v1/cash-bank/accounts":       {},
+	"/api/v1/cash-bank/accounts/{id}":  {},
+	"/api/v1/cash-bank/accounts/{id}/transactions": {},
+	"/api/v1/accounts":                 {},
+	"/api/v1/accounts/{id}":            {},
+	"/api/v1/products":                 {},
+	"/api/v1/products/{id}":            {},
+	"/api/v1/contacts":                 {},
+	"/api/v1/contacts/{id}":            {},
+	"/api/v1/users":                    {},
+	"/api/v1/users/{id}":               {},
+}
+
+// publicSwaggerAllowedPrefixes allows quick inclusion by prefix (kept narrow to avoid pulling in unrelated modules)
+var publicSwaggerAllowedPrefixes = []string{
+	"/api/v1/sales",
+	"/api/v1/purchases",
+	"/api/v1/payments/ssot",
+	"/api/v1/cash-bank",
+	"/api/v1/products",
+	"/api/v1/contacts",
+	"/api/v1/users",
+	"/api/v1/accounts",
+}
+
+// filterSwaggerSpecForPublic prunes the swagger spec to only include allowed paths according to the whitelist
+func filterSwaggerSpecForPublic(spec map[string]interface{}) map[string]interface{} {
+	paths, ok := spec["paths"].(map[string]interface{})
+	if !ok || len(paths) == 0 {
+		return spec
+	}
+
+	filtered := make(map[string]interface{})
+
+	// helper to test if path is allowed by exact or prefix
+	isAllowed := func(p string) bool {
+		if _, ok := publicSwaggerAllowedExact[p]; ok {
+			return true
+		}
+		for _, pref := range publicSwaggerAllowedPrefixes {
+			if len(p) >= len(pref) && p[:len(pref)] == pref {
+				return true
+			}
+		}
+		return false
+	}
+
+	for p, v := range paths {
+		if isAllowed(p) {
+			filtered[p] = v
+		}
+	}
+
+	// Replace paths with filtered ones
+	spec["paths"] = filtered
+
+	// Optionally annotate description to indicate this is a pruned public view
+	if info, ok := spec["info"].(map[string]interface{}); ok {
+		desc := "Public API documentation limited to Sales, Purchases, Payments and essential supporting resources."
+		if existing, ok := info["description"].(string); ok && existing != "" {
+			info["description"] = existing + "\n\nNOTE: Non-essential/internal endpoints are hidden in this public view."
+		} else {
+			info["description"] = desc
+		}
+	}
+
+	return spec
+}
+
 // AuthenticationHelperJS provides JavaScript for Swagger UI authentication
 func getAuthenticationHelperJS() string {
 	return `
@@ -305,7 +424,21 @@ func GetEnhancedSwaggerHTML(docURL string) string {
     .swagger-ui .topbar { background-color: #1b1b1b; }
     .swagger-ui .topbar .download-url-wrapper { display: none; }
     .swagger-ui .info .title { color: #3b4151; font-size: 36px; }
-    .swagger-ui .info .description { font-size: 16px; line-height: 1.6; }
+    
+    /* Hide all info description content to prevent Quick Start from showing */
+    .swagger-ui .info .description,
+    .swagger-ui .info .description *,
+    .info .description,
+    .info .description *,
+    [style*="background-color: green"],
+    [style*="background: green"],
+    [style*="background-color: #e8f5e8"],
+    [style*="background: #e8f5e8"] {
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      overflow: hidden !important;
+    }
     
     /* Custom banners */
     .dynamic-banner { 
@@ -327,16 +460,7 @@ func GetEnhancedSwaggerHTML(docURL string) string {
       margin-top: -1px;
     }
     
-    .info-banner {
-      background: #e8f5e8;
-      color: #2d5a2d;
-      padding: 10px 15px;
-      text-align: left;
-      font-size: 12px;
-      border-left: 4px solid #4CAF50;
-      margin: 10px;
-      border-radius: 0 4px 4px 0;
-    }
+    /* Info banner removed - Quick Start content eliminated */
     
     /* Loading overlay */
     .loading-overlay {
@@ -360,6 +484,25 @@ func GetEnhancedSwaggerHTML(docURL string) string {
   <div class="loading-overlay" id="loading">
     <div>🚀 Loading Enhanced Swagger UI...</div>
   </div>
+
+  <!-- Fail-safe: hide overlay even if other scripts fail -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        var el = document.getElementById('loading');
+        if (el) el.style.display = 'none';
+      } catch (e) { /* ignore */ }
+    });
+    // Report uncaught errors into the UI to avoid blank screen
+    window.addEventListener('error', function(ev) {
+      try {
+        var root = document.getElementById('swagger-ui');
+        if (root && !root.innerHTML) {
+          root.innerHTML = '<div style="padding:16px;color:red;">⚠️ Swagger UI runtime error: ' + (ev.error && ev.error.message ? ev.error.message : ev.message) + '</div>';
+        }
+      } catch (e) { /* ignore */ }
+    });
+  </script>
   
   <!-- Dynamic banners -->
   <div class="dynamic-banner">
@@ -372,15 +515,7 @@ func GetEnhancedSwaggerHTML(docURL string) string {
   <!-- Main Swagger UI -->
   <div id="swagger-ui"></div>
   
-  <!-- Info banner -->
-  <div class="info-banner">
-    <strong>💡 Quick Start:</strong><br>
-    1. Click the Authentication Helper (🔐) in the top-right corner<br>
-    2. Use default credentials (admin@company.com / admin123) or enter your own<br>
-    3. Click "Login" to authenticate<br>
-    4. All API requests will now include the Bearer token automatically<br>
-    5. Test protected endpoints like /api/v1/admin/* without manual token entry
-  </div>
+  <!-- Authentication info moved to banner above -->
 
   <!-- Swagger UI Bundle -->
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
@@ -523,6 +658,42 @@ func GetEnhancedSwaggerHTML(docURL string) string {
 				
 				// Start auto-authorization with slight delay
 				setTimeout(() => attemptAutoAuth(), 100);
+				
+				// Remove any Quick Start elements after Swagger loads
+				setTimeout(() => {
+					// Remove info description sections completely
+					const infoDescriptions = document.querySelectorAll('.swagger-ui .info .description, .info .description');
+					infoDescriptions.forEach(el => {
+						try { el.remove(); } catch(e) { el.style.display = 'none'; }
+					});
+					
+					// Remove any element containing Quick Start text
+					const allElements = document.querySelectorAll('*');
+					allElements.forEach(el => {
+						if (el.textContent && el.textContent.toLowerCase().includes('quick start')) {
+							try { el.remove(); } catch(e) { el.style.display = 'none'; }
+						}
+					});
+					
+					// Remove background colored elements that might contain Quick Start
+					const bgElements = document.querySelectorAll('[style*="background"]');
+					bgElements.forEach(el => {
+						if (el.textContent && (el.textContent.toLowerCase().includes('quick') || el.textContent.toLowerCase().includes('start'))) {
+							try { el.remove(); } catch(e) { el.style.display = 'none'; }
+						}
+					});
+				}, 2000);
+				
+				// Additional cleanup after 5 seconds
+				setTimeout(() => {
+					const moreElements = document.querySelectorAll('*');
+					moreElements.forEach(el => {
+						if (el.textContent && (el.textContent.toLowerCase().includes('quick start') || 
+							(el.textContent.toLowerCase().includes('quick') && el.textContent.toLowerCase().includes('start')))) {
+							try { el.remove(); } catch(e) { el.style.display = 'none'; }
+						}
+					});
+				}, 5000);
             }
           });
         })
@@ -757,7 +928,7 @@ func GenerateEnhancedSwaggerSpec() map[string]interface{} {
 		"swagger": "2.0",
 		"info": map[string]interface{}{
 			"title":       "Sistema Akuntansi API - Enhanced",
-			"description": "Comprehensive accounting system API with enhanced authentication support. Use the Authentication Helper in the top-right corner to login and test protected endpoints.",
+			"description": "Comprehensive accounting system API with enhanced authentication support.",
 			"version":     "1.0.0",
 			"contact": map[string]interface{}{
 				"name":  "API Support",
@@ -1080,23 +1251,32 @@ func SetupEnhancedSwaggerRoutes(r *gin.Engine) {
 
 	// Enhanced Swagger JSON endpoint
 	r.GET("/openapi/enhanced-doc.json", func(c *gin.Context) {
-		// Try to serve the actual swagger.json first
+		// Try to serve the actual swagger.json first, but prune it to public endpoints only
 		swaggerPath := filepath.Join("docs", "swagger.json")
 		if _, err := os.Stat(swaggerPath); err == nil {
 			data, err := os.ReadFile(swaggerPath)
 			if err == nil {
-				c.Header("Content-Type", "application/json")
-				c.Header("Access-Control-Allow-Origin", "*")
-				c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-				c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-				c.Data(200, "application/json", data)
-				return
+				var spec map[string]interface{}
+				if err := json.Unmarshal(data, &spec); err == nil {
+					// Filter spec to only include allowed public endpoints
+					filtered := filterSwaggerSpecForPublic(spec)
+					buf, merr := json.Marshal(filtered)
+					if merr == nil {
+						c.Header("Content-Type", "application/json")
+						c.Header("Access-Control-Allow-Origin", "*")
+						c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+						c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+						c.Data(200, "application/json", buf)
+						return
+					}
+				}
 			}
 		}
 
-		// Fallback to enhanced dynamic spec
-		log.Println("📄 Serving enhanced dynamic fallback Swagger spec")
+		// Fallback to enhanced dynamic spec (also pruned for consistency)
+		log.Println("📄 Serving enhanced dynamic fallback Swagger spec (public view)")
 		spec := GenerateEnhancedSwaggerSpec()
+		spec = filterSwaggerSpecForPublic(spec)
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")

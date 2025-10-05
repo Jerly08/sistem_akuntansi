@@ -11,19 +11,76 @@
       padding: 0;
     }
     
-    /* Remove all green elements and quick start banners */
+    /* Completely remove all Quick Start elements from body */
     .swagger-ui .info .title small.version-stamp,
     .swagger-ui .info .title small,
-    .swagger-ui .info .description .markdown p:first-child,
+    .swagger-ui .info .description .markdown p,
+    .swagger-ui .info .description .renderedMarkdown p,
+    .swagger-ui .info .description p,
+    .swagger-ui .info .description div,
+    .swagger-ui .info .description ul,
+    .swagger-ui .info .description ol,
+    .swagger-ui .info .description li,
+    .swagger-ui .info .description *[style],
     .info .description .renderedMarkdown p:first-child,
     [style*="background-color: #1f8443"],
     [style*="background: #1f8443"],
     [style*="background-color: green"],
     [style*="background: green"],
+    [style*="background-color: #e8f5e8"],
+    [style*="background: #e8f5e8"],
     [class*="quickstart"],
     [class*="quick-start"],
     .swagger-ui .scheme-container {
       display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      overflow: hidden !important;
+      opacity: 0 !important;
+    }
+    
+    /* Hide the entire info description section to prevent Quick Start from showing */
+    .swagger-ui .info .description {
+      display: none !important;
+    }
+    
+    /* Quick Start header banner */
+    .quick-start-header {
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+      color: white;
+      padding: 12px 20px;
+      margin: 0;
+      font-size: 13px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-left: 4px solid #2e7d32;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    
+    .quick-start-header strong {
+      font-weight: bold;
+      font-size: 14px;
+    }
+    
+    .quick-start-steps {
+      margin: 8px 0 0 0;
+      padding-left: 0;
+      list-style: none;
+    }
+    
+    .quick-start-steps li {
+      margin: 3px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+    
+    .quick-start-steps li:before {
+      content: "➤";
+      position: absolute;
+      left: 0;
+      color: #e8f5e8;
+      font-weight: bold;
     }
     
     /* Fix overflow issues in Quick Start and code sections */
@@ -71,6 +128,18 @@
   </style>
 </head>
 <body>
+  <!-- Quick Start Header -->
+  <div class="quick-start-header">
+    <strong>💡 Quick Start Guide:</strong>
+    <ul class="quick-start-steps">
+      <li>Click the Authentication Helper (🔐) in the top-right corner</li>
+      <li>Use default credentials (admin@company.com / admin123) or enter your own</li>
+      <li>Click "Login" to authenticate</li>
+      <li>All API requests will now include the Bearer token automatically</li>
+      <li>Test protected endpoints like /api/v1/admin/* without manual token entry</li>
+    </ul>
+  </div>
+  
   <div id="swagger"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
@@ -129,18 +198,33 @@
       }
     });
     
-    // Remove any remaining green elements after a delay
+    // Completely remove all Quick Start elements and info description
     setTimeout(function() {
+      // Remove the entire info description section
+      const infoDescriptions = document.querySelectorAll('.swagger-ui .info .description');
+      infoDescriptions.forEach(el => {
+        el.style.display = 'none';
+        el.style.visibility = 'hidden';
+        el.style.height = '0';
+        el.style.overflow = 'hidden';
+        el.remove(); // Completely remove from DOM
+      });
+      
       const elementsToHide = [
         '[style*="background-color: green"]',
         '[style*="background: green"]',
         '[style*="background-color: #1f8443"]',
         '[style*="background: #1f8443"]',
+        '[style*="background-color: #e8f5e8"]',
+        '[style*="background: #e8f5e8"]',
         '[class*="quickstart"]',
         '[class*="quick-start"]',
         '.info .title small',
-        '.renderedMarkdown p:first-child',
-        '.swagger-ui .info .description .markdown p:first-child'
+        '.renderedMarkdown p',
+        '.swagger-ui .info .description',
+        '.swagger-ui .info .description *',
+        '.info .description',
+        '.info .description *'
       ];
       
       elementsToHide.forEach(selector => {
@@ -151,6 +235,11 @@
           el.style.opacity = '0';
           el.style.height = '0';
           el.style.overflow = 'hidden';
+          try {
+            el.remove(); // Remove from DOM completely
+          } catch (e) {
+            // Ignore removal errors
+          }
         });
       });
       
@@ -162,16 +251,58 @@
         el.style.whiteSpace = 'pre-wrap';
         el.style.wordWrap = 'break-word';
       });
+      
+      // Remove any element containing Quick Start text
+      const allElements = document.querySelectorAll('*');
+      allElements.forEach(el => {
+        if (el.textContent && el.textContent.toLowerCase().includes('quick start')) {
+          // Check if it's not our header element
+          if (!el.classList.contains('quick-start-header') && !el.closest('.quick-start-header')) {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+            el.style.height = '0';
+            el.style.overflow = 'hidden';
+            try {
+              el.remove();
+            } catch (e) {
+              // Ignore removal errors
+            }
+          }
+        }
+      });
     }, 2000);
     
-    // Additional cleanup after 5 seconds to catch any dynamically added content
+    // Additional aggressive cleanup after 5 seconds to catch any dynamically added content
     setTimeout(function() {
-      const moreElementsToHide = document.querySelectorAll(
-        '[style*="green"], .renderedMarkdown p:first-child, .info .description .markdown p:first-child'
-      );
-      moreElementsToHide.forEach(el => {
-        if (el.textContent && el.textContent.toLowerCase().includes('quick')) {
-          el.style.display = 'none';
+      // Remove any remaining info description sections
+      const infoDescs = document.querySelectorAll('.swagger-ui .info .description, .info .description');
+      infoDescs.forEach(el => el.remove());
+      
+      // Remove any element with Quick Start text (except our header)
+      const allEls = document.querySelectorAll('*');
+      allEls.forEach(el => {
+        if (el.textContent && el.textContent.toLowerCase().includes('quick start')) {
+          if (!el.classList.contains('quick-start-header') && !el.closest('.quick-start-header')) {
+            try {
+              el.remove();
+            } catch (e) {
+              el.style.display = 'none';
+            }
+          }
+        }
+      });
+      
+      // Remove any background-colored elements
+      const backgroundElements = document.querySelectorAll('[style*="background"]');
+      backgroundElements.forEach(el => {
+        if (!el.classList.contains('quick-start-header') && !el.closest('.quick-start-header')) {
+          if (el.textContent && (el.textContent.toLowerCase().includes('quick') || el.textContent.toLowerCase().includes('start'))) {
+            try {
+              el.remove();
+            } catch (e) {
+              el.style.display = 'none';
+            }
+          }
         }
       });
     }, 5000);

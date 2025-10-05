@@ -10,6 +10,7 @@ export interface Sale {
   customer_id: number;
   user_id: number;
   sales_person_id?: number;
+  invoice_type_id?: number; // Selected invoice type (affects numbering)
   type: 'QUOTATION' | 'ORDER' | 'INVOICE' | 'SALE';
   status: 'DRAFT' | 'PENDING' | 'CONFIRMED' | 'INVOICED' | 'PAID' | 'OVERDUE' | 'CANCELLED';
   date: string;
@@ -138,6 +139,7 @@ export interface SaleReturnItem {
 export interface SaleCreateRequest {
   customer_id: number;
   sales_person_id?: number;
+  invoice_type_id?: number; // ✅ ensure invoice type is sent on create
   type: string;
   date: string; // ISO datetime string format for Go backend (e.g., '2025-08-15T00:00:00Z')
   due_date?: string;
@@ -177,6 +179,7 @@ export interface SaleItemRequest {
 export interface SaleUpdateRequest {
   customer_id?: number;
   sales_person_id?: number;
+  invoice_type_id?: number; // allow updating invoice type before invoicing
   date?: string; // ISO datetime string format for Go backend (e.g., '2025-08-15T00:00:00Z')
   due_date?: string;
   valid_until?: string;

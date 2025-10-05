@@ -72,6 +72,7 @@ func (s *SalesServiceV2) CreateSale(request models.SaleCreateRequest, userID uin
 	}
 	
 	// Create sale with DRAFT status by default
+	log.Printf("📝 Creating sale with invoice_type_id: %v", request.InvoiceTypeID)
 	sale := &models.Sale{
 		Code:              saleCode,
 		CustomerID:        request.CustomerID,
@@ -386,15 +387,21 @@ func (s *SalesServiceV2) CreateInvoice(saleID uint, userID uint) (*models.Sale, 
 	
 	// Generate invoice number using new service
 	if sale.InvoiceTypeID != nil {
+		log.Printf("🔧 Generating invoice number for sale #%d with invoice type ID: %d", sale.ID, *sale.InvoiceTypeID)
 		invoiceResp, err := s.invoiceNumberService.GenerateInvoiceNumber(*sale.InvoiceTypeID, sale.Date)
 		if err != nil {
+			log.Printf("❌ Failed to generate invoice number with type ID %d: %v", *sale.InvoiceTypeID, err)
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to generate invoice number: %v", err)
 		}
 		sale.InvoiceNumber = invoiceResp.InvoiceNumber
+		log.Printf("✅ Generated invoice number: %s (Counter: %d, Type: %s)", 
+			invoiceResp.InvoiceNumber, invoiceResp.Counter, invoiceResp.TypeCode)
 	} else {
 		// Fallback to old method if no invoice type specified
+		log.Printf("⚠️ No invoice type specified for sale #%d, using fallback method", sale.ID)
 		sale.InvoiceNumber = s.generateInvoiceNumber()
+		log.Printf("📄 Generated fallback invoice number: %s", sale.InvoiceNumber)
 	}
 	
 	sale.UpdatedAt = time.Now()

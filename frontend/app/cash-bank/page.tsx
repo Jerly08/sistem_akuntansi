@@ -43,7 +43,7 @@ import {
   Tooltip,
   useColorModeValue,
 } from '@chakra-ui/react';
-import { FiPlus, FiDollarSign, FiCreditCard, FiEdit2, FiEye, FiArrowRight, FiTrendingUp, FiTrendingDown, FiMoreVertical, FiTrash2 } from 'react-icons/fi';
+import { FiPlus, FiDollarSign, FiCreditCard, FiEdit2, FiEye, FiArrowRight, FiTrendingUp, FiTrendingDown, FiMoreVertical, FiTrash2, FiRefreshCw, FiSettings } from 'react-icons/fi';
 import cashbankService, { CashBank, BalanceSummary } from '@/services/cashbankService';
 import accountService from '@/services/accountService';
 import CashBankForm from '@/components/cashbank/CashBankForm';
@@ -61,6 +61,7 @@ const getAccountColumns = (
   onWithdraw?: (account: CashBank) => void,
   onTransfer?: (account: CashBank) => void,
   onDelete?: (account: CashBank) => void,
+  onReconcile?: (account: CashBank) => void,
   textColor?: string,
   mutedTextColor?: string
 ) => [
@@ -291,6 +292,15 @@ const getAccountColumns = (
             >
               Transfer Funds
             </MenuItem>
+            <MenuItem 
+              icon={<FiSettings />} 
+              onClick={() => onReconcile?.(row)}
+              color="purple.600"
+              fontSize="sm"
+              isDisabled={!row.is_active}
+            >
+              Check Reconciliation
+            </MenuItem>
             <MenuDivider />
             <MenuItem 
               icon={<FiTrash2 />} 
@@ -415,8 +425,18 @@ const CashBankPage: React.FC = () => {
     onClose: onDepositModalClose
   } = useDisclosure();
   
+  const {
+    isOpen: isReconcileModalOpen,
+    onOpen: onReconcileModalOpen,
+    onClose: onReconcileModalClose
+  } = useDisclosure();
+  
   // Deposit form states
   const [depositAccount, setDepositAccount] = useState<CashBank | null>(null);
+  
+  // Reconciliation states
+  const [reconcileAccount, setReconcileAccount] = useState<CashBank | null>(null);
+  const [reconciling, setReconciling] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -515,6 +535,84 @@ const CashBankPage: React.FC = () => {
     setTransactionAccount(account);
     onTransferModalOpen();
   };
+  
+  const handleReconcile = (account: CashBank) => {
+    setReconcileAccount(account);
+    onReconcileModalOpen();
+  };
+  
+  const handleGlobalReconcile = () => {
+    setReconcileAccount(null); // Global reconciliation
+    onReconcileModalOpen();
+  };
+  
+  const handleOpenReconciliationPage = () => {
+    // Navigate to dedicated reconciliation page
+    window.open('/cash-bank-reconciliation', '_blank');
+    onReconcileModalClose();
+  };
+  
+  const handleCheckReconciliationStatus = async () => {
+    try {
+      setReconciling(true);
+      
+      const response = await fetch('/api/v1/dashboard/finance', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) throw new Error('Failed to check reconciliation status');
+      
+      const result = await response.json();
+      const bankRecon = result.data.bank_reconciliation;
+      
+      let statusMessage = '';
+      let statusColor: 'success' | 'warning' | 'error' | 'info' = 'info';
+      
+      switch (bankRecon.status) {
+        case 'never_reconciled':
+          statusMessage = 'Bank reconciliation has never been performed. Please run reconciliation to ensure data accuracy.';
+          statusColor = 'error';
+          break;
+        case 'needs_attention':
+          statusMessage = `Bank reconciliation is overdue (${bankRecon.days_ago} days ago). Please perform reconciliation soon.`;
+          statusColor = 'warning';
+          break;
+        case 'recent':
+          statusMessage = `Bank reconciliation was performed ${bankRecon.days_ago} days ago. Status is acceptable.`;
+          statusColor = 'warning';
+          break;
+        case 'up_to_date':
+          statusMessage = 'Bank reconciliation is up to date. All accounts are properly reconciled.';
+          statusColor = 'success';
+          break;
+        default:
+          statusMessage = 'Reconciliation status is unknown. Please check manually.';
+          statusColor = 'info';
+      }
+      
+      toast({
+        title: 'Reconciliation Status',
+        description: statusMessage,
+        status: statusColor,
+        duration: 6000,
+        isClosable: true,
+      });
+      
+    } catch (error: any) {
+      toast({
+        title: 'Status Check Failed',
+        description: error.message || 'Failed to check reconciliation status',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setReconciling(false);
+    }
+  };
 
   const handleTransactionSuccess = () => {
     fetchData(); // Refresh data after successful transaction
@@ -602,7 +700,8 @@ const CashBankPage: React.FC = () => {
     handleTransfer, 
     handleDelete,
     textColor,
-    mutedTextColor
+    mutedTextColor,
+    handleReconcile
   );
 
   if (loading) {
@@ -620,13 +719,24 @@ const CashBankPage: React.FC = () => {
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Heading size="lg">{t('cashBank.title')}</Heading>
-          <Button
-            colorScheme="blue"
-            leftIcon={<FiPlus />}
-            onClick={handleAddAccount}
-          >
-            {t('common.add')} {t('accounts.title')}
-          </Button>
+          <HStack spacing={3}>
+            <Button
+              leftIcon={<FiSettings />}
+              onClick={handleGlobalReconcile}
+              colorScheme="purple"
+              variant="outline"
+              size="sm"
+            >
+              Bank Reconciliation
+            </Button>
+            <Button
+              colorScheme="blue"
+              leftIcon={<FiPlus />}
+              onClick={handleAddAccount}
+            >
+              {t('common.add')} {t('accounts.title')}
+            </Button>
+          </HStack>
         </Flex>
         
         {error && (
@@ -1208,6 +1318,115 @@ const CashBankPage: React.FC = () => {
         onClose={onTransactionHistoryModalClose}
         account={selectedAccount}
       />
+      
+      {/* Reconciliation Modal */}
+      <Modal isOpen={isReconcileModalOpen} onClose={onReconcileModalClose} size="lg">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            {reconcileAccount ? `Reconcile ${reconcileAccount.name}` : 'Bank Reconciliation Check'}
+          </ModalHeader>
+          <ModalCloseButton />
+          
+          <ModalBody>
+            <VStack spacing={4} align="stretch">
+              <Alert status="info">
+                <AlertIcon />
+                <Box>
+                  <AlertTitle fontSize="sm">Bank Reconciliation Status</AlertTitle>
+                  <AlertDescription fontSize="xs">
+                    Check the reconciliation status of your cash and bank accounts with the journal system.
+                  </AlertDescription>
+                </Box>
+              </Alert>
+              
+              {reconcileAccount ? (
+                <Box p={4} bg="gray.50" borderRadius="md">
+                  <Text fontWeight="bold" mb={2}>{reconcileAccount.name}</Text>
+                  <HStack justify="space-between" mb={1}>
+                    <Text fontSize="sm">Account Type:</Text>
+                    <Text fontSize="sm" fontWeight="bold">
+                      {reconcileAccount.type} Account
+                    </Text>
+                  </HStack>
+                  <HStack justify="space-between" mb={1}>
+                    <Text fontSize="sm">Current Balance:</Text>
+                    <Text fontSize="sm" fontWeight="bold">
+                      {reconcileAccount.currency} {reconcileAccount.balance.toLocaleString('id-ID')}
+                    </Text>
+                  </HStack>
+                  <HStack justify="space-between">
+                    <Text fontSize="sm">Status:</Text>
+                    <Badge 
+                      colorScheme={reconcileAccount.is_active ? 'green' : 'red'}
+                      variant="solid"
+                      fontSize="xs"
+                    >
+                      {reconcileAccount.is_active ? 'ACTIVE' : 'INACTIVE'}
+                    </Badge>
+                  </HStack>
+                </Box>
+              ) : (
+                <Box p={4} bg="blue.50" borderRadius="md" borderLeft="4px" borderLeftColor="blue.400">
+                  <Text fontWeight="bold" mb={2} color="blue.800">Global Reconciliation Check</Text>
+                  <Text fontSize="sm" color="blue.700">
+                    This will check the reconciliation status for all cash and bank accounts in your system.
+                  </Text>
+                </Box>
+              )}
+              
+              <Alert status="warning" size="sm">
+                <AlertIcon />
+                <AlertDescription fontSize="xs">
+                  <Text fontWeight="bold" mb={1}>Action Required:</Text>
+                  To perform actual reconciliation, please use the dedicated 
+                  <Text as="span" fontWeight="bold" color="blue.600"> Cash & Bank Reconciliation </Text> 
+                  module which provides advanced reconciliation tools.
+                </AlertDescription>
+              </Alert>
+              
+              <Text fontSize="sm" color="gray.600">
+                Available actions:
+              </Text>
+              
+              <VStack spacing={2} align="stretch">
+                <Button 
+                  leftIcon={<FiSettings />}
+                  variant="outline" 
+                  colorScheme="purple"
+                  onClick={handleOpenReconciliationPage}
+                  size="sm"
+                >
+                  Open Reconciliation Module
+                </Button>
+                <Button 
+                  leftIcon={<FiRefreshCw />}
+                  variant="outline" 
+                  onClick={handleCheckReconciliationStatus}
+                  isLoading={reconciling}
+                  size="sm"
+                >
+                  Check Current Status
+                </Button>
+              </VStack>
+            </VStack>
+          </ModalBody>
+          
+          <ModalFooter>
+            <HStack spacing={3}>
+              <Button variant="outline" onClick={onReconcileModalClose}>
+                Close
+              </Button>
+              <Button 
+                colorScheme="purple" 
+                onClick={handleOpenReconciliationPage}
+              >
+                Go to Reconciliation
+              </Button>
+            </HStack>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </SimpleLayout>
   );
 };

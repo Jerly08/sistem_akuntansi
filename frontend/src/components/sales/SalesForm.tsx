@@ -784,6 +784,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
         const createData: SaleCreateRequest = {
           customer_id: data.customer_id,
           sales_person_id: data.sales_person_id,
+          invoice_type_id: data.invoice_type_id,
           type: data.type,
           date: `${data.date}T00:00:00Z`, // Convert to ISO datetime format for Go backend
           due_date: data.due_date ? `${data.due_date}T00:00:00Z` : undefined,
@@ -1740,6 +1741,36 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             </Select>
                             <FormHelperText color={textColor}>
                               Which {watchPaymentMethodType.toLowerCase()} account will receive the money
+                            </FormHelperText>
+                          </FormControl>
+                        )}
+
+                        {watchPaymentMethodType === 'CREDIT' && (
+                          <FormControl>
+                            <FormLabel>Bank Account for Invoice (optional)</FormLabel>
+                            <Select
+                              {...register('cash_bank_id', {
+                                setValueAs: value => parseInt(value) || undefined
+                              })}
+                              bg={inputBg}
+                              _focus={{ bg: inputFocusBg }}
+                              isDisabled={loadingData}
+                            >
+                              <option value="">
+                                {loadingData ? 'Loading bank accounts...' : 
+                                 cashBankAccounts.length === 0 ? 'No bank accounts available' : 'Select bank account'}
+                              </option>
+                              {cashBankAccounts
+                                .filter(account => account.type === 'BANK')
+                                .map(account => (
+                                  <option key={account.id} value={account.id}>
+                                    {account.code} - {account.name}
+                                    {account.bank_name && ` (${account.bank_name})`}
+                                  </option>
+                              ))}
+                            </Select>
+                            <FormHelperText color={textColor}>
+                              Bank tujuan transfer yang akan dicetak pada invoice. Jika kosong, sistem akan menampilkan bank aktif pertama.
                             </FormHelperText>
                           </FormControl>
                         )}

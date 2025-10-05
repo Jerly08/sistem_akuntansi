@@ -11012,282 +11012,6 @@
         ]
       }
     },
-    "/api/v1/reports/ssot-profit-loss": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Generate a comprehensive Profit \u0026 Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "example": "2025-01-01",
-            "in": "query",
-            "name": "start_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "example": "2025-12-31",
-            "in": "query",
-            "name": "end_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "default": "json",
-            "description": "Output format",
-            "enum": [
-              "json",
-              "pdf",
-              "excel",
-              "csv"
-            ],
-            "in": "query",
-            "name": "format",
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "P\u0026L report generated successfully",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Generate SSOT Profit \u0026 Loss Report",
-        "tags": [
-          "SSOT Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/ssot/balance-sheet": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Generate a comprehensive Balance Sheet using Single Source of Truth (SSOT) journal system with real-time data integration and automatic balance validation",
-        "parameters": [
-          {
-            "description": "As of date (YYYY-MM-DD)",
-            "example": "2025-12-31",
-            "in": "query",
-            "name": "as_of_date",
-            "type": "string"
-          },
-          {
-            "default": "json",
-            "description": "Output format",
-            "enum": [
-              "json",
-              "summary",
-              "pdf",
-              "csv"
-            ],
-            "in": "query",
-            "name": "format",
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Balance Sheet generated successfully",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Generate SSOT Balance Sheet",
-        "tags": [
-          "SSOT Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/ssot/balance-sheet/account-details": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Get detailed account information for Balance Sheet drilldown analysis",
-        "parameters": [
-          {
-            "description": "As of date (YYYY-MM-DD)",
-            "example": "2025-12-31",
-            "in": "query",
-            "name": "as_of_date",
-            "type": "string"
-          },
-          {
-            "description": "Filter by account type",
-            "enum": [
-              "ASSET",
-              "LIABILITY",
-              "EQUITY"
-            ],
-            "in": "query",
-            "name": "account_type",
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Account details retrieved successfully",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get SSOT Balance Sheet Account Details",
-        "tags": [
-          "SSOT Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/ssot/cash-flow": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Generate a comprehensive Cash Flow statement using Single Source of Truth (SSOT) journal system with operating, investing, and financing activities analysis",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "example": "2025-01-01",
-            "in": "query",
-            "name": "start_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "example": "2025-12-31",
-            "in": "query",
-            "name": "end_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "default": "json",
-            "description": "Output format",
-            "enum": [
-              "json",
-              "pdf",
-              "excel",
-              "csv"
-            ],
-            "in": "query",
-            "name": "format",
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Cash Flow statement generated successfully",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Generate SSOT Cash Flow Statement",
-        "tags": [
-          "SSOT Reports"
-        ]
-      }
-    },
     "/api/v1/sales": {
       "get": {
         "consumes": [
@@ -12780,6 +12504,282 @@
           }
         },
         "summary": "Get vendor analysis integrated with SSOT journal",
+        "tags": [
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/reports/ssot-profit-loss": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate a comprehensive Profit \u0026 Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "example": "2025-01-01",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format",
+            "enum": [
+              "json",
+              "pdf",
+              "excel",
+              "csv"
+            ],
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "P\u0026L report generated successfully",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate SSOT Profit \u0026 Loss Report",
+        "tags": [
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/reports/ssot/balance-sheet": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate a comprehensive Balance Sheet using Single Source of Truth (SSOT) journal system with real-time data integration and automatic balance validation",
+        "parameters": [
+          {
+            "description": "As of date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format",
+            "enum": [
+              "json",
+              "summary",
+              "pdf",
+              "csv"
+            ],
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance Sheet generated successfully",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate SSOT Balance Sheet",
+        "tags": [
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/reports/ssot/balance-sheet/account-details": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get detailed account information for Balance Sheet drilldown analysis",
+        "parameters": [
+          {
+            "description": "As of date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "description": "Filter by account type",
+            "enum": [
+              "ASSET",
+              "LIABILITY",
+              "EQUITY"
+            ],
+            "in": "query",
+            "name": "account_type",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Account details retrieved successfully",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get SSOT Balance Sheet Account Details",
+        "tags": [
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/reports/ssot/cash-flow": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate a comprehensive Cash Flow statement using Single Source of Truth (SSOT) journal system with operating, investing, and financing activities analysis",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "example": "2025-01-01",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format",
+            "enum": [
+              "json",
+              "pdf",
+              "excel",
+              "csv"
+            ],
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash Flow statement generated successfully",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate SSOT Cash Flow Statement",
         "tags": [
           "SSOT Reports"
         ]
