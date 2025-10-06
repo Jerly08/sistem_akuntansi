@@ -17,6 +17,7 @@ type PurchaseSSOTJournalAdapter struct {
 	db                    *gorm.DB
 	unifiedJournalService *UnifiedJournalService
 	accountRepo           repositories.AccountRepository
+	taxService            *TaxAccountService
 }
 
 // NewPurchaseSSOTJournalAdapter creates an adapter instance wired to UnifiedJournalService
@@ -24,11 +25,13 @@ func NewPurchaseSSOTJournalAdapter(
 	db *gorm.DB,
 	unifiedJournalService *UnifiedJournalService,
 	accountRepo repositories.AccountRepository,
+	taxService *TaxAccountService,
 ) *PurchaseSSOTJournalAdapter {
 	return &PurchaseSSOTJournalAdapter{
 		db:                    db,
 		unifiedJournalService: unifiedJournalService,
 		accountRepo:           accountRepo,
+		taxService:            taxService,
 	}
 }
 
@@ -70,7 +73,7 @@ func (adapter *PurchaseSSOTJournalAdapter) CreatePurchaseJournalEntry(
 	return entry, nil
 }
 
-// GetPurchaseJournalEntries returns all SSOT journal entries for a purchase
+// GetPurchaseJournalEntries returns all SSOT journal entries for a purchase (only source_type=PURCHASE)
 func (adapter *PurchaseSSOTJournalAdapter) GetPurchaseJournalEntries(
 	ctx context.Context,
 	purchaseID uint64,
@@ -91,6 +94,36 @@ func (adapter *PurchaseSSOTJournalAdapter) GetPurchaseJournalEntries(
 		return nil, fmt.Errorf("failed to get purchase journal entries: %v", err)
 	}
 	return resp.Data, nil
+}
+
+// GetPurchaseRelatedJournalEntries returns journals for PURCHASE and optionally PAYMENT linked to the purchase
+func (adapter *PurchaseSSOTJournalAdapter) GetPurchaseRelatedJournalEntries(
+	ctx context.Context,
+	purchaseID uint64,
+	includePayments bool,
+) ([]models.SSOTJournalEntry, error) {
+	if adapter.unifiedJournalService == nil {
+		return nil, fmt.Errorf("unified journal service not available")
+	}
+
+	var result []models.SSOTJournalEntry
+	// 1) PURCHASE journals
+	purchaseFilters := JournalFilters{SourceType: models.SSOTSourceTypePurchase, SourceID: &purchaseID, Page: 1, Limit: 200}
+	if resp, err := adapter.unifiedJournalService.GetJournalEntries(purchaseFilters); err == nil {
+		result = append(result, resp.Data...)
+	} else {
+		return nil, fmt.Errorf("failed to get purchase journals: %v", err)
+	}
+
+	// 2) PAYMENT journals (optional)
+	if includePayments {
+		paymentFilters := JournalFilters{SourceType: models.SSOTSourceTypePayment, SourceID: &purchaseID, Page: 1, Limit: 200}
+		if resp, err := adapter.unifiedJournalService.GetJournalEntries(paymentFilters); err == nil {
+			result = append(result, resp.Data...)
+		}
+	}
+
+	return result, nil
 }
 
 // CreatePurchasePaymentJournalEntry creates SSOT journal entry for purchase payment
@@ -261,30 +294,59 @@ func (adapter *PurchaseSSOTJournalAdapter) buildPurchaseJournalLines(
 func (adapter *PurchaseSSOTJournalAdapter) getPurchaseAccountIDs() (*SSOTPurchaseAccountIDs, error) {
 	ids := &SSOTPurchaseAccountIDs{}
 
-	inv, err := adapter.accountRepo.FindByCode(nil, "1301")
-	if err != nil {
-		return nil, fmt.Errorf("inventory account 1301 not found: %v", err)
+	// Prefer dynamic settings from TaxAccountService when available
+	if adapter.taxService != nil {
+		if invID, err := adapter.taxService.GetAccountID("inventory"); err == nil && invID != 0 {
+			ids.InventoryAccountID = uint64(invID)
+			ids.PrimaryAccountID = uint64(invID)
+		}
+		if ppnInID, err := adapter.taxService.GetAccountID("purchase_input_vat"); err == nil && ppnInID != 0 {
+			ids.PPNInputAccountID = uint64(ppnInID)
+		}
+		if apID, err := adapter.taxService.GetAccountID("purchase_payable"); err == nil && apID != 0 {
+			ids.AccountsPayableID = uint64(apID)
+		}
+		if p21ID, err := adapter.taxService.GetAccountID("withholding_tax21"); err == nil && p21ID != 0 {
+			ids.PPh21PayableID = uint64(p21ID)
+		}
+		if p23ID, err := adapter.taxService.GetAccountID("withholding_tax23"); err == nil && p23ID != 0 {
+			ids.PPh23PayableID = uint64(p23ID)
+		}
 	}
-	ids.InventoryAccountID = uint64(inv.ID)
-	ids.PrimaryAccountID = uint64(inv.ID)
 
-	ppn, err := adapter.accountRepo.FindByCode(nil, "2102")
-	if err != nil {
-		return nil, fmt.Errorf("PPN input account 2102 not found: %v", err)
+	// Fallback by standard codes when settings not available
+	if ids.InventoryAccountID == 0 {
+		inv, err := adapter.accountRepo.FindByCode(nil, "1301")
+		if err != nil {
+			return nil, fmt.Errorf("inventory account 1301 not found: %v", err)
+		}
+		ids.InventoryAccountID = uint64(inv.ID)
+		ids.PrimaryAccountID = uint64(inv.ID)
 	}
-	ids.PPNInputAccountID = uint64(ppn.ID)
-
-	ap, err := adapter.accountRepo.FindByCode(nil, "2101")
-	if err != nil {
-		return nil, fmt.Errorf("accounts payable account 2101 not found: %v", err)
+	if ids.PPNInputAccountID == 0 {
+		ppn, err := adapter.accountRepo.FindByCode(nil, "1240")
+		if err != nil {
+			return nil, fmt.Errorf("PPN input account 1240 not found: %v", err)
+		}
+		ids.PPNInputAccountID = uint64(ppn.ID)
 	}
-	ids.AccountsPayableID = uint64(ap.ID)
-
-	if p21, err := adapter.accountRepo.FindByCode(nil, "2111"); err == nil {
-		ids.PPh21PayableID = uint64(p21.ID)
+	if ids.AccountsPayableID == 0 {
+		ap, err := adapter.accountRepo.FindByCode(nil, "2101")
+		if err != nil {
+			return nil, fmt.Errorf("accounts payable account 2101 not found: %v", err)
+		}
+		ids.AccountsPayableID = uint64(ap.ID)
 	}
-	if p23, err := adapter.accountRepo.FindByCode(nil, "2112"); err == nil {
-		ids.PPh23PayableID = uint64(p23.ID)
+	// Optional withholdings fallback
+	if ids.PPh21PayableID == 0 {
+		if p21, err := adapter.accountRepo.FindByCode(nil, "2111"); err == nil {
+			ids.PPh21PayableID = uint64(p21.ID)
+		}
+	}
+	if ids.PPh23PayableID == 0 {
+		if p23, err := adapter.accountRepo.FindByCode(nil, "2112"); err == nil {
+			ids.PPh23PayableID = uint64(p23.ID)
+		}
 	}
 	return ids, nil
 }

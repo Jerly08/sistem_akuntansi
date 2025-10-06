@@ -10,6 +10,7 @@ import {
   MenuDivider,
   IconButton,
   Tooltip,
+  Portal,
 } from '@chakra-ui/react';
 import { 
   FiDownload, 
@@ -140,7 +141,7 @@ const ExportButton: React.FC<ExportButtonProps> = ({
 
   // Multiple options - show dropdown menu
   return (
-    <Menu>
+    <Menu placement="bottom-end" strategy="fixed" isLazy>
       {variant === 'icon' ? (
         <Tooltip label="Export Data">
           <MenuButton
@@ -169,38 +170,40 @@ const ExportButton: React.FC<ExportButtonProps> = ({
         </MenuButton>
       )}
       
-      <MenuList>
-        {showExcel && onExportExcel && (
-          <MenuItem
-            icon={<FiDownload />}
-            onClick={onExportExcel}
-          >
-            Export to Excel
-          </MenuItem>
-        )}
-        
-        {showPDF && onExportPDF && (
-          <MenuItem
-            icon={<FiFilePlus />}
-            onClick={onExportPDF}
-            color="red.600"
-          >
-            Export to PDF
-          </MenuItem>
-        )}
-        
-        {showCSV && onExportCSV && (
-          <>
-            {(showExcel || showPDF) && <MenuDivider />}
+      <Portal>
+        <MenuList zIndex={1500} minW="200px" shadow="lg">
+          {showExcel && onExportExcel && (
             <MenuItem
-              icon={<FiFileText />}
-              onClick={onExportCSV}
+              icon={<FiDownload />}
+              onClick={onExportExcel}
             >
-              Export to CSV
+              Export to Excel
             </MenuItem>
-          </>
-        )}
-      </MenuList>
+          )}
+          
+          {showPDF && onExportPDF && (
+            <MenuItem
+              icon={<FiFilePlus />}
+              onClick={onExportPDF}
+              color="red.600"
+            >
+              Export to PDF
+            </MenuItem>
+          )}
+          
+          {showCSV && onExportCSV && (
+            <>
+              {(showExcel || showPDF) && <MenuDivider />}
+              <MenuItem
+                icon={<FiFileText />}
+                onClick={onExportCSV}
+              >
+                Export to CSV
+              </MenuItem>
+            </>
+          )}
+        </MenuList>
+      </Portal>
     </Menu>
   );
 };

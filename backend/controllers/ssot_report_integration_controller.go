@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,6 +15,7 @@ import (
 type SSOTReportIntegrationController struct {
 	integrationService *services.SSOTReportIntegrationService
 	pdfService         services.PDFServiceInterface
+	settingsService    *services.SettingsService
 }
 
 // NewSSOTReportIntegrationController creates a new SSOT report integration controller
@@ -21,6 +23,7 @@ func NewSSOTReportIntegrationController(integrationService *services.SSOTReportI
 	return &SSOTReportIntegrationController{
 		integrationService: integrationService,
 		pdfService:         services.NewPDFService(db),
+		settingsService:    services.NewSettingsService(db),
 	}
 }
 
@@ -47,21 +50,15 @@ func (c *SSOTReportIntegrationController) GetIntegratedFinancialReports(ctx *gin
 		return
 	}
 
-	startDate, err := time.Parse("2006-01-02", startDateStr)
+	startDate, err := c.parseDateBySettings(startDateStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid start_date format. Use YYYY-MM-DD",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status":"error","message": err.Error()})
 		return
 	}
 
-	endDate, err := time.Parse("2006-01-02", endDateStr)
+	endDate, err := c.parseDateBySettings(endDateStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid end_date format. Use YYYY-MM-DD",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status":"error","message": err.Error()})
 		return
 	}
 
@@ -107,21 +104,15 @@ func (c *SSOTReportIntegrationController) GetSSOTSalesSummary(ctx *gin.Context) 
 		return
 	}
 
-	startDate, err := time.Parse("2006-01-02", startDateStr)
+	startDate, err := c.parseDateBySettings(startDateStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid start_date format. Use YYYY-MM-DD",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status":"error","message": err.Error()})
 		return
 	}
 
-	endDate, err := time.Parse("2006-01-02", endDateStr)
+	endDate, err := c.parseDateBySettings(endDateStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid end_date format. Use YYYY-MM-DD",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status":"error","message": err.Error()})
 		return
 	}
 
@@ -513,21 +504,15 @@ func (c *SSOTReportIntegrationController) GetSSOTJournalAnalysis(ctx *gin.Contex
 		return
 	}
 
-	startDate, err := time.Parse("2006-01-02", startDateStr)
+	startDate, err := c.parseDateBySettings(startDateStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid start_date format. Use YYYY-MM-DD",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status":"error","message": err.Error()})
 		return
 	}
 
-	endDate, err := time.Parse("2006-01-02", endDateStr)
+	endDate, err := c.parseDateBySettings(endDateStr)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"message": "Invalid end_date format. Use YYYY-MM-DD",
-		})
+		ctx.JSON(http.StatusBadRequest, gin.H{"status":"error","message": err.Error()})
 		return
 	}
 
@@ -576,6 +561,34 @@ case "csv":
 			"message": "Unsupported format. Use json or pdf",
 		})
 	}
+}
+
+// parseDateBySettings parses a date string according to the system DateFormat setting, with safe fallbacks to common formats.
+func (c *SSOTReportIntegrationController) parseDateBySettings(s string) (time.Time, error) {
+	// Default layouts to try
+	layouts := []string{"2006-01-02", "02/01/2006", "01/02/2006", "02-01-2006", time.RFC3339}
+
+	// If settings available, put the configured layout first
+	if c.settingsService != nil {
+		if st, err := c.settingsService.GetSettings(); err == nil {
+			switch st.DateFormat {
+			case "DD/MM/YYYY":
+				layouts = append([]string{"02/01/2006"}, layouts...)
+			case "MM/DD/YYYY":
+				layouts = append([]string{"01/02/2006"}, layouts...)
+			case "YYYY-MM-DD":
+				layouts = append([]string{"2006-01-02"}, layouts...)
+			case "DD-MM-YYYY":
+				layouts = append([]string{"02-01-2006"}, layouts...)
+			}
+		}
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("invalid date format: %s (expected formats include YYYY-MM-DD or configured system date format)", s)
 }
 
 // GetSSOTReportStatus provides status and health information about SSOT report integration

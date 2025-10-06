@@ -9,19 +9,25 @@ import (
 	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
+	"app-sistem-akuntansi/repositories"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type PurchaseController struct {
 	purchaseService *services.PurchaseService
 	paymentService  *services.PaymentService
+	db              *gorm.DB
+	accountRepo     repositories.AccountRepository
 }
 
-func NewPurchaseController(purchaseService *services.PurchaseService, paymentService *services.PaymentService) *PurchaseController {
+func NewPurchaseController(purchaseService *services.PurchaseService, paymentService *services.PaymentService, db *gorm.DB, accountRepo repositories.AccountRepository) *PurchaseController {
 	return &PurchaseController{
 		purchaseService: purchaseService,
 		paymentService:  paymentService,
+		db:              db,
+		accountRepo:     accountRepo,
 	}
 }
 
@@ -1057,7 +1063,32 @@ func (pc *PurchaseController) CreatePurchasePayment(c *gin.Context) {
 		log.Printf("⚠️ Warning: Failed to create SSOT journal entry for payment: %v", err)
 		// Don't fail the payment process, but log the issue
 	} else {
-		log.Printf("✅ SSOT journal entry created for purchase payment")
+	log.Printf("✅ SSOT journal entry created for purchase payment")
+	}
+
+	// 🔧 NEW: Ensure COA balance is synchronized after payment
+	log.Printf("🔧 Ensuring COA balance sync after payment...")
+	if pc.accountRepo != nil {
+		// Initialize COA sync service
+		coaSyncService := services.NewPurchasePaymentCOASyncService(pc.db, pc.accountRepo)
+		
+		// Ensure COA balance is updated
+		err = coaSyncService.SyncCOABalanceAfterPayment(
+			uint(purchaseID),
+			request.Amount,
+			request.CashBankID,
+			userID,
+			fmt.Sprintf("PAY-%s", purchase.Code),
+			fmt.Sprintf("Payment for Purchase %s", purchase.Code),
+		)
+		if err != nil {
+			log.Printf("⚠️ Warning: Failed to sync COA balance: %v", err)
+			// Don't fail the payment, just log the warning
+		} else {
+			log.Printf("✅ COA balance synchronized successfully")
+		}
+	} else {
+		log.Printf("⚠️ Warning: Account repository not available for COA sync")
 	}
 
 	// CRITICAL FIX: Update purchase payment amounts after successful payment

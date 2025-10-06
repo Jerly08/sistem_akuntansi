@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   VStack,
@@ -19,6 +19,8 @@ import {
   FormControl,
   FormLabel,
   Input,
+  InputGroup,
+  InputLeftElement,
   Select,
   Spinner,
   Alert,
@@ -102,13 +104,17 @@ const SimpleJournalEntryReport: React.FC<SimpleJournalEntryReportProps> = ({
       setEntries(response.data || []);
       setTotalCount(response.total || 0);
       
-      toast({
-        title: 'Success',
-        description: `Loaded ${response.data?.length || 0} journal entries`,
-        status: 'success',
-        duration: 2000,
-        isClosable: true,
-      });
+      const successToastId = 'simple-journal-load-success';
+      if (!toast.isActive(successToastId)) {
+        toast({
+          id: successToastId,
+          title: 'Success',
+          description: `Loaded ${response.data?.length || 0} journal entries`,
+          status: 'success',
+          duration: 2000,
+          isClosable: true,
+        });
+      }
     } catch (error) {
       console.error('Error loading journal entries:', error);
       toast({
@@ -140,8 +146,11 @@ const SimpleJournalEntryReport: React.FC<SimpleJournalEntryReportProps> = ({
     setCurrentPage(1);
   }, [entries, searchTerm]);
 
-  // Load initial data
+  // Load initial data (guarded to avoid duplicate calls in React Strict Mode)
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     loadJournalEntries();
   }, []);
 
@@ -346,13 +355,16 @@ const SimpleJournalEntryReport: React.FC<SimpleJournalEntryReportProps> = ({
             <HStack spacing={4} w="full">
               <FormControl flex="1">
                 <FormLabel fontSize="sm">Search</FormLabel>
-                <Input
-                  size="sm"
-                  placeholder="Search by entry number, description, or reference..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  leftIcon={<FiSearch />}
-                />
+                <InputGroup size="sm">
+                  <InputLeftElement pointerEvents="none">
+                    <FiSearch />
+                  </InputLeftElement>
+                  <Input
+                    placeholder="Search by entry number, description, or reference..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </InputGroup>
               </FormControl>
               <HStack spacing={2} mt={6}>
                 <Button

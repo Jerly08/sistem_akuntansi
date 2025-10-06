@@ -12,7 +12,12 @@ func SeedData(db *gorm.DB) {
 
 	// Seed Users
 	seedUsers(db)
-	
+
+	// Ensure module permissions table and defaults are prepared (Manage Permission)
+	if err := MigratePermissions(db); err != nil {
+		log.Printf("Error migrating/initializing module permissions: %v", err)
+	}
+
 	// Seed Accounts (COA)
 	if err := SeedAccounts(db); err != nil {
 		log.Printf("Error seeding accounts: %v", err)
@@ -554,9 +559,14 @@ func seedRolePermissions(db *gorm.DB) {
 			"reports:read",
 		},
 		"employee": {
+			// Align employee defaults with module-level Manage Permissions
 			"products:read",
 			"sales:read", "sales:create",
 			"contacts:read",
+			// Needed for forms and lookups
+			"accounts:read",
+			// Allow employees to create and edit their purchase requests
+			"purchases:read", "purchases:create", "purchases:update",
 		},
 	}
 

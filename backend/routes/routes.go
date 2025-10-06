@@ -203,6 +203,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Initialize services needed for purchase service
 	journalRepo := repositories.NewJournalEntryRepository(db)
 	pdfService := services.NewPDFService(db)
+	coaService := services.NewCOAService(db)
 	purchaseService := services.NewPurchaseService(
 		db,
 		purchaseRepo,
@@ -214,9 +215,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 		journalRepo,
 		pdfService,
 		unifiedJournalService, // Add unified journal service for SSOT integration
+		coaService, // Add COA service for journal V2 integration
 	)
 	// Handlers that depend on services (purchaseController will be initialized later)
 	purchaseApprovalHandler := handlers.NewPurchaseApprovalHandler(purchaseService, approvalService)
+	// Employee approval handler
+	employeeDashboardService := services.NewEmployeeDashboardService(db)
+	employeeApprovalHandler := handlers.NewEmployeeApprovalHandler(approvalService, employeeDashboardService)
 	
 	// Initialize security middleware
 	middleware.InitAuditLogger(db)       // Initialize audit logging
@@ -384,6 +389,15 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				dashboard.GET("/finance", middleware.RoleRequired("admin", "finance"), dashboardController.GetFinanceDashboardData)
 				dashboard.GET("/stock-alerts", middleware.RoleRequired("admin", "inventory_manager", "director"), dashboardController.GetStockAlertsBanner)
 				dashboard.POST("/stock-alerts/:id/dismiss", middleware.RoleRequired("admin", "inventory_manager"), dashboardController.DismissStockAlert)
+				
+				// Employee dashboard routes
+				dashboard.GET("/employee", dashboardController.GetEmployeeDashboardData)
+				dashboard.GET("/employee/workflows", dashboardController.GetEmployeeApprovalWorkflows)
+				dashboard.GET("/employee/purchase-requests", dashboardController.GetEmployeePurchaseRequests)
+				dashboard.GET("/employee/approval-notifications", dashboardController.GetEmployeeApprovalNotifications)
+				dashboard.GET("/employee/purchase-approval-status", dashboardController.GetEmployeePurchaseApprovalStatus)
+				dashboard.GET("/employee/notifications-summary", dashboardController.GetEmployeeNotificationsSummary)
+				dashboard.PATCH("/employee/notifications/:id/read", dashboardController.MarkNotificationAsRead)
 			}
 
 			// 📦 Product routes with enhanced permission checks dan inventory monitoring
@@ -538,10 +552,16 @@ salesJournalServiceV2 := services.NewSalesJournalServiceV2(db, journalRepo, coaS
 			// Initialize Sales Service V2 (clean implementation with proper status-based journal posting)
 			salesServiceV2 := services.NewSalesServiceV2(db, salesRepo, salesJournalServiceV2, stockService, notificationService, settingsService, invoiceNumberService)
 
-	// Initialize Payment repositories, services and controllers
+// Initialize Payment repositories, services and controllers
 	paymentRepo := repositories.NewPaymentRepository(db)
 	cashBankRepo := repositories.NewCashBankRepository(db)
-	paymentService := services.NewPaymentService(db, paymentRepo, salesRepo, purchaseRepo, cashBankRepo, accountRepo, contactRepo)
+	
+	// Initialize PurchasePaymentJournalService for SSOT payment journal integration  
+	// Note: PurchaseService will be injected later if needed for SSOT integration
+	purchasePaymentJournalService := services.NewPurchasePaymentJournalService(db, accountRepo, unifiedJournalService, nil)
+	
+	// Initialize PaymentService with PurchasePaymentJournalService for proper credit purchase payment handling
+	paymentService := services.NewPaymentService(db, paymentRepo, salesRepo, purchaseRepo, cashBankRepo, accountRepo, contactRepo, purchasePaymentJournalService)
 	paymentController := controllers.NewPaymentController(paymentService)
 	cashBankService := services.NewCashBankService(db, cashBankRepo, accountRepo)
 	accountService := services.NewAccountService(accountRepo)
@@ -554,7 +574,7 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 	salesController := controllers.NewSalesController(salesServiceV2, paymentService, unifiedSalesPaymentService, pdfService)
 	
 	// Initialize PurchaseController with PaymentService integration (moved here after paymentService is available)
-	purchaseController := controllers.NewPurchaseController(purchaseService, paymentService)
+	purchaseController := controllers.NewPurchaseController(purchaseService, paymentService, db, accountRepo)
 
 			// 🔔 Notification routes (accessible by all authenticated users)
 			notifs := protected.Group("/notifications")
@@ -818,6 +838,18 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 			{
 				workflows.GET("", purchaseApprovalHandler.GetApprovalWorkflows)
 				workflows.POST("", middleware.RoleRequired("admin"), purchaseApprovalHandler.CreateApprovalWorkflow)
+			}
+			
+			// Employee approval routes
+			employeeApprovals := protected.Group("/employee/approvals")
+			{
+				employeeApprovals.GET("/requests", employeeApprovalHandler.GetMyApprovalRequests)
+				employeeApprovals.GET("/pending", employeeApprovalHandler.GetPendingApprovalsForMe)
+				employeeApprovals.POST("/:id/process", employeeApprovalHandler.ProcessApproval)
+				employeeApprovals.GET("/:id/history", employeeApprovalHandler.GetApprovalHistory)
+				employeeApprovals.GET("/my-requests", employeeApprovalHandler.GetMySubmittedRequests)
+				employeeApprovals.GET("/workflows", employeeApprovalHandler.GetApprovalWorkflowsForEmployee)
+				employeeApprovals.GET("/statistics", employeeApprovalHandler.GetApprovalStatistics)
 			}
 
 			// ✅ CONSOLIDATED: Use only Enhanced Report Service as primary service with caching

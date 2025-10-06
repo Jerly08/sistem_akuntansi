@@ -42,26 +42,69 @@ interface DashboardSummary {
   min_stock_alerts_count?: number;
 }
 
+interface EmployeeDashboardData {
+  pending_approvals?: Array<{
+    id: number;
+    title: string;
+    description: string;
+    status: string;
+    created_at: string;
+    urgency_level?: string;
+    days_pending?: number;
+  }>;
+  approval_notifications?: Array<{
+    id: number;
+    title: string;
+    message: string;
+    type: string;
+    status: string;
+    created_at: string;
+    urgency_level?: string;
+  }>;
+  purchase_requests?: Array<{
+    id: number;
+    title: string;
+    status: string;
+    total_amount: number;
+    approval_step: string;
+    days_pending?: number;
+    urgency_level?: string;
+  }>;
+  workflows?: Array<{
+    id: number;
+    name: string;
+    status: string;
+    total_steps: number;
+    current_step: number;
+  }>;
+  summary?: {
+    total_pending_approvals: number;
+    total_notifications: number;
+    urgent_items: number;
+  };
+}
+
 export const EmployeeDashboard = () => {
   const router = useRouter();
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [employeeData, setEmployeeData] = useState<EmployeeDashboardData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchSummary = async () => {
+    const fetchEmployeeDashboard = async () => {
       try {
-        // Use analytics endpoint under /api/v1 for summary data
-        const res = await api.get(API_ENDPOINTS.DASHBOARD_ANALYTICS);
-        setSummary(res.data?.data || res.data || {});
+        // Use employee dashboard endpoint
+        const res = await api.get(API_ENDPOINTS.DASHBOARD_EMPLOYEE);
+        setEmployeeData(res.data?.data || res.data || {});
         setError(null);
       } catch (e: any) {
-        setError(e?.response?.data?.error || e?.message || 'Gagal memuat ringkasan dashboard');
+        console.error('Employee dashboard fetch error:', e);
+        setError(e?.response?.data?.error || e?.message || 'Gagal memuat dashboard karyawan');
       } finally {
         setLoading(false);
       }
     };
-    fetchSummary();
+    fetchEmployeeDashboard();
   }, []);
   
   return (
@@ -76,43 +119,41 @@ export const EmployeeDashboard = () => {
         </Flex>
       ) : (
         <>
-          {/* Ringkasan & Notifikasi */}
-          <Box bg="white" p={6} borderRadius="lg" boxShadow="sm" mt={4}>
-            <Heading as="h3" size="md" mb={3} display="flex" alignItems="center" gap={2}>
-              <Icon as={FiBell} /> Ringkasan
-            </Heading>
-            {error ? (
-              <Text color="red.500">{error}</Text>
-            ) : (
-              <Text>
-                Anda memiliki{' '}
-                <Badge colorScheme="blue" mx={1}>{summary?.unread_notifications ?? 0}</Badge>
-                notifikasi belum dibaca.
-              </Text>
-            )}
-          </Box>
+          {error && (
+            <Box bg="red.50" p={4} borderRadius="lg" borderLeft="4px solid" borderColor="red.500" mb={4}>
+              <Text color="red.700">{error}</Text>
+            </Box>
+          )}
 
-          {/* Aktivitas Terbaru */}
-          {summary?.recent_activities && summary.recent_activities.length > 0 && (
+          {/* Approval Notifications */}
+          {employeeData?.approval_notifications && employeeData.approval_notifications.length > 0 && (
             <Card mt={6}>
               <CardHeader>
                 <Heading size="md" display="flex" alignItems="center">
-                  <Icon as={FiActivity} mr={2} color="blue.500" />
-                  Aktivitas Terbaru
+                  <Icon as={FiBell} mr={2} color="orange.500" />
+                  Notifikasi Approval
                 </Heading>
               </CardHeader>
               <CardBody>
                 <List spacing={3}>
-                  {summary.recent_activities.slice(0, 8).map((act) => (
-                    <ListItem key={act.id} display="flex" alignItems="center">
-                      <ListIcon as={FiActivity} color="gray.500" />
-                      <Box>
-                        <Text fontWeight="medium">{act.action}</Text>
+                  {employeeData.approval_notifications.slice(0, 5).map((notif) => (
+                    <ListItem key={notif.id} display="flex" alignItems="center" p={3} bg="gray.50" borderRadius="md">
+                      <ListIcon as={FiBell} color={notif.urgency_level === 'urgent' ? 'red.500' : 'orange.500'} />
+                      <Box flex="1">
+                        <Text fontWeight="medium">{notif.title}</Text>
                         <Text fontSize="sm" color="gray.600">
-                          {act.table_name ? `${act.table_name}` : ''}
-                          {act.created_at ? ` • ${new Date(act.created_at).toLocaleString('id-ID')}` : ''}
+                          {notif.message}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {new Date(notif.created_at).toLocaleString('id-ID')}
                         </Text>
                       </Box>
+                      <Badge 
+                        colorScheme={notif.urgency_level === 'urgent' ? 'red' : 'orange'}
+                        size="sm"
+                      >
+                        {notif.urgency_level || notif.status}
+                      </Badge>
                     </ListItem>
                   ))}
                 </List>
@@ -120,7 +161,76 @@ export const EmployeeDashboard = () => {
             </Card>
           )}
 
-          {/* Akses Cepat - sesuai role employee */}
+          {/* Purchase Requests */}
+          {employeeData?.purchase_requests && employeeData.purchase_requests.length > 0 && (
+            <Card mt={6}>
+              <CardHeader>
+                <Heading size="md" display="flex" alignItems="center">
+                  <Icon as={FiFileText} mr={2} color="blue.500" />
+                  Purchase Requests Saya
+                </Heading>
+              </CardHeader>
+              <CardBody>
+                <List spacing={3}>
+                  {employeeData.purchase_requests.slice(0, 5).map((req) => (
+                    <ListItem key={req.id} display="flex" alignItems="center" p={3} bg="gray.50" borderRadius="md">
+                      <ListIcon as={FiFileText} color="blue.500" />
+                      <Box flex="1">
+                        <Text fontWeight="medium">{req.title}</Text>
+                        <Text fontSize="sm" color="gray.600">
+                          {req.approval_step} • Rp {req.total_amount?.toLocaleString('id-ID') || '0'}
+                        </Text>
+                        <Text fontSize="xs" color="gray.500">
+                          {req.days_pending && `${req.days_pending} hari tertunda`}
+                        </Text>
+                      </Box>
+                      <Badge 
+                        colorScheme={req.status === 'approved' ? 'green' : req.status === 'rejected' ? 'red' : 'yellow'}
+                        size="sm"
+                      >
+                        {req.status}
+                      </Badge>
+                    </ListItem>
+                  ))}
+                </List>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Approval Workflows */}
+          {employeeData?.workflows && employeeData.workflows.length > 0 && (
+            <Card mt={6}>
+              <CardHeader>
+                <Heading size="md" display="flex" alignItems="center">
+                  <Icon as={FiActivity} mr={2} color="purple.500" />
+                  Approval Workflows
+                </Heading>
+              </CardHeader>
+              <CardBody>
+                <List spacing={3}>
+                  {employeeData.workflows.slice(0, 5).map((workflow) => (
+                    <ListItem key={workflow.id} display="flex" alignItems="center" p={3} bg="gray.50" borderRadius="md">
+                      <ListIcon as={FiActivity} color="purple.500" />
+                      <Box flex="1">
+                        <Text fontWeight="medium">{workflow.name}</Text>
+                        <Text fontSize="sm" color="gray.600">
+                          Step {workflow.current_step} dari {workflow.total_steps}
+                        </Text>
+                      </Box>
+                      <Badge 
+                        colorScheme={workflow.status === 'completed' ? 'green' : 'blue'}
+                        size="sm"
+                      >
+                        {workflow.status}
+                      </Badge>
+                    </ListItem>
+                  ))}
+                </List>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* Akses Cepat - Employee Features */}
           <Card mt={6}>
             <CardHeader>
               <Heading size="md" display="flex" alignItems="center">
@@ -130,26 +240,26 @@ export const EmployeeDashboard = () => {
             </CardHeader>
             <CardBody>
               <Text mb={4} color="gray.600">
-                Sebagai karyawan, Anda dapat mengakses profil dan melihat laporan yang tersedia.
+                Akses fitur-fitur employee dashboard dan approval workflow.
               </Text>
               <HStack spacing={4} flexWrap="wrap">
                 <Button
-                  leftIcon={<FiUser />}
+                  leftIcon={<FiFileText />}
                   colorScheme="blue"
                   variant="outline"
-                  onClick={() => router.push('/profile')}
+                  onClick={() => router.push('/purchases')}
                   size="md"
                 >
-                  Profil Saya
+                  Purchase Requests
                 </Button>
                 <Button
-                  leftIcon={<FiFileText />}
-                  colorScheme="gray"
+                  leftIcon={<FiActivity />}
+                  colorScheme="purple"
                   variant="outline"
-                  onClick={() => router.push('/reports')}
+                  onClick={() => window.location.reload()}
                   size="md"
                 >
-                  Lihat Laporan
+                  Refresh Dashboard
                 </Button>
               </HStack>
             </CardBody>

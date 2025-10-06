@@ -46,6 +46,15 @@ export const API_ENDPOINTS = {
   DASHBOARD_FINANCE: '/api/v1/dashboard/finance',
   DASHBOARD_STOCK_ALERTS: '/api/v1/dashboard/stock-alerts',
   
+  // Employee Dashboard endpoints
+  DASHBOARD_EMPLOYEE: '/api/v1/dashboard/employee',
+  DASHBOARD_EMPLOYEE_WORKFLOWS: '/api/v1/dashboard/employee/workflows',
+  DASHBOARD_EMPLOYEE_PURCHASE_REQUESTS: '/api/v1/dashboard/employee/purchase-requests',
+  DASHBOARD_EMPLOYEE_APPROVAL_NOTIFICATIONS: '/api/v1/dashboard/employee/approval-notifications',
+  DASHBOARD_EMPLOYEE_PURCHASE_APPROVAL_STATUS: '/api/v1/dashboard/employee/purchase-approval-status',
+  DASHBOARD_EMPLOYEE_NOTIFICATIONS_SUMMARY: '/api/v1/dashboard/employee/notifications-summary',
+  DASHBOARD_EMPLOYEE_MARK_NOTIFICATION_READ: (id: number) => `/api/v1/dashboard/employee/notifications/${id}/read`,
+  
   // Permissions (with /api/v1 prefix)
   PERMISSIONS_ME: '/api/v1/permissions/me',
   
@@ -355,7 +364,19 @@ export const API_ENDPOINTS = {
   SECURITY_METRICS: '/api/v1/admin/security/metrics',
   
   // Journal (with /api/v1 prefix)
-  JOURNALS: '/api/v1/journals',
+  JOURNALS: {
+    LIST: '/api/v1/journals',
+    CREATE: '/api/v1/journals',
+    GET_BY_ID: (id: number) => `/api/v1/journals/${id}`,
+    UPDATE: (id: number) => `/api/v1/journals/${id}`,
+    DELETE: (id: number) => `/api/v1/journals/${id}`,
+    POST: (id: number) => `/api/v1/journals/${id}/post`,
+    REVERSE: (id: number) => `/api/v1/journals/${id}/reverse`,
+    SUMMARY: '/api/v1/journals/summary',
+    ACCOUNT_BALANCES: '/api/v1/journals/account-balances',
+    REFRESH_ACCOUNT_BALANCES: '/api/v1/journals/account-balances/refresh',
+  },
+  // Legacy flat keys (kept for backward compatibility in other parts of the app)
   JOURNALS_ACCOUNT_BALANCES: '/api/v1/journals/account-balances',
   JOURNALS_REFRESH_BALANCES: '/api/v1/journals/account-balances/refresh',
   JOURNALS_SUMMARY: '/api/v1/journals/summary',

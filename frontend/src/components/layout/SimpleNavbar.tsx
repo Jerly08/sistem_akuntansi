@@ -21,7 +21,7 @@ import {
   useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react';
-import { FiMenu, FiChevronDown, FiSettings, FiLogOut } from 'react-icons/fi';
+import { FiMenu, FiChevronDown, FiLogOut } from 'react-icons/fi';
 
 interface SimpleNavbarProps {
   onMenuClick?: () => void;
@@ -105,8 +105,6 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({ onMenuClick, isMenuOpen = f
               </HStack>
             </MenuButton>
             <MenuList>
-              <MenuItem icon={<FiSettings />}>Settings</MenuItem>
-              <MenuDivider />
               <MenuItem icon={<FiLogOut />} onClick={logout}>
                 Sign out
               </MenuItem>

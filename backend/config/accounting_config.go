@@ -26,13 +26,13 @@ type DefaultAccountMapping struct {
 	Bank                    uint `json:"bank"`                     // Default: 1102
 	AccountsReceivable      uint `json:"accounts_receivable"`      // Default: 1201
 	Inventory               uint `json:"inventory"`                // Default: 1301
-	PPNReceivable          uint `json:"ppn_receivable"`           // Default: 1105
+	PPNReceivable          uint `json:"ppn_receivable"`           // Default: 1240 (PPN Masukan)
 	FixedAssets            uint `json:"fixed_assets"`             // Default: 1501
 	AccumulatedDepreciation uint `json:"accumulated_depreciation"` // Default: 1502
 
 	// Liability Accounts
-	AccountsPayable    uint `json:"accounts_payable"`     // Default: 2001
-	PPNPayable        uint `json:"ppn_payable"`          // Default: 2102
+	AccountsPayable    uint `json:"accounts_payable"`     // Default: 2101
+	PPNPayable        uint `json:"ppn_payable"`          // Default: 2103
 	TaxPayable        uint `json:"tax_payable"`          // Default: 2103
 	AccruedExpenses   uint `json:"accrued_expenses"`     // Default: 2201
 
@@ -190,13 +190,13 @@ func getDefaultConfig() *AccountingConfig {
 			Bank:                    1102,
 			AccountsReceivable:      1201,
 			Inventory:               1301,
-			PPNReceivable:          1105,
+			PPNReceivable:          1240,
 			FixedAssets:            1501,
 			AccumulatedDepreciation: 1502,
 
 			// Liability Accounts
-			AccountsPayable: 2001,
-			PPNPayable:     2102,
+			AccountsPayable: 2101,
+			PPNPayable:     2103,
 			TaxPayable:     2103,
 			AccruedExpenses: 2201,
 

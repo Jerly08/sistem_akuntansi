@@ -15,6 +15,7 @@ type DashboardController struct {
 	DB                     *gorm.DB
 	stockMonitoringService *services.StockMonitoringService
 	dashboardService       *services.DashboardService
+	employeeDashboardService *services.EmployeeDashboardService
 }
 
 func NewDashboardController(db *gorm.DB, stockMonitoringService *services.StockMonitoringService) *DashboardController {
@@ -22,6 +23,7 @@ func NewDashboardController(db *gorm.DB, stockMonitoringService *services.StockM
 		DB:                     db,
 		stockMonitoringService: stockMonitoringService,
 		dashboardService:       services.NewDashboardService(db),
+		employeeDashboardService: services.NewEmployeeDashboardService(db),
 	}
 }
 
@@ -255,6 +257,255 @@ func (dc *DashboardController) GetFinanceDashboardData(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Finance dashboard data retrieved successfully",
 		"data":    financeData,
+	})
+}
+
+// GetEmployeeDashboardData returns employee-specific dashboard data
+// @Summary Get employee dashboard data
+// @Description Retrieve employee-specific dashboard data including pending approvals, submitted requests, and notifications
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Employee dashboard data retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/employee [get]
+func (dc *DashboardController) GetEmployeeDashboardData(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	userRole := c.GetString("user_role")
+	
+	// Get employee dashboard data
+	data, err := dc.employeeDashboardService.GetEmployeeDashboardData(userID, userRole)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch employee dashboard data",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Employee dashboard data retrieved successfully",
+		"data":    data,
+	})
+}
+
+// GetEmployeeApprovalWorkflows returns approval workflows relevant to employee role
+// @Summary Get employee approval workflows
+// @Description Get approval workflows where the employee has a role or can submit requests
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Approval workflows retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/employee/workflows [get]
+func (dc *DashboardController) GetEmployeeApprovalWorkflows(c *gin.Context) {
+	userRole := c.GetString("user_role")
+	
+	// Get workflows relevant to this employee role
+	workflows, err := dc.employeeDashboardService.GetEmployeeApprovalWorkflows(userRole)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch approval workflows",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Employee approval workflows retrieved successfully",
+		"data": gin.H{
+			"workflows": workflows,
+			"total":     len(workflows),
+			"user_role": userRole,
+		},
+	})
+}
+
+// GetEmployeePurchaseRequests returns purchase requests submitted by employee
+// @Summary Get employee purchase requests
+// @Description Get purchase requests submitted by the employee with approval status
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Purchase requests retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/employee/purchase-requests [get]
+func (dc *DashboardController) GetEmployeePurchaseRequests(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	
+	// Get purchase requests for this employee
+	purchaseRequests, err := dc.employeeDashboardService.GetPurchaseRequestsForEmployee(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch purchase requests",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Employee purchase requests retrieved successfully",
+		"data": gin.H{
+			"purchase_requests": purchaseRequests,
+			"total":             len(purchaseRequests),
+		},
+	})
+}
+
+// GetEmployeeNotificationsSummary returns notification summary for employee
+// @Summary Get employee notifications summary
+// @Description Get summary of notifications for the employee including unread count
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Notifications summary retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/employee/notifications-summary [get]
+func (dc *DashboardController) GetEmployeeNotificationsSummary(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	
+	// Get recent notifications
+	recentNotifications, err := dc.employeeDashboardService.GetRecentNotifications(userID, 20)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch notifications",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	// Count unread notifications
+	var unreadCount int64
+	dc.DB.Model(&models.Notification{}).
+		Where("user_id = ? AND is_read = false AND deleted_at IS NULL", userID).
+		Count(&unreadCount)
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Employee notifications summary retrieved successfully",
+		"data": gin.H{
+			"notifications": recentNotifications,
+			"unread_count":  unreadCount,
+			"total":         len(recentNotifications),
+		},
+	})
+}
+
+// GetEmployeeApprovalNotifications returns approval-specific notifications for employee
+// @Summary Get employee approval notifications
+// @Description Get approval-related notifications including status updates on purchase requests
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Approval notifications retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/employee/approval-notifications [get]
+func (dc *DashboardController) GetEmployeeApprovalNotifications(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	
+	// Get approval notifications
+	notifications, err := dc.employeeDashboardService.GetApprovalNotifications(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch approval notifications",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Employee approval notifications retrieved successfully",
+		"data":    notifications,
+	})
+}
+
+// GetEmployeePurchaseApprovalStatus returns detailed approval status for employee's purchases
+// @Summary Get employee purchase approval status
+// @Description Get detailed approval status for purchases submitted by employee
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} models.APIResponse "Purchase approval status retrieved successfully"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/employee/purchase-approval-status [get]
+func (dc *DashboardController) GetEmployeePurchaseApprovalStatus(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	
+	// Get purchase approval status
+	approvalStatus, err := dc.employeeDashboardService.GetPurchaseApprovalStatus(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fetch purchase approval status",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Employee purchase approval status retrieved successfully",
+		"data":    approvalStatus,
+	})
+}
+
+// MarkNotificationAsRead marks a notification as read
+// @Summary Mark notification as read
+// @Description Mark a specific notification as read for the current user
+// @Tags Dashboard
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Notification ID"
+// @Success 200 {object} models.APIResponse "Notification marked as read successfully"
+// @Failure 400 {object} models.ErrorResponse "Invalid notification ID"
+// @Failure 403 {object} models.ErrorResponse "Access denied"
+// @Failure 404 {object} models.ErrorResponse "Notification not found"
+// @Failure 500 {object} models.ErrorResponse "Internal server error"
+// @Router /dashboard/employee/notifications/{id}/read [patch]
+func (dc *DashboardController) MarkNotificationAsRead(c *gin.Context) {
+	userID := c.MustGet("user_id").(uint)
+	notificationID := c.Param("id")
+	
+	if notificationID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Notification ID is required"})
+		return
+	}
+	
+	// Verify notification belongs to user and update
+	var notification models.Notification
+	err := dc.DB.Where("id = ? AND user_id = ?", notificationID, userID).First(&notification).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found or access denied"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to find notification"})
+		}
+		return
+	}
+	
+	// Update notification as read
+	notification.IsRead = true
+	if err := dc.DB.Save(&notification).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark notification as read"})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Notification marked as read successfully",
+		"data": gin.H{
+			"notification_id": notification.ID,
+			"is_read":         notification.IsRead,
+		},
 	})
 }
 

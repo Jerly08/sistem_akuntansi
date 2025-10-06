@@ -3,6 +3,7 @@ package services
 import (
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
+	config2 "app-sistem-akuntansi/config"
 	"context"
 	"errors"
 	"fmt"
@@ -28,6 +29,9 @@ type PurchaseService struct {
 	unifiedJournalService     *UnifiedJournalService
 	// Asset capitalization
 	assetCapitalizationSvc    *AssetCapitalizationService
+	// Journal Service V2 for COA balance updates
+	journalServiceV2          *PurchaseJournalServiceV2
+	coaService                *COAService
 }
 
 type PurchaseResult struct {
@@ -49,9 +53,15 @@ func NewPurchaseService(
 	journalRepo repositories.JournalEntryRepository,
 	pdfService PDFServiceInterface,
 	unifiedJournalService *UnifiedJournalService,
+	coaService *COAService,
 ) *PurchaseService {
 	// Initialize SSOT Journal Adapter (wired to unified journal service)
-	ssotAdapter := NewPurchaseSSOTJournalAdapter(db, unifiedJournalService, accountRepo)
+	// Use TaxAccountService so account mapping is flexible (no hardcoded codes)
+	taxAccountService := NewTaxAccountService(db)
+	ssotAdapter := NewPurchaseSSOTJournalAdapter(db, unifiedJournalService, accountRepo, taxAccountService)
+	
+	// Initialize PurchaseJournalServiceV2 for COA balance updates
+	journalServiceV2 := NewPurchaseJournalServiceV2(db, journalRepo, coaService)
 	
 ps := &PurchaseService{
 		db:                        db,
@@ -65,6 +75,8 @@ ps := &PurchaseService{
 		pdfService:                pdfService,
 		unifiedJournalService:     unifiedJournalService,
 		ssotJournalAdapter:        ssotAdapter,
+		journalServiceV2:          journalServiceV2,
+		coaService:                coaService,
 	}
 	// Asset capitalization service (reuses existing repos and unified journal)
 	ps.assetCapitalizationSvc = NewAssetCapitalizationService(db, accountRepo, unifiedJournalService, journalRepo)
@@ -642,14 +654,14 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 		fmt.Printf("📋 SSOT journal entries already exist for purchase %d, skipping creation\n", purchaseID)
     }
 
-    // NEW: Create and post legacy COA journal entry on approval (like sales)
-    // This ensures COA balances are updated immediately when status becomes APPROVED
-    if err := s.createAndPostPurchaseJournalEntries(purchase, userID); err != nil {
-        fmt.Printf("⚠️ Warning: Failed to create/post legacy COA journal for purchase %d: %v\n", purchaseID, err)
-        // Do not fail approval; SSOT journal already created. We log and continue.
-    } else {
-        fmt.Printf("📗 Legacy COA journal created and posted for purchase %d\n", purchaseID)
-    }
+	// NEW: Update journal entries using V2 service (like sales management)
+	// This ensures COA balances are updated immediately when status becomes APPROVED
+	if err := s.handlePurchaseJournalUpdate(purchase, "PENDING", nil); err != nil {
+		fmt.Printf("⚠️ Warning: Failed to update journal entries for purchase %d: %v\n", purchaseID, err)
+		// Continue processing, don't fail the entire approval
+	} else {
+		fmt.Printf("📗 Journal entries updated for approved purchase %d\n", purchaseID)
+	}
 
     // For credit purchases, create payment tracking records to manage accounts payable
     if purchase.PaymentMethod == models.PurchasePaymentCredit {
@@ -1081,19 +1093,26 @@ func (s *PurchaseService) OnPurchaseApproved(purchaseID uint) error {
 		// Continue processing even if journal creation fails
 	} else {
 		fmt.Printf("✅ Successfully created SSOT journal entries\n")
-		
-		// 3. Update cash/bank balance for immediate payment methods
-		if isImmediatePayment(purchase.PaymentMethod) {
-			fmt.Printf("💰 Updating cash/bank balance for immediate payment purchase\n")
-			err = s.updateCashBankBalanceForPurchase(purchase)
-			if err != nil {
-				fmt.Printf("⚠️ Warning: Failed to update cash/bank balance: %v\n", err)
-			} else {
-				fmt.Printf("✅ Successfully updated cash/bank balance\n")
-			}
-		}
+	}
+
+	// 2b. Update journal entries using V2 service for COA balance updates
+	if err := s.handlePurchaseJournalUpdate(purchase, "PENDING", nil); err != nil {
+		fmt.Printf("⚠️ Warning: Failed to update journal entries (callback): %v\n", err)
+	} else {
+		fmt.Printf("📗 Journal entries updated (callback) for purchase %s\n", purchase.Code)
 	}
 	
+	// 3. Update cash/bank balance for immediate payment methods
+	if isImmediatePayment(purchase.PaymentMethod) {
+		fmt.Printf("💰 Updating cash/bank balance for immediate payment purchase\n")
+		err = s.updateCashBankBalanceForPurchase(purchase)
+		if err != nil {
+			fmt.Printf("⚠️ Warning: Failed to update cash/bank balance: %v\n", err)
+		} else {
+			fmt.Printf("✅ Successfully updated cash/bank balance\n")
+		}
+	}
+
 	// 4. Initialize payment tracking for credit purchases
 	if purchase.PaymentMethod == models.PurchasePaymentCredit {
 		purchase.OutstandingAmount = purchase.TotalAmount
@@ -1316,7 +1335,11 @@ func getPaymentMethod(paymentMethod string) string {
 // nil = default to 11%, 0 = no VAT (explicit zero), any other value = use as-is
 func getPPNRateFromPointer(requestedRate *float64) float64 {
 	if requestedRate == nil {
-		// No rate provided in request - default to 11%
+		// No rate provided in request - use configurable default from settings
+		cfg := config2.GetAccountingConfig()
+		if cfg != nil && cfg.TaxRates.DefaultPPN > 0 {
+			return cfg.TaxRates.DefaultPPN
+		}
 		return 11.0
 	}
 	// Explicit rate provided (could be 0 for no VAT) - use as-is
@@ -1337,8 +1360,11 @@ func getPPhRateFromPointer(requestedRate *float64) float64 {
 // getPPNRateFromDoublePointer handles double pointer for update operations
 func getPPNRateFromDoublePointer(requestedRate **float64) float64 {
 	if requestedRate == nil || *requestedRate == nil {
-		// No update to rate - return current rate (this should not change existing value)
-		// This function should only be called when the outer pointer is not nil
+		// No update to rate - use configurable default
+		cfg := config2.GetAccountingConfig()
+		if cfg != nil && cfg.TaxRates.DefaultPPN > 0 {
+			return cfg.TaxRates.DefaultPPN
+		}
 		return 11.0 // fallback default
 	}
 	// Explicit rate provided - use as-is
@@ -1908,7 +1934,13 @@ func (s *PurchaseService) createSSOTPurchaseJournalEntries(purchase *models.Purc
 	ctx := context.Background()
 	journalEntry, err := s.ssotJournalAdapter.CreatePurchaseJournalEntry(ctx, purchase, uint64(userID))
 	if err != nil {
-		return fmt.Errorf("failed to create SSOT journal entry: %v", err)
+		// Robust fallback: write to simple_ssot_journals/items as POSTED so COA posted balances update
+		fmt.Printf("⚠️ SSOT create failed (%v). Falling back to simple_ssot_journals...\n", err)
+		if fbErr := s.createSimpleSSOTPurchaseJournalFallback(purchase); fbErr != nil {
+			return fmt.Errorf("failed SSOT and fallback: %v | fallbackErr: %v", err, fbErr)
+		}
+		fmt.Printf("✅ Fallback simple_ssot_journals posted for %s\n", purchase.Code)
+		return nil
 	}
 
 	fmt.Printf("✅ SSOT Journal Entry created: %s (ID: %d) for purchase %s\n", 
@@ -1973,16 +2005,17 @@ func (s *PurchaseService) CreatePurchasePaymentJournal(
 	return nil
 }
 
-// GetPurchaseJournalEntries retrieves all SSOT journal entries for a purchase
+// GetPurchaseJournalEntries retrieves SSOT journals related to a purchase
+// We include both PURCHASE journals and PAYMENT journals tied to the purchase ID
 func (s *PurchaseService) GetPurchaseJournalEntries(purchaseID uint) ([]models.SSOTJournalEntry, error) {
 	if s.ssotJournalAdapter == nil {
 		return nil, fmt.Errorf("SSOT journal adapter not available")
 	}
 
 	ctx := context.Background()
-	entries, err := s.ssotJournalAdapter.GetPurchaseJournalEntries(ctx, uint64(purchaseID))
+	entries, err := s.ssotJournalAdapter.GetPurchaseRelatedJournalEntries(ctx, uint64(purchaseID), true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get purchase journal entries: %v", err)
+		return nil, fmt.Errorf("failed to get purchase-related journal entries: %v", err)
 	}
 
 	return entries, nil
@@ -1991,4 +2024,133 @@ func (s *PurchaseService) GetPurchaseJournalEntries(purchaseID uint) ([]models.S
 // GetDB returns the database connection for external services
 func (s *PurchaseService) GetDB() *gorm.DB {
 	return s.db
+}
+
+// CreateAndPostLegacyForCLI exposes legacy posting for CLI scripts (backfill)
+func (s *PurchaseService) CreateAndPostLegacyForCLI(purchase *models.Purchase) error {
+return s.createAndPostPurchaseJournalEntries(purchase, purchase.UserID)
+}
+
+// createSimpleSSOTPurchaseJournalFallback inserts a posted purchase journal into simple_ssot_journals/items
+// This is a safety net so /coa/posted-balances reflects purchase impact even if unified SSOT posting fails
+func (s *PurchaseService) createSimpleSSOTPurchaseJournalFallback(purchase *models.Purchase) error {
+	// 1) Resolve required accounts
+	getAccID := func(code string) (uint, error) {
+		acc, err := s.accountRepo.GetAccountByCode(code)
+		if err != nil {
+			return 0, fmt.Errorf("account %s not found: %v", code, err)
+		}
+		return acc.ID, nil
+	}
+	invID, err := getAccID("1301")
+	if err != nil { return err }
+	ppnInputID, err := getAccID("1240")
+	if err != nil { return err }
+	apID, err := getAccID("2101")
+	if err != nil { return err }
+
+	// Optional withholdings
+	p21ID := uint(0)
+	if acc, err := s.accountRepo.GetAccountByCode("2111"); err == nil { p21ID = acc.ID }
+	p23ID := uint(0)
+	if acc, err := s.accountRepo.GetAccountByCode("2112"); err == nil { p23ID = acc.ID }
+
+	// Resolve cash/bank GL when immediate payment
+	resolveBankGL := func(bankAccountID *uint) (uint, error) {
+		if bankAccountID != nil && *bankAccountID != 0 {
+			var cb models.CashBank
+			if err := s.db.Select("account_id").First(&cb, *bankAccountID).Error; err == nil && cb.AccountID != 0 {
+				return cb.AccountID, nil
+			}
+		}
+		// Fallback to 1101 (Kas)
+		return getAccID("1101")
+	}
+	
+	// 2) Create posted journal in simple_ssot_journals
+	type row struct{ ID uint }
+	var jr row
+	if err := s.db.Raw(
+		"INSERT INTO simple_ssot_journals (status, entry_date, reference, description) VALUES ('POSTED', ?, ?, ?) RETURNING id",
+		purchase.Date, purchase.Code, fmt.Sprintf("Purchase %s - %s", purchase.Code, purchase.Vendor.Name),
+	).Scan(&jr).Error; err != nil {
+		return fmt.Errorf("failed to insert simple_ssot_journals: %v", err)
+	}
+
+	// 3) Insert lines: debit inventory/expense items
+	lineNo := 1
+	for _, it := range purchase.PurchaseItems {
+		accID := invID
+		if it.ExpenseAccountID != 0 { accID = uint(it.ExpenseAccountID) }
+		if err := s.db.Exec(
+			"INSERT INTO simple_ssot_journal_items (journal_id, account_id, debit, credit, description, line_number) VALUES (?,?,?,?,?,?)",
+			jr.ID, accID, it.TotalPrice, 0, fmt.Sprintf("Purchase - %s", it.Product.Name), lineNo,
+		).Error; err != nil { return fmt.Errorf("failed to insert item line: %v", err) }
+		lineNo++
+	}
+
+	// Debit PPN Masukan if any
+	if purchase.PPNAmount > 0 {
+		if err := s.db.Exec(
+			"INSERT INTO simple_ssot_journal_items (journal_id, account_id, debit, credit, description, line_number) VALUES (?,?,?,?,?,?)",
+			jr.ID, ppnInputID, purchase.PPNAmount, 0, "PPN Masukan (Input VAT)", lineNo,
+		).Error; err != nil { return fmt.Errorf("failed to insert PPN line: %v", err) }
+		lineNo++
+	}
+
+	// Optional withholdings
+	if p21ID != 0 && purchase.PPh21Amount > 0 {
+		if err := s.db.Exec(
+			"INSERT INTO simple_ssot_journal_items (journal_id, account_id, debit, credit, description, line_number) VALUES (?,?,?,?,?,?)",
+			jr.ID, p21ID, 0, purchase.PPh21Amount, "PPh 21 Withholding", lineNo,
+		).Error; err != nil { return fmt.Errorf("failed to insert PPh21 line: %v", err) }
+		lineNo++
+	}
+	if p23ID != 0 && purchase.PPh23Amount > 0 {
+		if err := s.db.Exec(
+			"INSERT INTO simple_ssot_journal_items (journal_id, account_id, debit, credit, description, line_number) VALUES (?,?,?,?,?,?)",
+			jr.ID, p23ID, 0, purchase.PPh23Amount, "PPh 23 Withholding", lineNo,
+		).Error; err != nil { return fmt.Errorf("failed to insert PPh23 line: %v", err) }
+		lineNo++
+	}
+
+	// Credit side: immediate payment -> bank, else AP
+	if isImmediatePayment(purchase.PaymentMethod) {
+		bankGL, err := resolveBankGL(purchase.BankAccountID)
+		if err != nil { return err }
+		if err := s.db.Exec(
+			"INSERT INTO simple_ssot_journal_items (journal_id, account_id, debit, credit, description, line_number) VALUES (?,?,?,?,?,?)",
+			jr.ID, bankGL, 0, purchase.TotalAmount, fmt.Sprintf("%s Payment - %s", purchase.PaymentMethod, purchase.Vendor.Name), lineNo,
+		).Error; err != nil { return fmt.Errorf("failed to insert bank credit line: %v", err) }
+	} else {
+		if err := s.db.Exec(
+			"INSERT INTO simple_ssot_journal_items (journal_id, account_id, debit, credit, description, line_number) VALUES (?,?,?,?,?,?)",
+			jr.ID, apID, 0, purchase.TotalAmount, fmt.Sprintf("Accounts Payable - %s", purchase.Vendor.Name), lineNo,
+		).Error; err != nil { return fmt.Errorf("failed to insert AP credit line: %v", err) }
+	}
+
+	return nil
+}
+
+// handlePurchaseJournalUpdate handles journal entries creation/update/deletion when purchase status changes
+// This is similar to sales management journal update logic
+func (s *PurchaseService) handlePurchaseJournalUpdate(purchase *models.Purchase, oldStatus string, tx *gorm.DB) error {
+	if s.journalServiceV2 == nil {
+		fmt.Printf("⚠️ PurchaseJournalServiceV2 not initialized, skipping journal update\n")
+		return nil
+	}
+
+	// Use the V2 service to handle journal updates based on status change
+	return s.journalServiceV2.UpdatePurchaseJournal(purchase, oldStatus, tx)
+}
+
+// createPurchaseJournalOnApproval creates journal entries when purchase status becomes APPROVED
+func (s *PurchaseService) createPurchaseJournalOnApproval(purchase *models.Purchase, tx *gorm.DB) error {
+	if s.journalServiceV2 == nil {
+		fmt.Printf("⚠️ PurchaseJournalServiceV2 not initialized, skipping journal creation\n")
+		return nil
+	}
+
+	// Create journal entries for the approved purchase
+	return s.journalServiceV2.CreatePurchaseJournal(purchase, tx)
 }

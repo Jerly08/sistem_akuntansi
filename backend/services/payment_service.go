@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"time"
 	"app-sistem-akuntansi/models"
@@ -16,14 +17,15 @@ import (
 )
 
 type PaymentService struct {
-	db              *gorm.DB
-	paymentRepo     *repositories.PaymentRepository
-	salesRepo       *repositories.SalesRepository
-	purchaseRepo    *repositories.PurchaseRepository
-	cashBankRepo    *repositories.CashBankRepository
-	accountRepo     repositories.AccountRepository
-	contactRepo     repositories.ContactRepository
-	statusValidator *StatusValidationHelper // NEW: Konsistensi dengan SalesJournalServiceV2
+	db                            *gorm.DB
+	paymentRepo                   *repositories.PaymentRepository
+	salesRepo                     *repositories.SalesRepository
+	purchaseRepo                  *repositories.PurchaseRepository
+	cashBankRepo                  *repositories.CashBankRepository
+	accountRepo                   repositories.AccountRepository
+	contactRepo                   repositories.ContactRepository
+	statusValidator               *StatusValidationHelper // NEW: Konsistensi dengan SalesJournalServiceV2
+	purchasePaymentJournalService *PurchasePaymentJournalService // NEW: SSOT payment journal integration
 }
 
 func NewPaymentService(
@@ -34,6 +36,7 @@ func NewPaymentService(
 	cashBankRepo *repositories.CashBankRepository,
 	accountRepo repositories.AccountRepository,
 	contactRepo repositories.ContactRepository,
+	purchasePaymentJournalService *PurchasePaymentJournalService,
 ) *PaymentService {
 	return &PaymentService{
 		db:              db,
@@ -44,6 +47,7 @@ func NewPaymentService(
 		accountRepo:     accountRepo,
 		contactRepo:     contactRepo,
 		statusValidator: NewStatusValidationHelper(), // Initialize status validator
+		purchasePaymentJournalService: purchasePaymentJournalService, // NEW: SSOT payment journal integration
 	}
 }
 
@@ -274,8 +278,25 @@ func (s *PaymentService) CreateReceivablePaymentFixed(request PaymentCreateReque
 	}
 	log.Printf("✅ All allocations processed. Total allocated: %.2f (%.2fms)", totalAllocatedAmount, float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
-	// Step 5: Create proper journals via SalesJournalServiceV2 (no ultra-fast posting)
-	log.Printf("📝 Step 5: Creating journals via SalesJournalServiceV2 (no ultra-fast posting)...")
+	// Step 5: Update Cash/Bank balance and record transaction (IN flow)
+	if request.CashBankID > 0 && totalAllocatedAmount > 0 {
+		log.Printf("🏦 Updating cash/bank balance for receivable payment: amount=%.2f, cashBankID=%d", totalAllocatedAmount, request.CashBankID)
+		if err := s.updateCashBankBalance(tx, request.CashBankID, totalAllocatedAmount, "IN", payment.ID, userID); err != nil {
+			log.Printf("❌ Cash/Bank balance update failed: %v", err)
+			return nil, fmt.Errorf("cash/bank balance update failed: %v", err)
+		}
+		log.Printf("✅ Cash/Bank balance updated and transaction recorded")
+	} else {
+		if request.CashBankID == 0 {
+			log.Printf("⚠️ CashBankID not provided; skipping Cash/Bank balance update")
+		}
+		if totalAllocatedAmount <= 0 {
+			log.Printf("⚠️ No allocated amount to record in Cash/Bank; skipping")
+		}
+	}
+	
+	// Step 6: Create proper journals via SalesJournalServiceV2 (no ultra-fast posting)
+	log.Printf("📝 Step 6: Creating journals via SalesJournalServiceV2 (no ultra-fast posting)...")
 	stepStart = time.Now()
 	coaSvc := NewCOAService(s.db)
 	journalRepo := repositories.NewJournalEntryRepository(s.db)
@@ -470,11 +491,33 @@ func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, user
 		log.Printf("✅ Cash/Bank balance updated and transaction recorded")
 	}
 	
-	// 🔥 SSOT Integration: Skip legacy journal creation for purchase payments
-	// Purchase payments will use SSOT journal system called from purchase controller
-	log.Printf("📝 Skipping legacy journal creation - SSOT journal will be created separately")
-	
-	payment.Status = models.PaymentStatusCompleted
+// 🔥 SSOT Integration: Create payment journal entry via PurchasePaymentJournalService
+// This ensures proper double-entry accounting: Debit Accounts Payable, Credit Cash/Bank
+log.Printf("📝 Creating SSOT payment journal entry via PurchasePaymentJournalService...")
+if s.purchasePaymentJournalService != nil {
+	// Create journal entry using SSOT payment journal service with existing transaction
+	if err := s.purchasePaymentJournalService.CreatePaymentJournalEntryWithTx(tx, payment, request.CashBankID, userID); err != nil {
+		log.Printf("❌ SSOT payment journal creation failed: %v", err)
+		tx.Rollback()
+		return nil, fmt.Errorf("payment journal creation failed: %v", err)
+	}
+	log.Printf("✅ SSOT payment journal created successfully")
+} else {
+	log.Printf("⚠️ PurchasePaymentJournalService not initialized - SSOT journal NOT created")
+}
+
+// 🔧 Optional Legacy COA Journal (deprecated)
+// If ENABLE_LEGACY_PAYMENT_JOURNALS=true, also create legacy COA journal (AP↓, Bank↓)
+if os.Getenv("ENABLE_LEGACY_PAYMENT_JOURNALS") == "true" {
+	log.Printf("📝 Creating legacy payment journal as well (deprecated)...")
+	if err := s.createLegacyPayableJournalInTx(tx, payment, request.CashBankID, userID); err != nil {
+		log.Printf("⚠️ Legacy payment journal creation failed: %v", err)
+	} else {
+		log.Printf("📗 Legacy payment journal created (AP debit, Bank credit)")
+	}
+}
+
+payment.Status = models.PaymentStatusCompleted
 	if err := tx.Save(payment).Error; err != nil {
 		tx.Rollback()
 		log.Printf("Failed to save payment status: %v", err)
@@ -543,6 +586,57 @@ func (s *PaymentService) updateCashBankBalance(tx *gorm.DB, cashBankID uint, amo
 	}
 	
 	return tx.Create(transaction).Error
+}
+
+// createLegacyPayableJournalInTx creates legacy COA journal for vendor payable payment (AP↓, Bank↓)
+func (s *PaymentService) createLegacyPayableJournalInTx(tx *gorm.DB, payment *models.Payment, cashBankID uint, userID uint) error {
+	// Get Accounts Payable account (2101)
+	var apAccount models.Account
+	if err := tx.Where("code = ?", "2101").First(&apAccount).Error; err != nil {
+		// Fallback by name contains 'hutang usaha'
+		if err := tx.Where("LOWER(name) LIKE ?", "%hutang%usaha%").First(&apAccount).Error; err != nil {
+			return fmt.Errorf("accounts payable (2101) not found: %v", err)
+		}
+	}
+	// Resolve Cash/Bank GL account
+	var cashBank models.CashBank
+	if err := tx.Preload("Account").First(&cashBank, cashBankID).Error; err != nil {
+		return fmt.Errorf("cash/bank account not found: %v", err)
+	}
+	if cashBank.AccountID == 0 {
+		return fmt.Errorf("cash/bank %d has no linked GL account", cashBankID)
+	}
+	// Create legacy journal entry (posted)
+	entry := &models.JournalEntry{
+		EntryDate:       payment.Date,
+		Description:     fmt.Sprintf("Vendor Payment %s", payment.Code),
+		ReferenceType:   models.JournalRefPayment,
+		ReferenceID:     &payment.ID,
+		Reference:       payment.Code,
+		UserID:          userID,
+		Status:          models.JournalStatusPosted,
+		TotalDebit:      payment.Amount,
+		TotalCredit:     payment.Amount,
+		IsAutoGenerated: true,
+	}
+	lines := []models.JournalLine{
+		{AccountID: apAccount.ID, Description: fmt.Sprintf("AP reduction - %s", payment.Code), DebitAmount: payment.Amount, CreditAmount: 0, LineNumber: 1},
+		{AccountID: cashBank.AccountID, Description: fmt.Sprintf("Bank payment - %s", payment.Code), DebitAmount: 0, CreditAmount: payment.Amount, LineNumber: 2},
+	}
+	entry.JournalLines = lines
+	if err := tx.Create(entry).Error; err != nil {
+		return fmt.Errorf("failed to create legacy payment journal: %v", err)
+	}
+	// Update account balances directly (legacy behavior)
+	// AP (liability normal credit): debit reduces -> balance - amount
+	if err := tx.Exec("UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", payment.Amount, apAccount.ID).Error; err != nil {
+		return fmt.Errorf("failed to update AP balance: %v", err)
+	}
+	// Cash/Bank (asset normal debit): credit reduces -> balance - amount
+	if err := tx.Exec("UPDATE accounts SET balance = balance - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", payment.Amount, cashBank.AccountID).Error; err != nil {
+		return fmt.Errorf("failed to update cash/bank balance: %v", err)
+	}
+	return nil
 }
 
 // createReceivablePaymentJournal creates journal entries for receivable payment

@@ -99,7 +99,9 @@ func reprocessApprovedPurchases(db *gorm.DB) {
 	// Initialize services for SSOT processing
 	accountRepo := repositories.NewAccountRepository(db)
 	unifiedJournalService := services.NewUnifiedJournalService(db)
-	purchaseAdapter := services.NewPurchaseSSOTJournalAdapter(db, unifiedJournalService, accountRepo)
+	// Use TaxAccountService for flexible account mapping
+	taxSvc := services.NewTaxAccountService(db)
+	purchaseAdapter := services.NewPurchaseSSOTJournalAdapter(db, unifiedJournalService, accountRepo, taxSvc)
 
 	// Get all approved and completed purchases that might not have SSOT journal entries
 	var purchases []models.Purchase

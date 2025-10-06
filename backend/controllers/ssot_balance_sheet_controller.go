@@ -15,6 +15,7 @@ import (
 type SSOTBalanceSheetController struct {
 	ssotBalanceSheetService *services.SSOTBalanceSheetService
 	pdfService              services.PDFServiceInterface
+	settingsService         *services.SettingsService
 }
 
 // NewSSOTBalanceSheetController creates a new SSOT Balance Sheet controller
@@ -22,6 +23,7 @@ func NewSSOTBalanceSheetController(db *gorm.DB) *SSOTBalanceSheetController {
 	return &SSOTBalanceSheetController{
 		ssotBalanceSheetService: services.NewSSOTBalanceSheetService(db),
 		pdfService:              services.NewPDFService(db),
+		settingsService:         services.NewSettingsService(db),
 	}
 }
 
@@ -43,11 +45,11 @@ func (ctrl *SSOTBalanceSheetController) GenerateSSOTBalanceSheet(c *gin.Context)
 	asOfDate := c.DefaultQuery("as_of_date", time.Now().Format("2006-01-02"))
 	format := c.DefaultQuery("format", "json")
 
-	// Validate date format
-	if _, err := time.Parse("2006-01-02", asOfDate); err != nil {
+// Validate date format using system settings (supports DD/MM/YYYY, MM/DD/YYYY, etc.)
+	if _, err := ctrl.parseDateBySettings(asOfDate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid as_of_date format",
-			"message": "Date must be in YYYY-MM-DD format",
+			"message": err.Error(),
 			"example": "2024-12-31",
 		})
 		return
@@ -132,10 +134,11 @@ func (ctrl *SSOTBalanceSheetController) GetSSOTBalanceSheetAccountDetails(c *gin
 	asOfDate := c.DefaultQuery("as_of_date", time.Now().Format("2006-01-02"))
 	accountType := c.Query("account_type") // ASSET, LIABILITY, or EQUITY
 	
-	// Validate parameters
-	if _, err := time.Parse("2006-01-02", asOfDate); err != nil {
+// Validate parameters using system date format
+	if _, err := ctrl.parseDateBySettings(asOfDate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid as_of_date format",
+			"message": err.Error(),
 		})
 		return
 	}
@@ -185,10 +188,11 @@ func (ctrl *SSOTBalanceSheetController) GetSSOTBalanceSheetAccountDetails(c *gin
 func (ctrl *SSOTBalanceSheetController) ValidateSSOTBalanceSheet(c *gin.Context) {
 	asOfDate := c.DefaultQuery("as_of_date", time.Now().Format("2006-01-02"))
 	
-	// Validate date format
-	if _, err := time.Parse("2006-01-02", asOfDate); err != nil {
+// Validate date format using system settings
+	if _, err := ctrl.parseDateBySettings(asOfDate); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid as_of_date format",
+			"message": err.Error(),
 		})
 		return
 	}
@@ -334,6 +338,31 @@ func createBalanceSheetSummary(bs *services.SSOTBalanceSheetData) map[string]int
 		"generated_at": bs.GeneratedAt,
 		"enhanced":     bs.Enhanced,
 	}
+}
+
+// parseDateBySettings parses a date string according to Settings.DateFormat with safe fallbacks.
+func (ctrl *SSOTBalanceSheetController) parseDateBySettings(s string) (time.Time, error) {
+	layouts := []string{"2006-01-02", "02/01/2006", "01/02/2006", "02-01-2006", time.RFC3339}
+	if ctrl.settingsService != nil {
+		if st, err := ctrl.settingsService.GetSettings(); err == nil {
+			switch st.DateFormat {
+			case "DD/MM/YYYY":
+				layouts = append([]string{"02/01/2006"}, layouts...)
+			case "MM/DD/YYYY":
+				layouts = append([]string{"01/02/2006"}, layouts...)
+			case "YYYY-MM-DD":
+				layouts = append([]string{"2006-01-02"}, layouts...)
+			case "DD-MM-YYYY":
+				layouts = append([]string{"02-01-2006"}, layouts...)
+			}
+		}
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("invalid date: %s", s)
 }
 
 // Helper function to calculate percentage change

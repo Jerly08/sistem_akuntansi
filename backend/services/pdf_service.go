@@ -3824,90 +3824,95 @@ func (p *PDFService) GenerateProfitLossPDF(plData interface{}, startDate, endDat
 
 // GenerateJournalAnalysisPDF generates a PDF for Journal Entry Analysis report
 func (p *PDFService) GenerateJournalAnalysisPDF(journalData interface{}, startDate, endDate string) ([]byte, error) {
-pdf := gofpdf.New("P", "mm", "A4", "")
-pdf.SetMargins(15, 15, 15)
-pdf.AddPage()
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(15, 15, 15)
+	pdf.AddPage()
 
-// Invoice-like header
-lm, tm, rm, _ := pdf.GetMargins()
-pageW, _ := pdf.GetPageSize()
-contentW := pageW - lm - rm
+	// Layout helpers
+	lm, tm, rm, _ := pdf.GetMargins()
+	pageW, _ := pdf.GetPageSize()
+	contentW := pageW - lm - rm
 
-companyInfo, err := p.getCompanyInfo()
-if err != nil { return nil, fmt.Errorf("failed to get company info: %v", err) }
+	// Company info
+	companyInfo, err := p.getCompanyInfo()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get company info: %v", err)
+	}
 
-// Logo left + company right
-logoX, logoY, logoSize := lm, tm, 35.0
-logoAdded := false
-if strings.TrimSpace(companyInfo.CompanyLogo) != "" {
-	logoPath := companyInfo.CompanyLogo
-	if strings.HasPrefix(logoPath, "/") { logoPath = "." + logoPath }
-	if _, err := os.Stat(logoPath); err == nil {
-		if imgType := detectImageType(logoPath); imgType != "" {
-			pdf.ImageOptions(logoPath, logoX, logoY, logoSize, 0, false, gofpdf.ImageOptions{ImageType: imgType, ReadDpi: true}, 0, "")
-			logoAdded = true
+	// Header: logo left, company right
+	logoX, logoY, logoSize := lm, tm, 35.0
+	logoAdded := false
+	if strings.TrimSpace(companyInfo.CompanyLogo) != "" {
+		logoPath := companyInfo.CompanyLogo
+		if strings.HasPrefix(logoPath, "/") { logoPath = "." + logoPath }
+		if _, err := os.Stat(logoPath); err == nil {
+			if imgType := detectImageType(logoPath); imgType != "" {
+				pdf.ImageOptions(logoPath, logoX, logoY, logoSize, 0, false, gofpdf.ImageOptions{ImageType: imgType, ReadDpi: true}, 0, "")
+				logoAdded = true
+			}
 		}
 	}
-}
-if !logoAdded {
-	pdf.SetDrawColor(220,220,220)
-	pdf.SetFillColor(248,249,250)
-	pdf.SetLineWidth(0.3)
+	if !logoAdded {
+		pdf.SetDrawColor(220,220,220)
+		pdf.SetFillColor(248,249,250)
+		pdf.SetLineWidth(0.3)
 	pdf.Rect(logoX, logoY, logoSize, logoSize, "FD")
-	pdf.SetFont("Arial","B",16)
-	pdf.SetTextColor(120,120,120)
-	pdf.SetXY(logoX+8, logoY+19)
-	pdf.CellFormat(19,8,"</>","",0,"C",false,0,"")
+		pdf.SetFont("Arial","B",16)
+		pdf.SetTextColor(120,120,120)
+		pdf.SetXY(logoX+8, logoY+19)
+		pdf.CellFormat(19,8,"</>","",0,"C",false,0,"")
+		pdf.SetTextColor(0,0,0)
+	}
+
+	// Company text on right
+	companyInfoX := pageW - rm
+	pdf.SetFont("Arial","B",12)
+	nameW := pdf.GetStringWidth(companyInfo.CompanyName)
+	pdf.SetXY(companyInfoX-nameW, tm)
+	pdf.Cell(nameW, 6, companyInfo.CompanyName)
+
+	pdf.SetFont("Arial","",9)
+	addrW := pdf.GetStringWidth(companyInfo.CompanyAddress)
+	pdf.SetXY(companyInfoX-addrW, tm+8)
+	pdf.Cell(addrW, 4, companyInfo.CompanyAddress)
+
+	phoneText := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
+	phoneW := pdf.GetStringWidth(phoneText)
+	pdf.SetXY(companyInfoX-phoneW, tm+14)
+	pdf.Cell(phoneW, 4, phoneText)
+
+	// Divider under header
+	pdf.SetDrawColor(238,238,238)
+	pdf.SetLineWidth(0.2)
+	pdf.Line(lm, tm+45, pageW-rm, tm+45)
+
+	// Title
+	pdf.SetY(tm + 55)
+	pdf.SetFont("Arial","B",22)
+	pdf.SetTextColor(51,51,51)
+	pdf.Cell(contentW,10,"JOURNAL ENTRY ANALYSIS")
 	pdf.SetTextColor(0,0,0)
-}
+	pdf.Ln(12)
 
-companyInfoX := pageW - rm
-pdf.SetFont("Arial","B",12)
-nameW := pdf.GetStringWidth(companyInfo.CompanyName)
-pdf.SetXY(companyInfoX-nameW, tm)
-pdf.Cell(nameW, 6, companyInfo.CompanyName)
+	// Report details (two-column style)
+	pdf.SetFont("Arial","B",9)
+	pdf.SetX(lm)
+	pdf.Cell(25,5,"Period:")
+	pdf.SetFont("Arial","",9)
+	pdf.SetTextColor(102,102,102)
+	pdf.Cell(70,5,fmt.Sprintf("%s to %s", startDate, endDate))
 
-pdf.SetFont("Arial","",9)
-addrW := pdf.GetStringWidth(companyInfo.CompanyAddress)
-pdf.SetXY(companyInfoX-addrW, tm+8)
-pdf.Cell(addrW, 4, companyInfo.CompanyAddress)
+	pdf.SetFont("Arial","B",9)
+	pdf.SetTextColor(0,0,0)
+	rightX := lm + contentW - 60
+	pdf.SetX(rightX)
+	pdf.Cell(26,5,"Generated:")
+	pdf.SetFont("Arial","",9)
+	pdf.SetTextColor(102,102,102)
+	pdf.Cell(34,5,time.Now().Format("02/01/2006 15:04"))
+	pdf.Ln(10)
 
-phoneText := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
-phoneW := pdf.GetStringWidth(phoneText)
-pdf.SetXY(companyInfoX-phoneW, tm+14)
-pdf.Cell(phoneW, 4, phoneText)
-
-// Divider and title
-pdf.SetDrawColor(238,238,238)
-pdf.SetLineWidth(0.2)
-pdf.Line(lm, tm+45, pageW-rm, tm+45)
-
-pdf.SetY(tm + 55)
-pdf.SetFont("Arial","B",22)
-pdf.SetTextColor(51,51,51)
-pdf.Cell(contentW,10,"JOURNAL ENTRY ANALYSIS")
-pdf.SetTextColor(0,0,0)
-pdf.Ln(12)
-
-// Details two-column
-pdf.SetFont("Arial","B",9)
-pdf.SetX(lm)
-pdf.Cell(25,5,"Period:")
-pdf.SetFont("Arial","",9)
-pdf.SetTextColor(102,102,102)
-pdf.Cell(70,5,fmt.Sprintf("%s to %s", startDate, endDate))
-
-pdf.SetFont("Arial","B",9)
-pdf.SetTextColor(0,0,0)
-rightX := lm + contentW - 60
-pdf.SetX(rightX)
-pdf.Cell(26,5,"Generated:")
-pdf.SetFont("Arial","",9)
-pdf.SetTextColor(102,102,102)
-pdf.Cell(34,5,time.Now().Format("02/01/2006 15:04"))
-pdf.Ln(10)
-
-	// Normalize input to map[string]interface{} (structs are common here)
+	// Normalize input to generic map (structs are common here)
 	var dataMap map[string]interface{}
 	if m, ok := journalData.(map[string]interface{}); ok {
 		dataMap = m
@@ -3915,18 +3920,18 @@ pdf.Ln(10)
 		b, _ := json.Marshal(journalData)
 		_ = json.Unmarshal(b, &dataMap)
 	}
+	if dataMap == nil { dataMap = map[string]interface{}{} }
 
-	if dataMap != nil {
-		// Summary grid
-		pdf.SetFont("Arial", "B", 12)
-		pdf.Cell(190, 8, "SUMMARY")
-		pdf.Ln(8)
-		pdf.SetFont("Arial", "", 10)
-		// Use light gray background for grid cells (avoid black fill)
-		pdf.SetFillColor(230,230,230)
-		
-		getNum := func(key string) float64 {
-			if v, exists := dataMap[key]; exists {
+	// SUMMARY
+	pdf.SetFont("Arial", "B", 12)
+	pdf.Cell(190, 8, "SUMMARY")
+	pdf.Ln(8)
+	pdf.SetFont("Arial", "", 10)
+	pdf.SetFillColor(230,230,230)
+
+	getNum := func(keys ...string) float64 {
+		for _, k := range keys {
+			if v, ok := dataMap[k]; ok {
 				switch t := v.(type) {
 				case float64:
 					return t
@@ -3936,82 +3941,101 @@ pdf.Ln(10)
 					return float64(t)
 				case json.Number:
 					f, _ := t.Float64(); return f
-				}
-			}
-			return 0
-		}
-		
-		left := []struct{label string; value float64; currency bool}{
-			{"Total Entries", getNum("total_entries"), false},
-			{"Posted Entries", getNum("posted_entries"), false},
-			{"Draft Entries", getNum("draft_entries"), false},
-		}
-		right := []struct{label string; value float64; currency bool}{
-			{"Reversed Entries", getNum("reversed_entries"), false},
-			{"Total Amount", getNum("total_amount"), true},
-		}
-		
-		for i := 0; i < len(left) || i < len(right); i++ {
-			if i < len(left) {
-				pdf.CellFormat(60, 6, left[i].label, "1", 0, "L", true, 0, "")
-				val := strconv.Itoa(int(left[i].value))
-				if left[i].currency { val = p.formatRupiah(left[i].value) }
-				pdf.CellFormat(35, 6, val, "1", 0, "R", true, 0, "")
-			} else { pdf.Cell(95, 6, "") }
-			if i < len(right) {
-				pdf.CellFormat(60, 6, right[i].label, "1", 0, "L", true, 0, "")
-				val := strconv.Itoa(int(right[i].value))
-				if right[i].currency { val = p.formatRupiah(right[i].value) }
-				pdf.CellFormat(35, 6, val, "1", 1, "R", true, 0, "")
-			} else { pdf.Cell(95, 6, ""); pdf.Ln(6) }
-		}
-
-		pdf.Ln(8)
-		pdf.SetFont("Arial", "B", 12)
-		pdf.Cell(190, 8, "ENTRIES BY TYPE")
-		pdf.Ln(8)
-		pdf.SetFont("Arial", "B", 9)
-		pdf.SetFillColor(220,220,220)
-		pdf.CellFormat(70, 8, "Source Type", "1", 0, "L", true, 0, "")
-		pdf.CellFormat(40, 8, "Count", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(40, 8, "Amount", "1", 0, "R", true, 0, "")
-		pdf.CellFormat(40, 8, "Percentage", "1", 1, "C", true, 0, "")
-		pdf.SetFont("Arial", "", 9)
-		
-		if list, exists := dataMap["entries_by_type"]; exists {
-			if items, ok := list.([]interface{}); ok {
-				for _, it := range items {
-					if m, ok := it.(map[string]interface{}); ok {
-						sType := ""
-						count := getNumFrom(m["count"]) 
-						amount := getNumFrom(m["total_amount"]) 
-						perc := getNumFrom(m["percentage"]) 
-						if v, ok := m["source_type"].(string); ok { sType = v }
-						pdf.CellFormat(70, 6, sType, "1", 0, "L", false, 0, "")
-						pdf.CellFormat(40, 6, strconv.Itoa(int(count)), "1", 0, "C", false, 0, "")
-						pdf.CellFormat(40, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
-						pdf.CellFormat(40, 6, fmt.Sprintf("%.2f%%", perc), "1", 1, "C", false, 0, "")
-					}
+				default:
+					if f, err := strconv.ParseFloat(fmt.Sprintf("%v", t), 64); err == nil { return f }
 				}
 			}
 		}
-	} else {
-		pdf.SetFont("Arial", "", 10)
-		pdf.Cell(190, 6, "Journal Analysis data not available")
-		pdf.Ln(10)
+		return 0
 	}
 
+	left := []struct{label string; value float64; currency bool}{
+		{"Total Entries", getNum("total_entries", "TotalEntries"), false},
+		{"Posted Entries", getNum("posted_entries", "PostedEntries"), false},
+		{"Draft Entries", getNum("draft_entries", "DraftEntries"), false},
+	}
+	right := []struct{label string; value float64; currency bool}{
+		{"Reversed Entries", getNum("reversed_entries", "ReversedEntries"), false},
+		{"Total Amount", getNum("total_amount", "TotalAmount"), true},
+	}
+
+	for i := 0; i < len(left) || i < len(right); i++ {
+		if i < len(left) {
+			pdf.CellFormat(60, 6, left[i].label, "1", 0, "L", true, 0, "")
+			val := strconv.Itoa(int(left[i].value))
+			if left[i].currency { val = p.formatRupiah(left[i].value) }
+			pdf.CellFormat(35, 6, val, "1", 0, "R", true, 0, "")
+		} else { pdf.Cell(95, 6, "") }
+		if i < len(right) {
+			pdf.CellFormat(60, 6, right[i].label, "1", 0, "L", true, 0, "")
+			val := strconv.Itoa(int(right[i].value))
+			if right[i].currency { val = p.formatRupiah(right[i].value) }
+			pdf.CellFormat(35, 6, val, "1", 1, "R", true, 0, "")
+		} else { pdf.Cell(95, 6, ""); pdf.Ln(6) }
+	}
+
+	// ENTRIES BY TYPE
+	pdf.Ln(8)
+	pdf.SetFont("Arial", "B", 12)
+	pdf.Cell(190, 8, "ENTRIES BY TYPE")
+	pdf.Ln(8)
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetFillColor(220,220,220)
+	pdf.CellFormat(70, 8, "Source Type", "1", 0, "L", true, 0, "")
+	pdf.CellFormat(40, 8, "Count", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(40, 8, "Amount", "1", 0, "R", true, 0, "")
+	pdf.CellFormat(40, 8, "Percentage", "1", 1, "C", true, 0, "")
+	pdf.SetFont("Arial", "", 9)
+
+	entriesAny, ok := dataMap["entries_by_type"]
+	if !ok { entriesAny, ok = dataMap["EntriesByType"] }
+	if !ok { entriesAny, ok = dataMap["entriesByType"] }
+
+	if ok {
+		if items, ok2 := entriesAny.([]interface{}); ok2 {
+			for _, it := range items {
+				if m, ok3 := it.(map[string]interface{}); ok3 {
+					sType := ""
+					if v, ok := m["source_type"].(string); ok { sType = v } else if v, ok := m["SourceType"].(string); ok { sType = v }
+					count := getNumFrom(m["count"])
+					amount := getNumFrom(m["total_amount"])
+					if amount == 0 { amount = getNumFrom(m["TotalAmount"]) }
+					perc := getNumFrom(m["percentage"])
+					if perc == 0 { perc = getNumFrom(m["Percentage"]) }
+					pdf.CellFormat(70, 6, sType, "1", 0, "L", false, 0, "")
+					pdf.CellFormat(40, 6, strconv.Itoa(int(count)), "1", 0, "C", false, 0, "")
+					pdf.CellFormat(40, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
+					pdf.CellFormat(40, 6, fmt.Sprintf("%.2f%%", perc), "1", 1, "C", false, 0, "")
+				}
+			}
+		} else {
+			pdf.SetFont("Arial", "I", 9)
+			pdf.CellFormat(190, 6, "No journal entries found for the selected period", "1", 1, "C", false, 0, "")
+		}
+	} else {
+		pdf.SetFont("Arial", "I", 9)
+		pdf.CellFormat(190, 6, "Entry type breakdown data not available", "1", 1, "C", false, 0, "")
+	}
+
+	// Footer
 	pdf.Ln(10)
 	pdf.SetFont("Arial", "I", 8)
 	pdf.Cell(190, 4, fmt.Sprintf("Report generated on %s", time.Now().Format("02/01/2006 15:04")))
 
 	var buf bytes.Buffer
-	err = pdf.Output(&buf)
-	if err != nil {
+	if err := pdf.Output(&buf); err != nil {
 		return nil, fmt.Errorf("failed to generate journal analysis PDF: %v", err)
 	}
-
 	return buf.Bytes(), nil
+}
+
+// getMapKeys returns all keys from a map for debugging
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // getNumFrom converts various number representations to float64 (helper for PDF tables)
