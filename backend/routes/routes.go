@@ -571,7 +571,7 @@ salesJournalServiceV2 := services.NewSalesJournalServiceV2(db, journalRepo, coaS
 unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 	
 	// Initialize SalesController with new V2 Sales Service (inject pdfService)
-	salesController := controllers.NewSalesController(salesServiceV2, paymentService, unifiedSalesPaymentService, pdfService)
+	salesController := controllers.NewSalesController(salesServiceV2, paymentService, unifiedSalesPaymentService, pdfService, db, accountRepo)
 	
 	// Initialize PurchaseController with PaymentService integration (moved here after paymentService is available)
 	purchaseController := controllers.NewPurchaseController(purchaseService, paymentService, db, accountRepo)

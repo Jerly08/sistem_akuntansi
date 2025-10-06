@@ -506,21 +506,10 @@ func (r *AccountRepo) GetHierarchy(ctx context.Context) ([]models.Account, error
 // calculateTotalBalance recursively calculates the total balance for parent accounts.
 // It sums up the balances of its children.
 func (r *AccountRepo) calculateTotalBalance(ctx context.Context, account *models.Account) {
-	// If it's a leaf account, calculate its balance from SSOT (posted-only)
+	// 🔧 DISABLED SSOT: Use stored balance from database directly
 	if len(account.Children) == 0 {
-		if !account.IsHeader {
-			calculatedBalance, err := r.CalculateBalanceSSOT(ctx, account.ID)
-			if err != nil {
-				// On error, use the stored balance and log the error
-				fmt.Printf("[ERROR] Failed to calculate SSOT balance for account %s: %v\\n", account.Code, err)
-				account.TotalBalance = account.Balance
-			} else {
-				account.Balance = calculatedBalance
-				account.TotalBalance = calculatedBalance
-			}
-		} else {
-			account.TotalBalance = account.Balance
-		}
+		// Keep the original balance from database without SSOT override
+		account.TotalBalance = account.Balance
 		account.ChildCount = 0
 		return
 	}
@@ -536,10 +525,11 @@ func (r *AccountRepo) calculateTotalBalance(ctx context.Context, account *models
 	account.TotalBalance = childrenTotal
 	account.ChildCount = len(account.Children)
 	
-	// The individual balance of a header account is the sum of its children
-	if account.IsHeader {
-		account.Balance = childrenTotal
-	}
+	// 🔧 DISABLED: Do not overwrite balance for header accounts
+	// Keep the original balance from database instead of calculating from children
+	// if account.IsHeader {
+	// 	account.Balance = childrenTotal
+	// }
 }
 
 
@@ -859,21 +849,10 @@ func (r *AccountRepo) FixAccountHeaderStatus(ctx context.Context) error {
 
 // calculateTotalBalanceRecursive recursively calculates balances for the entire hierarchy
 func (r *AccountRepo) calculateTotalBalanceRecursive(ctx context.Context, account *models.Account) {
-	// If it's a leaf account, calculate its balance from SSOT (posted-only)
+	// 🔧 DISABLED SSOT: Use stored balance from database directly
 	if len(account.Children) == 0 {
-		if !account.IsHeader {
-			calculatedBalance, err := r.CalculateBalanceSSOT(ctx, account.ID)
-			if err != nil {
-				// On error, use the stored balance and log the error
-				fmt.Printf("[ERROR] Failed to calculate SSOT balance for account %s: %v\\n", account.Code, err)
-				account.TotalBalance = account.Balance
-			} else {
-				account.Balance = calculatedBalance
-				account.TotalBalance = calculatedBalance
-			}
-		} else {
-			account.TotalBalance = account.Balance
-		}
+		// Keep the original balance from database without SSOT override
+		account.TotalBalance = account.Balance
 		return
 	}
 
@@ -886,10 +865,11 @@ func (r *AccountRepo) calculateTotalBalanceRecursive(ctx context.Context, accoun
 
 	account.TotalBalance = childrenTotal
 
-	// For header accounts, the balance is the sum of their children
-	if account.IsHeader {
-		account.Balance = childrenTotal
-	}
+	// 🔧 DISABLED: Do not overwrite balance for header accounts
+	// Keep the original balance from database instead of calculating from children
+	// if account.IsHeader {
+	// 	account.Balance = childrenTotal
+	// }
 }
 
 // checkCircularReference checks if setting parentID would create a circular reference

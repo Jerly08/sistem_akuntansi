@@ -89,9 +89,7 @@ const AccountsPage = () => {
 
   // Helper function to get balance for display
   const getDisplayBalance = (account: Account): number => {
-    if (account.is_header && account.total_balance !== undefined) {
-      return account.total_balance;
-    }
+    // 🔧 ALWAYS use backend balance - no total_balance calculation
     return account.balance;
   };
 
@@ -121,52 +119,8 @@ const AccountsPage = () => {
     return result;
   };
 
-  // Recompute totals recursively from children using current balances
-  const recomputeTotals = (nodes: Account[]): number => {
-    let total = 0;
-    for (const n of nodes) {
-      if (n.children && n.children.length > 0) {
-        const childTotal = recomputeTotals(n.children);
-        n.total_balance = childTotal;
-        // For header accounts, mirror balance to total for display
-        if (n.is_header) n.balance = childTotal;
-        total += childTotal;
-      } else {
-        total += n.balance || 0;
-      }
-    }
-    return total;
-  };
-
-  // Helper function to find account by code in hierarchy
-  const findAccountByCode = (account: any, code: string): any => {
-    if (account.code === code) return account;
-    if (account.children) {
-      for (const child of account.children) {
-        const found = findAccountByCode(child, code);
-        if (found) return found;
-      }
-    }
-    return null;
-  };
-
-  // Apply SSOT balances to hierarchy (leaf nodes only) and recompute totals
-  const applySSOTBalances = (root: Account[] | null | undefined, ssotMap: Map<number, number>) => {
-    if (!Array.isArray(root) || root.length === 0) return;
-    const applyLeaf = (nodes: Account[] | null | undefined) => {
-      if (!Array.isArray(nodes) || nodes.length === 0) return;
-      for (const n of nodes) {
-        if (n.children && n.children.length > 0) {
-          applyLeaf(n.children);
-        } else {
-          const ssotVal = ssotMap.get(n.id);
-          n.balance = ssotVal !== undefined ? ssotVal : 0;
-        }
-      }
-    };
-    applyLeaf(root);
-    recomputeTotals(root);
-  };
+  // 🗑️ REMOVED: All balance modification functions
+  // Backend data is used directly without any processing
 
   // Unified fetch function using only hierarchy endpoint
   const fetchAccountData = async () => {
@@ -176,39 +130,11 @@ const AccountsPage = () => {
     try {
       const hierarchyData = await accountService.getAccountHierarchy(token);
       const safeHierarchy: Account[] = Array.isArray(hierarchyData) ? hierarchyData : [];
-      console.log('📊 Unified Account Data:', safeHierarchy);
+      console.log('📊 Raw Backend Data:', safeHierarchy);
 
-      // ✅ PRODUCTION: Use SSOT balances from journal entries (INVOICED-only transactions)
-      // This ensures COA only shows balances from INVOICED/PAID sales (not DRAFT/CONFIRMED)
-      console.log('📊 Using SSOT balances from journal entries (INVOICED-only transactions)');
+      // 🔧 SIMPLE: Use backend data directly without ANY modifications
+      console.log('✅ Using backend data directly (no processing)');
       
-      try {
-        const ssotBalances = await accountService.getPostedCOABalances(token);
-        console.log('✅ Retrieved SSOT posted-only balances:', ssotBalances.length, 'accounts');
-        
-        // Log some key accounts for verification
-        const keyAccounts = ['4101', '2103', '1201', '1101'];
-        keyAccounts.forEach(code => {
-          const ssotData = ssotBalances.find(b => {
-            const account = safeHierarchy.find((acc: any) => findAccountByCode(acc, code));
-            return account && b.account_id === account.id;
-          });
-          if (ssotData) {
-            console.log(`🔍 SSOT Posted Raw Balance for ${code}:`, ssotData.raw_balance);
-          }
-        });
-        
-        const ssotMap = new Map<number, number>();
-        // Use raw_balance to keep arithmetic correct for tree totals
-        ssotBalances.forEach((row) => ssotMap.set(row.account_id, row.raw_balance));
-        applySSOTBalances(safeHierarchy as any, ssotMap);
-        console.log('✅ Applied SSOT balances to hierarchy');
-      } catch (ssotError) {
-        console.error('❌ SSOT balance fetch failed:', ssotError);
-        console.warn('⚠️ Falling back to hierarchy balances (may include non-INVOICED data)');
-        // Continue with hierarchy balances as fallback
-      }
-
       setHierarchyAccounts(safeHierarchy);
       setFlatAccounts(flattenHierarchy(safeHierarchy));
       setError(null);

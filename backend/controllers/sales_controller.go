@@ -11,9 +11,11 @@ import (
 	"time"
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/services"
+	"app-sistem-akuntansi/repositories"
 	"app-sistem-akuntansi/utils"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type SalesController struct {
@@ -21,14 +23,18 @@ type SalesController struct {
 	paymentService        *services.PaymentService
 	unifiedPaymentService *services.UnifiedSalesPaymentService
 	pdfService            services.PDFServiceInterface
+	db                    *gorm.DB
+	accountRepo           repositories.AccountRepository
 }
 
-func NewSalesController(salesServiceV2 *services.SalesServiceV2, paymentService *services.PaymentService, unifiedPaymentService *services.UnifiedSalesPaymentService, pdfService services.PDFServiceInterface) *SalesController {
+func NewSalesController(salesServiceV2 *services.SalesServiceV2, paymentService *services.PaymentService, unifiedPaymentService *services.UnifiedSalesPaymentService, pdfService services.PDFServiceInterface, db *gorm.DB, accountRepo repositories.AccountRepository) *SalesController {
 	return &SalesController{
 		salesServiceV2:        salesServiceV2, // Use V2 service
 		paymentService:        paymentService,
 		unifiedPaymentService: unifiedPaymentService,
 		pdfService:            pdfService,
+		db:                    db,
+		accountRepo:           accountRepo,
 	}
 }
 
@@ -549,6 +555,31 @@ func (sc *SalesController) CreateSalePayment(c *gin.Context) {
 	log.Printf("✅ Payment created successfully for sale %d: payment_id=%d, amount=%.2f", 
 		id, payment.ID, payment.Amount)
 
+	// 🔥 NEW: Ensure COA balance is synchronized after unified sales payment
+	log.Printf("🔧 Ensuring COA balance sync after unified sales payment...")
+	if sc.accountRepo != nil && request.CashBankID != nil && *request.CashBankID != 0 {
+		// Initialize COA sync service for unified sales payments
+		coaSyncService := services.NewPurchasePaymentCOASyncService(sc.db, sc.accountRepo)
+		
+		// Sync COA balance to match cash/bank balance
+		err = coaSyncService.SyncCOABalanceAfterPayment(
+			uint(id),
+			request.Amount,
+			*request.CashBankID,
+			userID,
+			fmt.Sprintf("UNI-SAL-%d", id),
+			fmt.Sprintf("Unified sales payment for Sale %d", id),
+		)
+		if err != nil {
+			log.Printf("⚠️ Warning: Failed to sync COA balance for unified sales payment: %v", err)
+			// Don't fail the payment, just log the warning
+		} else {
+			log.Printf("✅ COA balance synchronized successfully for unified sales payment")
+		}
+	} else {
+		log.Printf("⚠️ Warning: Account repository not available or CashBankID missing for COA sync")
+	}
+
 	// Return success response with comprehensive data
 	c.JSON(http.StatusCreated, gin.H{
 		"status":  "success",
@@ -682,6 +713,31 @@ sale, err := sc.salesServiceV2.GetSaleByID(uint(id))
 		return
 	}
 	log.Printf("✅ Payment created successfully: ID=%d, Code=%s", payment.ID, payment.Code)
+
+	// 🔥 NEW: Ensure COA balance is synchronized after sales payment
+	log.Printf("🔧 Ensuring COA balance sync after sales payment...")
+	if sc.accountRepo != nil {
+		// Initialize COA sync service for sales payments
+		coaSyncService := services.NewPurchasePaymentCOASyncService(sc.db, sc.accountRepo)
+		
+		// Sync COA balance to match cash/bank balance
+		err = coaSyncService.SyncCOABalanceAfterPayment(
+			uint(id),
+			request.Amount,
+			request.CashBankID,
+			userID,
+			fmt.Sprintf("REC-%s", sale.InvoiceNumber),
+			fmt.Sprintf("Sales payment for Invoice %s", sale.InvoiceNumber),
+		)
+		if err != nil {
+			log.Printf("⚠️ Warning: Failed to sync COA balance for sales payment: %v", err)
+			// Don't fail the payment, just log the warning
+		} else {
+			log.Printf("✅ COA balance synchronized successfully for sales payment")
+		}
+	} else {
+		log.Printf("⚠️ Warning: Account repository not available for COA sync")
+	}
 
 	// Return response with both payment info and updated sale status
 updatedSale, err := sc.salesServiceV2.GetSaleByID(uint(id))

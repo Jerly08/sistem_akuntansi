@@ -611,67 +611,19 @@ func (s *PurchaseService) ProcessPurchaseApprovalWithEscalation(purchaseID uint,
 		return nil, err
 	}
 
-	// Update product stock when purchase is approved
-	fmt.Printf("🔄 Updating product stock for approved purchase %d\n", purchaseID)
-	err = s.updateProductStockOnApproval(purchase)
+	// NOTE: Stock updates, journal entries, and cash/bank balance updates
+	// are now handled by OnPurchaseApproved callback above
+
+	// ✅ FIXED: Call OnPurchaseApproved callback for complete post-approval processing
+	// This ensures cash bank transactions, stock updates, and journal entries are all handled correctly
+	fmt.Printf("🔔 Calling OnPurchaseApproved callback for purchase %d\n", purchaseID)
+	err = s.OnPurchaseApproved(purchaseID)
 	if err != nil {
-		fmt.Printf("⚠️ Warning: Failed to update product stock for purchase %d: %v\n", purchaseID, err)
-		// Don't fail the approval process, but log the issue
-	} else {
-		fmt.Printf("✅ Successfully updated product stock for purchase %d\n", purchaseID)
-	}
-
-	// Create SSOT journal entries for the approved purchase
-	// Check if journal entries already exist to avoid duplicates
-	hasExistingJournalEntries, checkErr := s.purchaseHasSSOTJournalEntries(purchaseID)
-	if checkErr != nil {
-		fmt.Printf("Warning: Failed to check existing SSOT journal entries for purchase %d: %v\n", purchaseID, checkErr)
-		// Continue with journal creation to be safe
-		hasExistingJournalEntries = false
-	}
-
-	if !hasExistingJournalEntries {
-		fmt.Printf("🏗️ Creating SSOT journal entries for approved purchase %d\n", purchaseID)
-		err = s.createSSOTPurchaseJournalEntries(purchase, userID)
-		if err != nil {
-			fmt.Printf("⚠️ Warning: Failed to create SSOT journal entries for purchase %d: %v\n", purchaseID, err)
-			// Don't fail the approval process, but log the issue
-		} else {
-			fmt.Printf("✅ Successfully created SSOT journal entries for purchase %d\n", purchaseID)
-			
-			// For immediate payment purchases, update cash/bank balance after journal entry creation
-			if isImmediatePayment(purchase.PaymentMethod) {
-				err = s.updateCashBankBalanceForPurchase(purchase)
-				if err != nil {
-					fmt.Printf("⚠️ Warning: Failed to update cash/bank balance for purchase %d: %v\n", purchaseID, err)
-					// Don't fail the approval process, but log the issue
-				} else {
-					fmt.Printf("💰 Successfully updated cash/bank balance for approved immediate payment purchase %d\n", purchaseID)
-				}
-			}
-		}
-	} else {
-		fmt.Printf("📋 SSOT journal entries already exist for purchase %d, skipping creation\n", purchaseID)
-    }
-
-	// NEW: Update journal entries using V2 service (like sales management)
-	// This ensures COA balances are updated immediately when status becomes APPROVED
-	if err := s.handlePurchaseJournalUpdate(purchase, "PENDING", nil); err != nil {
-		fmt.Printf("⚠️ Warning: Failed to update journal entries for purchase %d: %v\n", purchaseID, err)
+		fmt.Printf("⚠️ Warning: Post-approval callback failed for purchase %d: %v\n", purchaseID, err)
 		// Continue processing, don't fail the entire approval
 	} else {
-		fmt.Printf("📗 Journal entries updated for approved purchase %d\n", purchaseID)
+		fmt.Printf("✅ Post-approval callback completed successfully for purchase %d\n", purchaseID)
 	}
-
-    // For credit purchases, create payment tracking records to manage accounts payable
-    if purchase.PaymentMethod == models.PurchasePaymentCredit {
-        fmt.Printf("Creating payment tracking records for credit purchase %d\n", purchaseID)
-        err = s.createPaymentTrackingForCreditPurchase(purchase, userID)
-        if err != nil {
-            fmt.Printf("Warning: Failed to create payment tracking for credit purchase %d: %v\n", purchaseID, err)
-            // Don't fail the approval process, but log the issue
-        }
-    }
 
     result["message"] = "Purchase approved successfully"
 	result["purchase_id"] = purchaseID
@@ -1839,6 +1791,30 @@ func (s *PurchaseService) updateCashBankBalanceForPurchase(purchase *models.Purc
 	}
 	fmt.Printf("💰 Balance updated: %s %.2f → %.2f (decreased by %.2f)\n", 
 		cashBank.Name, oldBalance, cashBank.Balance, purchase.TotalAmount)
+
+	// 🔥 NEW: Sync COA balance after cash/bank balance update
+	fmt.Printf("🔧 Syncing COA balance after immediate payment purchase...\n")
+	if s.accountRepo != nil {
+		// Initialize COA sync service for immediate payment purchases
+		coaSyncService := NewPurchasePaymentCOASyncService(s.db, s.accountRepo)
+		
+		// Sync COA balance to match cash/bank balance
+		if err := coaSyncService.SyncCOABalanceAfterPayment(
+			purchase.ID,
+			purchase.TotalAmount,
+			*purchase.BankAccountID,
+			purchase.UserID,
+			fmt.Sprintf("CASH-%s", purchase.Code),
+			fmt.Sprintf("Immediate payment for Purchase %s", purchase.Code),
+		); err != nil {
+			fmt.Printf("⚠️ Warning: Failed to sync COA balance for immediate payment: %v\n", err)
+			// Don't fail the entire purchase process, just log the warning
+		} else {
+			fmt.Printf("✅ COA balance synchronized successfully for immediate payment\n")
+		}
+	} else {
+		fmt.Printf("⚠️ Warning: Account repository not available for COA sync\n")
+	}
 	
 	// Create cash/bank transaction record for audit trail
 	cashBankTransaction := &models.CashBankTransaction{

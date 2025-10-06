@@ -136,33 +136,17 @@ const TreeNode: React.FC<TreeNodeProps> = ({
           </HStack>
 
           <HStack spacing={3}>
-            {showBalance && (() => {
-              // Use the same logic as in AccountsPage
-              const displayBalance = account.is_header && account.total_balance !== undefined 
-                ? account.total_balance 
-                : account.balance;
-              
-              const prefix = account.is_header && account.child_count && account.child_count > 0 
-                ? 'Total: '
-                : '';
-              
-              return (
-                <VStack spacing={0} align="end">
-                  <Text
-                    fontSize="sm"
-                    fontWeight={account.is_header ? "bold" : "medium"}
-                    color={displayBalance >= 0 ? 'green.600' : 'red.600'}
-                  >
-                    {prefix}{accountService.formatBalance(displayBalance, 'IDR', account.code, account.type)}
-                  </Text>
-                  {account.is_header && account.child_count && account.child_count > 0 && (
-                    <Text fontSize="xs" color="gray.500">
-                      (Sum of {account.child_count} children)
-                    </Text>
-                  )}
-                </VStack>
-              );
-            })()}
+            {showBalance && (
+              <VStack spacing={0} align="end">
+                <Text
+                  fontSize="sm"
+                  fontWeight={account.is_header ? "bold" : "medium"}
+                  color={account.balance >= 0 ? 'green.600' : 'red.600'}
+                >
+                  {accountService.formatBalance(account.balance, 'IDR', account.code, account.type)}
+                </Text>
+              </VStack>
+            )}
 
             {/* Regular accounts actions */}
             {showActions && !account.is_header && (

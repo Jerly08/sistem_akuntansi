@@ -48,9 +48,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
   
   // Helper function to get balance for display
   const getDisplayBalance = (account: Account): number => {
-    if (account.is_header && account.total_balance !== undefined) {
-      return account.total_balance;
-    }
+    // 🔧 ALWAYS use backend balance directly
     return account.balance;
   };
 

@@ -306,25 +306,111 @@ func (s *ApprovalService) ProcessApprovalAction(requestID uint, userID uint, act
 			return err
 		}
 	} else {
-		// Check if there are more steps
+		// FIXED LOGIC: Check if the approving user can approve any OTHER pending steps
+		// This fixes the bug where finance users skip their own step approval
+		var userCanApproveOtherSteps []*models.ApprovalAction
+		for i := range approvalReq.ApprovalSteps {
+			step := &approvalReq.ApprovalSteps[i]
+			if step.Status == models.ApprovalStatusPending && !step.IsActive {
+				if s.canUserApprove(userID, step.Step.ApproverRole) {
+					userCanApproveOtherSteps = append(userCanApproveOtherSteps, step)
+				}
+			}
+		}
+		
+		// Process any steps the user can approve directly
+		if len(userCanApproveOtherSteps) > 0 {
+			// User can approve other steps - complete them automatically
+			for _, step := range userCanApproveOtherSteps {
+				step.Status = models.ApprovalStatusApproved
+				step.ApproverID = &userID
+				step.Comments = "Auto-approved: User has multiple role permissions"
+				step.ActionDate = &now
+				step.IsActive = false
+				
+				if err := tx.Save(step).Error; err != nil {
+					tx.Rollback()
+					return err
+				}
+				
+				// Create history for auto-approval
+				autoHistory := models.ApprovalHistory{
+					RequestID: requestID,
+					UserID:    userID,
+					Action:    models.ApprovalActionApproved,
+					Comments:  fmt.Sprintf("Auto-approved %s step: User has %s role permissions", step.Step.ApproverRole, step.Step.ApproverRole),
+					Metadata:  "{\"auto_approved\": true}",
+				}
+				
+				if err := tx.Create(&autoHistory).Error; err != nil {
+					tx.Rollback()
+					return err
+				}
+			}
+		}
+		
+		// Now check for next steps to activate
 		nextStep := s.getNextStep(approvalReq.ApprovalSteps, currentAction.Step.StepOrder)
 		if nextStep != nil {
-			// Activate next step
+			// Check if the next step was already auto-approved above
+			nextStepAlreadyApproved := false
 			for i := range approvalReq.ApprovalSteps {
 				if approvalReq.ApprovalSteps[i].StepID == nextStep.ID {
-					approvalReq.ApprovalSteps[i].IsActive = true
-					if err := tx.Save(&approvalReq.ApprovalSteps[i]).Error; err != nil {
-						tx.Rollback()
-						return err
+					if approvalReq.ApprovalSteps[i].Status == models.ApprovalStatusApproved {
+						nextStepAlreadyApproved = true
 					}
-					// Notify next approvers
-					go s.notifyApprovers(&approvalReq, *nextStep)
 					break
 				}
 			}
+			
+			if !nextStepAlreadyApproved {
+				// Activate next step
+				for i := range approvalReq.ApprovalSteps {
+					if approvalReq.ApprovalSteps[i].StepID == nextStep.ID {
+						approvalReq.ApprovalSteps[i].IsActive = true
+						if err := tx.Save(&approvalReq.ApprovalSteps[i]).Error; err != nil {
+							tx.Rollback()
+							return err
+						}
+						// Notify next approvers
+						go s.notifyApprovers(&approvalReq, *nextStep)
+						break
+					}
+				}
+			}
+		}
+		
+		// Check if ALL required steps are now completed
+		allStepsCompleted := true
+		for i := range approvalReq.ApprovalSteps {
+			step := &approvalReq.ApprovalSteps[i]
+			// Skip optional director steps unless they were specifically activated
+			if strings.ToLower(step.Step.ApproverRole) == "director" && step.Step.IsOptional && !step.IsActive {
+				continue
+			}
+			if step.Status != models.ApprovalStatusApproved {
+				allStepsCompleted = false
+				break
+			}
+		}
+		
+		if allStepsCompleted {
+			// All required steps are completed - mark request as approved
+			approvalReq.Status = models.ApprovalStatusApproved
+			approvalReq.CompletedAt = &now
+
+			if err := tx.Save(&approvalReq).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+
+			// Update entity status
+			if err := s.updateEntityStatus(tx, approvalReq.EntityType, approvalReq.EntityID, "APPROVED"); err != nil {
+				tx.Rollback()
+				return err
+			}
 		} else {
 			// Check if there are any pending director steps that should be activated
-			// This handles the case where director step was added after initial workflow creation
 			var pendingDirectorStep *models.ApprovalAction
 			for i := range approvalReq.ApprovalSteps {
 				step := &approvalReq.ApprovalSteps[i]
@@ -336,7 +422,7 @@ func (s *ApprovalService) ProcessApprovalAction(requestID uint, userID uint, act
 			}
 			
 			if pendingDirectorStep != nil {
-				// Activate the pending director step instead of auto-approving
+				// Activate the pending director step
 				pendingDirectorStep.IsActive = true
 				if err := tx.Save(pendingDirectorStep).Error; err != nil {
 					tx.Rollback()
@@ -344,21 +430,6 @@ func (s *ApprovalService) ProcessApprovalAction(requestID uint, userID uint, act
 				}
 				// Notify directors
 				go s.notifyApprovers(&approvalReq, pendingDirectorStep.Step)
-			} else {
-				// All steps approved - complete request
-				approvalReq.Status = models.ApprovalStatusApproved
-				approvalReq.CompletedAt = &now
-
-				if err := tx.Save(&approvalReq).Error; err != nil {
-					tx.Rollback()
-					return err
-				}
-
-				// Update entity status
-				if err := s.updateEntityStatus(tx, approvalReq.EntityType, approvalReq.EntityID, "APPROVED"); err != nil {
-					tx.Rollback()
-					return err
-				}
 			}
 		}
 	}

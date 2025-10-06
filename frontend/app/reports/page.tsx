@@ -66,8 +66,6 @@ import { API_ENDPOINTS } from '@/config/api';
 import { ssotPurchaseReportService, SSOTPurchaseReportData } from '../../src/services/ssotPurchaseReportService';
 // Import Cash Flow Export Service
 import cashFlowExportService from '../../src/services/cashFlowExportService';
-// Import Simple Journal Entry Report
-import SimpleJournalEntryReport from '../../src/components/reports/SimpleJournalEntryReport';
 
 // Define reports data matching the UI design
 const getAvailableReports = (t: any) => [
@@ -126,13 +124,6 @@ const getAvailableReports = (t: any) => [
     description: 'Complete analysis of all journal entries showing all transactions with detailed breakdown by accounts, dates, and amounts',
     type: 'FINANCIAL',
     icon: FiDatabase
-  },
-  {
-    id: 'simple-journal-entries',
-    name: 'Journal Entry Report',
-    description: 'Simple view of journal entries with basic filtering, search capabilities, and CSV export. Perfect for quick journal entry review and verification.',
-    type: 'OPERATIONAL',
-    icon: FiBook
   }
 ];
 
@@ -245,8 +236,6 @@ const ReportsPage: React.FC = () => {
   const [ssotJAStartDate, setSSOTJAStartDate] = useState('');
   const [ssotJAEndDate, setSSOTJAEndDate] = useState('');
 
-  // State untuk Simple Journal Entry Report
-  const [simpleJournalOpen, setSimpleJournalOpen] = useState(false);
 
   // Modal and report generation states
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -705,6 +694,65 @@ const ReportsPage: React.FC = () => {
       toast({
         title: 'PDF Export Failed',
         description: error.message || 'Failed to export PDF',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Journal Analysis Export Handler with correct date parameters
+  const handleJournalAnalysisExport = async (format: 'pdf' | 'csv') => {
+    if (!ssotJAData || !ssotJAStartDate || !ssotJAEndDate) {
+      toast({
+        title: 'Export Failed',
+        description: 'No Journal Analysis data available or missing date parameters',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const params = {
+        start_date: ssotJAStartDate,
+        end_date: ssotJAEndDate,
+        format: format,
+        status: 'POSTED', // Use the same status filter as modal
+        reference_type: 'ALL' // Use the same reference type filter as modal
+      };
+
+      console.log('Exporting Journal Analysis with params:', params);
+      
+      const result = await reportService.generateReport('journal-entry-analysis', params);
+      
+      if (result instanceof Blob) {
+        if (result.size === 0) {
+          throw new Error('Empty file received from server');
+        }
+        
+        const fileName = `journal_entry_analysis_${format}_${ssotJAStartDate}_to_${ssotJAEndDate}.${format}`;
+        await reportService.downloadReport(result, fileName);
+        
+        toast({
+          title: 'Export Successful',
+          description: `Journal Entry Analysis has been downloaded as ${format.toUpperCase()}`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        throw new Error('Invalid response format from server');
+      }
+      
+    } catch (error: any) {
+      toast({
+        title: 'Export Failed',
+        description: error.message || 'Failed to export Journal Analysis',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1298,8 +1346,6 @@ const ReportsPage: React.FC = () => {
                             setSSOTGLOpen(true);
                           } else if (report.id === 'journal-entry-analysis') {
                             setSSOTJAOpen(true);
-                          } else if (report.id === 'simple-journal-entries') {
-                            setSimpleJournalOpen(true);
                           } else if (report.id === 'balance-sheet') {
                             setSSOTBSOpen(true);
                           } else if (report.id === 'cash-flow') {
@@ -4093,7 +4139,7 @@ leftIcon={<FiBook />}
                     variant="outline"
                     size="sm"
                     leftIcon={<FiFilePlus />}
-                    onClick={() => handleQuickDownload({id: 'journal-entry-analysis', name: 'Journal Entry Analysis'}, 'pdf')}
+                    onClick={() => handleJournalAnalysisExport('pdf')}
                   >
                     Export PDF
                   </Button>
@@ -4102,7 +4148,7 @@ leftIcon={<FiBook />}
                     variant="outline"
                     size="sm"
                     leftIcon={<FiFileText />}
-                    onClick={() => handleQuickDownload({id: 'journal-entry-analysis', name: 'Journal Entry Analysis'}, 'csv')}
+                    onClick={() => handleJournalAnalysisExport('csv')}
                   >
                     Export CSV
                   </Button>
@@ -4116,29 +4162,6 @@ leftIcon={<FiBook />}
         </ModalContent>
       </Modal>
 
-      {/* Simple Journal Entry Report Modal */}
-      <Modal isOpen={simpleJournalOpen} onClose={() => setSimpleJournalOpen(false)} size="6xl">
-        <ModalOverlay />
-        <ModalContent bg={modalContentBg}>
-          <ModalHeader>
-            <HStack>
-              <Icon as={FiBook} color="blue.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  Journal Entry Report
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  Simple view with filtering and export capabilities
-                </Text>
-              </VStack>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody p={0}>
-            <SimpleJournalEntryReport onClose={() => setSimpleJournalOpen(false)} />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
       
     </SimpleLayout>
   );
