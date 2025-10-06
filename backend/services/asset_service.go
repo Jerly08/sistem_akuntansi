@@ -77,7 +77,7 @@ func (s *AssetService) GetAssetByID(id uint) (*models.Asset, error) {
 
 // CreateAsset creates a new asset with generated code
 func (s *AssetService) CreateAsset(asset *models.Asset) error {
-	// Generate asset code if not provided
+	// Generate asset code OUTSIDE transaction to avoid transaction abort issues
 	if asset.Code == "" {
 		code, err := s.GenerateAssetCode(asset.Category)
 		if err != nil {
@@ -114,7 +114,32 @@ func (s *AssetService) CreateAsset(asset *models.Asset) error {
 		}
 	}
 
-	return s.assetRepo.Create(asset)
+	// Retry logic for handling unique constraint violations
+	const maxRetries = 5
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		err := s.assetRepo.Create(asset)
+		if err == nil {
+			// Success!
+			return nil
+		}
+		
+		// Check if it's a unique constraint violation on asset code
+		if isUniqueCodeError(err) && attempt < maxRetries {
+			// Generate new code and retry
+			newCode, codeErr := s.GenerateAssetCode(asset.Category)
+			if codeErr != nil {
+				return errors.New("failed to generate new asset code after collision: " + codeErr.Error())
+			}
+			asset.Code = newCode
+			continue // Retry with new code
+		}
+		
+		// If it's not a unique constraint error or we've exhausted retries, return the error
+		return err
+	}
+	
+	// Should never reach here, but just in case
+	return errors.New("exhausted all retry attempts")
 }
 
 // CreateAssetWithJournal creates a new asset and generates corresponding journal entries
@@ -617,6 +642,10 @@ func isUniqueCodeError(err error) bool {
 		return false
 	}
 	errorStr := err.Error()
-	// PostgreSQL unique violation for assets_code_key
-	return strings.Contains(errorStr, "SQLSTATE 23505") && strings.Contains(errorStr, "assets_code_key")
+	// PostgreSQL unique violation - check for multiple possible constraint names
+	return strings.Contains(errorStr, "SQLSTATE 23505") && 
+		(strings.Contains(errorStr, "assets_code_key") ||
+		 strings.Contains(errorStr, "uni_assets_code") ||
+		 strings.Contains(errorStr, "assets_code_unique") ||
+		 strings.Contains(errorStr, "idx_assets_code"))
 }

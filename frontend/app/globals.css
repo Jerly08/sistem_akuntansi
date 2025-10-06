@@ -450,6 +450,83 @@ body {
   overflow: visible;
 }
 
+/* Enhanced General Ledger Report table styling */
+.general-ledger-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.general-ledger-table .table-header {
+  background-color: var(--bg-tertiary);
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  text-align: left;
+  border-bottom: 2px solid var(--border-color);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.general-ledger-table .table-cell {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  vertical-align: top;
+}
+
+.general-ledger-table .table-row:hover {
+  background-color: var(--bg-tertiary);
+  transition: background-color 0.2s ease;
+}
+
+.general-ledger-table .table-row:last-child .table-cell {
+  border-bottom: none;
+}
+
+/* Responsive table improvements */
+@media (max-width: 768px) {
+  .general-ledger-table .table-cell {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+  
+  .general-ledger-table .table-header {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Text overflow handling for table cells */
+.table-cell-text {
+  display: block;
+  width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.table-cell-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
 /* Accessibility */
 @media (prefers-reduced-motion: reduce) {
   * {

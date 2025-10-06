@@ -9,6 +9,7 @@ import {
   Heading,
   Text,
   SimpleGrid,
+  Grid,
   Button,
   VStack,
   HStack,
@@ -753,6 +754,78 @@ const ReportsPage: React.FC = () => {
       toast({
         title: 'Export Failed',
         description: error.message || 'Failed to export Journal Analysis',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Purchase Report Export Handler
+  const handlePurchaseReportExport = async (format: 'pdf' | 'csv') => {
+    if (!ssotPRData || !ssotPRStartDate || !ssotPREndDate) {
+      toast({
+        title: 'Export Failed',
+        description: 'No Purchase Report data available or missing date parameters',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Import the SSOT Purchase Report Service
+      const { ssotPurchaseReportService } = await import('../../src/services/ssotPurchaseReportService');
+      
+      const params = {
+        start_date: ssotPRStartDate,
+        end_date: ssotPREndDate,
+        format: format
+      };
+
+      console.log('Exporting Purchase Report with params:', params);
+      
+      let result: Blob;
+      if (format === 'pdf') {
+        result = await ssotPurchaseReportService.exportToPDF(params);
+      } else {
+        result = await ssotPurchaseReportService.exportToCSV(params);
+      }
+      
+      if (result && result.size > 0) {
+        const fileName = `SSOT_Purchase_Report_${ssotPRStartDate}_to_${ssotPREndDate}.${format}`;
+        
+        // Create download link
+        const url = window.URL.createObjectURL(result);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast({
+          title: 'Export Successful',
+          description: `Purchase Report has been downloaded as ${format.toUpperCase()}`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        throw new Error('Empty file received from server');
+      }
+      
+    } catch (error: any) {
+      console.error('Purchase Report export error:', error);
+      
+      toast({
+        title: 'Export Failed',
+        description: error.message || `Failed to export Purchase Report as ${format.toUpperCase()}`,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -2582,7 +2655,7 @@ leftIcon={<FiShoppingCart />}
                     variant="outline"
                     size="sm"
                     leftIcon={<FiFilePlus />}
-                    onClick={() => handleQuickDownload({id: 'purchase-report', name: 'Purchase Report'}, 'pdf')}
+                    onClick={() => handlePurchaseReportExport('pdf')}
                   >
                     Export PDF
                   </Button>
@@ -2591,7 +2664,7 @@ leftIcon={<FiShoppingCart />}
                     variant="outline"
                     size="sm"
                     leftIcon={<FiFileText />}
-                    onClick={() => handleQuickDownload({id: 'purchase-report', name: 'Purchase Report'}, 'csv')}
+                    onClick={() => handlePurchaseReportExport('csv')}
                   >
                     Export CSV
                   </Button>
@@ -3598,54 +3671,128 @@ leftIcon={<FiBook />}
                     
                     {/* Transaction Table Header */}
                     <Box bg="gray.50" p={3} borderRadius="md" mb={2}>
-                      <SimpleGrid columns={[1, 2, 6]} spacing={2} fontSize="sm" fontWeight="bold" color="gray.700">
+                      <Grid 
+                        templateColumns={{
+                          base: "1fr",
+                          md: "minmax(100px, 120px) minmax(200px, 1fr) minmax(100px, 150px) minmax(100px, 120px) minmax(100px, 120px) minmax(100px, 120px)",
+                          lg: "120px 1fr 150px 120px 120px 120px"
+                        }}
+                        gap={3} 
+                        fontSize="sm" 
+                        fontWeight="bold" 
+                        color="gray.700"
+                        alignItems="center"
+                      >
                         <Text>Date</Text>
                         <Text>Description</Text>
                         <Text>Reference</Text>
                         <Text textAlign="right">Debit</Text>
                         <Text textAlign="right">Credit</Text>
                         <Text textAlign="right">Balance</Text>
-                      </SimpleGrid>
+                      </Grid>
                     </Box>
                     
                     {/* Transaction Rows */}
                     <VStack spacing={1} align="stretch" maxH="400px" overflow="auto">
                       {ssotGLData.transactions.map((transaction, index) => (
-                        <Box key={index} border="1px solid" borderColor="gray.100" borderRadius="sm" p={3} bg="white" _hover={{ bg: 'gray.50' }}>
-                          <SimpleGrid columns={[1, 2, 6]} spacing={2} fontSize="sm">
-                            <VStack align="start" spacing={0}>
-                              <Text fontWeight="medium" color="gray.800">
+                        <Box 
+                          key={index} 
+                          border="1px solid" 
+                          borderColor="gray.100" 
+                          borderRadius="sm" 
+                          p={3} 
+                          bg="white" 
+                          _hover={{ bg: 'gray.50' }}
+                          minH="60px"
+                        >
+                          <Grid 
+                            templateColumns={{
+                              base: "1fr",
+                              md: "minmax(100px, 120px) minmax(200px, 1fr) minmax(100px, 150px) minmax(100px, 120px) minmax(100px, 120px) minmax(100px, 120px)",
+                              lg: "120px 1fr 150px 120px 120px 120px"
+                            }}
+                            gap={3} 
+                            fontSize="sm"
+                            alignItems="center"
+                            minH="inherit"
+                          >
+                            <VStack align="start" spacing={0} justify="center">
+                              <Text 
+                                fontWeight="medium" 
+                                color="gray.800"
+                                fontSize="sm"
+                                wordBreak="break-word"
+                                overflowWrap="break-word"
+                              >
                                 {new Date(transaction.date).toLocaleDateString('id-ID')}
                               </Text>
                               {transaction.journal_code && (
-                                <Text fontSize="xs" color="blue.600">
+                                <Text 
+                                  fontSize="xs" 
+                                  color="blue.600"
+                                  wordBreak="break-word"
+                                  overflowWrap="break-word"
+                                >
                                   {transaction.journal_code}
                                 </Text>
                               )}
                             </VStack>
-                            <VStack align="start" spacing={0}>
-                              <Text fontSize="sm" color="gray.800" noOfLines={2}>
+                            <VStack align="start" spacing={0} justify="center" w="100%">
+                              <Text 
+                                fontSize="sm" 
+                                color="gray.800" 
+                                wordBreak="break-word"
+                                overflowWrap="break-word"
+                                whiteSpace="normal"
+                                lineHeight="1.3"
+                              >
                                 {transaction.description || 'No description'}
                               </Text>
                               {transaction.entry_type && (
-                                <Badge size="sm" colorScheme={getEntryTypeBadgeColor(transaction.entry_type)}>
+                                <Badge size="sm" colorScheme={getEntryTypeBadgeColor(transaction.entry_type)} mt={1}>
                                   {transaction.entry_type}
                                 </Badge>
                               )}
                             </VStack>
-                            <Text fontSize="sm" color="gray.600">
+                            <Text 
+                              fontSize="sm" 
+                              color="gray.600"
+                              wordBreak="break-word"
+                              overflowWrap="break-word"
+                            >
                               {transaction.reference || '-'}
                             </Text>
-                            <Text textAlign="right" fontSize="sm" fontWeight="medium" color={transaction.debit_amount > 0 ? 'green.600' : 'gray.400'}>
+                            <Text 
+                              textAlign="right" 
+                              fontSize="sm" 
+                              fontWeight="medium" 
+                              color={transaction.debit_amount > 0 ? 'green.600' : 'gray.400'}
+                              wordBreak="break-word"
+                              overflowWrap="break-word"
+                            >
                               {transaction.debit_amount > 0 ? formatCurrency(transaction.debit_amount) : '-'}
                             </Text>
-                            <Text textAlign="right" fontSize="sm" fontWeight="medium" color={transaction.credit_amount > 0 ? 'red.600' : 'gray.400'}>
+                            <Text 
+                              textAlign="right" 
+                              fontSize="sm" 
+                              fontWeight="medium" 
+                              color={transaction.credit_amount > 0 ? 'red.600' : 'gray.400'}
+                              wordBreak="break-word"
+                              overflowWrap="break-word"
+                            >
                               {transaction.credit_amount > 0 ? formatCurrency(transaction.credit_amount) : '-'}
                             </Text>
-                            <Text textAlign="right" fontSize="sm" fontWeight="bold" color={transaction.balance >= 0 ? 'green.600' : 'red.600'}>
+                            <Text 
+                              textAlign="right" 
+                              fontSize="sm" 
+                              fontWeight="bold" 
+                              color={transaction.balance >= 0 ? 'green.600' : 'red.600'}
+                              wordBreak="break-word"
+                              overflowWrap="break-word"
+                            >
                               {formatCurrency(transaction.balance)}
                             </Text>
-                          </SimpleGrid>
+                          </Grid>
                         </Box>
                       ))}
                     </VStack>

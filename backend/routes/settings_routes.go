@@ -19,6 +19,9 @@ func SetupSettingsRoutes(protected *gin.RouterGroup, db *gorm.DB) {
 	coaService := services.NewCOAService(db)
 	taxAccountController := controllers.NewTaxAccountController(taxAccountService, coaService)
 	
+	// Initialize enhanced tax account status controller
+	taxAccountStatusController := controllers.NewTaxAccountStatusController(taxAccountService, coaService)
+	
 	// Settings routes (admin only)
 	settings := protected.Group("/settings")
 	settings.Use(middleware.RoleRequired("admin"))
@@ -68,5 +71,9 @@ func SetupSettingsRoutes(protected *gin.RouterGroup, db *gorm.DB) {
 		
 		// Get account suggestions for setup wizard
 		taxSettings.GET("/suggestions", taxAccountController.GetAccountSuggestions)
+		
+		// Enhanced status and validation endpoints
+		taxSettings.GET("/status", taxAccountStatusController.GetStatus)
+		taxSettings.GET("/validate", taxAccountStatusController.ValidateAccountSelection)
 	}
 }

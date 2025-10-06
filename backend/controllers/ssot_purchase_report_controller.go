@@ -133,16 +133,24 @@ func (c *SSOTPurchaseReportController) GetPurchaseReport(ctx *gin.Context) {
 		ctx.Header("Content-Length", strconv.Itoa(len(pdfBytes)))
 		ctx.Data(http.StatusOK, "application/pdf", pdfBytes)
 	case "csv":
-		meta := map[string]interface{}{
-			"start_date":   startDate.Format("2006-01-02"),
-			"end_date":     endDate.Format("2006-01-02"),
-			"data":         report,
-			"export_ready": true,
-			"export_format":"csv",
-			"csv_headers":  []string{"Vendor","Total Purchases","Total Amount","Total Paid","Outstanding"},
-			"report_title": "SSOT Purchase Report",
+		// Get user ID from context (assuming it's set by auth middleware)
+		userID := uint(1) // Default fallback, should be extracted from JWT/session
+		if userIDValue, exists := ctx.Get("userID"); exists {
+			if uid, ok := userIDValue.(uint); ok {
+				userID = uid
+			}
 		}
-		ctx.JSON(http.StatusOK, gin.H{"success": true, "message": "Purchase report formatted for csv export", "data": meta})
+		
+		csvBytes, err := c.exportService.ExportToCSV(report, userID)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, GetPurchaseReportResponse{Success:false, Message:"Failed to generate CSV", Error: err.Error(), Timestamp: time.Now()})
+			return
+		}
+		filename := fmt.Sprintf("SSOT_Purchase_Report_%s_to_%s.csv", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		ctx.Header("Content-Type", "text/csv")
+		ctx.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+		ctx.Header("Content-Length", strconv.Itoa(len(csvBytes)))
+		ctx.Data(http.StatusOK, "text/csv", csvBytes)
 	default:
 		ctx.JSON(http.StatusBadRequest, GetPurchaseReportResponse{Success:false, Message:"Unsupported format. Use json, pdf, or csv", Timestamp: time.Now()})
 	}

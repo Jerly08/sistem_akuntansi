@@ -50,6 +50,7 @@ func (pc *PermissionController) GetUserPermissions(c *gin.Context) {
 			CanDelete:  perm.CanDelete,
 			CanApprove: perm.CanApprove,
 			CanExport:  perm.CanExport,
+			CanMenu:    perm.CanMenu,
 		}
 	}
 	
@@ -117,6 +118,7 @@ func (pc *PermissionController) UpdateUserPermissions(c *gin.Context) {
 			CanDelete:  perm.CanDelete,
 			CanApprove: perm.CanApprove,
 			CanExport:  perm.CanExport,
+			CanMenu:    perm.CanMenu,
 		}
 		
 		if err := tx.Create(&permission).Error; err != nil {
@@ -161,6 +163,7 @@ func (pc *PermissionController) GetAllUsersPermissions(c *gin.Context) {
 				CanDelete:  perm.CanDelete,
 				CanApprove: perm.CanApprove,
 				CanExport:  perm.CanExport,
+				CanMenu:    perm.CanMenu,
 			}
 		}
 		
@@ -224,6 +227,7 @@ func (pc *PermissionController) ResetToDefaultPermissions(c *gin.Context) {
 			CanDelete:  perm.CanDelete,
 			CanApprove: perm.CanApprove,
 			CanExport:  perm.CanExport,
+			CanMenu:    perm.CanMenu,
 		}
 		
 		if err := tx.Create(&permission).Error; err != nil {
@@ -290,6 +294,7 @@ func (pc *PermissionController) GetMyPermissions(c *gin.Context) {
 			CanDelete:  perm.CanDelete,
 			CanApprove: perm.CanApprove,
 			CanExport:  perm.CanExport,
+			CanMenu:    perm.CanMenu,
 		}
 	}
 
@@ -348,6 +353,7 @@ func (pc *PermissionController) CheckUserPermission(c *gin.Context) {
 					CanDelete:  modPerm.CanDelete,
 					CanApprove: modPerm.CanApprove,
 					CanExport:  modPerm.CanExport,
+					CanMenu:    modPerm.CanMenu,
 				}
 			} else {
 				c.JSON(http.StatusOK, gin.H{"has_permission": false})
@@ -374,6 +380,8 @@ func (pc *PermissionController) CheckUserPermission(c *gin.Context) {
 		hasPermission = permission.CanApprove
 	case "export":
 		hasPermission = permission.CanExport
+	case "menu":
+		hasPermission = permission.CanMenu
 	}
 	
 	c.JSON(http.StatusOK, gin.H{

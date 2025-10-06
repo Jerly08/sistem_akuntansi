@@ -40,6 +40,7 @@ interface Permission {
   can_delete: boolean;
   can_approve: boolean;
   can_export: boolean;
+  can_menu: boolean;
 }
 
 interface UserPermission {
@@ -146,6 +147,7 @@ const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user
           can_delete: value,
           can_approve: value,
           can_export: value,
+          can_menu: value,
         },
       },
     });
@@ -269,6 +271,7 @@ const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user
                 <Text fontSize="sm">
                   Permissions control what actions users can perform in each module. 
                   View permission is required for all other permissions to work.
+                  Menu permission controls whether users can access the module through navigation menus.
                 </Text>
               </Alert>
 
@@ -283,6 +286,7 @@ const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user
                       <Th textAlign="center">Delete</Th>
                       <Th textAlign="center">Approve</Th>
                       <Th textAlign="center">Export</Th>
+                      <Th textAlign="center">Menu</Th>
                       <Th textAlign="center">Actions</Th>
                     </Tr>
                   </Thead>
@@ -295,6 +299,7 @@ const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user
                         can_delete: false,
                         can_approve: false,
                         can_export: false,
+                        can_menu: false,
                       };
 
                       const allChecked = Object.values(perm).every(v => v === true);
@@ -346,6 +351,13 @@ const UserPermissions: React.FC<UserPermissionsProps> = ({ isOpen, onClose, user
                             <Checkbox
                               isChecked={perm.can_export}
                               onChange={(e) => handlePermissionChange(module.key, 'can_export', e.target.checked)}
+                              isDisabled={!perm.can_view}
+                            />
+                          </Td>
+                          <Td textAlign="center">
+                            <Checkbox
+                              isChecked={perm.can_menu}
+                              onChange={(e) => handlePermissionChange(module.key, 'can_menu', e.target.checked)}
                               isDisabled={!perm.can_view}
                             />
                           </Td>

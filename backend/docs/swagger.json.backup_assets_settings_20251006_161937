@@ -2179,7 +2179,7 @@
           "type": "string"
         },
         "status": {
-          "description": "Status & Control Fields",
+          "description": "Status \u0026 Control Fields",
           "type": "string"
         },
         "total_credit": {
@@ -8350,169 +8350,6 @@
         ]
       }
     },
-    "/api/v1/assets/categories": {
-      "get": {
-        "description": "Get list of asset categories",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "properties": {
-                      "depreciation_years": {
-                        "example": 5,
-                        "type": "integer"
-                      },
-                      "id": {
-                        "example": 1,
-                        "type": "integer"
-                      },
-                      "name": {
-                        "example": "IT Equipment",
-                        "type": "string"
-                      }
-                    },
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get asset categories",
-        "tags": [
-          "Assets"
-        ]
-      },
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Create a new asset category",
-        "parameters": [
-          {
-            "description": "Category creation data",
-            "in": "body",
-            "name": "category",
-            "required": true,
-            "schema": {
-              "properties": {
-                "depreciation_years": {
-                  "description": "Default depreciation years",
-                  "example": 8,
-                  "type": "integer"
-                },
-                "name": {
-                  "description": "Category name",
-                  "example": "Office Furniture",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "201": {
-            "description": "Category created successfully"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create asset category",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
-    "/api/v1/assets/summary": {
-      "get": {
-        "description": "Get summary of all assets with total values",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "properties": {
-                    "by_category": {
-                      "items": {
-                        "properties": {
-                          "category": {
-                            "type": "string"
-                          },
-                          "count": {
-                            "type": "integer"
-                          },
-                          "value": {
-                            "type": "number"
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "total_acquisition_cost": {
-                      "example": 500000000,
-                      "type": "number"
-                    },
-                    "total_assets": {
-                      "example": 150,
-                      "type": "integer"
-                    },
-                    "total_current_value": {
-                      "example": 300000000,
-                      "type": "number"
-                    },
-                    "total_depreciation": {
-                      "example": 200000000,
-                      "type": "number"
-                    }
-                  },
-                  "type": "object"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get assets summary",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
     "/api/v1/assets/{id}": {
       "delete": {
         "description": "Delete asset",
@@ -8648,59 +8485,6 @@
           }
         ],
         "summary": "Update asset",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
-    "/api/v1/assets/{id}/capitalize": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Manually capitalize asset (create journal entries)",
-        "parameters": [
-          {
-            "description": "Asset ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Asset capitalized successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Asset capitalized successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Asset already capitalized",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Capitalize asset",
         "tags": [
           "Assets"
         ]
@@ -12683,7 +12467,7 @@
         "consumes": [
           "application/json"
         ],
-        "description": "Generate P&L using materialized view for optimal performance",
+        "description": "Generate P\u0026L using materialized view for optimal performance",
         "parameters": [
           {
             "description": "Start date (YYYY-MM-DD)",
@@ -12711,7 +12495,7 @@
             }
           }
         },
-        "summary": "Generate Optimized Profit & Loss",
+        "summary": "Generate Optimized Profit \u0026 Loss",
         "tags": [
           "Optimized Reports"
         ]
@@ -12776,7 +12560,7 @@
         "consumes": [
           "application/json"
         ],
-        "description": "Generate a comprehensive Profit & Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
+        "description": "Generate a comprehensive Profit \u0026 Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
         "parameters": [
           {
             "description": "Start date (YYYY-MM-DD)",
@@ -12813,7 +12597,7 @@
         ],
         "responses": {
           "200": {
-            "description": "P&L report generated successfully",
+            "description": "P\u0026L report generated successfully",
             "schema": {
               "additionalProperties": true,
               "type": "object"
@@ -12839,7 +12623,7 @@
             "BearerAuth": []
           }
         ],
-        "summary": "Generate SSOT Profit & Loss Report",
+        "summary": "Generate SSOT Profit \u0026 Loss Report",
         "tags": [
           "SSOT Reports"
         ]
@@ -13645,37 +13429,245 @@
         ]
       }
     },
-    "/api/v1/settings/company": {
-      "put": {
+    "/api/v1/settings/tax-accounts": {
+      "get": {
         "consumes": [
           "application/json"
         ],
-        "description": "Update company-specific settings",
+        "description": "Retrieve the currently active tax account settings",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get current tax account settings",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Create a new tax account configuration",
         "parameters": [
           {
-            "description": "Company settings data",
+            "description": "Tax account settings data",
             "in": "body",
-            "name": "company",
+            "name": "settings",
             "required": true,
             "schema": {
-              "properties": {
-                "company_address": {
-                  "type": "string"
-                },
-                "company_email": {
-                  "type": "string"
-                },
-                "company_name": {
-                  "type": "string"
-                },
-                "company_phone": {
-                  "type": "string"
-                },
-                "tax_number": {
-                  "type": "string"
-                }
-              },
+              "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
               "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Create new tax account settings",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/all": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve all tax account settings for administration",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "items": {
+                "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+              },
+              "type": "array"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get all tax account settings",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/available-accounts": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve available accounts that can be used for tax account configuration",
+        "parameters": [
+          {
+            "description": "Filter by account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)",
+            "in": "query",
+            "name": "type",
+            "type": "string"
+          },
+          {
+            "description": "Filter by account category",
+            "in": "query",
+            "name": "category",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "items": {
+                "$ref": "#/definitions/models.AccountResponse"
+              },
+              "type": "array"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get available accounts",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/refresh-cache": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Refresh the tax account settings cache",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Refresh cache",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/suggestions": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get suggested accounts for tax account configuration setup",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get account suggestions",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/validate": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Validate the tax account configuration before saving",
+        "parameters": [
+          {
+            "description": "Tax account settings data",
+            "in": "body",
+            "name": "settings",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
             }
           }
         ],
@@ -13684,17 +13676,139 @@
         ],
         "responses": {
           "200": {
-            "description": "Company settings updated successfully"
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
           }
         },
-        "security": [
+        "summary": "Validate tax account configuration",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/{id}": {
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Update an existing tax account configuration",
+        "parameters": [
           {
-            "BearerAuth": []
+            "description": "Settings ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "description": "Tax account settings data",
+            "in": "body",
+            "name": "settings",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/models.TaxAccountSettingsUpdateRequest"
+            }
           }
         ],
-        "summary": "Update company settings",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Update tax account settings",
         "tags": [
-          "Settings"
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/{id}/activate": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Activate a specific tax account configuration",
+        "parameters": [
+          {
+            "description": "Settings ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Activate tax account settings",
+        "tags": [
+          "Tax Account Settings"
         ]
       }
     },
@@ -13767,7 +13881,7 @@
     },
     "/api/v1/ssot-reports/integrated": {
       "get": {
-        "description": "Generate all financial reports (P&L, Balance Sheet, Cash Flow, etc.) integrated with SSOT journal system",
+        "description": "Generate all financial reports (P\u0026L, Balance Sheet, Cash Flow, etc.) integrated with SSOT journal system",
         "parameters": [
           {
             "description": "Start date (YYYY-MM-DD)",
@@ -14303,316 +14417,6 @@
         "summary": "Get vendor analysis integrated with SSOT journal",
         "tags": [
           "SSOT Reports"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Retrieve the currently active tax account settings",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Get current tax account settings",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      },
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Create a new tax account configuration",
-        "parameters": [
-          {
-            "description": "Tax account settings data",
-            "in": "body",
-            "name": "settings",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "201": {
-            "description": "Created",
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Create new tax account settings",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/refresh-cache": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Refresh the tax account settings cache",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Refresh cache",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/suggestions": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Get suggested accounts for tax account configuration setup",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Get account suggestions",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/validate": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Validate the tax account configuration before saving",
-        "parameters": [
-          {
-            "description": "Tax account settings data",
-            "in": "body",
-            "name": "settings",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Validate tax account configuration",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/{id}": {
-      "put": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Update an existing tax account configuration",
-        "parameters": [
-          {
-            "description": "Settings ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "description": "Tax account settings data",
-            "in": "body",
-            "name": "settings",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsUpdateRequest"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Update tax account settings",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/{id}/activate": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Activate a specific tax account configuration",
-        "parameters": [
-          {
-            "description": "Settings ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Activate tax account settings",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
         ]
       }
     },

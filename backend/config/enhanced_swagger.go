@@ -84,6 +84,33 @@ var publicSwaggerAllowedExact = map[string]struct{}{
 	"/api/v1/contacts/{id}":            {},
 	"/api/v1/users":                    {},
 	"/api/v1/users/{id}":               {},
+
+	// Assets management (Fixed Assets and Depreciation)
+	"/api/v1/assets":                              {},
+	"/api/v1/assets/{id}":                         {},
+	"/api/v1/assets/{id}/capitalize":              {},
+	"/api/v1/assets/{id}/depreciation-schedule":   {},
+	"/api/v1/assets/categories":                   {},
+	"/api/v1/assets/summary":                      {},
+
+	// Settings and configuration
+	"/api/v1/settings":                    {},
+	"/api/v1/settings/company":            {},
+	"/api/v1/settings/system":             {},
+	"/api/v1/settings/reset":              {},
+	"/api/v1/settings/validation-rules":   {},
+	"/api/v1/settings/history":            {},
+
+	// Tax Account Settings (based on settings_routes.go analysis)
+	"/api/v1/tax-accounts":                {},  // GetAllSettings (admin)
+	"/api/v1/tax-accounts/current":        {},  // GetCurrentSettings
+	"/api/v1/tax-accounts/{id}":           {},  // UpdateSettings
+	"/api/v1/tax-accounts/{id}/activate":  {},  // ActivateSettings
+	"/api/v1/tax-accounts/accounts":       {},  // GetAvailableAccounts
+	"/api/v1/tax-accounts/validate":       {},  // ValidateAccountConfiguration & ValidateAccountSelection
+	"/api/v1/tax-accounts/refresh-cache":  {},  // RefreshCache (admin)
+	"/api/v1/tax-accounts/suggestions":    {},  // GetAccountSuggestions
+	"/api/v1/tax-accounts/status":         {},  // GetStatus
 }
 
 // publicSwaggerAllowedPrefixes allows quick inclusion by prefix (kept narrow to avoid pulling in unrelated modules)
@@ -96,6 +123,9 @@ var publicSwaggerAllowedPrefixes = []string{
 	"/api/v1/contacts",
 	"/api/v1/users",
 	"/api/v1/accounts",
+	"/api/v1/assets",
+	"/api/v1/settings",
+	"/api/v1/tax-accounts",
 }
 
 // filterSwaggerSpecForPublic prunes the swagger spec to only include allowed paths according to the whitelist

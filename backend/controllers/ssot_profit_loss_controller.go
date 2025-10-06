@@ -417,7 +417,7 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		},
 		"sections": sections,
 		"enhanced": ssotData.Enhanced,
-		"hasData":  len(sections) > 0 && ssotData.Revenue.TotalRevenue > 0,
+		"hasData":  len(sections) > 0,
 		"financialMetrics": gin.H{
 			"grossProfit":        ssotData.GrossProfit,
 			"grossProfitMargin":  ssotData.GrossProfitMargin,
@@ -463,7 +463,10 @@ func (c *SSOTProfitLossController) filterItemsByPrefix(items []services.PLSectio
 // generateAnalysisMessage creates a contextual message based on the P&L data
 func (c *SSOTProfitLossController) generateAnalysisMessage(ssotData *services.SSOTProfitLossData) string {
 	if ssotData.Revenue.TotalRevenue == 0 {
-		return "No revenue transactions found for this period. The report shows data from SSOT journal system but no income-generating activities were recorded."
+		if ssotData.COGS.TotalCOGS > 0 || ssotData.OperatingExpenses.TotalOpEx > 0 {
+			return "Expenses and costs have been recorded but no revenue transactions were found in journal entries. This may indicate that payment transactions are not yet reflected in the journal system."
+		}
+		return "No revenue or expense transactions found for this period. The report shows data from SSOT journal system but no income-generating or cost activities were recorded."
 	}
 	
 	if ssotData.COGS.TotalCOGS == 0 && ssotData.OperatingExpenses.TotalOpEx == 0 {

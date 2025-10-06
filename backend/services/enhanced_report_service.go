@@ -493,9 +493,9 @@ type PeriodData struct {
 type CustomerSalesData struct {
 	CustomerID       uint    `json:"customer_id"`
 	CustomerName     string  `json:"customer_name"`
-	TotalAmount      float64 `json:"total_amount"`
+	TotalAmount      float64 `json:"total_sales"`
 	TransactionCount int64   `json:"transaction_count"`
-	AverageOrder     float64 `json:"average_order"`
+	AverageOrder     float64 `json:"average_transaction"`
 	LastOrderDate    time.Time `json:"last_order_date"`
 	FirstOrderDate   time.Time `json:"first_order_date"`
 }

@@ -254,17 +254,22 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                       </Td>
                       <Td isNumeric>
                         <Text fontWeight="bold" color="green.600">
-                          {formatCurrency(customer.total_sales || customer.sales_amount || 0)}
+                          {formatCurrency(customer.total_sales || 0)}
                         </Text>
                       </Td>
                       <Td isNumeric>
                         <Text color="purple.600">
-                          {customer.order_count || customer.orders || 0}
+                          {customer.transaction_count || 0}
                         </Text>
                       </Td>
                       <Td isNumeric>
                         <Text color="orange.600">
-                          {formatCurrency(customer.average_order_value || (customer.total_sales / (customer.order_count || 1)))}
+                          {formatCurrency(
+                            customer.average_transaction ||
+                            (customer.total_sales && customer.transaction_count > 0 
+                              ? customer.total_sales / customer.transaction_count 
+                              : 0)
+                          )}
                         </Text>
                       </Td>
                     </Tr>

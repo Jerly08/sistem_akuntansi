@@ -88,7 +88,7 @@ export default function Sidebar({ isOpen, onClose, display, width, collapsed, on
   const router = useRouter();
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const { canView, loading: permissionLoading } = usePermissions();
+  const { canView, canMenu, loading: permissionLoading } = usePermissions();
 
   // Get translated menu groups
   const MenuGroups = getMenuGroups(t);
@@ -100,9 +100,10 @@ export default function Sidebar({ isOpen, onClose, display, width, collapsed, on
     items: group.items.filter(item => {
       if (!user) return false;
       
-      // For modules with permission checking, use API permission
+      // For modules with permission checking, use canMenu for menu visibility
+      // but still check canView for data access requirements
       if (item.module && item.permission) {
-        return canView(item.module);
+        return canView(item.module) && canMenu(item.module);
       }
       
       // For system pages (users, settings) and dashboard, use role-based checking

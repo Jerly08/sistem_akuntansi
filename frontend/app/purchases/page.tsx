@@ -389,6 +389,7 @@ const PurchasesPage: React.FC = () => {
   // Filter state
   const [filters, setFilters] = useState<PurchaseFilterParams>({
     status: '',
+    vendor_id: '',
     approval_status: '',
     search: '',
     start_date: '',
@@ -916,6 +917,7 @@ const PurchasesPage: React.FC = () => {
 
   useEffect(() => {
     fetchPurchases();
+    fetchVendors(); // Load vendors for filter
   }, [token]);
 
   // Handle filter changes
@@ -949,6 +951,7 @@ const PurchasesPage: React.FC = () => {
     try {
       await purchaseService.downloadPurchasesPDF({
         status: filters.status || undefined,
+        vendor_id: filters.vendor_id || undefined,
         approval_status: filters.approval_status || undefined,
         start_date: filters.start_date || undefined,
         end_date: filters.end_date || undefined,
@@ -964,6 +967,7 @@ const PurchasesPage: React.FC = () => {
     try {
       await purchaseService.downloadPurchasesCSV({
         status: filters.status || undefined,
+        vendor_id: filters.vendor_id || undefined,
         approval_status: filters.approval_status || undefined,
         start_date: filters.start_date || undefined,
         end_date: filters.end_date || undefined,
@@ -3021,6 +3025,37 @@ const handleCreate = async () => {
                   />
                 </FormControl>
 
+                <FormControl>
+                  <FormLabel 
+                    fontSize="sm"
+                    fontWeight="semibold"
+                    color={textPrimary}
+                    mb={2}
+                  >
+                    Vendor
+                  </FormLabel>
+                  <Select
+                    placeholder="All Vendors"
+                    value={filters.vendor_id || ''}
+                    onChange={(e) => handleFilterChange({ vendor_id: e.target.value })}
+                    bg={modalBg}
+                    borderColor={borderColor}
+                    _hover={{
+                      borderColor: inputHoverBorder
+                    }}
+                    _focus={{
+                      borderColor: inputFocusBorder,
+                      boxShadow: inputFocusShadow
+                    }}
+                  >
+                    {vendors.map((vendor) => (
+                      <option key={vendor.id} value={vendor.id.toString()}>
+                        {vendor.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormControl>
+
                 <SimpleGrid columns={2} spacing={4} w="100%">
                   <FormControl>
                     <FormLabel fontSize="sm" fontWeight="semibold" color={textPrimary} mb={2}>Start Date</FormLabel>
@@ -3129,7 +3164,16 @@ const handleCreate = async () => {
                 <Button 
                   colorScheme="blue"
                   onClick={() => {
-                    setFilters({ page: 1, limit: 10 });
+                    setFilters({ 
+                      page: 1, 
+                      limit: 10, 
+                      status: '', 
+                      vendor_id: '', 
+                      approval_status: '', 
+                      search: '', 
+                      start_date: '', 
+                      end_date: '' 
+                    });
                     fetchPurchases({ page: 1, limit: 10 });
                     onFilterClose();
                   }}

@@ -1,0 +1,102 @@
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "created_at": "2025-10-06T10:00:00Z",
+    "updated_at": "2025-10-06T10:00:00Z",
+    "sales_receivable_account": {
+      "id": 10,
+      "code": "1201", 
+      "name": "Piutang Usaha",
+      "type": "ASSET",
+      "category": "CURRENT_ASSET",
+      "is_active": true
+    },
+    "sales_cash_account": {
+      "id": 1,
+      "code": "1101",
+      "name": "Kas",
+      "type": "ASSET",
+      "category": "CURRENT_ASSET", 
+      "is_active": true
+    },
+    "sales_bank_account": {
+      "id": 2,
+      "code": "1102",
+      "name": "Bank",
+      "type": "ASSET",
+      "category": "CURRENT_ASSET",
+      "is_active": true
+    },
+    "sales_revenue_account": {
+      "id": 25,
+      "code": "4101",
+      "name": "Pendapatan Penjualan",
+      "type": "REVENUE", 
+      "category": "REVENUE",
+      "is_active": true
+    },
+    "sales_output_vat_account": {
+      "id": 18,
+      "code": "2103", 
+      "name": "PPN Keluaran",
+      "type": "LIABILITY",
+      "category": "CURRENT_LIABILITY",
+      "is_active": true
+    },
+    "purchase_payable_account": {
+      "id": 15,
+      "code": "2001",
+      "name": "Hutang Usaha", 
+      "type": "LIABILITY",
+      "category": "CURRENT_LIABILITY",
+      "is_active": true
+    },
+    "purchase_cash_account": {
+      "id": 1,
+      "code": "1101",
+      "name": "Kas",
+      "type": "ASSET",
+      "category": "CURRENT_ASSET",
+      "is_active": true
+    },
+    "purchase_bank_account": {
+      "id": 2,
+      "code": "1102", 
+      "name": "Bank",
+      "type": "ASSET",
+      "category": "CURRENT_ASSET",
+      "is_active": true
+    },
+    "purchase_input_vat_account": {
+      "id": 5,
+      "code": "1105",
+      "name": "PPN Masukan",
+      "type": "ASSET",
+      "category": "CURRENT_ASSET",
+      "is_active": true
+    },
+    "purchase_expense_account": {
+      "id": 30,
+      "code": "6001",
+      "name": "Beban Operasional", 
+      "type": "EXPENSE",
+      "category": "EXPENSE",
+      "is_active": true
+    },
+    "withholding_tax21_account": null,
+    "withholding_tax23_account": null,
+    "withholding_tax25_account": null,
+    "tax_payable_account": null,
+    "inventory_account": null,
+    "cogs_account": null,
+    "is_active": true,
+    "apply_to_all_companies": true,
+    "notes": "Default tax account configuration based on Indonesian chart of accounts",
+    "updated_by_user": {
+      "id": 1,
+      "name": "Admin User",
+      "username": "admin"
+    }
+  }
+}

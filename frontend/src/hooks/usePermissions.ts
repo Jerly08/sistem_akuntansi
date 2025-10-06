@@ -11,6 +11,7 @@ interface ModulePermission {
   can_delete: boolean;
   can_approve: boolean;
   can_export: boolean;
+  can_menu: boolean;
 }
 
 interface UserPermissions {
@@ -27,6 +28,7 @@ interface UsePermissionsReturn {
   canDelete: (module: string) => boolean;
   canApprove: (module: string) => boolean;
   canExport: (module: string) => boolean;
+  canMenu: (module: string) => boolean;
   hasAnyPermission: (module: string) => boolean;
   refetchPermissions: () => Promise<void>;
 }
@@ -38,6 +40,7 @@ const DEFAULT_PERMISSION: ModulePermission = {
   can_delete: false,
   can_approve: false,
   can_export: false,
+  can_menu: false,
 };
 
 export const usePermissions = (): UsePermissionsReturn => {
@@ -117,6 +120,11 @@ export const usePermissions = (): UsePermissionsReturn => {
     return perm.can_export;
   };
 
+  const canMenu = (module: string): boolean => {
+    const perm = getModulePermission(module);
+    return perm.can_menu;
+  };
+
   const hasAnyPermission = (module: string): boolean => {
     const perm = getModulePermission(module);
     return perm.can_view || perm.can_create || perm.can_edit || 
@@ -133,6 +141,7 @@ export const usePermissions = (): UsePermissionsReturn => {
     canDelete,
     canApprove,
     canExport,
+    canMenu,
     hasAnyPermission,
     refetchPermissions: fetchPermissions,
   };
@@ -150,6 +159,7 @@ export const useModulePermissions = (module: string) => {
     canDelete,
     canApprove,
     canExport,
+    canMenu,
     hasAnyPermission,
     refetchPermissions,
   } = usePermissions();
@@ -164,6 +174,7 @@ export const useModulePermissions = (module: string) => {
     canDelete: canDelete(module),
     canApprove: canApprove(module),
     canExport: canExport(module),
+    canMenu: canMenu(module),
     hasAnyPermission: hasAnyPermission(module),
     refetchPermissions,
   };

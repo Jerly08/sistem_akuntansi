@@ -79,7 +79,7 @@ export interface DataQualityMetrics {
 }
 
 export interface DataQualityIssue {
-  category: string;
+  type: string;
   description: string;
   count: number;
   severity: string;

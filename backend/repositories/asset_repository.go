@@ -63,16 +63,8 @@ func (r *AssetRepository) FindByCode(code string) (*models.Asset, error) {
 
 // Create creates a new asset
 func (r *AssetRepository) Create(asset *models.Asset) error {
-	// Check if code already exists
-	var existingAsset models.Asset
-	err := r.db.Where("code = ?", asset.Code).First(&existingAsset).Error
-	if err == nil {
-		return errors.New("asset code already exists")
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return err
-	}
-
+	// Let the database handle unique constraint checking to prevent race conditions
+	// The service layer handles retries if there's a unique constraint violation
 	return r.db.Create(asset).Error
 }
 

@@ -2899,13 +2899,13 @@ func (p *PDFService) generateSaleReceiptPDFWithUser(sale *models.Sale, userID ui
 	pdf.SetXY(companyInfoX-emailW, companyInfoY+20)
 	pdf.Cell(emailW, 4, emailText)
 
-	// Divider line under header
+	// Divider line below email - full width from edge to edge
 	pdf.SetDrawColor(238, 238, 238)
 	pdf.SetLineWidth(0.2)
-	pdf.Line(lm, tm+45, pageW-rm, tm+45)
+	pdf.Line(0, companyInfoY+26, pageW, companyInfoY+26)
 
-	// Move content down to make space for header - optimized for closer positioning
-	pdf.SetY(tm + 42) // Further reduced from 50 to 42 to bring title much closer to header
+	// Move content down to make space for header - positioned closer to the line
+	pdf.SetY(companyInfoY + 32) // Position closer to the new line
 
 	// Get localization helper
 	language := utils.GetUserLanguageFromSettings(p.db)

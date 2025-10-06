@@ -88,7 +88,7 @@ export interface MonthlyTaxSummary {
 export interface SSOTPurchaseReportParams {
   start_date: string;
   end_date: string;
-  format?: 'json' | 'pdf';
+  format?: 'json' | 'pdf' | 'csv';
 }
 
 class SSOTPurchaseReportService {
@@ -294,6 +294,33 @@ class SSOTPurchaseReportService {
         throw new Error('PDF export is not yet implemented');
       }
       throw new Error('Failed to export purchase report to PDF');
+    }
+  }
+
+  async exportToCSV(params: SSOTPurchaseReportParams): Promise<Blob> {
+    const csvParams = { ...params, format: 'csv' as const };
+    
+    try {
+      const queryParams = new URLSearchParams({
+        start_date: csvParams.start_date,
+        end_date: csvParams.end_date,
+        format: csvParams.format
+      });
+
+      const response = await api.get(
+        API_ENDPOINTS.SSOT_REPORTS.PURCHASE_REPORT + `?${queryParams}`,
+        {
+          responseType: 'blob'
+        }
+      );
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error exporting purchase report to CSV:', error);
+      if (error.response?.status === 501) {
+        throw new Error('CSV export is not yet implemented');
+      }
+      throw new Error('Failed to export purchase report to CSV');
     }
   }
 

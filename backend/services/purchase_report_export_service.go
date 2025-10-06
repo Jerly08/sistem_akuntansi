@@ -253,3 +253,5 @@ func reverseString(s string) string {
 	return string(runes)
 }
 
+// detectImageType function is defined in pdf_service.go and uses file headers for more accurate detection
+

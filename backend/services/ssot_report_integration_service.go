@@ -198,7 +198,7 @@ type DataQualityMetrics struct {
 }
 
 type DataQualityIssue struct {
-	Category    string `json:"category"`
+	Type        string `json:"type"`
 	Description string `json:"description"`
 	Count       int64  `json:"count"`
 	Severity    string `json:"severity"`
@@ -448,6 +448,233 @@ func (s *SSOTReportIntegrationService) generateDataSourceInfo(ctx context.Contex
 	}, nil
 }
 
+// mapSourceTypeToFriendlyName converts internal source types to user-friendly names
+func (s *SSOTReportIntegrationService) mapSourceTypeToFriendlyName(sourceType string) string {
+	switch sourceType {
+	case models.SSOTSourceTypeSale:
+		return "Sales Transaction"
+	case models.SSOTSourceTypePurchase:
+		return "Purchase Transaction"
+	case models.SSOTSourceTypePayment:
+		return "Payment Transaction"
+	case models.SSOTSourceTypeCashBank:
+		return "Cash & Bank Transaction"
+	case models.SSOTSourceTypeAsset:
+		return "Asset Transaction"
+	case models.SSOTSourceTypeManual:
+		return "Manual Journal Entry"
+	case models.SSOTSourceTypeOpening:
+		return "Opening Balance"
+	case models.SSOTSourceTypeClosing:
+		return "Closing Entry"
+	case models.SSOTSourceTypeAdjustment:
+		return "Adjustment Entry"
+	case models.SSOTSourceTypeTransfer:
+		return "Transfer Transaction"
+	case models.SSOTSourceTypeDepreciation:
+		return "Depreciation Entry"
+	case models.SSOTSourceTypeReversal:
+		return "Reversal Entry"
+	default:
+		return strings.Title(strings.ToLower(strings.ReplaceAll(sourceType, "_", " ")))
+	}
+}
+
+// generateAccountBreakdown creates account-wise breakdown of journal entries
+func (s *SSOTReportIntegrationService) generateAccountBreakdown(ctx context.Context, startDate, endDate time.Time) []AccountBreakdown {
+	var accountBreakdown []AccountBreakdown
+	
+	query := `
+		SELECT 
+			a.id as account_id,
+			a.code as account_code,
+			a.name as account_name,
+			COUNT(DISTINCT ujl.journal_id) as count,
+			COALESCE(SUM(ujl.debit_amount), 0) as total_debit,
+			COALESCE(SUM(ujl.credit_amount), 0) as total_credit
+		FROM unified_journal_lines ujl
+		JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
+		JOIN accounts a ON a.id = ujl.account_id
+		WHERE uje.entry_date >= ? AND uje.entry_date <= ? 
+			AND uje.status = ?
+			AND ujl.deleted_at IS NULL
+			AND a.deleted_at IS NULL
+		GROUP BY a.id, a.code, a.name
+		ORDER BY total_debit + total_credit DESC
+		LIMIT 20
+	`
+	
+	s.db.WithContext(ctx).Raw(query, startDate, endDate, models.SSOTStatusPosted).Scan(&accountBreakdown)
+	
+	return accountBreakdown
+}
+
+// generatePeriodBreakdown creates period-wise breakdown of journal entries
+func (s *SSOTReportIntegrationService) generatePeriodBreakdown(ctx context.Context, startDate, endDate time.Time) []PeriodBreakdown {
+	var periodBreakdown []PeriodBreakdown
+	
+	// Determine period type based on date range
+	daysDiff := int(endDate.Sub(startDate).Hours() / 24)
+	var groupBy, dateFormat string
+	
+	if daysDiff <= 31 {
+		// Daily breakdown for month or less
+		groupBy = "DATE(entry_date)"
+		dateFormat = "2006-01-02"
+	} else if daysDiff <= 365 {
+		// Weekly breakdown for year or less
+		groupBy = "DATE_TRUNC('week', entry_date)"
+		dateFormat = "2006-01-02"
+	} else {
+		// Monthly breakdown for more than a year
+		groupBy = "DATE_TRUNC('month', entry_date)"
+		dateFormat = "2006-01"
+	}
+	
+	query := fmt.Sprintf(`
+		SELECT 
+			%s as period,
+			%s as start_date,
+			%s as end_date,
+			COUNT(*) as count,
+			COALESCE(SUM(total_debit), 0) as total_amount
+		FROM unified_journal_ledger
+		WHERE entry_date >= ? AND entry_date <= ? AND status = ?
+		GROUP BY %s
+		ORDER BY %s
+	`, groupBy, groupBy, groupBy, groupBy, groupBy)
+	
+	type periodResult struct {
+		Period      time.Time       `json:"period"`
+		StartDate   time.Time       `json:"start_date"`
+		EndDate     time.Time       `json:"end_date"`
+		Count       int64           `json:"count"`
+		TotalAmount decimal.Decimal `json:"total_amount"`
+	}
+	
+	var results []periodResult
+	s.db.WithContext(ctx).Raw(query, startDate, endDate, models.SSOTStatusPosted).Scan(&results)
+	
+	for _, result := range results {
+		periodBreakdown = append(periodBreakdown, PeriodBreakdown{
+			Period:      result.Period.Format(dateFormat),
+			StartDate:   result.StartDate,
+			EndDate:     result.EndDate,
+			Count:       result.Count,
+			TotalAmount: result.TotalAmount,
+		})
+	}
+	
+	return periodBreakdown
+}
+
+// generateComplianceCheck creates basic compliance reporting
+func (s *SSOTReportIntegrationService) generateComplianceCheck(ctx context.Context, startDate, endDate time.Time) ComplianceReport {
+	var totalEntries, balancedEntries, unbalancedEntries int64
+	
+	// Check for balanced entries
+	s.db.WithContext(ctx).Model(&models.SSOTJournalEntry{}).
+		Where("entry_date >= ? AND entry_date <= ? AND status = ?", startDate, endDate, models.SSOTStatusPosted).
+		Count(&totalEntries)
+	
+	s.db.WithContext(ctx).Model(&models.SSOTJournalEntry{}).
+		Where("entry_date >= ? AND entry_date <= ? AND status = ? AND is_balanced = ?", startDate, endDate, models.SSOTStatusPosted, true).
+		Count(&balancedEntries)
+	
+	unbalancedEntries = totalEntries - balancedEntries
+	
+	var issues []ComplianceIssue
+	if unbalancedEntries > 0 {
+		issues = append(issues, ComplianceIssue{
+			Type:        "BALANCE_MISMATCH",
+			Description: fmt.Sprintf("%d journal entries are not balanced", unbalancedEntries),
+			Severity:    "HIGH",
+		})
+	}
+	
+	passedChecks := 1
+	totalChecks := 1
+	if unbalancedEntries > 0 {
+		passedChecks = 0
+	}
+	
+	complianceScore := float64(passedChecks) / float64(totalChecks) * 100
+	
+	return ComplianceReport{
+		TotalChecks:     totalChecks,
+		PassedChecks:    passedChecks,
+		FailedChecks:    totalChecks - passedChecks,
+		ComplianceScore: complianceScore,
+		Issues:          issues,
+		Recommendations: []string{"Review and correct unbalanced journal entries", "Implement automated balance validation"},
+	}
+}
+
+// generateDataQualityMetrics creates data quality assessment
+func (s *SSOTReportIntegrationService) generateDataQualityMetrics(ctx context.Context, startDate, endDate time.Time) DataQualityMetrics {
+	var totalEntries, entriesWithDescription, entriesWithReference int64
+	
+	// Get total entries
+	s.db.WithContext(ctx).Model(&models.SSOTJournalEntry{}).
+		Where("entry_date >= ? AND entry_date <= ? AND status = ?", startDate, endDate, models.SSOTStatusPosted).
+		Count(&totalEntries)
+	
+	// Check entries with descriptions
+	s.db.WithContext(ctx).Model(&models.SSOTJournalEntry{}).
+		Where("entry_date >= ? AND entry_date <= ? AND status = ? AND description != '' AND description IS NOT NULL", startDate, endDate, models.SSOTStatusPosted).
+		Count(&entriesWithDescription)
+	
+	// Check entries with references
+	s.db.WithContext(ctx).Model(&models.SSOTJournalEntry{}).
+		Where("entry_date >= ? AND entry_date <= ? AND status = ? AND reference != '' AND reference IS NOT NULL", startDate, endDate, models.SSOTStatusPosted).
+		Count(&entriesWithReference)
+	
+	var issues []DataQualityIssue
+	completenessScore := 100.0
+	accuracyScore := 100.0
+	consistencyScore := 100.0
+	
+	if totalEntries > 0 {
+		descriptionCompleteness := float64(entriesWithDescription) / float64(totalEntries) * 100
+		referenceCompleteness := float64(entriesWithReference) / float64(totalEntries) * 100
+		completenessScore = (descriptionCompleteness + referenceCompleteness) / 2
+		
+		if descriptionCompleteness < 80 {
+			issues = append(issues, DataQualityIssue{
+				Type:        "MISSING_DESCRIPTION",
+				Description: fmt.Sprintf("%.1f%% of entries lack proper descriptions", 100-descriptionCompleteness),
+				Severity:    "MEDIUM",
+				Count:       totalEntries - entriesWithDescription,
+			})
+		}
+		
+		if referenceCompleteness < 60 {
+			issues = append(issues, DataQualityIssue{
+				Type:        "MISSING_REFERENCE",
+				Description: fmt.Sprintf("%.1f%% of entries lack reference information", 100-referenceCompleteness),
+				Severity:    "LOW",
+				Count:       totalEntries - entriesWithReference,
+			})
+		}
+	}
+	
+	overallScore := (completenessScore + accuracyScore + consistencyScore) / 3
+	
+	return DataQualityMetrics{
+		OverallScore:      overallScore,
+		CompletenessScore: completenessScore,
+		AccuracyScore:     accuracyScore,
+		ConsistencyScore:  consistencyScore,
+		Issues:            issues,
+		DetailedMetrics: map[string]interface{}{
+			"total_entries":           totalEntries,
+			"entries_with_description": entriesWithDescription,
+			"entries_with_reference":   entriesWithReference,
+			"description_completeness": float64(entriesWithDescription) / float64(totalEntries) * 100,
+			"reference_completeness":   float64(entriesWithReference) / float64(totalEntries) * 100,
+		},
+	}
+}
 
 // GetDB returns the database instance (for external access)
 func (s *SSOTReportIntegrationService) GetDB() *gorm.DB {
@@ -914,7 +1141,7 @@ func (s *SSOTReportIntegrationService) generateGeneralLedger(ctx context.Context
 }
 
 func (s *SSOTReportIntegrationService) generateJournalAnalysis(ctx context.Context, startDate, endDate time.Time) (*JournalAnalysisData, error) {
-	// Get basic statistics
+	// Get basic statistics - using POSTED entries for total amount calculation
 	var stats struct {
 		TotalEntries    int64           `json:"total_entries"`
 		PostedEntries   int64           `json:"posted_entries"`
@@ -929,29 +1156,54 @@ func (s *SSOTReportIntegrationService) generateJournalAnalysis(ctx context.Conte
 			COUNT(CASE WHEN status = ? THEN 1 END) as posted_entries,
 			COUNT(CASE WHEN status = ? THEN 1 END) as draft_entries,
 			COUNT(CASE WHEN status = ? THEN 1 END) as reversed_entries,
-			COALESCE(SUM(total_debit), 0) as total_amount
-		`, models.SSOTStatusPosted, models.SSOTStatusDraft, models.SSOTStatusReversed).
+			COALESCE(SUM(CASE WHEN status = ? THEN total_debit ELSE 0 END), 0) as total_amount
+		`, models.SSOTStatusPosted, models.SSOTStatusDraft, models.SSOTStatusReversed, models.SSOTStatusPosted).
 		Where("entry_date >= ? AND entry_date <= ?", startDate, endDate).
 		Scan(&stats).Error; err != nil {
 		return nil, fmt.Errorf("failed to get journal statistics: %w", err)
 	}
 
-	// Get entries by type
-	var entriesByType []EntryTypeBreakdown
+	// Get entries by type with user-friendly labels
+	var entriesByTypeRaw []struct {
+		SourceType  string          `json:"source_type"`
+		Count       int64           `json:"count"`
+		TotalAmount decimal.Decimal `json:"total_amount"`
+	}
+	
 	s.db.WithContext(ctx).Model(&models.SSOTJournalEntry{}).
 		Select("source_type, COUNT(*) as count, COALESCE(SUM(total_debit), 0) as total_amount").
 		Where("entry_date >= ? AND entry_date <= ? AND status = ?", startDate, endDate, models.SSOTStatusPosted).
 		Group("source_type").
-		Scan(&entriesByType)
+		Scan(&entriesByTypeRaw)
 
-	// Calculate percentages for entry types
-	for i := range entriesByType {
+	// Map source types to user-friendly labels and calculate percentages
+	var entriesByType []EntryTypeBreakdown
+	for _, entry := range entriesByTypeRaw {
+		friendlyType := s.mapSourceTypeToFriendlyName(entry.SourceType)
+		percentage := 0.0
 		if stats.TotalAmount.GreaterThan(decimal.Zero) {
-			entriesByType[i].Percentage = entriesByType[i].TotalAmount.Div(stats.TotalAmount).Mul(decimal.NewFromInt(100)).InexactFloat64()
+			percentage = entry.TotalAmount.Div(stats.TotalAmount).Mul(decimal.NewFromInt(100)).InexactFloat64()
 		}
+		
+		entriesByType = append(entriesByType, EntryTypeBreakdown{
+			SourceType:  friendlyType,
+			Count:       entry.Count,
+			TotalAmount: entry.TotalAmount,
+			Percentage:  percentage,
+		})
 	}
 
-return &JournalAnalysisData{
+	// Get entries by account (implement the missing feature)
+	entriesByAccount := s.generateAccountBreakdown(ctx, startDate, endDate)
+	
+	// Get entries by period (implement the missing feature)
+	entriesByPeriod := s.generatePeriodBreakdown(ctx, startDate, endDate)
+	
+	// Generate compliance and quality checks
+	complianceCheck := s.generateComplianceCheck(ctx, startDate, endDate)
+	dataQualityMetrics := s.generateDataQualityMetrics(ctx, startDate, endDate)
+
+	return &JournalAnalysisData{
 		Company:            s.getCompanyInfo(),
 		StartDate:          startDate,
 		EndDate:            endDate,
@@ -962,10 +1214,10 @@ return &JournalAnalysisData{
 		ReversedEntries:    stats.ReversedEntries,
 		TotalAmount:        stats.TotalAmount,
 		EntriesByType:      entriesByType,
-		EntriesByAccount:   []AccountBreakdown{}, // TODO: Implement
-		EntriesByPeriod:    []PeriodBreakdown{},  // TODO: Implement
-		ComplianceCheck:    ComplianceReport{},   // TODO: Implement
-		DataQualityMetrics: DataQualityMetrics{}, // TODO: Implement
+		EntriesByAccount:   entriesByAccount,
+		EntriesByPeriod:    entriesByPeriod,
+		ComplianceCheck:    complianceCheck,
+		DataQualityMetrics: dataQualityMetrics,
 		GeneratedAt:        time.Now(),
 	}, nil
 }

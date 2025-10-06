@@ -16,6 +16,7 @@ type ModulePermissionRecord struct {
 	CanDelete   bool           `json:"can_delete" gorm:"default:false"`
 	CanApprove  bool           `json:"can_approve" gorm:"default:false"`
 	CanExport   bool           `json:"can_export" gorm:"default:false"`
+	CanMenu     bool           `json:"can_menu" gorm:"default:false"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
@@ -41,6 +42,7 @@ type ModulePermission struct {
 	CanDelete  bool `json:"can_delete"`
 	CanApprove bool `json:"can_approve"`
 	CanExport  bool `json:"can_export"`
+	CanMenu    bool `json:"can_menu"`
 }
 
 // GetDefaultPermissions returns default permissions based on role
@@ -59,6 +61,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 				CanDelete:  true,
 				CanApprove: true,
 				CanExport:  true,
+				CanMenu:    true,
 			}
 		}
 	case "finance", "finance_manager":
@@ -73,6 +76,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: true,
 					CanExport:  true,
+					CanMenu:    true,
 				}
 			} else if module == "settings" {
 				// Finance roles need settings access for invoice types and financial configuration
@@ -83,6 +87,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false, // Cannot delete settings for safety
 					CanApprove: true,
 					CanExport:  true,
+					CanMenu:    true,
 				}
 			} else {
 				permissions[module] = &ModulePermission{
@@ -92,6 +97,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: false,
 					CanExport:  false,
+					CanMenu:    false, // No menu access for non-financial modules
 				}
 			}
 		}
@@ -111,6 +117,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false, // Safety: no delete permission
 					CanApprove: false, // Purchase approvals handled by finance/director
 					CanExport:  true,
+					CanMenu:    true,
 				}
 			} else if contains(supportingModules, module) {
 				// Good access to supporting modules (contacts for vendors/customers, assets for inventory items, reports for analytics)
@@ -121,6 +128,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: false,
 					CanExport:  true, // Can export reports and asset lists
+					CanMenu:    true,
 				}
 			} else if contains(financialSupportModules, module) {
 				// Limited financial access - can create entries for inventory operations but cannot approve
@@ -131,6 +139,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: false, // Financial approvals remain with finance team
 					CanExport:  true,  // Can export for reporting
+					CanMenu:    false, // No menu access to financial modules
 				}
 			} else {
 				// View-only access to other modules
@@ -141,13 +150,26 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: false,
 					CanExport:  false,
+					CanMenu:    false,
 				}
 			}
 		}
 	case "employee":
 		// Employee has limited access
 		for _, module := range modules {
-			if module == "contacts" || module == "products" {
+			if module == "contacts" {
+				// Employee needs view access to contacts for vendor/customer data loading
+				// but should NOT have menu access to browse contacts directly
+				permissions[module] = &ModulePermission{
+					CanView:    true,  // Essential for loading vendor/customer lists in purchases
+					CanCreate:  true,  // Can create vendors/customers when needed
+					CanEdit:    false,
+					CanDelete:  false,
+					CanApprove: false,
+					CanExport:  false,
+					CanMenu:    false, // KEY: No menu access to prevent browsing other employees
+				}
+			} else if module == "products" {
 				permissions[module] = &ModulePermission{
 					CanView:    true,
 					CanCreate:  true,
@@ -155,6 +177,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: false,
 					CanExport:  false,
+					CanMenu:    true, // Can access products menu
 				}
 			} else if module == "accounts" {
 				// Employee needs view access to accounts for purchase form dropdowns
@@ -165,6 +188,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: false,
 					CanExport:  false,
+					CanMenu:    false, // No menu access to accounts
 				}
 			} else if module == "purchases" {
 				// Employee should be able to create purchases
@@ -175,6 +199,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false, // Cannot delete purchases
 					CanApprove: false, // Cannot approve purchases
 					CanExport:  false,
+					CanMenu:    true, // Can access purchases menu
 				}
 			} else {
 				permissions[module] = &ModulePermission{
@@ -184,6 +209,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: false,
 					CanExport:  false,
+					CanMenu:    false, // No menu access to other modules
 				}
 			}
 		}
@@ -200,6 +226,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false, // Still no delete access for safety
 					CanApprove: true,
 					CanExport:  true,
+					CanMenu:    true,
 				}
 			} else if module == "settings" {
 				// Directors need settings access for system configuration and invoice types
@@ -210,6 +237,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false, // Cannot delete settings for safety
 					CanApprove: true,
 					CanExport:  true,
+					CanMenu:    false, // Directors don't need settings menu access
 				}
 			} else {
 				// For other modules, keep view/approve only access
@@ -220,6 +248,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 					CanDelete:  false,
 					CanApprove: true,
 					CanExport:  true,
+					CanMenu:    false, // No menu access to other modules
 				}
 			}
 		}
@@ -233,6 +262,7 @@ func GetDefaultPermissions(role string) map[string]*ModulePermission {
 				CanDelete:  false,
 				CanApprove: false,
 				CanExport:  false,
+				CanMenu:    false,
 			}
 		}
 	}
