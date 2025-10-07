@@ -369,16 +369,13 @@ class AccountService {
     return response.blob();
   }
 
-  // Helper: Format balance for display with special handling for Revenue/PPN accounts
+  // Helper: Format balance for display with all accounts as positive values
   formatBalance(balance: number, currency = 'IDR', accountCode?: string, accountType?: string): string {
-    let displayBalance = balance;
+    // 🎯 CRITICAL: Display all accounts as positive for user clarity per accounting principles
+    // Use absolute value to ensure all balances are displayed as positive
+    const displayBalance = Math.abs(balance);
     
-    // 🎯 CRITICAL: Display Revenue and PPN accounts as positive for user clarity
-    // Even though they are stored as negative in DB (credit accounts), show positive to users
-    if (this.shouldDisplayAsPositive(accountCode, accountType)) {
-      displayBalance = Math.abs(balance);
-      console.log(`💡 Displaying ${accountCode} as positive: ${displayBalance} (original: ${balance})`);
-    }
+    console.log(`💡 Displaying ${accountCode} as positive: ${displayBalance} (original: ${balance})`);
     
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',

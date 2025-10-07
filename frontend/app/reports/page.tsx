@@ -3623,8 +3623,8 @@ leftIcon={<FiBook />}
                         )}
                       </VStack>
                       <VStack align="end" spacing={1}>
-                        <Text fontSize="lg" fontWeight="bold" color={ssotGLData.closing_balance >= 0 ? 'green.600' : 'red.600'}>
-                          Closing Balance: {formatCurrency(ssotGLData.closing_balance || 0)}
+                        <Text fontSize="lg" fontWeight="bold" color="green.600">
+                          Closing Balance: {formatCurrency(Math.abs(ssotGLData.closing_balance || 0))}
                         </Text>
                         <Text fontSize="sm" color="gray.600">
                           Opening Balance: {formatCurrency(ssotGLData.opening_balance || 0)}
@@ -3786,11 +3786,11 @@ leftIcon={<FiBook />}
                               textAlign="right" 
                               fontSize="sm" 
                               fontWeight="bold" 
-                              color={transaction.balance >= 0 ? 'green.600' : 'red.600'}
+                              color="green.600"
                               wordBreak="break-word"
                               overflowWrap="break-word"
                             >
-                              {formatCurrency(transaction.balance)}
+                              {formatCurrency(Math.abs(transaction.balance))}
                             </Text>
                           </Grid>
                         </Box>

@@ -716,9 +716,9 @@ const JournalDrilldownModal: React.FC<JournalDrilldownModalProps> = ({
                                     <Text
                                       fontSize="sm"
                                       fontWeight="medium"
-                                      color={balanceInfo.current_balance >= 0 ? 'green.600' : 'red.600'}
+                                      color="green.600"
                                     >
-                                      {formatCurrency(balanceInfo.current_balance)}
+                                      {formatCurrency(Math.abs(balanceInfo.current_balance))}
                                     </Text>
                                   </Td>
                                   <Td>

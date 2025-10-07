@@ -260,9 +260,15 @@ const AccountForm: React.FC<AccountFormProps> = ({
             }
             // Otherwise 4-digit is acceptable; no error
           } else {
-            // Non-header child must use dashed child format with correct parent prefix
+            // Non-header child can use either format - 4-digit or dashed child format with correct parent prefix
             if (!isChildFormat) {
-              newErrors.code = `Use child format with parent prefix: ${parent.code}-XXX`;
+              // If using 4-digit format, it should start with parent code digit pattern
+              // For example, if parent is 1100, child could be 1101, 1102, etc.
+              const parentCodePrefix = parent.code.substring(0, 2); // Taking first 2 digits of parent code
+              const childCodePrefix = formData.code.substring(0, 2); // Taking first 2 digits of child code
+              if (childCodePrefix !== parentCodePrefix) {
+                newErrors.code = `Child code should start with parent code prefix: ${parentCodePrefix}XX (e.g., ${parentCodePrefix}01, ${parentCodePrefix}02, etc.)`;
+              }
             } else if (!formData.code.startsWith(`${parent.code}-`)) {
               newErrors.code = `Child code must start with parent code: ${parent.code}-XXX`;
             }

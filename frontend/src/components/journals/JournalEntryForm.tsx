@@ -471,10 +471,10 @@ const JournalEntryForm: React.FC<JournalEntryFormProps> = ({
                             <Text
                               fontSize="sm"
                               fontWeight="medium"
-                              color={currentBalance >= 0 ? 'green.600' : 'red.600'}
+                              color="green.600"
                               textAlign="right"
                             >
-                              {formatCurrency(currentBalance)}
+                              {formatCurrency(Math.abs(currentBalance))}
                             </Text>
                           </Td>
                         )}

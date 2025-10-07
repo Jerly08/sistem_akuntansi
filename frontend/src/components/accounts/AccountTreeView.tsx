@@ -141,7 +141,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                 <Text
                   fontSize="sm"
                   fontWeight={account.is_header ? "bold" : "medium"}
-                  color={account.balance >= 0 ? 'green.600' : 'red.600'}
+                  color="green.600"
                 >
                   {accountService.formatBalance(account.balance, 'IDR', account.code, account.type)}
                 </Text>

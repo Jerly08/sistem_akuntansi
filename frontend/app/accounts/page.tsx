@@ -90,7 +90,8 @@ const AccountsPage = () => {
   // Helper function to get balance for display
   const getDisplayBalance = (account: Account): number => {
     // 🔧 ALWAYS use backend balance - no total_balance calculation
-    return account.balance;
+    // Now displaying as positive per accounting principles
+    return Math.abs(account.balance);
   };
 
   // Helper function to flatten hierarchy for List View
