@@ -23,7 +23,17 @@ func NewInvoiceTypeController(invoiceTypeService *services.InvoiceTypeService, i
 	}
 }
 
-// GetInvoiceTypes gets all invoice types
+// GetInvoiceTypes godoc
+// @Summary List invoice types
+// @Description Get all invoice types, with optional active_only=true to filter only active ones
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param active_only query bool false "Filter only active types" default(false)
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types [get]
 func (c *InvoiceTypeController) GetInvoiceTypes(ctx *gin.Context) {
 	log.Printf("📋 Getting invoice types list")
 	
@@ -41,7 +51,18 @@ func (c *InvoiceTypeController) GetInvoiceTypes(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Invoice types retrieved successfully", invoiceTypes)
 }
 
-// GetInvoiceType gets a single invoice type by ID
+// GetInvoiceType godoc
+// @Summary Get invoice type
+// @Description Get a single invoice type by ID
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Invoice Type ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 404 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/{id} [get]
 func (c *InvoiceTypeController) GetInvoiceType(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -65,7 +86,19 @@ func (c *InvoiceTypeController) GetInvoiceType(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Invoice type retrieved successfully", invoiceType)
 }
 
-// CreateInvoiceType creates a new invoice type
+// CreateInvoiceType godoc
+// @Summary Create invoice type
+// @Description Create a new invoice type
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body models.InvoiceTypeCreateRequest true "Invoice type data"
+// @Success 201 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 401 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types [post]
 func (c *InvoiceTypeController) CreateInvoiceType(ctx *gin.Context) {
 	log.Printf("🆕 Creating new invoice type")
 	
@@ -107,7 +140,19 @@ func (c *InvoiceTypeController) CreateInvoiceType(ctx *gin.Context) {
 	utils.SendCreated(ctx, "Invoice type created successfully", invoiceType)
 }
 
-// UpdateInvoiceType updates an existing invoice type
+// UpdateInvoiceType godoc
+// @Summary Update invoice type
+// @Description Update an existing invoice type
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Invoice Type ID"
+// @Param request body models.InvoiceTypeUpdateRequest true "Invoice type update data"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/{id} [put]
 func (c *InvoiceTypeController) UpdateInvoiceType(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -141,7 +186,18 @@ func (c *InvoiceTypeController) UpdateInvoiceType(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Invoice type updated successfully", invoiceType)
 }
 
-// DeleteInvoiceType deletes an invoice type
+// DeleteInvoiceType godoc
+// @Summary Delete invoice type
+// @Description Delete an invoice type (only if not used)
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Invoice Type ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/{id} [delete]
 func (c *InvoiceTypeController) DeleteInvoiceType(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -165,7 +221,18 @@ func (c *InvoiceTypeController) DeleteInvoiceType(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Invoice type deleted successfully", nil)
 }
 
-// ToggleInvoiceType toggles the active status of an invoice type
+// ToggleInvoiceType godoc
+// @Summary Toggle active status
+// @Description Toggle the active status of an invoice type
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Invoice Type ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/{id}/toggle [post]
 func (c *InvoiceTypeController) ToggleInvoiceType(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -195,7 +262,16 @@ func (c *InvoiceTypeController) ToggleInvoiceType(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Invoice type "+status+" successfully", invoiceType)
 }
 
-// GetActiveInvoiceTypes gets only active invoice types (for dropdowns)
+// GetActiveInvoiceTypes godoc
+// @Summary List active invoice types
+// @Description Get only active invoice types (for dropdowns)
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Success 200 {object} map[string]interface{}
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/active [get]
 func (c *InvoiceTypeController) GetActiveInvoiceTypes(ctx *gin.Context) {
 	log.Printf("📋 Getting active invoice types for dropdown")
 	
@@ -210,7 +286,18 @@ func (c *InvoiceTypeController) GetActiveInvoiceTypes(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Active invoice types retrieved successfully", invoiceTypes)
 }
 
-// PreviewInvoiceNumber previews what the next invoice number would be for a given type and date
+// PreviewInvoiceNumber godoc
+// @Summary Preview next invoice number
+// @Description Preview what the next invoice number would be for a given type and date
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param request body models.InvoiceNumberRequest true "Invoice number preview request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/preview-number [post]
 func (c *InvoiceTypeController) PreviewInvoiceNumber(ctx *gin.Context) {
 	var request models.InvoiceNumberRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
@@ -235,7 +322,19 @@ func (c *InvoiceTypeController) PreviewInvoiceNumber(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Invoice number preview generated successfully", preview)
 }
 
-// PreviewInvoiceNumberByID previews the next invoice number using path param and optional date query (?date=YYYY-MM-DD)
+// PreviewInvoiceNumberByID godoc
+// @Summary Preview next invoice number by ID
+// @Description Preview the next invoice number using path param and optional date query (?date=YYYY-MM-DD)
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Invoice Type ID"
+// @Param date query string false "Custom date (YYYY-MM-DD)"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/{id}/preview [get]
 func (c *InvoiceTypeController) PreviewInvoiceNumberByID(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil || id == 0 {
@@ -274,7 +373,18 @@ func (c *InvoiceTypeController) PreviewInvoiceNumberByID(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Invoice number preview generated successfully", preview)
 }
 
-// GetCounterHistory gets counter history for a specific invoice type
+// GetCounterHistory godoc
+// @Summary Get counter history
+// @Description Get counter history for a specific invoice type
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Invoice Type ID"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/{id}/counter-history [get]
 func (c *InvoiceTypeController) GetCounterHistory(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
 	if err != nil {
@@ -295,4 +405,72 @@ func (c *InvoiceTypeController) GetCounterHistory(ctx *gin.Context) {
 
 	log.Printf("✅ Retrieved counter history with %d entries", len(history))
 	utils.SendSuccess(ctx, "Counter history retrieved successfully", history)
+}
+
+// ResetCounterForYear godoc
+// @Summary Reset invoice counter
+// @Description Reset counter for a specific invoice type and year
+// @Tags Invoice Types
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Invoice Type ID"
+// @Param request body struct{Year int `json:"year"`; Counter int `json:"counter"`} true "Year and new counter value"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /api/v1/invoice-types/{id}/reset-counter [post]
+func (c *InvoiceTypeController) ResetCounterForYear(ctx *gin.Context) {
+	id, err := strconv.ParseUint(ctx.Param("id"), 10, 32)
+	if err != nil {
+		utils.SendValidationError(ctx, "Invalid invoice type ID", map[string]string{
+			"id": "Invoice type ID must be a valid positive number",
+		})
+		return
+	}
+
+	var request struct {
+		Year     int `json:"year" binding:"required,min=2020,max=2050"`
+		Counter  int `json:"counter" binding:"required,min=0"`
+	}
+
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		log.Printf("❌ Invalid counter reset request: %v", err)
+		utils.SendValidationError(ctx, "Invalid request data", map[string]string{
+			"year":    "Year must be between 2020 and 2050",
+			"counter": "Counter must be a non-negative number",
+		})
+		return
+	}
+
+	log.Printf("🔄 Resetting counter for invoice type %d, year %d to %d", id, request.Year, request.Counter)
+	
+	err = c.invoiceNumberService.ResetCounterForYear(uint(id), request.Year, request.Counter)
+	if err != nil {
+		log.Printf("❌ Failed to reset counter: %v", err)
+		utils.SendBusinessRuleError(ctx, "Failed to reset counter", map[string]interface{}{
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Get preview of next invoice number
+	preview, err := c.invoiceNumberService.PreviewInvoiceNumber(uint(id), time.Now())
+	if err != nil {
+		log.Printf("⚠️ Counter reset successful but failed to generate preview: %v", err)
+		utils.SendSuccess(ctx, "Counter reset successfully", map[string]interface{}{
+			"invoice_type_id": uint(id),
+			"year":            request.Year,
+			"new_counter":     request.Counter,
+		})
+		return
+	}
+
+	log.Printf("✅ Counter reset successfully. Next invoice: %s", preview.InvoiceNumber)
+	utils.SendSuccess(ctx, "Counter reset successfully", map[string]interface{}{
+		"invoice_type_id":      uint(id),
+		"year":                 request.Year,
+		"new_counter":          request.Counter,
+		"next_invoice_preview": preview,
+	})
 }

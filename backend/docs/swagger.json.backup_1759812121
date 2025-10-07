@@ -1,6 +1,74 @@
 {
   "basePath": "/",
   "definitions": {
+    "controllers.AccountCodeValidationResponse": {
+      "properties": {
+        "is_valid": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "controllers.AccountStatus": {
+      "properties": {
+        "account": {
+          "$ref": "#/definitions/models.AccountResponse"
+        },
+        "is_configured": {
+          "type": "boolean"
+        },
+        "recommendations": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "controllers.GenerateCodeRequest": {
+      "properties": {
+        "account_name": {
+          "type": "string"
+        },
+        "account_type": {
+          "type": "string"
+        },
+        "parent_code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account_type"
+      ],
+      "type": "object"
+    },
+    "controllers.GenerateCodeResponse": {
+      "properties": {
+        "alternative_codes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recommended_code": {
+          "type": "string"
+        },
+        "validation": {
+          "$ref": "#/definitions/controllers.AccountCodeValidationResponse"
+        }
+      },
+      "type": "object"
+    },
     "controllers.GetPurchaseReportResponse": {
       "properties": {
         "data": {
@@ -278,6 +346,103 @@
         },
         "status": {
           "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "controllers.TaxAccountStatusResponse": {
+      "properties": {
+        "cogs": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "configuration_id": {
+          "type": "integer"
+        },
+        "health_score": {
+          "description": "0-100",
+          "type": "integer"
+        },
+        "inventory": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "is_fully_configured": {
+          "type": "boolean"
+        },
+        "last_updated": {
+          "type": "string"
+        },
+        "missing_accounts": {
+          "description": "Overall status",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "purchase_bank": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "purchase_cash": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "purchase_expense": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "purchase_input_vat": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "purchase_payable": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/controllers.AccountStatus"
+            }
+          ],
+          "description": "Purchase accounts status"
+        },
+        "sales_bank": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "sales_cash": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "sales_output_vat": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "sales_receivable": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/controllers.AccountStatus"
+            }
+          ],
+          "description": "Sales accounts status"
+        },
+        "sales_revenue": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "system_warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tax_payable": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "updated_by": {
+          "$ref": "#/definitions/models.UserResponse"
+        },
+        "withholding_tax21": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/controllers.AccountStatus"
+            }
+          ],
+          "description": "Optional accounts"
+        },
+        "withholding_tax23": {
+          "$ref": "#/definitions/controllers.AccountStatus"
+        },
+        "withholding_tax25": {
+          "$ref": "#/definitions/controllers.AccountStatus"
         }
       },
       "type": "object"
@@ -3545,6 +3710,26 @@
       },
       "type": "object"
     },
+    "services.AccountCodeFix": {
+      "properties": {
+        "account_name": {
+          "type": "string"
+        },
+        "account_type": {
+          "type": "string"
+        },
+        "current_code": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "suggested_code": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "services.AccountTypeSummary": {
       "properties": {
         "account_count": {
@@ -4045,7 +4230,7 @@
     },
     "services.CustomerSalesData": {
       "properties": {
-        "average_order": {
+        "average_transaction": {
           "type": "number"
         },
         "customer_id": {
@@ -4060,7 +4245,7 @@
         "last_order_date": {
           "type": "string"
         },
-        "total_amount": {
+        "total_sales": {
           "type": "number"
         },
         "transaction_count": {
@@ -4071,9 +4256,6 @@
     },
     "services.DataQualityIssue": {
       "properties": {
-        "category": {
-          "type": "string"
-        },
         "count": {
           "type": "integer"
         },
@@ -4081,6 +4263,9 @@
           "type": "string"
         },
         "severity": {
+          "type": "string"
+        },
+        "type": {
           "type": "string"
         }
       },
@@ -6994,147 +7179,65 @@
     "version": "1.0"
   },
   "paths": {
-    "/api/v1/accounts": {
+    "/api/v1/account-codes/availability": {
       "get": {
-        "description": "Retrieve list of all accounts with optional filtering and pagination",
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Check if an account code is already in use",
         "parameters": [
           {
-            "description": "Account type filter (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)",
+            "description": "Account code to check",
             "in": "query",
-            "name": "type",
+            "name": "code",
+            "required": true,
             "type": "string"
-          },
-          {
-            "description": "Search by account name or code",
-            "in": "query",
-            "name": "search",
-            "type": "string"
-          },
-          {
-            "description": "Filter active/inactive accounts",
-            "in": "query",
-            "name": "is_active",
-            "type": "boolean"
-          },
-          {
-            "description": "Page number",
-            "in": "query",
-            "name": "page",
-            "type": "integer"
-          },
-          {
-            "description": "Items per page",
-            "in": "query",
-            "name": "limit",
-            "type": "integer"
           }
+        ],
+        "produces": [
+          "application/json"
         ],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "OK",
             "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "$ref": "#/definitions/models.Account"
-                  },
-                  "type": "array"
-                },
-                "pagination": {
-                  "properties": {
-                    "limit": {
-                      "type": "integer"
-                    },
-                    "page": {
-                      "type": "integer"
-                    },
-                    "total": {
-                      "type": "integer"
-                    }
-                  },
-                  "type": "object"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
+              "additionalProperties": true,
               "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/utils.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/utils.ErrorResponse"
             }
           }
         },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get all accounts",
+        "summary": "Check code availability",
         "tags": [
-          "Accounts"
+          "Account Code"
         ]
-      },
+      }
+    },
+    "/api/v1/account-codes/generate": {
       "post": {
         "consumes": [
           "application/json"
         ],
-        "description": "Create a new account in the chart of accounts",
+        "description": "Generate a sequential account code based on account type and parent",
         "parameters": [
           {
-            "description": "Account creation data",
+            "description": "Code generation parameters",
             "in": "body",
-            "name": "account",
+            "name": "request",
             "required": true,
             "schema": {
-              "properties": {
-                "category": {
-                  "description": "Account category",
-                  "example": "current_asset",
-                  "type": "string"
-                },
-                "code": {
-                  "description": "Unique account code",
-                  "example": "1100-001",
-                  "type": "string"
-                },
-                "description": {
-                  "description": "Account description",
-                  "example": "Kas untuk keperluan operasional harian",
-                  "type": "string"
-                },
-                "is_header": {
-                  "description": "Whether this is a header account",
-                  "example": false,
-                  "type": "boolean"
-                },
-                "name": {
-                  "description": "Account name",
-                  "example": "Kas Kecil",
-                  "type": "string"
-                },
-                "parent_id": {
-                  "description": "Parent account ID for hierarchy",
-                  "example": 1,
-                  "type": "integer"
-                },
-                "type": {
-                  "description": "Account type",
-                  "enum": [
-                    "ASSET",
-                    "LIABILITY",
-                    "EQUITY",
-                    "REVENUE",
-                    "EXPENSE"
-                  ],
-                  "example": "ASSET",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "code",
-                "name",
-                "type"
-              ],
-              "type": "object"
+              "$ref": "#/definitions/controllers.GenerateCodeRequest"
             }
           }
         ],
@@ -7142,231 +7245,50 @@
           "application/json"
         ],
         "responses": {
-          "201": {
-            "description": "Account created successfully",
+          "200": {
+            "description": "OK",
             "schema": {
-              "$ref": "#/definitions/models.AccountResponse"
+              "$ref": "#/definitions/controllers.GenerateCodeResponse"
             }
           },
           "400": {
-            "description": "Bad request",
+            "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
+              "$ref": "#/definitions/utils.ErrorResponse"
             }
           },
-          "409": {
-            "description": "Account code already exists",
+          "500": {
+            "description": "Internal Server Error",
             "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
+              "$ref": "#/definitions/utils.ErrorResponse"
             }
           }
         },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create new account",
+        "summary": "Generate account code",
         "tags": [
-          "Accounts"
+          "Account Code"
         ]
       }
     },
-    "/api/v1/accounts/export/excel": {
+    "/api/v1/account-codes/next": {
       "get": {
-        "description": "Export chart of accounts to Excel",
-        "produces": [
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ],
-        "responses": {
-          "200": {
-            "description": "Excel file",
-            "schema": {
-              "type": "file"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Export accounts to Excel",
-        "tags": [
-          "Accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/export/pdf": {
-      "get": {
-        "description": "Export chart of accounts to PDF",
-        "produces": [
-          "application/pdf"
-        ],
-        "responses": {
-          "200": {
-            "description": "PDF file",
-            "schema": {
-              "type": "file"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Export accounts to PDF",
-        "tags": [
-          "Accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/hierarchy": {
-      "get": {
-        "description": "Get account hierarchy tree structure",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "$ref": "#/definitions/models.Account"
-                  },
-                  "type": "array"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get account hierarchy",
-        "tags": [
-          "Accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/{code}": {
-      "delete": {
-        "description": "Delete account (only if no transactions exist)",
-        "parameters": [
-          {
-            "description": "Account code",
-            "in": "path",
-            "name": "code",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Account deleted successfully",
-            "schema": {
-              "$ref": "#/definitions/models.APIResponse"
-            }
-          },
-          "400": {
-            "description": "Cannot delete account with transactions",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Delete account",
-        "tags": [
-          "Accounts"
-        ]
-      },
-      "get": {
-        "description": "Get account details by account code",
-        "parameters": [
-          {
-            "description": "Account code",
-            "in": "path",
-            "name": "code",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "$ref": "#/definitions/models.AccountResponse"
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get account by code",
-        "tags": [
-          "Accounts"
-        ]
-      },
-      "put": {
         "consumes": [
           "application/json"
         ],
-        "description": "Update account details",
+        "description": "Get the next available sequential code for an account type",
         "parameters": [
           {
-            "description": "Account code",
-            "in": "path",
-            "name": "code",
+            "description": "Account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)",
+            "in": "query",
+            "name": "account_type",
             "required": true,
             "type": "string"
           },
           {
-            "description": "Account update data",
-            "in": "body",
-            "name": "account",
-            "required": true,
-            "schema": {
-              "properties": {
-                "description": {
-                  "example": "Updated description",
-                  "type": "string"
-                },
-                "is_active": {
-                  "example": true,
-                  "type": "boolean"
-                },
-                "name": {
-                  "example": "Kas Kecil Updated",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
+            "description": "Parent account code",
+            "in": "query",
+            "name": "parent_code",
+            "type": "string"
           }
         ],
         "produces": [
@@ -7374,26 +7296,183 @@
         ],
         "responses": {
           "200": {
-            "description": "Account updated successfully",
+            "description": "OK",
             "schema": {
-              "$ref": "#/definitions/models.AccountResponse"
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
             }
           },
-          "404": {
-            "description": "Account not found",
+          "400": {
+            "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
+              "$ref": "#/definitions/utils.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/utils.ErrorResponse"
             }
           }
         },
-        "security": [
+        "summary": "Get next sequential code",
+        "tags": [
+          "Account Code"
+        ]
+      }
+    },
+    "/api/v1/account-codes/non-standard": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get a list of account codes that don't follow standard patterns with suggested fixes",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "items": {
+                "$ref": "#/definitions/services.AccountCodeFix"
+              },
+              "type": "array"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/utils.ErrorResponse"
+            }
+          }
+        },
+        "summary": "Get non-standard codes",
+        "tags": [
+          "Account Code"
+        ]
+      }
+    },
+    "/api/v1/account-codes/structure": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get the standard account code ranges and rules",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get accounting structure",
+        "tags": [
+          "Account Code"
+        ]
+      }
+    },
+    "/api/v1/account-codes/suggest": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Suggest account codes based on account name and type",
+        "parameters": [
           {
-            "BearerAuth": []
+            "description": "Account name",
+            "in": "query",
+            "name": "account_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Account type",
+            "in": "query",
+            "name": "account_type",
+            "required": true,
+            "type": "string"
           }
         ],
-        "summary": "Update account",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/utils.ErrorResponse"
+            }
+          }
+        },
+        "summary": "Suggest code by name",
         "tags": [
-          "Accounts"
+          "Account Code"
+        ]
+      }
+    },
+    "/api/v1/account-codes/validate": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Validate if an account code follows proper hierarchy and is available",
+        "parameters": [
+          {
+            "description": "Account code to validate",
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Account type",
+            "in": "query",
+            "name": "account_type",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Parent account code",
+            "in": "query",
+            "name": "parent_code",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/controllers.AccountCodeValidationResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/utils.ErrorResponse"
+            }
+          }
+        },
+        "summary": "Validate account code",
+        "tags": [
+          "Account Code"
         ]
       }
     },
@@ -8129,639 +8208,6 @@
         ]
       }
     },
-    "/api/v1/assets": {
-      "get": {
-        "description": "Retrieve list of all assets with filtering and pagination",
-        "parameters": [
-          {
-            "description": "Search by asset name or code",
-            "in": "query",
-            "name": "search",
-            "type": "string"
-          },
-          {
-            "description": "Filter by category ID",
-            "in": "query",
-            "name": "category_id",
-            "type": "integer"
-          },
-          {
-            "description": "Filter by asset status",
-            "in": "query",
-            "name": "status",
-            "type": "string"
-          },
-          {
-            "description": "Page number",
-            "in": "query",
-            "name": "page",
-            "type": "integer"
-          },
-          {
-            "description": "Items per page",
-            "in": "query",
-            "name": "limit",
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "properties": {
-                      "acquisition_cost": {
-                        "type": "number"
-                      },
-                      "category": {
-                        "type": "string"
-                      },
-                      "code": {
-                        "type": "string"
-                      },
-                      "created_at": {
-                        "type": "string"
-                      },
-                      "current_value": {
-                        "type": "number"
-                      },
-                      "depreciation_method": {
-                        "type": "string"
-                      },
-                      "id": {
-                        "type": "integer"
-                      },
-                      "name": {
-                        "type": "string"
-                      },
-                      "status": {
-                        "type": "string"
-                      },
-                      "updated_at": {
-                        "type": "string"
-                      },
-                      "useful_life_years": {
-                        "type": "integer"
-                      }
-                    },
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get all assets",
-        "tags": [
-          "Assets"
-        ]
-      },
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Create a new asset",
-        "parameters": [
-          {
-            "description": "Asset creation data",
-            "in": "body",
-            "name": "asset",
-            "required": true,
-            "schema": {
-              "properties": {
-                "acquisition_cost": {
-                  "description": "Asset acquisition cost",
-                  "example": 5000000,
-                  "type": "number"
-                },
-                "acquisition_date": {
-                  "description": "Asset acquisition date",
-                  "example": "2024-01-15",
-                  "format": "date",
-                  "type": "string"
-                },
-                "category_id": {
-                  "description": "Asset category ID",
-                  "example": 1,
-                  "type": "integer"
-                },
-                "code": {
-                  "description": "Unique asset code",
-                  "example": "AST-001",
-                  "type": "string"
-                },
-                "depreciation_method": {
-                  "description": "Depreciation method",
-                  "enum": [
-                    "STRAIGHT_LINE",
-                    "DECLINING_BALANCE",
-                    "UNITS_OF_PRODUCTION"
-                  ],
-                  "example": "STRAIGHT_LINE",
-                  "type": "string"
-                },
-                "location": {
-                  "description": "Asset location",
-                  "example": "Office Floor 1",
-                  "type": "string"
-                },
-                "name": {
-                  "description": "Asset name",
-                  "example": "Office Computer",
-                  "type": "string"
-                },
-                "residual_value": {
-                  "description": "Expected residual value",
-                  "example": 500000,
-                  "type": "number"
-                },
-                "useful_life_years": {
-                  "description": "Estimated useful life in years",
-                  "example": 5,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "name",
-                "code",
-                "acquisition_cost",
-                "category_id"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "201": {
-            "description": "Asset created successfully",
-            "schema": {
-              "properties": {
-                "data": {
-                  "properties": {
-                    "acquisition_cost": {
-                      "type": "number"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "message": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create new asset",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
-    "/api/v1/assets/categories": {
-      "get": {
-        "description": "Get list of asset categories",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "properties": {
-                      "depreciation_years": {
-                        "example": 5,
-                        "type": "integer"
-                      },
-                      "id": {
-                        "example": 1,
-                        "type": "integer"
-                      },
-                      "name": {
-                        "example": "IT Equipment",
-                        "type": "string"
-                      }
-                    },
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get asset categories",
-        "tags": [
-          "Assets"
-        ]
-      },
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Create a new asset category",
-        "parameters": [
-          {
-            "description": "Category creation data",
-            "in": "body",
-            "name": "category",
-            "required": true,
-            "schema": {
-              "properties": {
-                "depreciation_years": {
-                  "description": "Default depreciation years",
-                  "example": 8,
-                  "type": "integer"
-                },
-                "name": {
-                  "description": "Category name",
-                  "example": "Office Furniture",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "201": {
-            "description": "Category created successfully"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create asset category",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
-    "/api/v1/assets/summary": {
-      "get": {
-        "description": "Get summary of all assets with total values",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "properties": {
-                    "by_category": {
-                      "items": {
-                        "properties": {
-                          "category": {
-                            "type": "string"
-                          },
-                          "count": {
-                            "type": "integer"
-                          },
-                          "value": {
-                            "type": "number"
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
-                    },
-                    "total_acquisition_cost": {
-                      "example": 500000000,
-                      "type": "number"
-                    },
-                    "total_assets": {
-                      "example": 150,
-                      "type": "integer"
-                    },
-                    "total_current_value": {
-                      "example": 300000000,
-                      "type": "number"
-                    },
-                    "total_depreciation": {
-                      "example": 200000000,
-                      "type": "number"
-                    }
-                  },
-                  "type": "object"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get assets summary",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
-    "/api/v1/assets/{id}": {
-      "delete": {
-        "description": "Delete asset",
-        "parameters": [
-          {
-            "description": "Asset ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Asset deleted successfully"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Delete asset",
-        "tags": [
-          "Assets"
-        ]
-      },
-      "get": {
-        "description": "Get asset details by ID",
-        "parameters": [
-          {
-            "description": "Asset ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "properties": {
-                    "accumulated_depreciation": {
-                      "type": "number"
-                    },
-                    "acquisition_cost": {
-                      "type": "number"
-                    },
-                    "code": {
-                      "type": "string"
-                    },
-                    "current_value": {
-                      "type": "number"
-                    },
-                    "id": {
-                      "type": "integer"
-                    },
-                    "name": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get asset by ID",
-        "tags": [
-          "Assets"
-        ]
-      },
-      "put": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Update asset details",
-        "parameters": [
-          {
-            "description": "Asset ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "description": "Asset update data",
-            "in": "body",
-            "name": "asset",
-            "required": true,
-            "schema": {
-              "properties": {
-                "location": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "notes": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Asset updated successfully"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Update asset",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
-    "/api/v1/assets/{id}/capitalize": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Manually capitalize asset (create journal entries)",
-        "parameters": [
-          {
-            "description": "Asset ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Asset capitalized successfully",
-            "schema": {
-              "properties": {
-                "message": {
-                  "example": "Asset capitalized successfully",
-                  "type": "string"
-                },
-                "status": {
-                  "example": "success",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Asset already capitalized",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Capitalize asset",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
-    "/api/v1/assets/{id}/depreciation-schedule": {
-      "get": {
-        "description": "Get depreciation schedule for an asset",
-        "parameters": [
-          {
-            "description": "Asset ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "properties": {
-                      "closing_value": {
-                        "type": "number"
-                      },
-                      "depreciation_amount": {
-                        "type": "number"
-                      },
-                      "opening_value": {
-                        "type": "number"
-                      },
-                      "year": {
-                        "type": "integer"
-                      }
-                    },
-                    "type": "object"
-                  },
-                  "type": "array"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get depreciation schedule",
-        "tags": [
-          "Assets"
-        ]
-      }
-    },
     "/api/v1/auth/login": {
       "post": {
         "consumes": [
@@ -9404,318 +8850,6 @@
         ]
       }
     },
-    "/api/v1/contacts": {
-      "get": {
-        "description": "Retrieve list of all contacts with filtering and pagination",
-        "parameters": [
-          {
-            "description": "Search by contact name",
-            "in": "query",
-            "name": "search",
-            "type": "string"
-          },
-          {
-            "description": "Filter by contact type (CUSTOMER, VENDOR, EMPLOYEE)",
-            "in": "query",
-            "name": "type",
-            "type": "string"
-          },
-          {
-            "description": "Filter active/inactive contacts",
-            "in": "query",
-            "name": "is_active",
-            "type": "boolean"
-          },
-          {
-            "description": "Page number",
-            "in": "query",
-            "name": "page",
-            "type": "integer"
-          },
-          {
-            "description": "Items per page",
-            "in": "query",
-            "name": "limit",
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "$ref": "#/definitions/models.Contact"
-                  },
-                  "type": "array"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get all contacts",
-        "tags": [
-          "Contacts"
-        ]
-      },
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Create a new contact",
-        "parameters": [
-          {
-            "description": "Contact creation data",
-            "in": "body",
-            "name": "contact",
-            "required": true,
-            "schema": {
-              "properties": {
-                "address": {
-                  "description": "Address",
-                  "example": "Jl. Teknologi No. 123, Jakarta",
-                  "type": "string"
-                },
-                "code": {
-                  "description": "Contact code",
-                  "example": "CUST-001",
-                  "type": "string"
-                },
-                "credit_limit": {
-                  "description": "Credit limit for customers",
-                  "example": 50000000,
-                  "type": "number"
-                },
-                "email": {
-                  "description": "Email address",
-                  "example": "info@teknologimaju.com",
-                  "type": "string"
-                },
-                "mobile": {
-                  "description": "Mobile number",
-                  "example": "+628123456789",
-                  "type": "string"
-                },
-                "name": {
-                  "description": "Contact name",
-                  "example": "PT Teknologi Maju",
-                  "type": "string"
-                },
-                "payment_terms": {
-                  "description": "Payment terms in days",
-                  "example": 30,
-                  "type": "integer"
-                },
-                "phone": {
-                  "description": "Phone number",
-                  "example": "+62211234567",
-                  "type": "string"
-                },
-                "tax_number": {
-                  "description": "Tax identification number",
-                  "example": "01.234.567.8-901.000",
-                  "type": "string"
-                },
-                "type": {
-                  "description": "Contact type",
-                  "enum": [
-                    "CUSTOMER",
-                    "VENDOR",
-                    "EMPLOYEE"
-                  ],
-                  "example": "CUSTOMER",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name",
-                "type"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "201": {
-            "description": "Contact created successfully",
-            "schema": {
-              "$ref": "#/definitions/models.Contact"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create new contact",
-        "tags": [
-          "Contacts"
-        ]
-      }
-    },
-    "/api/v1/contacts/type/{type}": {
-      "get": {
-        "description": "Get contacts by type (CUSTOMER, VENDOR, EMPLOYEE)",
-        "parameters": [
-          {
-            "description": "Contact type",
-            "in": "path",
-            "name": "type",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "items": {
-                "$ref": "#/definitions/models.Contact"
-              },
-              "type": "array"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get contacts by type",
-        "tags": [
-          "Contacts"
-        ]
-      }
-    },
-    "/api/v1/contacts/{id}": {
-      "delete": {
-        "description": "Delete contact",
-        "parameters": [
-          {
-            "description": "Contact ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Contact deleted successfully"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Delete contact",
-        "tags": [
-          "Contacts"
-        ]
-      },
-      "get": {
-        "description": "Get contact details by ID",
-        "parameters": [
-          {
-            "description": "Contact ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "$ref": "#/definitions/models.Contact"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get contact by ID",
-        "tags": [
-          "Contacts"
-        ]
-      },
-      "put": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Update contact details",
-        "parameters": [
-          {
-            "description": "Contact ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "description": "Contact update data",
-            "in": "body",
-            "name": "contact",
-            "required": true,
-            "schema": {
-              "properties": {
-                "address": {
-                  "type": "string"
-                },
-                "email": {
-                  "type": "string"
-                },
-                "is_active": {
-                  "type": "boolean"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "phone": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Contact updated successfully"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Update contact",
-        "tags": [
-          "Contacts"
-        ]
-      }
-    },
     "/api/v1/dashboard/analytics": {
       "get": {
         "consumes": [
@@ -9757,6 +8891,307 @@
           }
         ],
         "summary": "Get analytics data",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/employee": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve employee-specific dashboard data including pending approvals, submitted requests, and notifications",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Employee dashboard data retrieved successfully",
+            "schema": {
+              "$ref": "#/definitions/models.APIResponse"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get employee dashboard data",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/employee/approval-notifications": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get approval-related notifications including status updates on purchase requests",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval notifications retrieved successfully",
+            "schema": {
+              "$ref": "#/definitions/models.APIResponse"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get employee approval notifications",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/employee/notifications-summary": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get summary of notifications for the employee including unread count",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Notifications summary retrieved successfully",
+            "schema": {
+              "$ref": "#/definitions/models.APIResponse"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get employee notifications summary",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/employee/notifications/{id}/read": {
+      "patch": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Mark a specific notification as read for the current user",
+        "parameters": [
+          {
+            "description": "Notification ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification marked as read successfully",
+            "schema": {
+              "$ref": "#/definitions/models.APIResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid notification ID",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "403": {
+            "description": "Access denied",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Notification not found",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Mark notification as read",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/employee/purchase-approval-status": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get detailed approval status for purchases submitted by employee",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase approval status retrieved successfully",
+            "schema": {
+              "$ref": "#/definitions/models.APIResponse"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get employee purchase approval status",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/employee/purchase-requests": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get purchase requests submitted by the employee with approval status",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase requests retrieved successfully",
+            "schema": {
+              "$ref": "#/definitions/models.APIResponse"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get employee purchase requests",
+        "tags": [
+          "Dashboard"
+        ]
+      }
+    },
+    "/api/v1/dashboard/employee/workflows": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get approval workflows where the employee has a role or can submit requests",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Approval workflows retrieved successfully",
+            "schema": {
+              "$ref": "#/definitions/models.APIResponse"
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "$ref": "#/definitions/models.ErrorResponse"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get employee approval workflows",
         "tags": [
           "Dashboard"
         ]
@@ -9805,393 +9240,6 @@
         "summary": "Get finance dashboard data",
         "tags": [
           "Dashboard"
-        ]
-      }
-    },
-    "/api/v1/invoice-types": {
-      "get": {
-        "description": "Get all invoice types, with optional active_only query to filter only active types",
-        "parameters": [
-          {
-            "description": "Filter only active types",
-            "in": "query",
-            "name": "active_only",
-            "required": false,
-            "type": "boolean"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List invoice types",
-        "tags": [
-          "Invoice Types"
-        ]
-      },
-      "post": {
-        "description": "Create a new invoice type",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "request",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.InvoiceTypeCreateRequest"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create invoice type",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/active": {
-      "get": {
-        "description": "Get only active invoice types (for dropdowns)",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List active invoice types",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/preview-number": {
-      "post": {
-        "description": "Preview what the next invoice number would be for a given type and date",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "request",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.InvoiceNumberRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Preview next invoice number",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}": {
-      "delete": {
-        "description": "Delete an invoice type (only if not used)",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Delete invoice type",
-        "tags": [
-          "Invoice Types"
-        ]
-      },
-      "get": {
-        "description": "Get a single invoice type by ID",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "404": {
-            "description": "Not Found"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get invoice type",
-        "tags": [
-          "Invoice Types"
-        ]
-      },
-      "put": {
-        "description": "Update an existing invoice type",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "request",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.InvoiceTypeUpdateRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Update invoice type",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}/counter-history": {
-      "get": {
-        "description": "Get counter history for a specific invoice type",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get counter history",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}/preview": {
-      "get": {
-        "description": "Preview the next invoice number using path param and optional date query (YYYY-MM-DD)",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "query",
-            "name": "date",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Preview next invoice number by ID",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}/reset-counter": {
-      "post": {
-        "description": "Reset counter for a specific invoice type and year",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "request",
-            "required": true,
-            "schema": {
-              "properties": {
-                "counter": {
-                  "example": 150,
-                  "type": "integer"
-                },
-                "year": {
-                  "example": 2025,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "year",
-                "counter"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Reset invoice counter",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}/toggle": {
-      "post": {
-        "description": "Toggle the active status of an invoice type",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Toggle active status",
-        "tags": [
-          "Invoice Types"
         ]
       }
     },
@@ -11995,417 +11043,6 @@
         ]
       }
     },
-    "/api/v1/products": {
-      "get": {
-        "description": "Retrieve list of all products with filtering and pagination",
-        "parameters": [
-          {
-            "description": "Search by product name or SKU",
-            "in": "query",
-            "name": "search",
-            "type": "string"
-          },
-          {
-            "description": "Filter by category ID",
-            "in": "query",
-            "name": "category_id",
-            "type": "integer"
-          },
-          {
-            "description": "Filter active/inactive products",
-            "in": "query",
-            "name": "is_active",
-            "type": "boolean"
-          },
-          {
-            "description": "Filter service/product items",
-            "in": "query",
-            "name": "is_service",
-            "type": "boolean"
-          },
-          {
-            "description": "Page number",
-            "in": "query",
-            "name": "page",
-            "type": "integer"
-          },
-          {
-            "description": "Items per page",
-            "in": "query",
-            "name": "limit",
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "properties": {
-                "data": {
-                  "items": {
-                    "$ref": "#/definitions/models.Product"
-                  },
-                  "type": "array"
-                },
-                "pagination": {
-                  "properties": {
-                    "limit": {
-                      "type": "integer"
-                    },
-                    "page": {
-                      "type": "integer"
-                    },
-                    "total": {
-                      "type": "integer"
-                    }
-                  },
-                  "type": "object"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get all products",
-        "tags": [
-          "Products"
-        ]
-      },
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Create a new product",
-        "parameters": [
-          {
-            "description": "Product creation data",
-            "in": "body",
-            "name": "product",
-            "required": true,
-            "schema": {
-              "properties": {
-                "category_id": {
-                  "description": "Product category ID",
-                  "example": 1,
-                  "type": "integer"
-                },
-                "code": {
-                  "description": "Unique product code",
-                  "example": "LTP-ASUS-001",
-                  "type": "string"
-                },
-                "cost_price": {
-                  "description": "Cost price",
-                  "example": 11500000,
-                  "type": "number"
-                },
-                "description": {
-                  "description": "Product description",
-                  "example": "High performance gaming laptop",
-                  "type": "string"
-                },
-                "is_service": {
-                  "description": "Is this a service item",
-                  "example": false,
-                  "type": "boolean"
-                },
-                "max_stock": {
-                  "description": "Maximum stock level",
-                  "example": 100,
-                  "type": "integer"
-                },
-                "min_stock": {
-                  "description": "Minimum stock level",
-                  "example": 5,
-                  "type": "integer"
-                },
-                "name": {
-                  "description": "Product name",
-                  "example": "Laptop Gaming ASUS",
-                  "type": "string"
-                },
-                "purchase_price": {
-                  "description": "Purchase price",
-                  "example": 12000000,
-                  "type": "number"
-                },
-                "sale_price": {
-                  "description": "Selling price",
-                  "example": 15000000,
-                  "type": "number"
-                },
-                "sku": {
-                  "description": "Stock keeping unit",
-                  "example": "ASUS-ROG-G15",
-                  "type": "string"
-                },
-                "taxable": {
-                  "description": "Is product taxable",
-                  "example": true,
-                  "type": "boolean"
-                },
-                "unit": {
-                  "description": "Unit of measurement",
-                  "example": "pcs",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "name",
-                "code",
-                "sale_price"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "201": {
-            "description": "Product created successfully",
-            "schema": {
-              "$ref": "#/definitions/models.Product"
-            }
-          },
-          "400": {
-            "description": "Bad request",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create new product",
-        "tags": [
-          "Products"
-        ]
-      }
-    },
-    "/api/v1/products/adjust-stock": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Adjust product stock levels",
-        "parameters": [
-          {
-            "description": "Stock adjustment data",
-            "in": "body",
-            "name": "adjustment",
-            "required": true,
-            "schema": {
-              "properties": {
-                "adjustment_quantity": {
-                  "description": "Positive for increase, negative for decrease",
-                  "example": 10,
-                  "type": "integer"
-                },
-                "notes": {
-                  "example": "Monthly inventory adjustment",
-                  "type": "string"
-                },
-                "product_id": {
-                  "example": 1,
-                  "type": "integer"
-                },
-                "reason": {
-                  "example": "Stock correction",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "product_id",
-                "adjustment_quantity",
-                "reason"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Stock adjusted successfully",
-            "schema": {
-              "$ref": "#/definitions/models.APIResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Adjust stock",
-        "tags": [
-          "Products"
-        ]
-      }
-    },
-    "/api/v1/products/{id}": {
-      "delete": {
-        "description": "Delete product",
-        "parameters": [
-          {
-            "description": "Product ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product deleted successfully",
-            "schema": {
-              "$ref": "#/definitions/models.APIResponse"
-            }
-          },
-          "404": {
-            "description": "Product not found",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Delete product",
-        "tags": [
-          "Products"
-        ]
-      },
-      "get": {
-        "description": "Get product details by ID",
-        "parameters": [
-          {
-            "description": "Product ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "$ref": "#/definitions/models.Product"
-            }
-          },
-          "404": {
-            "description": "Product not found",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get product by ID",
-        "tags": [
-          "Products"
-        ]
-      },
-      "put": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Update product details",
-        "parameters": [
-          {
-            "description": "Product ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "description": "Product update data",
-            "in": "body",
-            "name": "product",
-            "required": true,
-            "schema": {
-              "properties": {
-                "cost_price": {
-                  "type": "number"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "is_active": {
-                  "type": "boolean"
-                },
-                "max_stock": {
-                  "type": "integer"
-                },
-                "min_stock": {
-                  "type": "integer"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "purchase_price": {
-                  "type": "number"
-                },
-                "sale_price": {
-                  "type": "number"
-                }
-              },
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Product updated successfully",
-            "schema": {
-              "$ref": "#/definitions/models.Product"
-            }
-          },
-          "404": {
-            "description": "Product not found",
-            "schema": {
-              "$ref": "#/definitions/models.ErrorResponse"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Update product",
-        "tags": [
-          "Products"
-        ]
-      }
-    },
     "/api/v1/profile": {
       "get": {
         "consumes": [
@@ -13034,6 +11671,607 @@
         ]
       }
     },
+    "/api/v1/reports/accounts-payable": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate accounts payable aging report with vendor balances",
+        "parameters": [
+          {
+            "default": "\"current date\"",
+            "description": "As of date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "description": "Specific vendor ID to filter",
+            "in": "query",
+            "name": "vendor_id",
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format (json, pdf, excel)",
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Accounts payable data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate Accounts Payable Report",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/accounts-receivable": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate accounts receivable aging report with customer balances",
+        "parameters": [
+          {
+            "default": "\"current date\"",
+            "description": "As of date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "description": "Specific customer ID to filter",
+            "in": "query",
+            "name": "customer_id",
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format (json, pdf, excel)",
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Accounts receivable data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate Accounts Receivable Report",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/available": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get list of all available financial and operational reports with their metadata",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Available reports list",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get Available Reports List",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/balance-sheet": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate comprehensive balance sheet using SSOT journal system with real-time data",
+        "parameters": [
+          {
+            "default": "\"current date\"",
+            "description": "As of date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format (json, pdf, excel)",
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance sheet data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate Comprehensive Balance Sheet",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/cash-flow": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate comprehensive cash flow statement using SSOT journal system",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format (json, pdf)",
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash flow data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate Comprehensive Cash Flow Statement",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/financial-dashboard": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate comprehensive financial dashboard with key metrics and summaries",
+        "parameters": [
+          {
+            "default": "monthly",
+            "description": "Dashboard period (monthly, quarterly, yearly)",
+            "in": "query",
+            "name": "period",
+            "type": "string"
+          },
+          {
+            "default": false,
+            "description": "Include chart data",
+            "in": "query",
+            "name": "include_charts",
+            "type": "boolean"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Financial dashboard data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate Financial Dashboard",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/financial-ratios": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate comprehensive financial ratios analysis including liquidity, leverage, efficiency, and profitability ratios",
+        "parameters": [
+          {
+            "default": "\"current date\"",
+            "description": "As of date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "default": "yearly",
+            "description": "Analysis period (quarterly, yearly)",
+            "in": "query",
+            "name": "period",
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format (json, pdf, excel)",
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Financial ratios data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate Financial Ratios Report",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/general-ledger": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate general ledger report using SSOT journal system",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Specific account ID to filter",
+            "in": "query",
+            "name": "account_id",
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format (json, pdf, excel)",
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "General ledger data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate General Ledger Report",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/inventory-report": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate comprehensive inventory report with valuation and stock levels",
+        "parameters": [
+          {
+            "default": "\"current date\"",
+            "description": "As of date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "description": "Product category filter",
+            "in": "query",
+            "name": "category_id",
+            "type": "string"
+          },
+          {
+            "description": "Warehouse location filter",
+            "in": "query",
+            "name": "location_id",
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format (json, pdf, excel)",
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Inventory report data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate Inventory Report",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/journal-entry-analysis": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate comprehensive journal entry analysis using SSOT journal system",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Journal entry type filter",
+            "in": "query",
+            "name": "entry_type",
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format (json, pdf, excel)",
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal analysis data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid parameters",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Generate Journal Entry Analysis Report",
+        "tags": [
+          "Enhanced Reports"
+        ]
+      }
+    },
     "/api/v1/reports/optimized/balance-sheet": {
       "get": {
         "consumes": [
@@ -13158,16 +12396,15 @@
         ]
       }
     },
-    "/api/v1/reports/ssot-profit-loss": {
+    "/api/v1/reports/profit-loss": {
       "get": {
         "consumes": [
           "application/json"
         ],
-        "description": "Generate a comprehensive Profit \u0026 Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
+        "description": "Generate comprehensive profit and loss statement using SSOT journal system",
         "parameters": [
           {
             "description": "Start date (YYYY-MM-DD)",
-            "example": "2025-01-01",
             "in": "query",
             "name": "start_date",
             "required": true,
@@ -13175,7 +12412,6 @@
           },
           {
             "description": "End date (YYYY-MM-DD)",
-            "example": "2025-12-31",
             "in": "query",
             "name": "end_date",
             "required": true,
@@ -13183,13 +12419,7 @@
           },
           {
             "default": "json",
-            "description": "Output format",
-            "enum": [
-              "json",
-              "pdf",
-              "excel",
-              "csv"
-            ],
+            "description": "Output format (json, pdf, excel)",
             "in": "query",
             "name": "format",
             "type": "string"
@@ -13200,61 +12430,54 @@
         ],
         "responses": {
           "200": {
-            "description": "P\u0026L report generated successfully",
+            "description": "Profit \u0026 loss data",
             "schema": {
               "additionalProperties": true,
               "type": "object"
             }
           },
           "400": {
-            "description": "Invalid request parameters",
+            "description": "Invalid parameters",
             "schema": {
-              "additionalProperties": true,
+              "additionalProperties": {
+                "type": "string"
+              },
               "type": "object"
             }
           },
           "500": {
             "description": "Internal server error",
             "schema": {
-              "additionalProperties": true,
+              "additionalProperties": {
+                "type": "string"
+              },
               "type": "object"
             }
           }
         },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Generate SSOT Profit \u0026 Loss Report",
+        "summary": "Generate Comprehensive Profit \u0026 Loss Statement",
         "tags": [
-          "SSOT Reports"
+          "Enhanced Reports"
         ]
       }
     },
-    "/api/v1/reports/ssot/balance-sheet": {
+    "/api/v1/reports/trial-balance": {
       "get": {
         "consumes": [
           "application/json"
         ],
-        "description": "Generate a comprehensive Balance Sheet using Single Source of Truth (SSOT) journal system with real-time data integration and automatic balance validation",
+        "description": "Generate trial balance report using SSOT journal system",
         "parameters": [
           {
+            "default": "\"current date\"",
             "description": "As of date (YYYY-MM-DD)",
-            "example": "2025-12-31",
             "in": "query",
             "name": "as_of_date",
             "type": "string"
           },
           {
             "default": "json",
-            "description": "Output format",
-            "enum": [
-              "json",
-              "summary",
-              "pdf",
-              "csv"
-            ],
+            "description": "Output format (json, pdf, excel)",
             "in": "query",
             "name": "format",
             "type": "string"
@@ -13265,172 +12488,34 @@
         ],
         "responses": {
           "200": {
-            "description": "Balance Sheet generated successfully",
+            "description": "Trial balance data",
             "schema": {
               "additionalProperties": true,
               "type": "object"
             }
           },
           "400": {
-            "description": "Invalid request parameters",
+            "description": "Invalid parameters",
             "schema": {
-              "additionalProperties": true,
+              "additionalProperties": {
+                "type": "string"
+              },
               "type": "object"
             }
           },
           "500": {
             "description": "Internal server error",
             "schema": {
-              "additionalProperties": true,
+              "additionalProperties": {
+                "type": "string"
+              },
               "type": "object"
             }
           }
         },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Generate SSOT Balance Sheet",
+        "summary": "Generate Trial Balance Report",
         "tags": [
-          "SSOT Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/ssot/balance-sheet/account-details": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Get detailed account information for Balance Sheet drilldown analysis",
-        "parameters": [
-          {
-            "description": "As of date (YYYY-MM-DD)",
-            "example": "2025-12-31",
-            "in": "query",
-            "name": "as_of_date",
-            "type": "string"
-          },
-          {
-            "description": "Filter by account type",
-            "enum": [
-              "ASSET",
-              "LIABILITY",
-              "EQUITY"
-            ],
-            "in": "query",
-            "name": "account_type",
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Account details retrieved successfully",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get SSOT Balance Sheet Account Details",
-        "tags": [
-          "SSOT Reports"
-        ]
-      }
-    },
-    "/api/v1/reports/ssot/cash-flow": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Generate a comprehensive Cash Flow statement using Single Source of Truth (SSOT) journal system with operating, investing, and financing activities analysis",
-        "parameters": [
-          {
-            "description": "Start date (YYYY-MM-DD)",
-            "example": "2025-01-01",
-            "in": "query",
-            "name": "start_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "End date (YYYY-MM-DD)",
-            "example": "2025-12-31",
-            "in": "query",
-            "name": "end_date",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "default": "json",
-            "description": "Output format",
-            "enum": [
-              "json",
-              "pdf",
-              "excel",
-              "csv"
-            ],
-            "in": "query",
-            "name": "format",
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Cash Flow statement generated successfully",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid request parameters",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Generate SSOT Cash Flow Statement",
-        "tags": [
-          "SSOT Reports"
+          "Enhanced Reports"
         ]
       }
     },
@@ -13940,76 +13025,320 @@
         ]
       }
     },
-    "/api/v1/settings": {
+    "/api/v1/settings/tax-accounts": {
       "get": {
-        "description": "Get system settings",
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve the currently active tax account settings",
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "OK",
             "schema": {
-              "properties": {
-                "data": {
-                  "properties": {
-                    "company_name": {
-                      "type": "string"
-                    },
-                    "currency": {
-                      "type": "string"
-                    },
-                    "fiscal_year_start": {
-                      "type": "string"
-                    },
-                    "tax_rate": {
-                      "type": "number"
-                    }
-                  },
-                  "type": "object"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
+              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
               "type": "object"
             }
           }
         },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get system settings",
+        "summary": "Get current tax account settings",
         "tags": [
-          "Settings"
+          "Tax Account Settings"
         ]
       },
-      "put": {
+      "post": {
         "consumes": [
           "application/json"
         ],
-        "description": "Update system settings",
+        "description": "Create a new tax account configuration",
         "parameters": [
           {
-            "description": "Settings data",
+            "description": "Tax account settings data",
             "in": "body",
             "name": "settings",
             "required": true,
             "schema": {
-              "properties": {
-                "company_name": {
-                  "type": "string"
-                },
-                "currency": {
-                  "type": "string"
-                },
-                "fiscal_year_start": {
-                  "type": "string"
-                },
-                "tax_rate": {
-                  "type": "number"
-                }
-              },
+              "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "schema": {
+              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
               "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Create new tax account settings",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/all": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve all tax account settings for administration",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "items": {
+                "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+              },
+              "type": "array"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get all tax account settings",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/available-accounts": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Retrieve available accounts that can be used for tax account configuration",
+        "parameters": [
+          {
+            "description": "Filter by account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)",
+            "in": "query",
+            "name": "type",
+            "type": "string"
+          },
+          {
+            "description": "Filter by account category",
+            "in": "query",
+            "name": "category",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "items": {
+                "$ref": "#/definitions/models.AccountResponse"
+              },
+              "type": "array"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get available accounts",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/refresh-cache": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Refresh the tax account settings cache",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Refresh cache",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/status": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get detailed status information about tax account configuration including validation and recommendations",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/controllers.TaxAccountStatusResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get tax account configuration status",
+        "tags": [
+          "Tax Account Status"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/suggestions": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get suggested accounts for tax account configuration setup",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get account suggestions",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/validate": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Validate if a specific account is suitable for a particular tax account role",
+        "parameters": [
+          {
+            "description": "Account ID to validate",
+            "in": "query",
+            "name": "account_id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "description": "Role to validate for (sales_receivable, sales_cash, etc.)",
+            "in": "query",
+            "name": "role",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Validate account selection",
+        "tags": [
+          "Tax Account Status"
+        ]
+      },
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Validate the tax account configuration before saving",
+        "parameters": [
+          {
+            "description": "Tax account settings data",
+            "in": "body",
+            "name": "settings",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
             }
           }
         ],
@@ -14018,51 +13347,47 @@
         ],
         "responses": {
           "200": {
-            "description": "Settings updated successfully"
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
           }
         },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Update settings",
+        "summary": "Validate tax account configuration",
         "tags": [
-          "Settings"
+          "Tax Account Settings"
         ]
       }
     },
-    "/api/v1/settings/company": {
+    "/api/v1/settings/tax-accounts/{id}": {
       "put": {
         "consumes": [
           "application/json"
         ],
-        "description": "Update company-specific settings",
+        "description": "Update an existing tax account configuration",
         "parameters": [
           {
-            "description": "Company settings data",
+            "description": "Settings ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "description": "Tax account settings data",
             "in": "body",
-            "name": "company",
+            "name": "settings",
             "required": true,
             "schema": {
-              "properties": {
-                "company_address": {
-                  "type": "string"
-                },
-                "company_email": {
-                  "type": "string"
-                },
-                "company_name": {
-                  "type": "string"
-                },
-                "company_phone": {
-                  "type": "string"
-                },
-                "tax_number": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
+              "$ref": "#/definitions/models.TaxAccountSettingsUpdateRequest"
             }
           }
         ],
@@ -14071,7 +13396,146 @@
         ],
         "responses": {
           "200": {
-            "description": "Company settings updated successfully"
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Update tax account settings",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/tax-accounts/{id}/activate": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Activate a specific tax account configuration",
+        "parameters": [
+          {
+            "description": "Settings ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Activate tax account settings",
+        "tags": [
+          "Tax Account Settings"
+        ]
+      }
+    },
+    "/api/v1/ssot-reports/account-balances": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get account balances from Single Source of Truth journal system (filtered to INVOICED/PAID sales only)",
+        "parameters": [
+          {
+            "default": "\"current date\"",
+            "description": "As of date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "default": "POSTED",
+            "description": "Journal status filter",
+            "in": "query",
+            "name": "status_filter",
+            "type": "string"
+          },
+          {
+            "default": "ALL",
+            "description": "Source filter (ALL, INVOICED_ONLY)",
+            "in": "query",
+            "name": "source_filter",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Account balances data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
           }
         },
         "security": [
@@ -14079,9 +13543,242 @@
             "BearerAuth": []
           }
         ],
-        "summary": "Update company settings",
+        "summary": "Get SSOT Account Balances",
         "tags": [
-          "Settings"
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/api/v1/ssot-reports/balance-sheet/comparison": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Compare balance sheets between two dates using SSOT journal system data with variance analysis",
+        "parameters": [
+          {
+            "default": "\"1 year ago\"",
+            "description": "From date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "from_date",
+            "type": "string"
+          },
+          {
+            "default": "\"current date\"",
+            "description": "To date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "to_date",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance sheet comparison data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Compare SSOT Balance Sheets",
+        "tags": [
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/api/v1/ssot-reports/balance-sheet/validate": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Validate balance sheet equation (Assets = Liabilities + Equity) using SSOT journal system data",
+        "parameters": [
+          {
+            "default": "\"current date\"",
+            "description": "As of date (YYYY-MM-DD)",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance sheet validation result",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Validate SSOT Balance Sheet",
+        "tags": [
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/api/v1/ssot-reports/cash-flow/summary": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate summarized cash flow statement using SSOT journal system with key metrics and totals",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "example": "2025-01-01",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash flow summary data",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate SSOT Cash Flow Summary",
+        "tags": [
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/api/v1/ssot-reports/cash-flow/validate": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Validate cash flow statement balance using SSOT journal system data",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "example": "2025-01-01",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash flow validation result",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Validate SSOT Cash Flow Statement",
+        "tags": [
+          "SSOT Reports"
         ]
       }
     },
@@ -14693,421 +14390,66 @@
         ]
       }
     },
-    "/api/v1/tax-accounts": {
+    "/reports/ssot-profit-loss": {
       "get": {
         "consumes": [
           "application/json"
         ],
-        "description": "Retrieve the currently active tax account settings",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Get current tax account settings",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      },
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Create a new tax account configuration",
+        "description": "Generate a comprehensive Profit \u0026 Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
         "parameters": [
           {
-            "description": "Tax account settings data",
-            "in": "body",
-            "name": "settings",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "201": {
-            "description": "Created",
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Create new tax account settings",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/refresh-cache": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Refresh the tax account settings cache",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Refresh cache",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/suggestions": {
-      "get": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Get suggested accounts for tax account configuration setup",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Get account suggestions",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/validate": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Validate the tax account configuration before saving",
-        "parameters": [
-          {
-            "description": "Tax account settings data",
-            "in": "body",
-            "name": "settings",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Validate tax account configuration",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/{id}": {
-      "put": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Update an existing tax account configuration",
-        "parameters": [
-          {
-            "description": "Settings ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "description": "Tax account settings data",
-            "in": "body",
-            "name": "settings",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsUpdateRequest"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Update tax account settings",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/tax-accounts/{id}/activate": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Activate a specific tax account configuration",
-        "parameters": [
-          {
-            "description": "Settings ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "schema": {
-              "additionalProperties": true,
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Activate tax account settings",
-        "tags": [
-          "Tax Account Settings",
-          "Settings"
-        ]
-      }
-    },
-    "/api/v1/users": {
-      "get": {
-        "description": "Retrieve list of all users (admin only)",
-        "parameters": [
-          {
-            "description": "Search by username or email",
+            "description": "Start date (YYYY-MM-DD)",
+            "example": "2025-01-01",
             "in": "query",
-            "name": "search",
+            "name": "start_date",
+            "required": true,
             "type": "string"
           },
           {
-            "description": "Filter by role",
+            "description": "End date (YYYY-MM-DD)",
+            "example": "2025-12-31",
             "in": "query",
-            "name": "role",
+            "name": "end_date",
+            "required": true,
             "type": "string"
           },
           {
-            "description": "Filter active/inactive users",
+            "default": "json",
+            "description": "Output format",
+            "enum": [
+              "json",
+              "pdf",
+              "excel",
+              "csv"
+            ],
             "in": "query",
-            "name": "is_active",
-            "type": "boolean"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "items": {
-                "$ref": "#/definitions/models.User"
-              },
-              "type": "array"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get all users",
-        "tags": [
-          "Users"
-        ]
-      },
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Create a new user (admin only)",
-        "parameters": [
-          {
-            "description": "User creation data",
-            "in": "body",
-            "name": "user",
-            "required": true,
-            "schema": {
-              "properties": {
-                "email": {
-                  "example": "john@example.com",
-                  "type": "string"
-                },
-                "first_name": {
-                  "example": "John",
-                  "type": "string"
-                },
-                "last_name": {
-                  "example": "Doe",
-                  "type": "string"
-                },
-                "password": {
-                  "example": "securepassword123",
-                  "type": "string"
-                },
-                "role": {
-                  "enum": [
-                    "admin",
-                    "finance",
-                    "employee",
-                    "director"
-                  ],
-                  "example": "employee",
-                  "type": "string"
-                },
-                "username": {
-                  "example": "johndoe",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "username",
-                "email",
-                "password"
-              ],
-              "type": "object"
-            }
+            "name": "format",
+            "type": "string"
           }
         ],
         "produces": [
           "application/json"
         ],
         "responses": {
-          "201": {
-            "description": "User created successfully",
+          "200": {
+            "description": "P\u0026L report generated successfully",
             "schema": {
-              "$ref": "#/definitions/models.User"
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
             }
           }
         },
@@ -15116,106 +14458,38 @@
             "BearerAuth": []
           }
         ],
-        "summary": "Create new user",
+        "summary": "Generate SSOT Profit \u0026 Loss Report",
         "tags": [
-          "Users"
+          "SSOT Reports"
         ]
       }
     },
-    "/api/v1/users/{id}": {
-      "delete": {
-        "description": "Delete user (admin only)",
-        "parameters": [
-          {
-            "description": "User ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "User deleted successfully"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Delete user",
-        "tags": [
-          "Users"
-        ]
-      },
+    "/reports/ssot/balance-sheet": {
       "get": {
-        "description": "Get user details by ID (admin only)",
-        "parameters": [
-          {
-            "description": "User ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "schema": {
-              "$ref": "#/definitions/models.User"
-            }
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get user by ID",
-        "tags": [
-          "Users"
-        ]
-      },
-      "put": {
         "consumes": [
           "application/json"
         ],
-        "description": "Update user details (admin only)",
+        "description": "Generate a comprehensive Balance Sheet using Single Source of Truth (SSOT) journal system with real-time data integration and automatic balance validation",
         "parameters": [
           {
-            "description": "User ID",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
+            "description": "As of date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
           },
           {
-            "description": "User update data",
-            "in": "body",
-            "name": "user",
-            "required": true,
-            "schema": {
-              "properties": {
-                "email": {
-                  "type": "string"
-                },
-                "first_name": {
-                  "type": "string"
-                },
-                "is_active": {
-                  "type": "boolean"
-                },
-                "last_name": {
-                  "type": "string"
-                },
-                "role": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
+            "default": "json",
+            "description": "Output format",
+            "enum": [
+              "json",
+              "summary",
+              "pdf",
+              "csv"
+            ],
+            "in": "query",
+            "name": "format",
+            "type": "string"
           }
         ],
         "produces": [
@@ -15223,7 +14497,25 @@
         ],
         "responses": {
           "200": {
-            "description": "User updated successfully"
+            "description": "Balance Sheet generated successfully",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
           }
         },
         "security": [
@@ -15231,9 +14523,146 @@
             "BearerAuth": []
           }
         ],
-        "summary": "Update user",
+        "summary": "Generate SSOT Balance Sheet",
         "tags": [
-          "Users"
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/reports/ssot/balance-sheet/account-details": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get detailed account information for Balance Sheet drilldown analysis",
+        "parameters": [
+          {
+            "description": "As of date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "as_of_date",
+            "type": "string"
+          },
+          {
+            "description": "Filter by account type",
+            "enum": [
+              "ASSET",
+              "LIABILITY",
+              "EQUITY"
+            ],
+            "in": "query",
+            "name": "account_type",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Account details retrieved successfully",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Get SSOT Balance Sheet Account Details",
+        "tags": [
+          "SSOT Reports"
+        ]
+      }
+    },
+    "/reports/ssot/cash-flow": {
+      "get": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Generate a comprehensive Cash Flow statement using Single Source of Truth (SSOT) journal system with operating, investing, and financing activities analysis",
+        "parameters": [
+          {
+            "description": "Start date (YYYY-MM-DD)",
+            "example": "2025-01-01",
+            "in": "query",
+            "name": "start_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "End date (YYYY-MM-DD)",
+            "example": "2025-12-31",
+            "in": "query",
+            "name": "end_date",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "default": "json",
+            "description": "Output format",
+            "enum": [
+              "json",
+              "pdf",
+              "excel",
+              "csv"
+            ],
+            "in": "query",
+            "name": "format",
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash Flow statement generated successfully",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "schema": {
+              "additionalProperties": true,
+              "type": "object"
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "summary": "Generate SSOT Cash Flow Statement",
+        "tags": [
+          "SSOT Reports"
         ]
       }
     }
@@ -15254,35 +14683,5 @@
       "type": "apiKey"
     }
   },
-  "swagger": "2.0",
-  "tags": [
-    {
-      "description": "Chart of accounts management - Manajemen bagan akun (COA)",
-      "name": "Accounts"
-    },
-    {
-      "description": "Product and inventory management - Manajemen produk dan inventori",
-      "name": "Products"
-    },
-    {
-      "description": "Fixed assets and depreciation management - Manajemen aset tetap dan depresiasi",
-      "name": "Assets"
-    },
-    {
-      "description": "Customer, vendor, and employee contact management - Manajemen kontak pelanggan, vendor, dan karyawan",
-      "name": "Contacts"
-    },
-    {
-      "description": "User account and role management - Manajemen pengguna dan peran",
-      "name": "Users"
-    },
-    {
-      "description": "System settings and configuration - Pengaturan sistem dan konfigurasi",
-      "name": "Settings"
-    },
-    {
-      "description": "Invoice types management and numbering - Manajemen tipe invoice dan penomoran",
-      "name": "Invoice Types"
-    }
-  ]
+  "swagger": "2.0"
 }

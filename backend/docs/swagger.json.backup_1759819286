@@ -15279,10 +15279,6 @@
     {
       "description": "System settings and configuration - Pengaturan sistem dan konfigurasi",
       "name": "Settings"
-    },
-    {
-      "description": "Invoice types management and numbering - Manajemen tipe invoice dan penomoran",
-      "name": "Invoice Types"
     }
   ]
 }

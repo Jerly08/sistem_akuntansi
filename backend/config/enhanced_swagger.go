@@ -126,6 +126,9 @@ var publicSwaggerAllowedPrefixes = []string{
 	"/api/v1/assets",
 	"/api/v1/settings",
 	"/api/v1/tax-accounts",
+	"/api/v1/invoice-types",
+	// Include all SSOT Reports endpoints used by the Reports SSOT page
+	"/api/v1/ssot-reports",
 }
 
 // filterSwaggerSpecForPublic prunes the swagger spec to only include allowed paths according to the whitelist

@@ -2179,7 +2179,7 @@
           "type": "string"
         },
         "status": {
-          "description": "Status \u0026 Control Fields",
+          "description": "Status & Control Fields",
           "type": "string"
         },
         "total_credit": {
@@ -9808,393 +9808,6 @@
         ]
       }
     },
-    "/api/v1/invoice-types": {
-      "get": {
-        "description": "Get all invoice types, with optional active_only query to filter only active types",
-        "parameters": [
-          {
-            "description": "Filter only active types",
-            "in": "query",
-            "name": "active_only",
-            "required": false,
-            "type": "boolean"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List invoice types",
-        "tags": [
-          "Invoice Types"
-        ]
-      },
-      "post": {
-        "description": "Create a new invoice type",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "request",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.InvoiceTypeCreateRequest"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "401": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Create invoice type",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/active": {
-      "get": {
-        "description": "Get only active invoice types (for dropdowns)",
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "List active invoice types",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/preview-number": {
-      "post": {
-        "description": "Preview what the next invoice number would be for a given type and date",
-        "parameters": [
-          {
-            "in": "body",
-            "name": "request",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.InvoiceNumberRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Preview next invoice number",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}": {
-      "delete": {
-        "description": "Delete an invoice type (only if not used)",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Delete invoice type",
-        "tags": [
-          "Invoice Types"
-        ]
-      },
-      "get": {
-        "description": "Get a single invoice type by ID",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "404": {
-            "description": "Not Found"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get invoice type",
-        "tags": [
-          "Invoice Types"
-        ]
-      },
-      "put": {
-        "description": "Update an existing invoice type",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "request",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/models.InvoiceTypeUpdateRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Update invoice type",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}/counter-history": {
-      "get": {
-        "description": "Get counter history for a specific invoice type",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Get counter history",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}/preview": {
-      "get": {
-        "description": "Preview the next invoice number using path param and optional date query (YYYY-MM-DD)",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "query",
-            "name": "date",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Preview next invoice number by ID",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}/reset-counter": {
-      "post": {
-        "description": "Reset counter for a specific invoice type and year",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "in": "body",
-            "name": "request",
-            "required": true,
-            "schema": {
-              "properties": {
-                "counter": {
-                  "example": 150,
-                  "type": "integer"
-                },
-                "year": {
-                  "example": 2025,
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "year",
-                "counter"
-              ],
-              "type": "object"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Reset invoice counter",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
-    "/api/v1/invoice-types/{id}/toggle": {
-      "post": {
-        "description": "Toggle the active status of an invoice type",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "type": "integer"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Bad Request"
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        },
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "summary": "Toggle active status",
-        "tags": [
-          "Invoice Types"
-        ]
-      }
-    },
     "/api/v1/journal-drilldown": {
       "post": {
         "consumes": [
@@ -13070,7 +12683,7 @@
         "consumes": [
           "application/json"
         ],
-        "description": "Generate P\u0026L using materialized view for optimal performance",
+        "description": "Generate P&L using materialized view for optimal performance",
         "parameters": [
           {
             "description": "Start date (YYYY-MM-DD)",
@@ -13098,7 +12711,7 @@
             }
           }
         },
-        "summary": "Generate Optimized Profit \u0026 Loss",
+        "summary": "Generate Optimized Profit & Loss",
         "tags": [
           "Optimized Reports"
         ]
@@ -13163,7 +12776,7 @@
         "consumes": [
           "application/json"
         ],
-        "description": "Generate a comprehensive Profit \u0026 Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
+        "description": "Generate a comprehensive Profit & Loss statement using Single Source of Truth (SSOT) journal system with real-time data integration",
         "parameters": [
           {
             "description": "Start date (YYYY-MM-DD)",
@@ -13200,7 +12813,7 @@
         ],
         "responses": {
           "200": {
-            "description": "P\u0026L report generated successfully",
+            "description": "P&L report generated successfully",
             "schema": {
               "additionalProperties": true,
               "type": "object"
@@ -13226,7 +12839,7 @@
             "BearerAuth": []
           }
         ],
-        "summary": "Generate SSOT Profit \u0026 Loss Report",
+        "summary": "Generate SSOT Profit & Loss Report",
         "tags": [
           "SSOT Reports"
         ]
@@ -14154,7 +13767,7 @@
     },
     "/api/v1/ssot-reports/integrated": {
       "get": {
-        "description": "Generate all financial reports (P\u0026L, Balance Sheet, Cash Flow, etc.) integrated with SSOT journal system",
+        "description": "Generate all financial reports (P&L, Balance Sheet, Cash Flow, etc.) integrated with SSOT journal system",
         "parameters": [
           {
             "description": "Start date (YYYY-MM-DD)",
@@ -15279,10 +14892,6 @@
     {
       "description": "System settings and configuration - Pengaturan sistem dan konfigurasi",
       "name": "Settings"
-    },
-    {
-      "description": "Invoice types management and numbering - Manajemen tipe invoice dan penomoran",
-      "name": "Invoice Types"
     }
   ]
 }

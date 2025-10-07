@@ -654,6 +654,9 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				invoiceTypes.POST("/preview-number", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.PreviewInvoiceNumber)
 				invoiceTypes.GET("/:id/preview", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.PreviewInvoiceNumberByID)
 				invoiceTypes.GET("/:id/counter-history", middleware.RoleRequired("admin", "finance", "director"), invoiceTypeController.GetCounterHistory)
+				
+				// Counter management (admin-only for safety)
+				invoiceTypes.POST("/:id/reset-counter", middleware.RoleRequired("admin"), invoiceTypeController.ResetCounterForYear)
 			}
 			
 			// 📄 Setup Invoice routes
