@@ -573,12 +573,161 @@ const ReportsPage: React.FC = () => {
   // Enhanced export handlers for Balance Sheet
   const handleEnhancedCSVExport = async (balanceSheetData: SSOTBalanceSheetData) => {
     try {
-      const { exportAndDownloadCSV } = await import('../../src/utils/balanceSheetExportClient');
-      exportAndDownloadCSV(balanceSheetData, {
-        includeAccountDetails: true,
-        companyName: balanceSheetData.company?.name || 'PT. Sistem Akuntansi',
-        filename: `balance_sheet_${ssotAsOfDate}.csv`
-      });
+      // Create simple CSV content directly from the balance sheet data
+      const csvLines: string[] = [];
+      
+      // Helper function to escape CSV values
+      const escapeCSV = (value: string | number | null | undefined): string => {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      };
+      
+      // Helper function to format currency
+      const formatCurrency = (amount: number | null | undefined): string => {
+        if (amount === null || amount === undefined || isNaN(Number(amount))) {
+          return '0';
+        }
+        return Number(amount).toLocaleString('id-ID');
+      };
+      
+      // Header
+      csvLines.push(escapeCSV(balanceSheetData.company?.name || 'PT. Sistem Akuntansi'));
+      csvLines.push('BALANCE SHEET');
+      csvLines.push(`As of: ${balanceSheetData.as_of_date || new Date().toISOString().split('T')[0]}`);
+      csvLines.push(`Generated on: ${new Date().toLocaleString('id-ID')}`);
+      csvLines.push(''); // Empty line
+      
+      // Summary
+      csvLines.push('FINANCIAL SUMMARY');
+      csvLines.push('Category,Amount');
+      csvLines.push(`Total Assets,${formatCurrency(balanceSheetData.assets?.total_assets || balanceSheetData.total_assets || 0)}`);
+      csvLines.push(`Total Liabilities,${formatCurrency(balanceSheetData.liabilities?.total_liabilities || balanceSheetData.total_liabilities || 0)}`);
+      csvLines.push(`Total Equity,${formatCurrency(balanceSheetData.equity?.total_equity || balanceSheetData.total_equity || 0)}`);
+      csvLines.push(`Total Liabilities + Equity,${formatCurrency(balanceSheetData.total_liabilities_and_equity || 0)}`);
+      csvLines.push(`Balanced,${balanceSheetData.is_balanced ? 'Yes' : 'No'}`);
+      if (!balanceSheetData.is_balanced && balanceSheetData.balance_difference) {
+        csvLines.push(`Balance Difference,${formatCurrency(balanceSheetData.balance_difference)}`);
+      }
+      csvLines.push(''); // Empty line
+      
+      // Detailed breakdown
+      csvLines.push('DETAILED BREAKDOWN');
+      csvLines.push('Account Code,Account Name,Category,Amount');
+      
+      // Assets
+      csvLines.push('ASSETS,,,');
+      
+      // Current Assets
+      if (balanceSheetData.assets?.current_assets?.items && balanceSheetData.assets.current_assets.items.length > 0) {
+        csvLines.push('Current Assets,,,');
+        balanceSheetData.assets.current_assets.items.forEach(item => {
+          csvLines.push([
+            escapeCSV(item.account_code || ''),
+            escapeCSV(item.account_name || ''),
+            'Current Asset',
+            formatCurrency(item.amount || 0)
+          ].join(','));
+        });
+        csvLines.push(`Subtotal Current Assets,,,${formatCurrency(balanceSheetData.assets.current_assets.total_current_assets || 0)}`);
+        csvLines.push('');
+      }
+      
+      // Non-Current Assets
+      if (balanceSheetData.assets?.non_current_assets?.items && balanceSheetData.assets.non_current_assets.items.length > 0) {
+        csvLines.push('Non-Current Assets,,,');
+        balanceSheetData.assets.non_current_assets.items.forEach(item => {
+          csvLines.push([
+            escapeCSV(item.account_code || ''),
+            escapeCSV(item.account_name || ''),
+            'Non-Current Asset',
+            formatCurrency(item.amount || 0)
+          ].join(','));
+        });
+        csvLines.push(`Subtotal Non-Current Assets,,,${formatCurrency(balanceSheetData.assets.non_current_assets.total_non_current_assets || 0)}`);
+        csvLines.push('');
+      }
+      
+      csvLines.push(`TOTAL ASSETS,,,${formatCurrency(balanceSheetData.assets?.total_assets || 0)}`);
+      csvLines.push(''); // Empty line
+      
+      // Liabilities
+      csvLines.push('LIABILITIES,,,');
+      
+      // Current Liabilities
+      if (balanceSheetData.liabilities?.current_liabilities?.items && balanceSheetData.liabilities.current_liabilities.items.length > 0) {
+        csvLines.push('Current Liabilities,,,');
+        balanceSheetData.liabilities.current_liabilities.items.forEach(item => {
+          csvLines.push([
+            escapeCSV(item.account_code || ''),
+            escapeCSV(item.account_name || ''),
+            'Current Liability',
+            formatCurrency(item.amount || 0)
+          ].join(','));
+        });
+        csvLines.push(`Subtotal Current Liabilities,,,${formatCurrency(balanceSheetData.liabilities.current_liabilities.total_current_liabilities || 0)}`);
+        csvLines.push('');
+      }
+      
+      // Non-Current Liabilities
+      if (balanceSheetData.liabilities?.non_current_liabilities?.items && balanceSheetData.liabilities.non_current_liabilities.items.length > 0) {
+        csvLines.push('Non-Current Liabilities,,,');
+        balanceSheetData.liabilities.non_current_liabilities.items.forEach(item => {
+          csvLines.push([
+            escapeCSV(item.account_code || ''),
+            escapeCSV(item.account_name || ''),
+            'Non-Current Liability',
+            formatCurrency(item.amount || 0)
+          ].join(','));
+        });
+        csvLines.push(`Subtotal Non-Current Liabilities,,,${formatCurrency(balanceSheetData.liabilities.non_current_liabilities.total_non_current_liabilities || 0)}`);
+        csvLines.push('');
+      }
+      
+      csvLines.push(`TOTAL LIABILITIES,,,${formatCurrency(balanceSheetData.liabilities?.total_liabilities || 0)}`);
+      csvLines.push(''); // Empty line
+      
+      // Equity
+      if (balanceSheetData.equity?.items && balanceSheetData.equity.items.length > 0) {
+        csvLines.push('EQUITY,,,');
+        balanceSheetData.equity.items.forEach(item => {
+          csvLines.push([
+            escapeCSV(item.account_code || ''),
+            escapeCSV(item.account_name || ''),
+            'Equity',
+            formatCurrency(item.amount || 0)
+          ].join(','));
+        });
+        csvLines.push('');
+      }
+      
+      csvLines.push(`TOTAL EQUITY,,,${formatCurrency(balanceSheetData.equity?.total_equity || 0)}`);
+      csvLines.push(''); // Empty line
+      csvLines.push(`TOTAL LIABILITIES + EQUITY,,,${formatCurrency(balanceSheetData.total_liabilities_and_equity || 0)}`);
+      
+      // Footer
+      csvLines.push('');
+      csvLines.push('Generated by Sistem Akuntansi');
+      csvLines.push(`Report Date: ${new Date().toLocaleString('id-ID')}`);
+      csvLines.push(`Data Source: ${balanceSheetData.enhanced ? 'SSOT Enhanced' : 'SSOT Standard'}`);
+      
+      const csvContent = csvLines.join('\n');
+      
+      // Create and trigger download in the browser
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `balance_sheet_${ssotAsOfDate}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
       
       toast({
         title: 'CSV Export Successful',
@@ -600,12 +749,21 @@ const ReportsPage: React.FC = () => {
 
   const handleEnhancedPDFExport = async (balanceSheetData: SSOTBalanceSheetData) => {
     try {
-      const { exportAndDownloadPDF } = await import('../../src/utils/balanceSheetExportClient');
-      exportAndDownloadPDF(balanceSheetData, {
-        companyName: balanceSheetData.company?.name || 'PT. Sistem Akuntansi',
-        includeAccountDetails: true,
-        filename: `balance_sheet_${ssotAsOfDate}.pdf`
+      // Use the new PDF generation method from the service
+      const { ssotBalanceSheetReportService } = await import('../../src/services/ssotBalanceSheetReportService');
+      const pdfBlob = await ssotBalanceSheetReportService.generateSSOTBalanceSheetPDF({
+        as_of_date: ssotAsOfDate
       });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `SSOT_BalanceSheet_${ssotAsOfDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
       toast({
         title: 'PDF Export Successful',

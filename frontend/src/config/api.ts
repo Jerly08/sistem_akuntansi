@@ -31,86 +31,46 @@ export const API_ENDPOINTS = {
   },
   
   // Products (with /api/v1 prefix)
-  PRODUCTS: '/api/v1/products',
-  CATEGORIES: '/api/v1/categories',
+  PRODUCTS_BY_ID: (id: number) => `/api/v1/products/${id}`,
+  PRODUCTS_ADJUST_STOCK: '/api/v1/products/adjust-stock',
+  PRODUCTS_OPNAME: '/api/v1/products/opname',
+  PRODUCTS_UPLOAD_IMAGE: '/api/v1/products/upload-image',
   
-  // Notifications (with /api/v1 prefix)
-  NOTIFICATIONS: '/api/v1/notifications',
-  NOTIFICATIONS_UNREAD_COUNT: '/api/v1/notifications/unread-count',
-  NOTIFICATIONS_MARK_READ: (id: number) => `/api/v1/notifications/${id}/read`,
-  NOTIFICATIONS_APPROVALS: '/api/v1/notifications/approvals',
-  NOTIFICATIONS_BY_TYPE: (type: string) => `/api/v1/notifications/type/${type}`,
+  // Categories (with /api/v1 prefix)
+  CATEGORIES_TREE: '/api/v1/categories/tree',
+  CATEGORIES_BY_ID: (id: number) => `/api/v1/categories/${id}`,
+  CATEGORIES_PRODUCTS: (id: number) => `/api/v1/categories/${id}/products`,
   
-  // Dashboard (with /api/v1 prefix - corrected based on actual backend routes)
-  DASHBOARD_ANALYTICS: '/api/v1/dashboard/analytics',
-  DASHBOARD_FINANCE: '/api/v1/dashboard/finance',
-  DASHBOARD_STOCK_ALERTS: '/api/v1/dashboard/stock-alerts',
+  // Product Units (with /api/v1 prefix)
+  PRODUCT_UNITS: '/api/v1/product-units',
+  PRODUCT_UNITS_BY_ID: (id: number) => `/api/v1/product-units/${id}`,
   
-  // Employee Dashboard endpoints
-  DASHBOARD_EMPLOYEE: '/api/v1/dashboard/employee',
-  DASHBOARD_EMPLOYEE_WORKFLOWS: '/api/v1/dashboard/employee/workflows',
-  DASHBOARD_EMPLOYEE_PURCHASE_REQUESTS: '/api/v1/dashboard/employee/purchase-requests',
-  DASHBOARD_EMPLOYEE_APPROVAL_NOTIFICATIONS: '/api/v1/dashboard/employee/approval-notifications',
-  DASHBOARD_EMPLOYEE_PURCHASE_APPROVAL_STATUS: '/api/v1/dashboard/employee/purchase-approval-status',
-  DASHBOARD_EMPLOYEE_NOTIFICATIONS_SUMMARY: '/api/v1/dashboard/employee/notifications-summary',
-  DASHBOARD_EMPLOYEE_MARK_NOTIFICATION_READ: (id: number) => `/api/v1/dashboard/employee/notifications/${id}/read`,
+  // Warehouse Locations (with /api/v1 prefix)
+  WAREHOUSE_LOCATIONS: '/api/v1/warehouse-locations',
+  WAREHOUSE_LOCATIONS_BY_ID: (id: number) => `/api/v1/warehouse-locations/${id}`,
   
-  // Permissions (with /api/v1 prefix)
-  PERMISSIONS_ME: '/api/v1/permissions/me',
+  // Inventory (with /api/v1 prefix)
+  INVENTORY_MOVEMENTS: '/api/v1/inventory/movements',
+  INVENTORY_LOW_STOCK: '/api/v1/inventory/low-stock',
+  INVENTORY_VALUATION: '/api/v1/inventory/valuation',
+  INVENTORY_REPORT: '/api/v1/inventory/report',
+  INVENTORY_BULK_PRICE_UPDATE: '/api/v1/inventory/bulk-price-update',
   
-  // Purchases (with /api/v1 prefix)
-  PURCHASES: '/api/v1/purchases',
-  PURCHASES_BY_ID: (id: number) => `/api/v1/purchases/${id}`,
-  PURCHASES_APPROVAL_STATS: '/api/v1/purchases/approval-stats',
-  PURCHASES_SUBMIT_APPROVAL: (id: number) => `/api/v1/purchases/${id}/submit-approval`,
-  PURCHASES_APPROVE: (id: number) => `/api/v1/purchases/${id}/approve`,
-  PURCHASES_REJECT: (id: number) => `/api/v1/purchases/${id}/reject`,
-  PURCHASES_APPROVAL_HISTORY: (id: number) => `/api/v1/purchases/${id}/approval-history`,
-  PURCHASES_PENDING_APPROVAL: '/api/v1/purchases/pending-approval',
-  PURCHASES_DOCUMENTS: (id: number) => `/api/v1/purchases/${id}/documents`,
-  PURCHASES_DELETE_DOCUMENT: (documentId: number) => `/api/v1/purchases/documents/${documentId}`,
-  PURCHASES_RECEIPTS: '/api/v1/purchases/receipts',
-  PURCHASES_RECEIPTS_BY_ID: (id: number) => `/api/v1/purchases/${id}/receipts`,
-  PURCHASES_RECEIPT_PDF: (receiptId: number) => `/api/v1/purchases/receipts/${receiptId}/pdf`,
-  PURCHASES_ALL_RECEIPTS_PDF: (id: number) => `/api/v1/purchases/${id}/receipts/pdf`,
-  PURCHASES_SUMMARY: '/api/v1/purchases/summary',
-  PURCHASES_PENDING_APPROVALS: '/api/v1/purchases/pending-approvals',
-  PURCHASES_DASHBOARD: '/api/v1/purchases/dashboard',
-  PURCHASES_VENDOR_SUMMARY: (vendorId: number) => `/api/v1/purchases/vendor/${vendorId}/summary`,
-  PURCHASES_PAYMENTS: (id: number) => `/api/v1/purchases/${id}/payments`,
-  PURCHASES_FOR_PAYMENT: (id: number) => `/api/v1/purchases/${id}/for-payment`,
-  PURCHASES_INTEGRATED_PAYMENT: (id: number) => `/api/v1/purchases/${id}/integrated-payment`,
-  PURCHASES_MATCHING: (id: number) => `/api/v1/purchases/${id}/matching`,
-  PURCHASES_VALIDATE_MATCHING: (id: number) => `/api/v1/purchases/${id}/validate-matching`,
-  PURCHASES_JOURNAL_ENTRIES: (id: number) => `/api/v1/purchases/${id}/journal-entries`,
-  PURCHASES_EXPORT_PDF: '/api/v1/purchases/export/pdf',
-  PURCHASES_EXPORT_CSV: '/api/v1/purchases/export/csv',
-  
-  // Assets (with /api/v1 prefix) - with nested structure
-  ASSETS: {
-    LIST: '/api/v1/assets',
-    CREATE: '/api/v1/assets',
-    GET_BY_ID: (id: number) => `/api/v1/assets/${id}`,
-    UPDATE: (id: number) => `/api/v1/assets/${id}`,
-    DELETE: (id: number) => `/api/v1/assets/${id}`,
-    SUMMARY: '/api/v1/assets/summary',
-    DEPRECIATION_REPORT: '/api/v1/assets/depreciation-report',
-    DEPRECIATION_SCHEDULE: (id: number) => `/api/v1/assets/${id}/depreciation-schedule`,
-    CALCULATE_DEPRECIATION: (id: number) => `/api/v1/assets/${id}/calculate-depreciation`,
-    UPLOAD_IMAGE: '/api/v1/assets/upload-image',
-    CATEGORIES: {
-      LIST: '/api/v1/assets/categories',
-      CREATE: '/api/v1/assets/categories',
-    }
+  // Users (with /api/v1 prefix)
+  USERS: {
+    LIST: '/api/v1/users',
+    CREATE: '/api/v1/users',
+    GET_BY_ID: (id: number) => `/api/v1/users/${id}`,
+    UPDATE: (id: number) => `/api/v1/users/${id}`,
+    DELETE: (id: number) => `/api/v1/users/${id}`,
   },
-  // Legacy flat endpoints for backward compatibility
-  ASSETS_BY_ID: (id: number) => `/api/v1/assets/${id}`,
-  ASSETS_UPLOAD_IMAGE: '/api/v1/assets/upload-image',
-  ASSETS_CATEGORIES: '/api/v1/assets/categories',
-  ASSETS_SUMMARY: '/api/v1/assets/summary',
-  ASSETS_DEPRECIATION_REPORT: '/api/v1/assets/depreciation-report',
-  ASSETS_DEPRECIATION_SCHEDULE: (id: number) => `/api/v1/assets/${id}/depreciation-schedule`,
-  ASSETS_CALCULATE_DEPRECIATION: (id: number) => `/api/v1/assets/${id}/calculate-depreciation`,
+  
+  // Permissions (with /api/v1 prefix)  
+  PERMISSIONS_ME: '/api/v1/permissions/me',
+  PERMISSIONS_USERS: '/api/v1/permissions/users',
+  PERMISSIONS_USER_BY_ID: (userId: number) => `/api/v1/permissions/users/${userId}`,
+  PERMISSIONS_USER_RESET: (userId: number) => `/api/v1/permissions/users/${userId}/reset`,
+  PERMISSIONS_CHECK: '/api/v1/permissions/check',
   
   // Approval Workflows (with /api/v1 prefix)
   APPROVAL_WORKFLOWS: '/api/v1/approval-workflows',
@@ -186,50 +146,6 @@ export const API_ENDPOINTS = {
   ACCOUNTS_CATALOG: '/api/v1/accounts/catalog', // Public
   ACCOUNTS_CREDIT: '/api/v1/accounts/credit', // Public
   
-  // Products (with /api/v1 prefix)
-  PRODUCTS: '/api/v1/products',
-  PRODUCTS_BY_ID: (id: number) => `/api/v1/products/${id}`,
-  PRODUCTS_ADJUST_STOCK: '/api/v1/products/adjust-stock',
-  PRODUCTS_OPNAME: '/api/v1/products/opname',
-  PRODUCTS_UPLOAD_IMAGE: '/api/v1/products/upload-image',
-  
-  // Categories (with /api/v1 prefix)
-  CATEGORIES: '/api/v1/categories',
-  CATEGORIES_TREE: '/api/v1/categories/tree',
-  CATEGORIES_BY_ID: (id: number) => `/api/v1/categories/${id}`,
-  CATEGORIES_PRODUCTS: (id: number) => `/api/v1/categories/${id}/products`,
-  
-  // Product Units (with /api/v1 prefix)
-  PRODUCT_UNITS: '/api/v1/product-units',
-  PRODUCT_UNITS_BY_ID: (id: number) => `/api/v1/product-units/${id}`,
-  
-  // Warehouse Locations (with /api/v1 prefix)
-  WAREHOUSE_LOCATIONS: '/api/v1/warehouse-locations',
-  WAREHOUSE_LOCATIONS_BY_ID: (id: number) => `/api/v1/warehouse-locations/${id}`,
-  
-  // Inventory (with /api/v1 prefix)
-  INVENTORY_MOVEMENTS: '/api/v1/inventory/movements',
-  INVENTORY_LOW_STOCK: '/api/v1/inventory/low-stock',
-  INVENTORY_VALUATION: '/api/v1/inventory/valuation',
-  INVENTORY_REPORT: '/api/v1/inventory/report',
-  INVENTORY_BULK_PRICE_UPDATE: '/api/v1/inventory/bulk-price-update',
-  
-  // Users (with /api/v1 prefix)
-  USERS: {
-    LIST: '/api/v1/users',
-    CREATE: '/api/v1/users',
-    GET_BY_ID: (id: number) => `/api/v1/users/${id}`,
-    UPDATE: (id: number) => `/api/v1/users/${id}`,
-    DELETE: (id: number) => `/api/v1/users/${id}`,
-  },
-  
-  // Permissions (with /api/v1 prefix)  
-  PERMISSIONS_USERS: '/api/v1/permissions/users',
-  PERMISSIONS_USER_BY_ID: (userId: number) => `/api/v1/permissions/users/${userId}`,
-  PERMISSIONS_USER_RESET: (userId: number) => `/api/v1/permissions/users/${userId}/reset`,
-  PERMISSIONS_ME: '/api/v1/permissions/me',
-  PERMISSIONS_CHECK: '/api/v1/permissions/check',
-  
   // CASH_BANK endpoints aligned with backend routes under /api/v1
   CASH_BANK: {
     // Accounts CRUD
@@ -283,11 +199,12 @@ export const API_ENDPOINTS = {
   ADMIN_FIX_CASHBANK_GL: '/api/v1/admin/fix-cashbank-gl-links',
   
   // Balance Monitoring (with /api/v1 prefix)
-  MONITORING_BALANCE_HEALTH: '/api/v1/monitoring/balance-health',
-  MONITORING_BALANCE_SYNC: '/api/v1/monitoring/balance-sync',
-  MONITORING_DISCREPANCIES: '/api/v1/monitoring/discrepancies',
-  MONITORING_FIX_DISCREPANCIES: '/api/v1/monitoring/fix-discrepancies',
-  MONITORING_SYNC_STATUS: '/api/v1/monitoring/sync-status',
+  // These are duplicates - commenting out since they're already defined above
+  // MONITORING_BALANCE_HEALTH: '/api/v1/monitoring/balance-health',
+  // MONITORING_BALANCE_SYNC: '/api/v1/monitoring/balance-sync',
+  // MONITORING_DISCREPANCIES: '/api/v1/monitoring/discrepancies',
+  // MONITORING_FIX_DISCREPANCIES: '/api/v1/monitoring/fix-discrepancies',
+  // MONITORING_SYNC_STATUS: '/api/v1/monitoring/sync-status',
   
   // API Usage Monitoring (with /api/v1 prefix)
   MONITORING_API_ANALYTICS: '/api/v1/monitoring/api-usage/analytics',
@@ -420,32 +337,38 @@ export const API_ENDPOINTS = {
     JOURNAL_ANALYSIS: '/api/v1/ssot-reports/journal-analysis',
     VENDOR_ANALYSIS: '/api/v1/ssot-reports/vendor-analysis',
 
-    // Balance Sheet
-    BALANCE_SHEET: '/api/v1/ssot-reports/balance-sheet',
-    BALANCE_SHEET_DETAILS: '/api/v1/ssot-reports/balance-sheet/account-details',
-    BALANCE_SHEET_VALIDATE: '/api/v1/ssot-reports/balance-sheet/validate',
-    BALANCE_SHEET_COMPARISON: '/api/v1/ssot-reports/balance-sheet/comparison',
+    // Balance Sheet - Using the correct endpoint that matches backend routes
+    BALANCE_SHEET: '/api/v1/reports/ssot/balance-sheet',
+    BALANCE_SHEET_DETAILS: '/api/v1/reports/ssot/balance-sheet/account-details',
+    BALANCE_SHEET_VALIDATE: '/api/v1/reports/ssot/balance-sheet/validate',
+    BALANCE_SHEET_COMPARISON: '/api/v1/reports/ssot/balance-sheet/comparison',
 
-    // Cash Flow
-    CASH_FLOW: '/api/v1/ssot-reports/cash-flow',
-    CASH_FLOW_SUMMARY: '/api/v1/ssot-reports/cash-flow/summary',
-    CASH_FLOW_VALIDATE: '/api/v1/ssot-reports/cash-flow/validate',
+    // Cash Flow - Using the correct endpoint that matches backend routes
+    CASH_FLOW: '/api/v1/reports/ssot/cash-flow',
+    CASH_FLOW_SUMMARY: '/api/v1/reports/ssot/cash-flow/summary',
+    CASH_FLOW_VALIDATE: '/api/v1/reports/ssot/cash-flow/validate',
 
     // Account balances for COA sync
     ACCOUNT_BALANCES: '/api/v1/ssot-reports/account-balances',
   },
-  
-  // SSOT Balance Sheet & Cash Flow (no /api/v1 prefix based on Swagger)
-  REPORTS_SSOT_PROFIT_LOSS: '/reports/ssot-profit-loss',
-  REPORTS_SSOT_BALANCE_SHEET: '/reports/ssot/balance-sheet',
-  REPORTS_SSOT_BALANCE_SHEET_DETAILS: '/reports/ssot/balance-sheet/account-details',
-  REPORTS_SSOT_CASH_FLOW: '/reports/ssot/cash-flow',
   
   // Journal Drilldown (with /api/v1 prefix - unified)
   JOURNAL_DRILLDOWN: '/api/v1/journal-drilldown',
   JOURNAL_DRILLDOWN_ENTRIES: '/api/v1/journal-drilldown/entries',
   JOURNAL_DRILLDOWN_ENTRY_BY_ID: (id: number) => `/api/v1/journal-drilldown/entries/${id}`,
   JOURNAL_DRILLDOWN_ACCOUNTS: '/api/v1/journal-drilldown/accounts',
+  
+  // 🔔 Notification endpoints
+  NOTIFICATIONS: '/api/v1/notifications',
+  NOTIFICATIONS_APPROVALS: '/api/v1/notifications/approvals',
+  NOTIFICATIONS_BY_TYPE: (type: string) => `/api/v1/notifications/type/${type}`,
+  NOTIFICATIONS_MARK_READ: (id: number) => `/api/v1/notifications/${id}/read`,
+  NOTIFICATIONS_UNREAD_COUNT: '/api/v1/notifications/unread-count',
+  
+  // 📊 Dashboard endpoints
+  DASHBOARD_ANALYTICS: '/api/v1/dashboard/analytics',
+  DASHBOARD_STOCK_ALERTS: '/api/v1/dashboard/stock-alerts',
+  DASHBOARD_STOCK_ALERTS_DISMISS: (id: number) => `/api/v1/dashboard/stock-alerts/${id}/dismiss`,
   
   // Monitoring & Admin (with /api/v1 prefix) 
   MONITORING_STATUS: '/api/v1/monitoring/status',
@@ -469,7 +392,7 @@ export const API_ENDPOINTS = {
   MONITORING_API_USAGE_RESET: '/api/v1/monitoring/api-usage/reset',
   MONITORING_PERFORMANCE_REPORT: '/api/v1/monitoring/performance/report',
   MONITORING_PERFORMANCE_METRICS: '/api/v1/monitoring/performance/metrics',
-  MONITORING_PERFORMANCE_BOTTLENECKS: '/api/v1/monitoring/performance/bottlenecks',
+  MONITORING_PERFORMANCE_BOTTLENEcks: '/api/v1/monitoring/performance/bottlenecks',
   MONITORING_PERFORMANCE_RECOMMENDATIONS: '/api/v1/monitoring/performance/recommendations',
   MONITORING_PERFORMANCE_SYSTEM: '/api/v1/monitoring/performance/system',
   MONITORING_PERFORMANCE_CLEAR: '/api/v1/monitoring/performance/metrics/clear',

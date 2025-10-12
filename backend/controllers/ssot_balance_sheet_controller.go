@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"app-sistem-akuntansi/services"
@@ -44,9 +45,21 @@ func (ctrl *SSOTBalanceSheetController) GenerateSSOTBalanceSheet(c *gin.Context)
 	// Get parameters
 	asOfDate := c.DefaultQuery("as_of_date", time.Now().Format("2006-01-02"))
 	format := c.DefaultQuery("format", "json")
+	
+	// Log request for debugging
+	fmt.Printf("GenerateSSOTBalanceSheet called with asOfDate: %s, format: %s\n", asOfDate, format)
+	fmt.Printf("Request URL: %s\n", c.Request.URL.String())
+	fmt.Printf("Request headers: %v\n", c.Request.Header)
+	
+	// Log additional debugging information
+	fmt.Printf("User-Agent: %s\n", c.GetHeader("User-Agent"))
+	fmt.Printf("Referer: %s\n", c.GetHeader("Referer"))
+	fmt.Printf("Origin: %s\n", c.GetHeader("Origin"))
+	fmt.Printf("Remote IP: %s\n", c.ClientIP())
 
 // Validate date format using system settings (supports DD/MM/YYYY, MM/DD/YYYY, etc.)
 	if _, err := ctrl.parseDateBySettings(asOfDate); err != nil {
+		fmt.Printf("Date validation error: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid as_of_date format",
 			"message": err.Error(),
@@ -58,6 +71,7 @@ func (ctrl *SSOTBalanceSheetController) GenerateSSOTBalanceSheet(c *gin.Context)
 	// Generate Balance Sheet
 	balanceSheetData, err := ctrl.ssotBalanceSheetService.GenerateSSOTBalanceSheet(asOfDate)
 	if err != nil {
+		fmt.Printf("Balance sheet generation error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to generate SSOT Balance Sheet",
 			"message": err.Error(),
@@ -68,12 +82,14 @@ func (ctrl *SSOTBalanceSheetController) GenerateSSOTBalanceSheet(c *gin.Context)
 	// Handle different output formats
 	switch format {
 	case "json":
+		fmt.Println("Returning JSON format")
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "success",
 			"message": "SSOT Balance Sheet generated successfully",
 			"data":    balanceSheetData,
 		})
 	case "summary":
+		fmt.Println("Returning summary format")
 		// Return a simplified summary view
 		summary := createBalanceSheetSummary(balanceSheetData)
 		c.JSON(http.StatusOK, gin.H{
@@ -82,8 +98,10 @@ func (ctrl *SSOTBalanceSheetController) GenerateSSOTBalanceSheet(c *gin.Context)
 			"data":    summary,
 		})
 	case "pdf":
-pdfBytes, err := ctrl.pdfService.GenerateBalanceSheetPDF(balanceSheetData, asOfDate)
+		fmt.Println("Generating PDF format")
+		pdfBytes, err := ctrl.pdfService.GenerateBalanceSheetPDF(balanceSheetData, asOfDate)
 		if err != nil {
+			fmt.Printf("PDF generation error: %v\n", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  "error",
 				"message": "Failed to generate Balance Sheet PDF",
@@ -97,19 +115,30 @@ pdfBytes, err := ctrl.pdfService.GenerateBalanceSheetPDF(balanceSheetData, asOfD
 		c.Header("Content-Length", strconv.Itoa(len(pdfBytes)))
 		c.Data(http.StatusOK, "application/pdf", pdfBytes)
 	case "csv":
-		// Follow SSOT P&L style: return JSON with export metadata
-		response := gin.H{
-			"as_of_date":     asOfDate,
-			"data":           balanceSheetData,
-			"export_format":  "csv",
-			"export_ready":   true,
-			"csv_headers":    []string{"Section", "Account Code", "Account Name", "Balance"},
-			"data_source":    "SSOT Journal System",
-			"generated_at":   time.Now().Format(time.RFC3339),
-			"report_title":   "SSOT Balance Sheet",
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "success", "data": response, "format": "csv"})
+		fmt.Println("Generating CSV format")
+		// Generate actual CSV content instead of JSON metadata
+		// Create CSV content from balance sheet data
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Printf("CSV generation panic: %v\n", r)
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"status":  "error",
+					"message": "Failed to generate Balance Sheet CSV due to internal error",
+					"error":   fmt.Sprintf("Panic occurred: %v", r),
+				})
+			}
+		}()
+		
+		csvContent := ctrl.generateCSVContent(balanceSheetData, asOfDate)
+		fmt.Printf("Generated CSV content length: %d\n", len(csvContent))
+		
+		// Set appropriate headers for CSV download
+		c.Header("Content-Type", "text/csv; charset=utf-8")
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=SSOT_BalanceSheet_%s.csv", asOfDate))
+		c.Data(http.StatusOK, "text/csv", []byte(csvContent))
+
 	default:
+		fmt.Printf("Invalid format requested: %s\n", format)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid format",
 			"message": "Supported formats: json, summary, pdf, csv",
@@ -374,4 +403,145 @@ func calculatePercentChange(from, to float64) float64 {
 		return 100 // Arbitrary large percentage for new items
 	}
 	return ((to - from) / from) * 100
+}
+
+// generateCSVContent creates CSV content from balance sheet data
+func (ctrl *SSOTBalanceSheetController) generateCSVContent(data *services.SSOTBalanceSheetData, asOfDate string) string {
+	var csvLines []string
+	
+	// Helper function to escape CSV values
+	escapeCSV := func(value string) string {
+		if strings.Contains(value, ",") || strings.Contains(value, "\"") || strings.Contains(value, "\n") {
+			return "\"" + strings.ReplaceAll(value, "\"", "\"\"") + "\""
+		}
+		return value
+	}
+	
+	// Helper function to format currency
+	formatCurrency := func(amount float64) string {
+		return fmt.Sprintf("%.0f", amount)
+	}
+	
+	// Header section
+	csvLines = append(csvLines, escapeCSV(data.Company.Name))
+	csvLines = append(csvLines, "BALANCE SHEET")
+	csvLines = append(csvLines, fmt.Sprintf("As of: %s", asOfDate))
+	csvLines = append(csvLines, fmt.Sprintf("Generated on: %s", time.Now().Format("2006-01-02 15:04:05")))
+	csvLines = append(csvLines, "") // Empty line
+	
+	// Summary section
+	csvLines = append(csvLines, "FINANCIAL SUMMARY")
+	csvLines = append(csvLines, "Category,Amount")
+	csvLines = append(csvLines, fmt.Sprintf("Total Assets,%s", formatCurrency(data.Assets.TotalAssets)))
+	csvLines = append(csvLines, fmt.Sprintf("Total Liabilities,%s", formatCurrency(data.Liabilities.TotalLiabilities)))
+	csvLines = append(csvLines, fmt.Sprintf("Total Equity,%s", formatCurrency(data.Equity.TotalEquity)))
+	csvLines = append(csvLines, fmt.Sprintf("Total Liabilities + Equity,%s", formatCurrency(data.TotalLiabilitiesAndEquity)))
+	csvLines = append(csvLines, fmt.Sprintf("Balanced,%s", map[bool]string{true: "Yes", false: "No"}[data.IsBalanced]))
+	if !data.IsBalanced && data.BalanceDifference != 0 {
+		csvLines = append(csvLines, fmt.Sprintf("Balance Difference,%s", formatCurrency(data.BalanceDifference)))
+	}
+	csvLines = append(csvLines, "") // Empty line
+	
+	// Detailed account breakdown
+	csvLines = append(csvLines, "DETAILED BREAKDOWN")
+	csvLines = append(csvLines, "Account Code,Account Name,Category,Amount")
+	
+	// Assets section
+	csvLines = append(csvLines, "ASSETS,,,")
+
+	// Current Assets
+	if len(data.Assets.CurrentAssets.Items) > 0 {
+		csvLines = append(csvLines, "Current Assets,,,")
+
+		for _, item := range data.Assets.CurrentAssets.Items {
+			csvLines = append(csvLines, fmt.Sprintf("%s,%s,Current Asset,%s",
+				escapeCSV(item.AccountCode),
+				escapeCSV(item.AccountName),
+				formatCurrency(item.Amount)))
+		}
+		csvLines = append(csvLines, fmt.Sprintf("Subtotal Current Assets,,,%s", formatCurrency(data.Assets.CurrentAssets.TotalCurrentAssets)))
+		csvLines = append(csvLines, "")
+	}
+
+	// Non-Current Assets
+	if len(data.Assets.NonCurrentAssets.Items) > 0 {
+		csvLines = append(csvLines, "Non-Current Assets,,,")
+
+		for _, item := range data.Assets.NonCurrentAssets.Items {
+			csvLines = append(csvLines, fmt.Sprintf("%s,%s,Non-Current Asset,%s",
+				escapeCSV(item.AccountCode),
+				escapeCSV(item.AccountName),
+				formatCurrency(item.Amount)))
+		}
+		csvLines = append(csvLines, fmt.Sprintf("Subtotal Non-Current Assets,,,%s", formatCurrency(data.Assets.NonCurrentAssets.TotalNonCurrentAssets)))
+		csvLines = append(csvLines, "")
+	}
+
+	csvLines = append(csvLines, fmt.Sprintf("TOTAL ASSETS,,,%s", formatCurrency(data.Assets.TotalAssets)))
+	csvLines = append(csvLines, "") // Empty line
+
+	// Liabilities section
+	csvLines = append(csvLines, "LIABILITIES,,,")
+
+	// Current Liabilities
+	if len(data.Liabilities.CurrentLiabilities.Items) > 0 {
+		csvLines = append(csvLines, "Current Liabilities,,,")
+
+		for _, item := range data.Liabilities.CurrentLiabilities.Items {
+			csvLines = append(csvLines, fmt.Sprintf("%s,%s,Current Liability,%s",
+				escapeCSV(item.AccountCode),
+				escapeCSV(item.AccountName),
+				formatCurrency(item.Amount)))
+		}
+		csvLines = append(csvLines, fmt.Sprintf("Subtotal Current Liabilities,,,%s", formatCurrency(data.Liabilities.CurrentLiabilities.TotalCurrentLiabilities)))
+		csvLines = append(csvLines, "")
+	}
+
+	// Non-Current Liabilities
+	if len(data.Liabilities.NonCurrentLiabilities.Items) > 0 {
+		csvLines = append(csvLines, "Non-Current Liabilities,,,")
+
+		for _, item := range data.Liabilities.NonCurrentLiabilities.Items {
+			csvLines = append(csvLines, fmt.Sprintf("%s,%s,Non-Current Liability,%s",
+				escapeCSV(item.AccountCode),
+				escapeCSV(item.AccountName),
+				formatCurrency(item.Amount)))
+		}
+		csvLines = append(csvLines, fmt.Sprintf("Subtotal Non-Current Liabilities,,,%s", formatCurrency(data.Liabilities.NonCurrentLiabilities.TotalNonCurrentLiabilities)))
+		csvLines = append(csvLines, "")
+	}
+
+	csvLines = append(csvLines, fmt.Sprintf("TOTAL LIABILITIES,,,%s", formatCurrency(data.Liabilities.TotalLiabilities)))
+	csvLines = append(csvLines, "") // Empty line
+
+	// Equity section
+	if len(data.Equity.Items) > 0 {
+		csvLines = append(csvLines, "EQUITY,,,")
+
+		for _, item := range data.Equity.Items {
+			csvLines = append(csvLines, fmt.Sprintf("%s,%s,Equity,%s",
+				escapeCSV(item.AccountCode),
+				escapeCSV(item.AccountName),
+				formatCurrency(item.Amount)))
+		}
+		csvLines = append(csvLines, "")
+	}
+
+	csvLines = append(csvLines, fmt.Sprintf("TOTAL EQUITY,,,%s", formatCurrency(data.Equity.TotalEquity)))
+	csvLines = append(csvLines, "") // Empty line
+	csvLines = append(csvLines, fmt.Sprintf("TOTAL LIABILITIES + EQUITY,,,%s", formatCurrency(data.TotalLiabilitiesAndEquity)))
+
+	// Footer
+	csvLines = append(csvLines, "")
+	csvLines = append(csvLines, "Generated by Sistem Akuntansi")
+	csvLines = append(csvLines, fmt.Sprintf("Report Date: %s", time.Now().Format("2006-01-02 15:04:05")))
+	
+	// Safer way to handle the data source mapping
+	dataSource := "SSOT Standard"
+	if data.Enhanced {
+		dataSource = "SSOT Enhanced"
+	}
+	csvLines = append(csvLines, fmt.Sprintf("Data Source: %s", dataSource))
+
+	return strings.Join(csvLines, "\n")
 }

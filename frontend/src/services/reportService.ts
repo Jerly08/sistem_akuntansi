@@ -43,6 +43,7 @@ class ReportService {
   }
 
   private buildQueryString(params: ReportParameters): string {
+    console.log('buildQueryString called with params:', params);
     const searchParams = new URLSearchParams();
     
     Object.entries(params).forEach(([key, value]) => {
@@ -51,7 +52,9 @@ class ReportService {
       }
     });
 
-    return searchParams.toString();
+    const queryString = searchParams.toString();
+    console.log('buildQueryString result:', queryString);
+    return queryString;
   }
 
   private formatErrorMessage(textResponse: string, status: number): string {
@@ -196,8 +199,10 @@ class ReportService {
 
   // Generate Balance Sheet
   async generateBalanceSheet(params: ReportParameters): Promise<ReportData | Blob> {
+    console.log('generateBalanceSheet called with params:', params);
     const queryString = this.buildQueryString(params);
     const url = `${API_V1_BASE}/reports/balance-sheet${queryString ? '?' + queryString : ''}`;
+    console.log('Making request to:', url);
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
@@ -454,6 +459,9 @@ class ReportService {
 
   // Generic report generator
   async generateReport(reportId: string, params: ReportParameters): Promise<ReportData | Blob> {
+    // Log the request for debugging
+    console.log('generateReport called with reportId:', reportId, 'params:', params);
+    
     // Handle journal entry analysis separately as it uses different endpoint
     if (reportId === 'journal-entry-analysis') {
       return this.generateJournalEntryAnalysis(params);
@@ -497,6 +505,8 @@ class ReportService {
     const url = endpoint.startsWith('/')
       ? `${API_V1_BASE}${endpoint}${queryString ? '?' + queryString : ''}`
       : `${API_V1_BASE}/reports/${endpoint}${queryString ? '?' + queryString : ''}`;
+    
+    console.log('Making request to:', url);
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),

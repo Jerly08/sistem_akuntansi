@@ -113,11 +113,18 @@ func (p *PDFService) getFinanceSignatoryNameWithUser(currentUserID uint) string 
 	
 	// If currentUserID is provided, check if that user is an active finance user
 	if currentUserID > 0 {
-		var currentUser models.User
-		if err := p.db.Where("id = ? AND role = ? AND is_active = ?", currentUserID, "finance", true).First(&currentUser).Error; err == nil {
-			full := strings.TrimSpace(strings.TrimSpace(currentUser.FirstName+" "+currentUser.LastName))
-			if full != "" { return full }
-			if strings.TrimSpace(currentUser.Username) != "" { return currentUser.Username }
+		// First check if the user exists at all to avoid GORM logging "record not found" errors
+		var userExists models.User
+		if err := p.db.Select("id").Where("id = ?", currentUserID).First(&userExists).Error; err != nil {
+			// User doesn't exist, skip to fallback
+		} else {
+			// User exists, now check if they are an active finance user
+			var currentUser models.User
+			if err := p.db.Where("id = ? AND role = ? AND is_active = ?", currentUserID, "finance", true).First(&currentUser).Error; err == nil {
+				full := strings.TrimSpace(strings.TrimSpace(currentUser.FirstName+" "+currentUser.LastName))
+				if full != "" { return full }
+				if strings.TrimSpace(currentUser.Username) != "" { return currentUser.Username }
+			}
 		}
 	}
 	
@@ -2920,11 +2927,6 @@ func (p *PDFService) generateSaleReceiptPDFWithUser(sale *models.Sale, userID ui
 	pdf.SetTextColor(0, 0, 0)
 	receiptTitle := loc("receipt", "RECEIPT")
 	pdf.CellFormat(contentW, 14, receiptTitle, "", 0, "C", false, 0, "")
-	pdf.Ln(2)
-	titleWidth := pdf.GetStringWidth(receiptTitle)
-	cx := lm + (contentW-titleWidth)/2
-	pdf.SetLineWidth(0.3)
-	pdf.Line(cx, pdf.GetY(), cx+titleWidth, pdf.GetY())
 	pdf.Ln(15) // Reduced from 18 to 15 points for tighter spacing below title
 
 	// Field layout sizes
@@ -3008,6 +3010,7 @@ func (p *PDFService) generateSaleReceiptPDFWithUser(sale *models.Sale, userID ui
 	if strings.TrimSpace(financeName) == "" { financeName = "Finance" }
 	lineW := 60.0 // Slightly smaller signature line
 	lineX := rightX
+	// Add signature line above the finance user name
 	pdf.Line(lineX, currentY+25, lineX+lineW, currentY+25)
 	pdf.SetXY(lineX, currentY+27)
 	pdf.SetFont("Times", "", 11)
@@ -4082,16 +4085,47 @@ func (p *PDFService) renderSSOTFinancialSections(pdf *gofpdf.Fpdf, data map[stri
 		return 0
 	}
 
+	// Helper to get nested array values
+	getArray := func(candidates ...[]string) []interface{} {
+		for _, path := range candidates {
+			cur := interface{}(data)
+			okPath := true
+			for _, key := range path {
+				m, ok := cur.(map[string]interface{})
+				if !ok { okPath = false; break }
+				v, exists := m[key]
+				if !exists { okPath = false; break }
+				cur = v
+			}
+			if okPath {
+				if arr, ok := cur.([]interface{}); ok {
+					return arr
+				}
+			}
+		}
+		return nil
+	}
+
 	// REVENUE SECTION
 	revenue := get([]string{"revenue", "total_revenue"}, []string{"TotalRevenue"})
 	if revenue > 0 {
 		p.addSSOTSection(pdf, "REVENUE", revenue, "Revenue from sales and services")
+		
+		// Add revenue account details
+		if revenueItems := getArray([]string{"revenue", "items"}); revenueItems != nil && len(revenueItems) > 0 {
+			p.addAccountDetails(pdf, "Revenue Accounts", revenueItems)
+		}
 	}
 	
 	// COST OF GOODS SOLD SECTION
 	cogs := get([]string{"cost_of_goods_sold", "total_cogs"}, []string{"COGS", "TotalCOGS"})
 	if cogs > 0 {
 		p.addSSOTSection(pdf, "COST OF GOODS SOLD", cogs, "Direct costs of producing goods/services")
+		
+		// Add COGS account details
+		if cogsItems := getArray([]string{"cost_of_goods_sold", "items"}); cogsItems != nil && len(cogsItems) > 0 {
+			p.addAccountDetails(pdf, "COGS Accounts", cogsItems)
+		}
 	}
 	
 	// GROSS PROFIT
@@ -4109,6 +4143,19 @@ func (p *PDFService) renderSSOTFinancialSections(pdf *gofpdf.Fpdf, data map[stri
 	opex := get([]string{"operating_expenses", "total_opex"}, []string{"OperatingExpenses", "TotalOpEx"})
 	if opex > 0 {
 		p.addSSOTSection(pdf, "OPERATING EXPENSES", opex, "Administrative, selling, and general expenses")
+		
+		// Add operating expenses account details
+		if adminItems := getArray([]string{"operating_expenses", "administrative", "items"}); adminItems != nil && len(adminItems) > 0 {
+			p.addAccountDetails(pdf, "Administrative Expenses", adminItems)
+		}
+		
+		if sellItems := getArray([]string{"operating_expenses", "selling_marketing", "items"}); sellItems != nil && len(sellItems) > 0 {
+			p.addAccountDetails(pdf, "Selling & Marketing Expenses", sellItems)
+		}
+		
+		if genItems := getArray([]string{"operating_expenses", "general", "items"}); genItems != nil && len(genItems) > 0 {
+			p.addAccountDetails(pdf, "General Expenses", genItems)
+		}
 	}
 	
 	// OPERATING INCOME
@@ -4129,6 +4176,15 @@ func (p *PDFService) renderSSOTFinancialSections(pdf *gofpdf.Fpdf, data map[stri
 		data["OtherExpenses"] = exp
 	}
 	p.addOtherIncomeExpenses(pdf, data)
+	
+	// Add other income/expense account details
+	if otherIncomeItems := getArray([]string{"other_income_items"}); otherIncomeItems != nil && len(otherIncomeItems) > 0 {
+		p.addAccountDetails(pdf, "Other Income Accounts", otherIncomeItems)
+	}
+	
+	if otherExpenseItems := getArray([]string{"other_expense_items"}); otherExpenseItems != nil && len(otherExpenseItems) > 0 {
+		p.addAccountDetails(pdf, "Other Expense Accounts", otherExpenseItems)
+	}
 	
 	// INCOME BEFORE TAX
 	ibt := get([]string{"income_before_tax"}, []string{"IncomeBeforeTax"})
@@ -4273,6 +4329,19 @@ func (p *PDFService) addOtherIncomeExpenses(pdf *gofpdf.Fpdf, data map[string]in
 			}
 		}
 		pdf.Ln(3)
+		
+		// Add account details for other income and expenses
+		if otherIncomeItems, exists := data["other_income_items"]; exists {
+			if items, ok := otherIncomeItems.([]interface{}); ok && len(items) > 0 {
+				p.addAccountDetails(pdf, "Other Income Accounts", items)
+			}
+		}
+		
+		if otherExpenseItems, exists := data["other_expense_items"]; exists {
+			if items, ok := otherExpenseItems.([]interface{}); ok && len(items) > 0 {
+				p.addAccountDetails(pdf, "Other Expense Accounts", items)
+			}
+		}
 	}
 }
 
@@ -4328,6 +4397,64 @@ func (p *PDFService) addFinancialRatiosSummary(pdf *gofpdf.Fpdf, data map[string
 		pdf.Cell(95, 5, "Net Income Margin: N/A")
 	}
 	pdf.Ln(10)
+}
+
+// addAccountDetails adds a section showing account details
+func (p *PDFService) addAccountDetails(pdf *gofpdf.Fpdf, title string, items []interface{}) {
+	if len(items) == 0 {
+		return
+	}
+	
+	pdf.SetFont("Arial", "B", 10)
+	pdf.SetFillColor(245, 245, 245)
+	pdf.Cell(190, 6, fmt.Sprintf("  %s:", title))
+	pdf.Ln(6)
+	
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetFillColor(255, 255, 255)
+	
+	for _, item := range items {
+		if itemMap, ok := item.(map[string]interface{}); ok {
+			accountCode := ""
+			accountName := "Unknown Account"
+			amount := 0.0
+			
+			// Try different key formats (snake_case and PascalCase)
+			if code, exists := itemMap["account_code"]; exists {
+				if codeStr, ok := code.(string); ok {
+					accountCode = codeStr
+				}
+			} else if code, exists := itemMap["AccountCode"]; exists {
+				if codeStr, ok := code.(string); ok {
+					accountCode = codeStr
+				}
+			}
+			
+			if name, exists := itemMap["account_name"]; exists {
+				if nameStr, ok := name.(string); ok {
+					accountName = nameStr
+				}
+			} else if name, exists := itemMap["AccountName"]; exists {
+				if nameStr, ok := name.(string); ok {
+					accountName = nameStr
+				}
+			}
+			
+			if amt, exists := itemMap["amount"]; exists {
+				amount = getNumFrom(amt)
+			} else if amt, exists := itemMap["Amount"]; exists {
+				amount = getNumFrom(amt)
+			}
+			
+			// Display account details
+			pdf.CellFormat(30, 5, "    "+accountCode, "0", 0, "L", false, 0, "")
+			pdf.CellFormat(110, 5, accountName, "0", 0, "L", false, 0, "")
+			pdf.CellFormat(50, 5, p.formatRupiah(amount), "0", 0, "R", false, 0, "")
+			pdf.Ln(5)
+		}
+	}
+	
+	pdf.Ln(2)
 }
 
 // GenerateSSOTProfitLossPDF generates a PDF for SSOT-based Profit & Loss report

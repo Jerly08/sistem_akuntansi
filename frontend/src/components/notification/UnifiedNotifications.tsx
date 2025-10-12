@@ -206,7 +206,7 @@ const UnifiedNotifications: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.post(
-        `${API_BASE_URL}${API_ENDPOINTS.DASHBOARD_STOCK_ALERTS}/${alertId}/dismiss`,
+        `${API_BASE_URL}${API_ENDPOINTS.DASHBOARD_STOCK_ALERTS_DISMISS(alertId)}`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );

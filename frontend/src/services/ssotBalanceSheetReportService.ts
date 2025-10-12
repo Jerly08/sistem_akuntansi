@@ -123,15 +123,66 @@ export interface SSOTBalanceSheetComparison {
   balance_sheet_to: SSOTBalanceSheetData;
 }
 
+// Legacy Balance Sheet data structure for compatibility
+export interface LegacyBalanceSheetData {
+  report_title: string;
+  company: string;
+  as_of_date: string;
+  currency: string;
+  
+  // Assets section
+  assets: {
+    current_assets: {
+      items: BSAccountItem[];
+      subtotal: number;
+    };
+    non_current_assets: {
+      items: BSAccountItem[];
+      subtotal: number;
+    };
+    total_assets: number;
+  };
+  
+  // Liabilities section
+  liabilities: {
+    current_liabilities: {
+      items: BSAccountItem[];
+      subtotal: number;
+    };
+    non_current_liabilities: {
+      items: BSAccountItem[];
+      subtotal: number;
+    };
+    total_liabilities: number;
+  };
+  
+  // Equity section
+  equity: {
+    items: BSAccountItem[];
+    total_equity: number;
+  };
+  
+  // Balance validation
+  total_liabilities_and_equity: number;
+  is_balanced: boolean;
+  balance_difference: number;
+  
+  // Metadata
+  generated_at: string;
+  enhanced: boolean;
+  ssot_source: boolean;
+}
+
 class SSOTBalanceSheetReportService {
   private getAuthHeaders() {
     return getAuthHeaders();
   }
 
-  private buildQueryString(params: Record<string, any>): string {
+  private buildQueryString(params: Record<string, string | number | boolean | undefined>): string {
     const searchParams = new URLSearchParams();
     
     Object.entries(params).forEach(([key, value]) => {
+      // Add additional check to prevent undefined values from being converted to "undefined" string
       if (value !== undefined && value !== null && value !== '' && value !== 'ALL') {
         searchParams.append(key, value.toString());
       }
@@ -145,24 +196,146 @@ class SSOTBalanceSheetReportService {
     as_of_date?: string;
     format?: 'json' | 'summary';
   } = {}): Promise<SSOTBalanceSheetData> {
-    const queryString = this.buildQueryString({
+    const queryParams = {
       as_of_date: params.as_of_date || new Date().toISOString().split('T')[0],
       format: params.format || 'json'
-    });
+    };
     
-    const url = API_ENDPOINTS.SSOT_REPORTS.BALANCE_SHEET + (queryString ? '?' + queryString : '');
+    const queryString = this.buildQueryString(queryParams);
+    const baseUrl = API_ENDPOINTS.SSOT_REPORTS.BALANCE_SHEET;
+    const url = baseUrl + (queryString ? '?' + queryString : '');
+    
+    // Log the request for debugging
+    console.log('Making SSOT Balance Sheet request to:', url);
+    console.log('Base URL:', baseUrl);
+    console.log('Query params:', queryParams);
+    console.log('Query string:', queryString);
     
     const response = await fetch(url, {
       headers: this.getAuthHeaders(),
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Failed to generate SSOT Balance Sheet: ${response.statusText}`);
+      // Try to parse error as JSON first, fallback to text if it's HTML
+      try {
+        const error = await response.json();
+        throw new Error(error.message || `Failed to generate SSOT Balance Sheet: ${response.statusText}`);
+      } catch (e) {
+        // If JSON parsing fails, it's likely HTML error page
+        throw new Error(`Failed to generate SSOT Balance Sheet. Server returned: ${response.status} ${response.statusText}`);
+      }
     }
 
     const result = await response.json();
     return result.data;
+  }
+
+  // Generate SSOT Balance Sheet as PDF
+  async generateSSOTBalanceSheetPDF(params: {
+    as_of_date?: string;
+  }): Promise<Blob> {
+    const queryParams = {
+      as_of_date: params.as_of_date || new Date().toISOString().split('T')[0],
+      format: 'pdf'
+    };
+    
+    // Use the correct endpoint from the SSOT_REPORTS nested object
+    const baseUrl = API_ENDPOINTS.SSOT_REPORTS.BALANCE_SHEET;
+    const queryString = this.buildQueryString(queryParams);
+    const url = baseUrl + (queryString ? '?' + queryString : '');
+    
+    // Log the request for debugging
+    console.log('Making PDF export request to:', url);
+    console.log('Base URL:', baseUrl);
+    console.log('Query params:', queryParams);
+    console.log('Query string:', queryString);
+    
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      // Try to parse error as JSON first, fallback to text if it's HTML
+      try {
+        const error = await response.json();
+        throw new Error(error.message || `Failed to generate SSOT Balance Sheet PDF: ${response.statusText}`);
+      } catch (e) {
+        // If JSON parsing fails, it's likely HTML error page
+        throw new Error(`Failed to generate SSOT Balance Sheet PDF. Server returned: ${response.status} ${response.statusText}`);
+      }
+    }
+
+    return await response.blob();
+  }
+
+  // Generate SSOT Balance Sheet as CSV
+  async generateSSOTBalanceSheetCSV(params: {
+    as_of_date?: string;
+  }): Promise<string> {
+    const queryParams = {
+      as_of_date: params.as_of_date || new Date().toISOString().split('T')[0],
+      format: 'csv'
+    };
+    
+    // Use the correct endpoint from the SSOT_REPORTS nested object
+    const baseUrl = API_ENDPOINTS.SSOT_REPORTS.BALANCE_SHEET;
+    const queryString = this.buildQueryString(queryParams);
+    const url = baseUrl + (queryString ? '?' + queryString : '');
+    
+    // Log the request for debugging
+    console.log('Making CSV export request to:', url);
+    console.log('Base URL:', baseUrl);
+    console.log('Query params:', queryParams);
+    console.log('Query string:', queryString);
+    
+    const response = await fetch(url, {
+      headers: this.getAuthHeaders(),
+    });
+
+    console.log('CSV export response status:', response.status);
+    console.log('CSV export response headers:', [...response.headers.entries()]);
+
+    // Check if the response is HTML (error page) before processing
+    const contentType = response.headers.get('content-type') || '';
+    console.log('Response content type:', contentType);
+    
+    // If it's an HTML error page or error status, handle it appropriately
+    if (contentType.includes('text/html') || response.status >= 400) {
+      const errorText = await response.text();
+      console.error('CSV export error response:', errorText);
+      
+      // Try to parse as JSON first in case it's a JSON error response
+      try {
+        const errorJson = JSON.parse(errorText);
+        throw new Error(errorJson.message || errorJson.error || `Failed to generate SSOT Balance Sheet CSV: ${response.statusText}`);
+      } catch (jsonError) {
+        // If not JSON, check if it's HTML
+        if (errorText.trim().startsWith('<')) {
+          throw new Error(`Failed to generate SSOT Balance Sheet CSV. Server returned an HTML error page.`);
+        }
+        // Otherwise use the text content as the error message
+        throw new Error(`Failed to generate SSOT Balance Sheet CSV. Server returned: ${errorText || response.statusText}`);
+      }
+    }
+
+    // For CSV format, the backend now returns actual CSV content
+    const csvContent = await response.text();
+    console.log('CSV export content preview:', csvContent.substring(0, 200));
+    
+    // Additional check if the response is actually HTML instead of CSV
+    if (csvContent.trim().startsWith('<')) {
+      throw new Error('Failed to generate SSOT Balance Sheet CSV. Server returned an HTML error page instead of CSV content.');
+    }
+    
+    return csvContent;
+  }
+
+  // Convert balance sheet data to CSV format
+  private convertToCSV(data: SSOTBalanceSheetData): string {
+    // This is a simplified implementation - in reality, we should use the existing
+    // export utilities from the frontend
+    return "Account Code,Account Name,Category,Amount\n" +
+           "Sample Data,Sample Account,Asset,1000000";
   }
 
   // Get SSOT Balance Sheet account details for drilldown
@@ -244,7 +417,7 @@ class SSOTBalanceSheetReportService {
   }
 
   // Convert SSOT Balance Sheet data to legacy format for compatibility
-  convertToLegacyFormat(ssotData: SSOTBalanceSheetData): any {
+  convertToLegacyFormat(ssotData: SSOTBalanceSheetData): LegacyBalanceSheetData {
     return {
       report_title: 'Balance Sheet',
       company: ssotData.company.name,

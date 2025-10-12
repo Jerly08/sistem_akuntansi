@@ -143,8 +143,8 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
         isClosable: true,
       });
       
-    } catch (error: any) {
-      const errorMessage = error.message || 'Failed to generate Balance Sheet';
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate Balance Sheet';
       setError(errorMessage);
       
       toast({
@@ -161,10 +161,10 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
 
   // Export CSV function
   const handleExportCSV = async () => {
-    if (!balanceSheetData) {
+    if (!asOfDate) {
       toast({
         title: 'No Data',
-        description: 'Please generate the Balance Sheet first',
+        description: 'Please select a date first',
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -175,11 +175,23 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
     setExportingCSV(true);
     
     try {
-      exportAndDownloadCSV(balanceSheetData, {
-        includeAccountDetails,
-        companyName,
-        filename: `balance_sheet_${asOfDate}.csv`
+      console.log('Exporting CSV with asOfDate:', asOfDate);
+      // Use the new CSV generation method from the service
+      const csvContent = await ssotBalanceSheetReportService.generateSSOTBalanceSheetCSV({
+        as_of_date: asOfDate
       });
+      
+      console.log('Received CSV content, creating download link');
+      // Create download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `SSOT_BalanceSheet_${asOfDate}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
       toast({
         title: 'CSV Export Successful',
@@ -189,10 +201,13 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
         isClosable: true,
       });
       
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export CSV';
+      console.error('CSV Export Error:', error); // Log the error for debugging
+      
       toast({
         title: 'CSV Export Failed',
-        description: error.message || 'Failed to export CSV',
+        description: errorMessage,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -204,10 +219,10 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
 
   // Export PDF function
   const handleExportPDF = async () => {
-    if (!balanceSheetData) {
+    if (!asOfDate) {
       toast({
         title: 'No Data',
-        description: 'Please generate the Balance Sheet first',
+        description: 'Please select a date first',
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -218,11 +233,20 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
     setExportingPDF(true);
     
     try {
-      exportAndDownloadPDF(balanceSheetData, {
-        companyName,
-        includeAccountDetails,
-        filename: `balance_sheet_${asOfDate}.pdf`
+      // Use the new PDF generation method from the service
+      const pdfBlob = await ssotBalanceSheetReportService.generateSSOTBalanceSheetPDF({
+        as_of_date: asOfDate
       });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `SSOT_BalanceSheet_${asOfDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
       
       toast({
         title: 'PDF Export Successful',
@@ -232,10 +256,11 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
         isClosable: true,
       });
       
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export PDF';
       toast({
         title: 'PDF Export Failed',
-        description: error.message || 'Failed to export PDF',
+        description: errorMessage,
         status: 'error',
         duration: 5000,
         isClosable: true,

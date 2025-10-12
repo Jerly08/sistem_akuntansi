@@ -97,7 +97,11 @@ type SSOTProfitLossData struct {
 	Enhanced          bool                   `json:"enhanced"`
 	
 	// Account Details for Drilldown
-	AccountDetails    []SSOTAccountBalance       `json:"account_details,omitempty"`
+	AccountDetails    []SSOTAccountBalance   `json:"account_details,omitempty"`
+	
+	// Additional fields for PDF generation with account details
+	OtherIncomeItems  []PLSectionItem        `json:"other_income_items,omitempty"`
+	OtherExpenseItems []PLSectionItem        `json:"other_expense_items,omitempty"`
 }
 
 // PLSectionItem represents an item within a P&L section
@@ -280,6 +284,8 @@ func (s *SSOTProfitLossService) generateProfitLossFromBalances(balances []SSOTAc
 	plData.OperatingExpenses.SellingMarketing.Items = []PLSectionItem{}
 	plData.OperatingExpenses.General.Items = []PLSectionItem{}
 	plData.AccountDetails = balances
+	plData.OtherIncomeItems = []PLSectionItem{}
+	plData.OtherExpenseItems = []PLSectionItem{}
 	
 	// Process each account balance
 	for _, balance := range balances {
@@ -358,10 +364,12 @@ func (s *SSOTProfitLossService) generateProfitLossFromBalances(balances []SSOTAc
 		case strings.HasPrefix(code, "6"):
 			// Other expenses (6xxx)
 			plData.OtherExpenses += amount
+			plData.OtherExpenseItems = append(plData.OtherExpenseItems, item)
 			
 		case strings.HasPrefix(code, "7"):
 			// Other income (7xxx)
 			plData.OtherIncome += amount
+			plData.OtherIncomeItems = append(plData.OtherIncomeItems, item)
 		}
 	}
 	

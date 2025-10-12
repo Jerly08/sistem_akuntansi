@@ -30,6 +30,8 @@ import {
   useDisclosure,
   Select,
   Input,
+  InputGroup,
+  InputLeftElement,
   FormControl,
   FormLabel,
   Grid,
@@ -67,7 +69,8 @@ import {
   Menu,
   MenuButton,
   MenuList,
-  MenuItem
+  MenuItem,
+  Tooltip,
 } from '@chakra-ui/react';
 import { 
   FiPlus, 
@@ -82,7 +85,8 @@ import {
   FiAlertCircle,
   FiPackage,
   FiDownload,
-  FiFileText 
+  FiFileText,
+  FiSearch
 } from 'react-icons/fi';
 import purchaseService, { Purchase, PurchaseFilterParams } from '@/services/purchaseService';
 import SubmitApprovalButton from '@/components/purchase/SubmitApprovalButton';
@@ -2494,87 +2498,84 @@ const handleCreate = async () => {
           mb={2}
         >
           <CardBody p={6}>
-            <Flex justify="space-between" align="center">
-              <Box>
+            <Flex justify="space-between" align="center" wrap="wrap" gap={4}>
+              <VStack align="start" spacing={1}>
                 <Heading 
-                  size="lg" 
+                  size="xl" 
                   color={headingColor}
-                  fontWeight="bold"
-                  mb={1}
+                  fontWeight="600"
                 >
                   Purchase Management
                 </Heading>
                 <Text 
-                  fontSize="sm" 
+                  fontSize="md" 
                   color={textSecondary}
                 >
-                  Manage purchase orders and approvals
+                  Manage your purchase transactions and approvals
                 </Text>
-              </Box>
+              </VStack>
+              
               <HStack spacing={3}>
-                <Button
-                  variant="outline"
-                  size="md"
-                  leftIcon={<FiFilter />}
-                  onClick={onFilterOpen}
-                  borderColor={borderColor}
-                  color={textPrimary}
-                  _hover={{
-                    bg: hoverBg,
-                    borderColor: hoverBorder,
-                    transform: 'translateY(-1px)'
-                  }}
-                  transition="all 0.2s ease"
-                >
-                  Filters
-                </Button>
-                <Button
-                  variant="outline"
-                  size="md"
-                  leftIcon={<FiRefreshCw />}
-                  onClick={handleRefresh}
-                  isLoading={loading}
-                  borderColor={borderColor}
-                  color={textPrimary}
-                  _hover={{
-                    bg: hoverBg,
-                    borderColor: hoverBorder,
-                    transform: 'translateY(-1px)'
-                  }}
-                  transition="all 0.2s ease"
-                >
-                  Refresh
-                </Button>
-                <Menu>
-                  <MenuButton as={Button} leftIcon={<FiDownload />} variant="outline" size="md">
-                    Export
-                  </MenuButton>
-                  <MenuList>
-                    <MenuItem icon={<FiFileText />} onClick={handleExportPDF}>Export PDF Report</MenuItem>
-                    <MenuItem icon={<FiDownload />} onClick={handleExportCSV}>Export CSV Report</MenuItem>
-                  </MenuList>
-                </Menu>
-                {/* New Purchase button only for Employee role */}
-                {normalizeRole(user?.role as any) === 'employee' && (
-                  <Button
-                    colorScheme="blue"
-                    size="md"
-                    leftIcon={<FiPlus />}
-                    onClick={handleCreate}
-                    bg={buttonBlueBg}
-                    color="white"
-                    _hover={{
-                      bg: buttonBlueHover,
+                <Tooltip label="Refresh Data">
+                  <IconButton
+                    aria-label="Refresh"
+                    icon={<FiRefreshCw />}
+                    variant="ghost"
+                    onClick={handleRefresh}
+                    isLoading={loading}
+                    _hover={{ 
+                      bg: hoverBg,
                       transform: 'translateY(-1px)',
                       boxShadow: 'md'
                     }}
-                    _active={{
-                      transform: 'translateY(0)'
+                    transition="all 0.2s ease"
+                  />
+                </Tooltip>
+                
+                <Menu zIndex={9999} strategy="fixed">
+                  <MenuButton
+                    as={Button}
+                    leftIcon={<FiDownload />}
+                    colorScheme="green"
+                    variant="outline"
+                    size="md"
+                    _hover={{ 
+                      bg: hoverBg,
+                      borderColor: hoverBorder,
+                      transform: 'translateY(-1px)'
                     }}
                     transition="all 0.2s ease"
-                    fontWeight="semibold"
                   >
-                    New Purchase
+                    Export Report
+                  </MenuButton>
+                  <MenuList 
+                    zIndex={10001}
+                    boxShadow="lg"
+                    border="1px solid"
+                    borderColor={borderColor}
+                    bg={cardBg}
+                    minW="160px"
+                    maxW="240px"
+                  >
+                    <MenuItem onClick={handleExportPDF} icon={<FiFileText />}>Export PDF</MenuItem>
+                    <MenuItem onClick={handleExportCSV} icon={<FiDownload />}>Export CSV</MenuItem>
+                  </MenuList>
+                </Menu>
+                
+                {(normalizeRole(user?.role as any) === 'employee') && (
+                  <Button 
+                    leftIcon={<FiPlus />} 
+                    colorScheme="blue" 
+                    size="md"
+                    px={6}
+                    fontWeight="medium"
+                    onClick={handleCreate}
+                    _hover={{ 
+                      transform: 'translateY(-1px)',
+                      boxShadow: 'lg'
+                    }}
+                  >
+                    Create Purchase
                   </Button>
                 )}
               </HStack>
@@ -2945,6 +2946,128 @@ const handleCreate = async () => {
           </Alert>
         )}
 
+        {/* Search and Filters */}
+        <Card mb={6}>
+          <CardBody>
+            <Flex gap={4} align="end" wrap="wrap">
+              <Box flex="1" minW="300px">
+                <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
+                  Search Transactions
+                </Text>
+                <InputGroup>
+                  <InputLeftElement pointerEvents="none">
+                    <FiSearch color={textSecondary} />
+                  </InputLeftElement>
+                  <Input
+                    placeholder="Search by purchase number, vendor..."
+                    value={filters.search || ''}
+                    onChange={(e) => handleFilterChange({ search: e.target.value })}
+                    bg={cardBg}
+                  />
+                </InputGroup>
+              </Box>
+              
+              <Box minW="180px">
+                <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
+                  Filter by Vendor
+                </Text>
+                <Select 
+                  placeholder="All Vendors"
+                  value={filters.vendor_id || ''}
+                  onChange={(e) => handleFilterChange({ vendor_id: e.target.value })}
+                  bg={cardBg}
+                >
+                  {vendors.map((vendor) => (
+                    <option key={vendor.id} value={vendor.id.toString()}>
+                      {vendor.name}
+                    </option>
+                  ))}
+                </Select>
+              </Box>
+              
+              <Box minW="160px">
+                <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
+                  Filter by Status
+                </Text>
+                <Select 
+                  placeholder="All Statuses"
+                  value={filters.status || ''}
+                  onChange={(e) => handleFilterChange({ status: e.target.value })}
+                  bg={cardBg}
+                >
+                  <option value="">All Statuses</option>
+                  <option value="draft">Draft</option>
+                  <option value="pending_approval">Pending Approval</option>
+                  <option value="approved">Approved</option>
+                  <option value="cancelled">Cancelled</option>
+                </Select>
+              </Box>
+              
+              <Box minW="160px">
+                <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
+                  Approval Status
+                </Text>
+                <Select 
+                  placeholder="All Approval Statuses"
+                  value={filters.approval_status || ''}
+                  onChange={(e) => handleFilterChange({ approval_status: e.target.value })}
+                  bg={cardBg}
+                >
+                  <option value="">All Approval Statuses</option>
+                  <option value="not_required">Not Required</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </Select>
+              </Box>
+              
+              <Box minW="160px">
+                <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
+                  Start Date
+                </Text>
+                <Input
+                  type="date"
+                  value={filters.start_date || ''}
+                  onChange={(e) => handleFilterChange({ start_date: e.target.value })}
+                  bg={cardBg}
+                />
+              </Box>
+              
+              <Box minW="160px">
+                <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
+                  End Date
+                </Text>
+                <Input
+                  type="date"
+                  value={filters.end_date || ''}
+                  onChange={(e) => handleFilterChange({ end_date: e.target.value })}
+                  bg={cardBg}
+                />
+              </Box>
+              
+              <Button
+                leftIcon={<FiFilter />}
+                variant="outline"
+                onClick={() => {
+                  setFilters({ 
+                    page: 1, 
+                    limit: 10, 
+                    status: '', 
+                    vendor_id: '', 
+                    approval_status: '', 
+                    search: '', 
+                    start_date: '', 
+                    end_date: '' 
+                  });
+                  fetchPurchases({ page: 1, limit: 10 });
+                }}
+              >
+                Clear Filters
+              </Button>
+            </Flex>
+          </CardBody>
+        </Card>
+
         {/* Main Data Table */}
         <EnhancedPurchaseTable
           purchases={purchases}
@@ -2961,235 +3084,6 @@ const handleCreate = async () => {
           canDelete={canDelete}
           userRole={normalizeRole(user?.role as any)}
         />
-
-        {/* Enhanced Filter Modal */}
-        <Modal isOpen={isFilterOpen} onClose={onFilterClose} size="md">
-          <ModalOverlay bg="blackAlpha.300" backdropFilter="blur(10px)" />
-          <ModalContent 
-            bg={cardBg}
-            borderWidth="1px"
-            borderColor={borderColor}
-            borderRadius="lg"
-            boxShadow="xl"
-          >
-            <ModalHeader 
-              color={headingColor}
-              fontSize="lg"
-              fontWeight="bold"
-              borderBottom="1px solid"
-              borderColor={borderColor}
-              pb={4}
-            >
-              <HStack>
-                <Box 
-                  p={2} 
-                  borderRadius="md"
-                  bg={modalFilterBg}
-                  color={modalFilterColor}
-                >
-                  <FiFilter size={16} />
-                </Box>
-                <Text>Filter Purchases</Text>
-              </HStack>
-            </ModalHeader>
-            <ModalCloseButton 
-              color={textSecondary}
-              _hover={{
-                bg: modalHoverBg
-              }}
-            />
-            <ModalBody py={6}>
-              <VStack spacing={5}>
-                <FormControl>
-                  <FormLabel 
-                    fontSize="sm"
-                    fontWeight="semibold"
-                    color={textPrimary}
-                    mb={2}
-                  >
-                    Search
-                  </FormLabel>
-                  <Input
-                    placeholder="Search by purchase number, vendor..."
-                    value={filters.search || ''}
-                    onChange={(e) => handleFilterChange({ search: e.target.value })}
-                    bg={modalBg}
-                    borderColor={borderColor}
-                    _hover={{
-                      borderColor: inputHoverBorder
-                    }}
-                    _focus={{
-                      borderColor: inputFocusBorder,
-                      boxShadow: inputFocusShadow
-                    }}
-                  />
-                </FormControl>
-
-                <FormControl>
-                  <FormLabel 
-                    fontSize="sm"
-                    fontWeight="semibold"
-                    color={textPrimary}
-                    mb={2}
-                  >
-                    Vendor
-                  </FormLabel>
-                  <Select
-                    placeholder="All Vendors"
-                    value={filters.vendor_id || ''}
-                    onChange={(e) => handleFilterChange({ vendor_id: e.target.value })}
-                    bg={modalBg}
-                    borderColor={borderColor}
-                    _hover={{
-                      borderColor: inputHoverBorder
-                    }}
-                    _focus={{
-                      borderColor: inputFocusBorder,
-                      boxShadow: inputFocusShadow
-                    }}
-                  >
-                    {vendors.map((vendor) => (
-                      <option key={vendor.id} value={vendor.id.toString()}>
-                        {vendor.name}
-                      </option>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <SimpleGrid columns={2} spacing={4} w="100%">
-                  <FormControl>
-                    <FormLabel fontSize="sm" fontWeight="semibold" color={textPrimary} mb={2}>Start Date</FormLabel>
-                    <Input
-                      type="date"
-                      value={filters.start_date || ''}
-                      onChange={(e) => handleFilterChange({ start_date: e.target.value })}
-                      bg={modalBg}
-                      borderColor={borderColor}
-                      _hover={{ borderColor: inputHoverBorder }}
-                      _focus={{ borderColor: inputFocusBorder, boxShadow: inputFocusShadow }}
-                    />
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel fontSize="sm" fontWeight="semibold" color={textPrimary} mb={2}>End Date</FormLabel>
-                    <Input
-                      type="date"
-                      value={filters.end_date || ''}
-                      onChange={(e) => handleFilterChange({ end_date: e.target.value })}
-                      bg={modalBg}
-                      borderColor={borderColor}
-                      _hover={{ borderColor: inputHoverBorder }}
-                      _focus={{ borderColor: inputFocusBorder, boxShadow: inputFocusShadow }}
-                    />
-                  </FormControl>
-                </SimpleGrid>
-                
-                <FormControl>
-                  <FormLabel 
-                    fontSize="sm"
-                    fontWeight="semibold"
-                    color={textPrimary}
-                    mb={2}
-                  >
-                    Status
-                  </FormLabel>
-                  <Select
-                    placeholder="All Statuses"
-                    value={filters.status || ''}
-                    onChange={(e) => handleFilterChange({ status: e.target.value })}
-                    bg={modalBg}
-                    borderColor={borderColor}
-                    _hover={{
-                      borderColor: inputHoverBorder
-                    }}
-                    _focus={{
-                      borderColor: inputFocusBorder,
-                      boxShadow: inputFocusShadow
-                    }}
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="pending_approval">Pending Approval</option>
-                    <option value="approved">Approved</option>
-                    <option value="cancelled">Cancelled</option>
-                  </Select>
-                </FormControl>
-                
-                <FormControl>
-                  <FormLabel 
-                    fontSize="sm"
-                    fontWeight="semibold"
-                    color={textPrimary}
-                    mb={2}
-                  >
-                    Approval Status
-                  </FormLabel>
-                  <Select
-                    placeholder="All Approval Statuses"
-                    value={filters.approval_status || ''}
-                    onChange={(e) => handleFilterChange({ approval_status: e.target.value })}
-                    bg={modalBg}
-                    borderColor={borderColor}
-                    _hover={{
-                      borderColor: inputHoverBorder
-                    }}
-                    _focus={{
-                      borderColor: inputFocusBorder,
-                      boxShadow: inputFocusShadow
-                    }}
-                  >
-                    <option value="not_required">Not Required</option>
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                  </Select>
-                </FormControl>
-              </VStack>
-            </ModalBody>
-            <ModalFooter 
-              borderTop="1px solid"
-              borderColor={borderColor}
-              pt={4}
-            >
-              <HStack spacing={3} w="100%">
-                <Button 
-                  variant="ghost" 
-                  onClick={onFilterClose}
-                  flex={1}
-                  color={textSecondary}
-                  _hover={{
-                    bg: ghostHoverBg
-                  }}
-                >
-                  Close
-                </Button>
-                <Button 
-                  colorScheme="blue"
-                  onClick={() => {
-                    setFilters({ 
-                      page: 1, 
-                      limit: 10, 
-                      status: '', 
-                      vendor_id: '', 
-                      approval_status: '', 
-                      search: '', 
-                      start_date: '', 
-                      end_date: '' 
-                    });
-                    fetchPurchases({ page: 1, limit: 10 });
-                    onFilterClose();
-                  }}
-                  flex={1}
-                  bg={buttonBlueBg}
-                  _hover={{
-                    bg: buttonBlueHover
-                  }}
-                  fontWeight="semibold"
-                >
-                  Clear Filters
-                </Button>
-              </HStack>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
 
         {/* View Purchase Modal */}
         <Modal isOpen={isViewOpen} onClose={onViewClose} size="xl">

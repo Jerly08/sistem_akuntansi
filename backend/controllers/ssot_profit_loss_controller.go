@@ -236,7 +236,7 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		if ssotData.COGS.OtherCOGS != 0 {
 			otherItems := []gin.H{}
 			for _, item := range ssotData.COGS.Items {
-				if item.AccountCode[:3] == "513" || item.AccountCode[:3] == "514" || item.AccountCode[:3] == "519" {
+				if len(item.AccountCode) >= 3 && (item.AccountCode[:3] == "513" || item.AccountCode[:3] == "514" || item.AccountCode[:3] == "519") {
 					otherItems = append(otherItems, gin.H{
 						"name":         item.AccountName,
 						"amount":       item.Amount,
@@ -407,6 +407,26 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		},
 	})
 
+	// Prepare account details for other income and expenses
+	otherIncomeItems := []gin.H{}
+	otherExpenseItems := []gin.H{}
+	
+	for _, item := range ssotData.OtherIncomeItems {
+		otherIncomeItems = append(otherIncomeItems, gin.H{
+			"account_code": item.AccountCode,
+			"account_name": item.AccountName,
+			"amount":       item.Amount,
+		})
+	}
+	
+	for _, item := range ssotData.OtherExpenseItems {
+		otherExpenseItems = append(otherExpenseItems, gin.H{
+			"account_code": item.AccountCode,
+			"account_name": item.AccountName,
+			"amount":       item.Amount,
+		})
+	}
+
 	// Create the frontend-compatible response
 	return gin.H{
 		"title":   "Enhanced Profit and Loss Statement",
@@ -442,12 +462,16 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 			return "Accounts Balance Fallback"
 		}(),
 		"message":         c.generateAnalysisMessage(ssotData),
+		// Add account details for other income and expenses
+		"other_income_items":  otherIncomeItems,
+		"other_expense_items": otherExpenseItems,
 	}
 }
 
 // filterItemsByPrefix filters items by account code prefix
 func (c *SSOTProfitLossController) filterItemsByPrefix(items []services.PLSectionItem, prefix string) []gin.H {
 	var filtered []gin.H
+	var filteredItems []services.PLSectionItem
 	for _, item := range items {
 		if len(item.AccountCode) >= len(prefix) && item.AccountCode[:len(prefix)] == prefix {
 			filtered = append(filtered, gin.H{
@@ -455,6 +479,7 @@ func (c *SSOTProfitLossController) filterItemsByPrefix(items []services.PLSectio
 				"amount":       item.Amount,
 				"account_code": item.AccountCode,
 			})
+			filteredItems = append(filteredItems, item)
 		}
 	}
 	return filtered
