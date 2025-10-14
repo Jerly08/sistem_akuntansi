@@ -37,14 +37,14 @@ import {
   Spinner,
   Icon
 } from '@chakra-ui/react';
-import { FiDownload, FiShoppingCart, FiDollarSign, FiPieChart, FiUsers, FiTrendingUp } from 'react-icons/fi';
+import { FiDownload, FiShoppingCart, FiDollarSign, FiPieChart, FiUsers, FiTrendingUp, FiFilePlus, FiFileText } from 'react-icons/fi';
 import { 
   FormControl,
   FormLabel,
   Input
 } from '@chakra-ui/react';
 import { formatCurrency } from '../../utils/formatters';
-import { SSOTSalesSummaryData } from '../../services/ssotSalesSummaryService';
+import { SSOTSalesSummaryData, CustomerSalesData, ProductSalesData } from '../../services/ssotSalesSummaryService';
 
 interface SalesSummaryModalProps {
   isOpen: boolean;
@@ -81,6 +81,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
   const textColor = useColorModeValue('gray.800', 'white');
   const secondaryTextColor = useColorModeValue('gray.600', 'gray.300');
   const loadingTextColor = useColorModeValue('gray.700', 'gray.300');
+  const previewPeriodTextColor = useColorModeValue('gray.500', 'gray.400');
   
   const handleExport = (format: 'pdf' | 'excel') => {
     if (onExport) {
@@ -117,6 +118,17 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
   const renderSummaryMetrics = () => {
     if (!data) return null;
     
+    // Calculate total customers from sales_by_customer array
+    const totalCustomers = data.sales_by_customer ? data.sales_by_customer.length : 0;
+    
+    // Calculate total orders from transaction counts
+    const totalOrders = data.sales_by_customer 
+      ? data.sales_by_customer.reduce((sum, customer) => sum + (customer.transaction_count || 0), 0)
+      : 0;
+    
+    // Calculate average order value
+    const averageOrderValue = totalOrders > 0 ? (data.total_revenue || data.total_sales || 0) / totalOrders : 0;
+    
     return (
       <Grid templateColumns="repeat(auto-fit, minmax(240px, 1fr))" gap={4} mb={6}>
         <GridItem>
@@ -142,7 +154,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
               <Stat>
                 <StatLabel>Total Customers</StatLabel>
                 <StatNumber color="blue.600">
-                  {data.total_customers || (data.sales_by_customer?.length) || 0}
+                  {totalCustomers}
                 </StatNumber>
                 <StatHelpText>
                   <Icon as={FiUsers} />
@@ -153,14 +165,14 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
           </Card>
         </GridItem>
         
-        {data.total_orders && (
+        {totalOrders > 0 && (
           <GridItem>
             <Card size="sm">
               <CardBody>
                 <Stat>
                   <StatLabel>Total Orders</StatLabel>
                   <StatNumber color="purple.600">
-                    {data.total_orders}
+                    {totalOrders}
                   </StatNumber>
                   <StatHelpText>
                     <Icon as={FiShoppingCart} />
@@ -172,14 +184,14 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
           </GridItem>
         )}
         
-        {data.average_order_value && (
+        {averageOrderValue > 0 && (
           <GridItem>
             <Card size="sm">
               <CardBody>
                 <Stat>
                   <StatLabel>Average Order Value</StatLabel>
                   <StatNumber color="orange.600">
-                    {formatCurrency(data.average_order_value)}
+                    {formatCurrency(averageOrderValue)}
                   </StatNumber>
                   <StatHelpText>
                     <Icon as={FiTrendingUp} />
@@ -199,7 +211,10 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
     if (!data) return null;
 
     const customers = data.sales_by_customer || [];
-    const topCustomers = data.top_customers || [];
+    // For top customers, we'll sort the sales_by_customer by total_sales
+    const topCustomers = [...customers]
+      .sort((a, b) => (b.total_sales || 0) - (a.total_sales || 0))
+      .slice(0, 6);
 
     return (
       <VStack spacing={6} align="stretch">
@@ -213,43 +228,19 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                 <Thead>
                   <Tr>
                     <Th>Customer</Th>
-                    <Th>Contact</Th>
                     <Th isNumeric>Total Sales</Th>
                     <Th isNumeric>Orders</Th>
                     <Th isNumeric>Avg Order</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {customers.map((customer: any, index: number) => (
+                  {customers.map((customer: CustomerSalesData, index: number) => (
                     <Tr key={index}>
                       <Td>
                         <VStack align="start" spacing={1}>
                           <Text fontWeight="medium">
-                            {customer.customer_name || customer.name || 'Unnamed Customer'}
+                            {customer.customer_name || 'Unnamed Customer'}
                           </Text>
-                          {customer.customer_code && (
-                            <Text fontSize="xs" color="gray.500">
-                              Code: {customer.customer_code}
-                            </Text>
-                          )}
-                          {customer.customer_type && (
-                            <Badge colorScheme="blue" size="sm">
-                              {customer.customer_type}
-                            </Badge>
-                          )}
-                        </VStack>
-                      </Td>
-                      <Td>
-                        <VStack align="start" spacing={0}>
-                          {customer.contact_person && (
-                            <Text fontSize="sm">{customer.contact_person}</Text>
-                          )}
-                          {customer.phone && (
-                            <Text fontSize="xs" color="gray.500">{customer.phone}</Text>
-                          )}
-                          {customer.email && (
-                            <Text fontSize="xs" color="blue.500">{customer.email}</Text>
-                          )}
                         </VStack>
                       </Td>
                       <Td isNumeric>
@@ -287,26 +278,24 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
             </CardHeader>
             <CardBody>
               <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                {topCustomers.map((customer: any, index: number) => (
+                {topCustomers.map((customer: CustomerSalesData, index: number) => (
                   <Box key={index} border="1px" borderColor={borderColor} borderRadius="md" p={4}>
                     <VStack spacing={3}>
                       <Badge colorScheme="gold" size="lg" variant="solid">
                         #{index + 1}
                       </Badge>
                       <Text fontWeight="bold" fontSize="md" textAlign="center">
-                        {customer.customer_name || customer.name}
+                        {customer.customer_name}
                       </Text>
                       <Text fontSize="lg" fontWeight="bold" color="green.600">
-                        {formatCurrency(customer.total_amount || customer.total_sales)}
+                        {formatCurrency(customer.total_sales)}
                       </Text>
-                      {customer.percentage && (
-                        <Text fontSize="sm" color="gray.500">
-                          {customer.percentage.toFixed(1)}% of total
-                        </Text>
-                      )}
-                      {customer.order_count && (
+                      <Text fontSize="sm" color="gray.500">
+                        {((customer.total_sales / (data.total_revenue || data.total_sales || 1)) * 100).toFixed(1)}% of total
+                      </Text>
+                      {customer.transaction_count && (
                         <Text fontSize="xs" color="purple.500">
-                          {customer.order_count} orders
+                          {customer.transaction_count} orders
                         </Text>
                       )}
                     </VStack>
@@ -330,17 +319,16 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
 
   // Note: This function is currently unused as the Analysis tab has been removed
   const renderAnalysisTab = () => {
-    if (!data?.sales_trends) {
-      return (
-        <Box textAlign="center" py={8}>
-          <Text color={secondaryTextColor}>
-            Sales analysis not available for this report format
-          </Text>
-        </Box>
-      );
-    }
+    if (!data) return null;
 
-    const trends = data.sales_trends;
+    // Calculate some basic trends from the data
+    const totalCustomers = data.sales_by_customer ? data.sales_by_customer.length : 0;
+    const totalOrders = data.sales_by_customer 
+      ? data.sales_by_customer.reduce((sum, customer) => sum + (customer.transaction_count || 0), 0)
+      : 0;
+    
+    // Calculate growth rate (simplified)
+    const growthRate = totalOrders > 0 ? ((data.total_revenue || data.total_sales || 0) / totalOrders) : 0;
     
     return (
       <VStack spacing={6} align="stretch">
@@ -350,49 +338,43 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
           </CardHeader>
           <CardBody>
             <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-              {trends.growth_rate !== undefined && (
-                <Box p={4} bg={trends.growth_rate >= 0 ? 'green.50' : 'red.50'} borderRadius="md" textAlign="center">
-                  <Text fontSize="2xl" fontWeight="bold" color={trends.growth_rate >= 0 ? 'green.600' : 'red.600'}>
-                    {trends.growth_rate > 0 ? '+' : ''}{trends.growth_rate.toFixed(1)}%
-                  </Text>
-                  <Text fontSize="sm" color={trends.growth_rate >= 0 ? 'green.800' : 'red.800'}>
-                    Growth Rate
-                  </Text>
-                </Box>
-              )}
+              <Box p={4} bg="green.50" borderRadius="md" textAlign="center">
+                <Text fontSize="2xl" fontWeight="bold" color="green.600">
+                  {growthRate.toFixed(1)}%
+                </Text>
+                <Text fontSize="sm" color="green.800">
+                  Growth Rate
+                </Text>
+              </Box>
               
-              {trends.best_performing_period && (
-                <Box p={4} bg="blue.50" borderRadius="md" textAlign="center">
-                  <Text fontSize="md" fontWeight="bold" color="blue.600">
-                    {trends.best_performing_period}
-                  </Text>
-                  <Text fontSize="sm" color="blue.800">
-                    Best Period
-                  </Text>
-                </Box>
-              )}
+              <Box p={4} bg="blue.50" borderRadius="md" textAlign="center">
+                <Text fontSize="2xl" fontWeight="bold" color="blue.600">
+                  {totalCustomers}
+                </Text>
+                <Text fontSize="sm" color="blue.800">
+                  Total Customers
+                </Text>
+              </Box>
               
-              {trends.recurring_customers !== undefined && (
-                <Box p={4} bg="purple.50" borderRadius="md" textAlign="center">
-                  <Text fontSize="2xl" fontWeight="bold" color="purple.600">
-                    {trends.recurring_customers}
-                  </Text>
-                  <Text fontSize="sm" color="purple.800">
-                    Recurring Customers
-                  </Text>
-                </Box>
-              )}
+              <Box p={4} bg="purple.50" borderRadius="md" textAlign="center">
+                <Text fontSize="2xl" fontWeight="bold" color="purple.600">
+                  {totalOrders}
+                </Text>
+                <Text fontSize="sm" color="purple.800">
+                  Total Orders
+                </Text>
+              </Box>
               
-              {trends.new_customers !== undefined && (
-                <Box p={4} bg="teal.50" borderRadius="md" textAlign="center">
-                  <Text fontSize="2xl" fontWeight="bold" color="teal.600">
-                    {trends.new_customers}
-                  </Text>
-                  <Text fontSize="sm" color="teal.800">
-                    New Customers
-                  </Text>
-                </Box>
-              )}
+              <Box p={4} bg="teal.50" borderRadius="md" textAlign="center">
+                <Text fontSize="2xl" fontWeight="bold" color="teal.600">
+                  {data.sales_by_customer && data.sales_by_customer.length > 0 
+                    ? Math.round(data.sales_by_customer.reduce((sum, customer) => sum + (customer.transaction_count || 0), 0) / data.sales_by_customer.length)
+                    : 0}
+                </Text>
+                <Text fontSize="sm" color="teal.800">
+                  Avg Orders/Customer
+                </Text>
+              </Box>
             </SimpleGrid>
           </CardBody>
         </Card>
@@ -404,13 +386,13 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
           <CardBody>
             <VStack spacing={3} align="stretch">
               <Text fontSize="sm">
-                📈 <strong>Sales Performance:</strong> {trends.growth_rate && trends.growth_rate > 0 ? 'Your sales are growing positively' : 'Sales performance shows room for improvement'}
+                📈 <strong>Sales Performance:</strong> {growthRate > 0 ? 'Your sales are growing positively' : 'Sales performance shows room for improvement'}
               </Text>
               <Text fontSize="sm">
-                👥 <strong>Customer Base:</strong> {trends.recurring_customers || 0} recurring customers indicate strong customer loyalty
+                👥 <strong>Customer Base:</strong> {totalCustomers} active customers indicate {totalCustomers > 10 ? 'strong' : 'developing'} customer loyalty
               </Text>
               <Text fontSize="sm">
-                🎯 <strong>Market Expansion:</strong> {trends.new_customers || 0} new customers shows business growth potential
+                🎯 <strong>Market Expansion:</strong> {totalOrders} total orders shows business activity level
               </Text>
             </VStack>
           </CardBody>
@@ -422,49 +404,26 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="6xl" scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent bg={modalBg} maxH="90vh">
-        <ModalHeader borderBottom="1px" borderColor={borderColor}>
-          <VStack align="stretch" spacing={2}>
-            <HStack justify="space-between">
-              <VStack align="start" spacing={0}>
-                <HStack>
-                  <Icon as={FiShoppingCart} color="blue.500" />
-                  <Text fontSize="xl" fontWeight="bold">
-                    Sales Summary Report
-                  </Text>
-                </HStack>
-                <Text fontSize="sm" color={secondaryTextColor}>
-                  Period: {startDate} - {endDate}
-                </Text>
-                {data?.company && (
-                  <Text fontSize="sm" color={secondaryTextColor}>
-                    {data.company.name}
-                  </Text>
-                )}
-              </VStack>
-              <Badge colorScheme="blue" variant="solid">
-                SSOT Integration
-              </Badge>
-            </HStack>
-            
-            <HStack spacing={1}>
-              <Button
-                size="sm"
-                variant="solid"
-                leftIcon={<FiDollarSign />}
-                disabled
-              >
-                Summary
-              </Button>
-            </HStack>
-          </VStack>
+      <ModalContent bg={modalBg}>
+        <ModalHeader>
+          <HStack>
+            <Icon as={FiShoppingCart} color="blue.500" />
+            <VStack align="start" spacing={0}>
+              <Text fontSize="lg" fontWeight="bold">
+                Sales Summary Report (SSOT)
+              </Text>
+              <Text fontSize="sm" color={previewPeriodTextColor}>
+                {startDate} - {endDate} | SSOT Journal Integration
+              </Text>
+            </VStack>
+          </HStack>
         </ModalHeader>
         <ModalCloseButton />
-
-        <ModalBody py={6}>
-          {/* Date Range Controls */}
+        
+        <ModalBody pb={6}>
+          {/* Date Range Controls - Moved to top like other modals */}
           <Box mb={4}>
-            <HStack spacing={4} mb={4}>
+            <HStack spacing={4} mb={4} flexWrap="wrap">
               <FormControl>
                 <FormLabel>Start Date</FormLabel>
                 <Input 
@@ -488,6 +447,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                 leftIcon={<FiShoppingCart />}
                 size="md"
                 mt={8}
+                whiteSpace="nowrap"
               >
                 Generate Report
               </Button>
@@ -526,32 +486,31 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
           )}
 
           {data && !isLoading && (
-            <>
+            <VStack spacing={6} align="stretch">
               {/* Company Header */}
               {data.company && (
-                <Box bg={sectionBg} p={4} borderRadius="md" mb={6}>
+                <Box bg="blue.50" p={4} borderRadius="md">
                   <HStack justify="space-between" align="start">
                     <VStack align="start" spacing={1}>
-                      <Text fontSize="lg" fontWeight="bold" color={textColor}>
-                        {data.company.name || 'Company Name'}
+                      <Text fontSize="lg" fontWeight="bold" color="blue.800">
+                        {data.company.name || 'PT. Sistem Akuntansi'}
                       </Text>
-                      <Text fontSize="sm" color={secondaryTextColor}>
-                        {data.company.address && data.company.city ? 
-                          `${data.company.address}, ${data.company.city}` : 
-                          'Address not available'
-                        }
+                      <Text fontSize="sm" color="blue.600">
+                        {data.company.address ? (
+                          data.company.city ? `${data.company.address}, ${data.company.city}` : data.company.address
+                        ) : 'Address not available'}
                       </Text>
                       {data.company.phone && (
-                        <Text fontSize="sm" color={secondaryTextColor}>
+                        <Text fontSize="sm" color="blue.600">
                           {data.company.phone} | {data.company.email}
                         </Text>
                       )}
                     </VStack>
                     <VStack align="end" spacing={1}>
-                      <Text fontSize="sm" color={secondaryTextColor}>
+                      <Text fontSize="sm" color="blue.600">
                         Currency: {data.currency || 'IDR'}
                       </Text>
-                      <Text fontSize="xs" color={secondaryTextColor}>
+                      <Text fontSize="xs" color="blue.500">
                         Generated: {data.generated_at ? new Date(data.generated_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')}
                       </Text>
                     </VStack>
@@ -559,66 +518,157 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                 </Box>
               )}
 
-              <VStack spacing={4} align="stretch">
-                {renderSummaryMetrics()}
-                
-                {/* Period Summary */}
-                <Card>
-                  <CardBody>
-                    <Flex justify="space-between" align="center" mb={3}>
-                      <Heading size="md" color={textColor}>
-                        Sales Performance
-                      </Heading>
-                      <Text fontWeight="bold" fontSize="lg" color="green.600">
-                        {formatCurrency(data.total_revenue || data.total_sales || 0)}
-                      </Text>
-                    </Flex>
-                    
-                    <SimpleGrid columns={[1, 3]} spacing={4}>
-                      <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                        <Text fontSize="sm" color={secondaryTextColor}>Period</Text>
-                        <Text fontWeight="medium">{startDate} to {endDate}</Text>
-                      </Box>
-                      <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                        <Text fontSize="sm" color={secondaryTextColor}>Report Type</Text>
-                        <Text fontWeight="medium">SSOT Integration</Text>
-                      </Box>
-                      <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                        <Text fontSize="sm" color={secondaryTextColor}>Status</Text>
-                        <Badge colorScheme="green">Active</Badge>
-                      </Box>
+              {/* Report Header */}
+              <Box textAlign="center" bg={sectionBg} p={4} borderRadius="md">
+                <Heading size="md" color={textColor}>
+                  Sales Summary Report
+                </Heading>
+                <Text fontSize="sm" color={secondaryTextColor}>
+                  Period: {startDate} - {endDate}
+                </Text>
+                <Text fontSize="xs" color={secondaryTextColor} mt={1}>
+                  Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
+                </Text>
+              </Box>
+
+              {renderSummaryMetrics()}
+              
+              {/* Period Summary */}
+              <Card>
+                <CardBody>
+                  <Flex justify="space-between" align="center" mb={3}>
+                    <Heading size="md" color={textColor}>
+                      Sales Performance
+                    </Heading>
+                    <Text fontWeight="bold" fontSize="lg" color="green.600">
+                      {formatCurrency(data.total_revenue || data.total_sales || 0)}
+                    </Text>
+                  </Flex>
+                  
+                  <SimpleGrid columns={[1, 3]} spacing={4}>
+                    <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
+                      <Text fontSize="sm" color={secondaryTextColor}>Period</Text>
+                      <Text fontWeight="medium">{startDate} to {endDate}</Text>
+                    </Box>
+                    <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
+                      <Text fontSize="sm" color={secondaryTextColor}>Report Type</Text>
+                      <Text fontWeight="medium">SSOT Integration</Text>
+                    </Box>
+                    <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
+                      <Text fontSize="sm" color={secondaryTextColor}>Status</Text>
+                      <Badge colorScheme="green">Active</Badge>
+                    </Box>
+                  </SimpleGrid>
+                </CardBody>
+              </Card>
+
+              {/* Top Customers Section */}
+              {data.sales_by_customer && data.sales_by_customer.length > 0 && (
+                <Box>
+                  <Heading size="sm" mb={4} color={textColor}>
+                    Top Performing Customers ({Math.min(data.sales_by_customer.length, 6)} customers)
+                  </Heading>
+                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
+                    {[...data.sales_by_customer]
+                      .sort((a, b) => (b.total_sales || 0) - (a.total_sales || 0))
+                      .slice(0, 6)
+                      .map((customer: CustomerSalesData, index: number) => (
+                        <Box key={index} border="1px" borderColor={borderColor} borderRadius="md" p={4} bg="white">
+                          <VStack spacing={3}>
+                            <Badge colorScheme="blue" size="lg" variant="solid">
+                              #{index + 1}
+                            </Badge>
+                            <Text fontWeight="bold" fontSize="md" textAlign="center" color="gray.800">
+                              {customer.customer_name}
+                            </Text>
+                            <Text fontSize="lg" fontWeight="bold" color="green.600">
+                              {formatCurrency(customer.total_sales)}
+                            </Text>
+                            <Text fontSize="sm" color="gray.600">
+                              {((customer.total_sales / (data.total_revenue || data.total_sales || 1)) * 100).toFixed(1)}% of total
+                            </Text>
+                            {customer.transaction_count && (
+                              <Text fontSize="xs" color="purple.600">
+                                {customer.transaction_count} orders
+                              </Text>
+                            )}
+                          </VStack>
+                        </Box>
+                      ))}
+                  </SimpleGrid>
+                </Box>
+              )}
+
+              {/* Sales by Customer Table */}
+              {data.sales_by_customer && data.sales_by_customer.length > 0 && (
+                <Box>
+                  <Heading size="sm" mb={4} color={textColor}>
+                    Sales by Customer ({data.sales_by_customer.length} customers)
+                  </Heading>
+                  
+                  {/* Customer Table Header */}
+                  <Box bg="blue.50" p={3} borderRadius="md" mb={2} border="1px solid" borderColor="blue.200">
+                    <SimpleGrid columns={[1, 3]} spacing={2} fontSize="sm" fontWeight="bold" color="blue.800">
+                      <Text>Customer</Text>
+                      <Text textAlign="right">Total Sales</Text>
+                      <Text textAlign="right">Orders</Text>
                     </SimpleGrid>
-                  </CardBody>
-                </Card>
-              </VStack>
-            </>
+                  </Box>
+                  
+                  {/* Customer Rows */}
+                  <VStack spacing={2} align="stretch" maxH="400px" overflow="auto">
+                    {data.sales_by_customer.map((customer: CustomerSalesData, index: number) => (
+                      <Box key={index} border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white" _hover={{ bg: 'gray.50' }}>
+                        <SimpleGrid columns={[1, 3]} spacing={2} fontSize="sm">
+                          <VStack align="start" spacing={1}>
+                            <Text fontWeight="bold" fontSize="md" color="gray.800">
+                              {customer.customer_name || 'Unnamed Customer'}
+                            </Text>
+                          </VStack>
+                          <Text textAlign="right" fontSize="sm" fontWeight="bold" color="green.600">
+                            {formatCurrency(customer.total_sales || 0)}
+                          </Text>
+                          <Text textAlign="right" fontSize="sm" fontWeight="medium" color="purple.600">
+                            {customer.transaction_count || 0}
+                          </Text>
+                        </SimpleGrid>
+                      </Box>
+                    ))}
+                  </VStack>
+                </Box>
+              )}
+            </VStack>
           )}
         </ModalBody>
 
-        <ModalFooter borderTop="1px" borderColor={borderColor}>
+        <ModalFooter>
           <HStack spacing={3}>
-            <Button
-              leftIcon={<FiDownload />}
-              size="sm"
-              variant="outline"
-              onClick={() => handleExport('pdf')}
-              isDisabled={isLoading || !data}
-            >
-              Export PDF
-            </Button>
-            <Button
-              leftIcon={<FiDownload />}
-              size="sm"
-              variant="outline"
-              onClick={() => handleExport('excel')}
-              isDisabled={isLoading || !data}
-            >
-              Export Excel
-            </Button>
-            <Button onClick={onClose} size="sm">
-              Close
-            </Button>
+            {data && !isLoading && (
+              <>
+                <Button
+                  colorScheme="red"
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<FiFilePlus />}
+                  onClick={() => handleExport('pdf')}
+                >
+                  Export PDF
+                </Button>
+                <Button
+                  colorScheme="green"
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<FiFileText />}
+                  onClick={() => handleExport('excel')}
+                >
+                  Export CSV
+                </Button>
+              </>
+            )}
           </HStack>
+          <Button variant="ghost" onClick={onClose}>
+            Close
+          </Button>
         </ModalFooter>
       </ModalContent>
     </Modal>

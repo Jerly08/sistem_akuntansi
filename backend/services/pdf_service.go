@@ -1183,91 +1183,116 @@ func (p *PDFService) GenerateSalesReportPDF(sales []models.Sale, startDate, endD
 	return buf.Bytes(), nil
 }
 
-// GenerateSalesSummaryPDF generates a PDF for SSOT Sales Summary (invoice-like)
+// GenerateSalesSummaryPDF generates a PDF for SSOT Sales Summary (similar to trial balance format)
 func (p *PDFService) GenerateSalesSummaryPDF(summary interface{}) ([]byte, error) {
 	if summary == nil {
 		return nil, fmt.Errorf("sales summary data is required")
 	}
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(15, 15, 15)
-	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
-	// Header with letterhead + company info right
-	p.addCompanyLetterhead(pdf)
+	// Layout helpers
 	lm, tm, rm, _ := pdf.GetMargins()
 	pageW, _ := pdf.GetPageSize()
 	contentW := pageW - lm - rm
 
-	companyInfo, _ := p.getCompanyInfo()
-	pdf.SetFont("Arial", "B", 12)
-	nameW := pdf.GetStringWidth(companyInfo.CompanyName)
-	pdf.SetXY(pageW-rm-nameW, tm)
-	pdf.Cell(nameW, 6, companyInfo.CompanyName)
-	pdf.SetFont("Arial", "", 9)
-	addr := companyInfo.CompanyAddress
-	if strings.TrimSpace(addr) != "" {
-		pdf.SetXY(pageW-rm-pdf.GetStringWidth(addr), tm+8)
-		pdf.Cell(0, 4, addr)
+	// Company info
+	companyInfo, err := p.getCompanyInfo()
+	if err != nil { return nil, fmt.Errorf("failed to get company info: %v", err) }
+
+	// Header: logo left, text right (similar to trial balance)
+	logoX, logoY, logoSize := lm, tm, 35.0
+	logoAdded := false
+	if strings.TrimSpace(companyInfo.CompanyLogo) != "" {
+		logoPath := companyInfo.CompanyLogo
+		if strings.HasPrefix(logoPath, "/") { logoPath = "." + logoPath }
+		if _, err := os.Stat(logoPath); err == nil {
+			if imgType := detectImageType(logoPath); imgType != "" {
+				pdf.ImageOptions(logoPath, logoX, logoY, logoSize, 0, false, gofpdf.ImageOptions{ImageType: imgType}, 0, "")
+				logoAdded = true
+			}
+		}
 	}
-	phone := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
-	if strings.TrimSpace(companyInfo.CompanyPhone) != "" {
-		pdf.SetXY(pageW-rm-pdf.GetStringWidth(phone), tm+14)
-		pdf.Cell(0, 4, phone)
-	}
-	if strings.TrimSpace(companyInfo.CompanyEmail) != "" {
-		email := fmt.Sprintf("Email: %s", companyInfo.CompanyEmail)
-		pdf.SetXY(pageW-rm-pdf.GetStringWidth(email), tm+20)
-		pdf.Cell(0, 4, email)
+	if !logoAdded {
+		pdf.SetDrawColor(220,220,220)
+		pdf.SetFillColor(248,249,250)
+		pdf.SetLineWidth(0.3)
+		pdf.Rect(logoX, logoY, logoSize, logoSize, "FD")
+		pdf.SetFont("Arial", "B", 16)
+		pdf.SetTextColor(120,120,120)
+		pdf.SetXY(logoX+8, logoY+19)
+		pdf.CellFormat(19,8,"</>","",0,"C",false,0,"")
+		pdf.SetTextColor(0,0,0)
 	}
 
-	// Divider under header
-	pdf.SetDrawColor(238, 238, 238)
+	companyInfoX := pageW - rm
+	companyInfoY := tm
+	pdf.SetFont("Arial", "B", 12)
+	nameW := pdf.GetStringWidth(companyInfo.CompanyName)
+	pdf.SetXY(companyInfoX-nameW, companyInfoY)
+	pdf.Cell(nameW, 6, companyInfo.CompanyName)
+
+	pdf.SetFont("Arial", "", 9)
+	addrW := pdf.GetStringWidth(companyInfo.CompanyAddress)
+	pdf.SetXY(companyInfoX-addrW, companyInfoY+8)
+	pdf.Cell(addrW, 4, companyInfo.CompanyAddress)
+
+	phoneText := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
+	phoneW := pdf.GetStringWidth(phoneText)
+	pdf.SetXY(companyInfoX-phoneW, companyInfoY+14)
+	pdf.Cell(phoneW, 4, phoneText)
+
+	// Divider line
+	pdf.SetDrawColor(238,238,238)
 	pdf.SetLineWidth(0.2)
 	pdf.Line(lm, tm+45, pageW-rm, tm+45)
 
 	// Title
 	pdf.SetY(tm + 55)
+	pdf.SetX(lm)
 	pdf.SetFont("Arial", "B", 22)
-	pdf.SetTextColor(51, 51, 51)
+	pdf.SetTextColor(51,51,51)
 	pdf.Cell(contentW, 10, "SALES SUMMARY REPORT")
-	pdf.SetTextColor(0, 0, 0)
-	pdf.Ln(10)
+	pdf.SetTextColor(0,0,0)
+	pdf.Ln(12)
 
-// Period and generated
-	pdf.SetFont("Arial", "", 11)
+	// Details two-column
+	pdf.SetFont("Arial", "B", 9)
 	// Try to get start/end date from map
 	var smap map[string]interface{}
 	if b, err := json.Marshal(summary); err == nil { _ = json.Unmarshal(b, &smap) }
 	startStr, endStr := "", ""
 	if v, ok := smap["start_date"].(string); ok { startStr = v }
 	if v, ok := smap["end_date"].(string); ok { endStr = v }
+	
 	if startStr != "" && endStr != "" {
-		pdf.Cell(contentW, 6, fmt.Sprintf("Period: %s to %s", startStr, endStr))
-		pdf.Ln(6)
+		pdf.SetX(lm)
+		pdf.Cell(20, 5, "Period:")
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(102,102,102)
+		pdf.Cell(60, 5, fmt.Sprintf("%s to %s", startStr, endStr))
+	} else {
+		pdf.SetX(lm)
+		pdf.Cell(20, 5, "Period:")
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(102,102,102)
+		pdf.Cell(60, 5, "All Time")
 	}
-	pdf.Cell(contentW, 6, fmt.Sprintf("Generated: %s", time.Now().Format("02/01/2006 15:04")))
-	pdf.Ln(10)
 
-	// Summary block
-	pdf.SetFont("Arial", "B", 12)
-	pdf.Cell(0, 8, "SUMMARY")
-	pdf.Ln(8)
-	pdf.SetFont("Arial", "", 10)
-	// Read totals from map
-	totalRevenue := getNumFrom(smap["total_revenue"])
-	totalTx := getNumFrom(smap["total_transactions"])
-	avgOrder := getNumFrom(smap["average_order_value"])
-	pdf.CellFormat(90, 6, "Total Revenue", "1", 0, "L", false, 0, "")
-	pdf.CellFormat(90, 6, p.formatRupiah(totalRevenue), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, "Total Transactions", "1", 0, "L", false, 0, "")
-	pdf.CellFormat(90, 6, fmt.Sprintf("%d", int(totalTx)), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, "Average Order Value", "1", 0, "L", false, 0, "")
-	pdf.CellFormat(90, 6, p.formatRupiah(avgOrder), "1", 1, "R", false, 0, "")
-	pdf.Ln(6)
+	pdf.SetFont("Arial", "B", 9)
+	pdf.SetTextColor(0,0,0)
+	rightX := lm + contentW - 60
+	pdf.SetX(rightX)
+	pdf.Cell(26,5,"Generated:")
+	pdf.SetFont("Arial","",9)
+	pdf.SetTextColor(102,102,102)
+	pdf.Cell(34,5,time.Now().Format("02/01/2006 15:04"))
+	pdf.Ln(12)
 
-// Top Customers/Products via generic map (fields are optional across builds)
-	// Marshal to map for flexible extraction (smap initialized earlier if available)
+	// Summary section removed as per user request
+
+	// Top Customers table (similar to trial balance account table)
 	getList := func(keys ...string) []interface{} {
 		for _, k := range keys {
 			if v, ok := smap[k]; ok {
@@ -1291,64 +1316,151 @@ func (p *PDFService) GenerateSalesSummaryPDF(summary interface{}) ([]byte, error
 		return 0
 	}
 
+	// Period sales section removed as per user request
+
 	// Top Customers table
-	if customers := getList("top_customers", "TopCustomers"); len(customers) > 0 {
+	if customers := getList("sales_by_customer", "top_customers", "TopCustomers"); len(customers) > 0 {
+		pdf.Ln(5)
 		pdf.SetFont("Arial", "B", 12)
-		pdf.Cell(0, 8, "TOP CUSTOMERS")
-		pdf.Ln(8)
-		pdf.SetFont("Arial", "B", 9)
 		pdf.SetFillColor(220, 220, 220)
-		pdf.CellFormat(80, 7, "Customer", "1", 0, "L", true, 0, "")
-		pdf.CellFormat(30, 7, "Orders", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(40, 7, "Amount", "1", 0, "R", true, 0, "")
-		pdf.CellFormat(40, 7, "Share", "1", 1, "R", true, 0, "")
+		pdf.CellFormat(70, 8, "Customer", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(30, 8, "Orders", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(45, 8, "Amount", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(45, 8, "Avg Order", "1", 0, "C", true, 0, "")
+		pdf.Ln(8)
+
 		pdf.SetFont("Arial", "", 9)
+		pdf.SetFillColor(255, 255, 255)
 		limit := len(customers)
-		if limit > 12 { limit = 12 }
+		if limit > 15 { limit = 15 }
 		for i := 0; i < limit; i++ {
 			if cm, ok := customers[i].(map[string]interface{}); ok {
+				// Check if we need a new page
+				if pdf.GetY() > 250 {
+					pdf.AddPage()
+					// Re-add headers
+					pdf.SetFont("Arial", "B", 12)
+					pdf.SetFillColor(220, 220, 220)
+					pdf.CellFormat(70, 8, "Customer", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(30, 8, "Orders", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(45, 8, "Amount", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(45, 8, "Avg Order", "1", 0, "C", true, 0, "")
+					pdf.Ln(8)
+					pdf.SetFont("Arial", "", 9)
+					pdf.SetFillColor(255, 255, 255)
+				}
+
 				name := getStr(cm, "customer_name", "name")
-				if len(name) > 42 { name = name[:39] + "..." }
-				count := getNum(cm, "count", "orders")
-				amount := getNum(cm, "amount", "total_amount")
-				share := getNum(cm, "percentage", "share")
-				pdf.CellFormat(80, 6, name, "1", 0, "L", false, 0, "")
-				pdf.CellFormat(30, 6, fmt.Sprintf("%d", int(count)), "1", 0, "C", false, 0, "")
-				pdf.CellFormat(40, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
-				pdf.CellFormat(40, 6, fmt.Sprintf("%.1f%%", share), "1", 1, "R", false, 0, "")
+				if len(name) > 30 { name = name[:27] + "..." }
+				count := getNum(cm, "transaction_count", "count", "orders", "total_sales")
+				amount := getNum(cm, "total_amount", "amount", "total_sales")
+				avgOrderValue := getNum(cm, "average_order", "average_transaction", "average_order_value")
+
+				pdf.CellFormat(70, 6, name, "1", 0, "L", false, 0, "")
+				pdf.CellFormat(30, 6, fmt.Sprintf("%.0f", count), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(45, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(45, 6, p.formatRupiah(avgOrderValue), "1", 0, "R", false, 0, "")
+				pdf.Ln(6)
 			}
 		}
-		pdf.Ln(4)
 	}
 
-	// Top Products table (optional)
-	if products := getList("top_products", "TopProducts"); len(products) > 0 {
+	// Top Products table
+	if products := getList("sales_by_product", "top_products", "TopProducts"); len(products) > 0 {
+		pdf.Ln(5)
 		pdf.SetFont("Arial", "B", 12)
-		pdf.Cell(0, 8, "TOP PRODUCTS")
-		pdf.Ln(8)
-		pdf.SetFont("Arial", "B", 9)
 		pdf.SetFillColor(220, 220, 220)
-		pdf.CellFormat(80, 7, "Product", "1", 0, "L", true, 0, "")
-		pdf.CellFormat(30, 7, "Qty", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(40, 7, "Amount", "1", 0, "R", true, 0, "")
-		pdf.CellFormat(40, 7, "Share", "1", 1, "R", true, 0, "")
+		pdf.CellFormat(70, 8, "Product", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(30, 8, "Qty", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(45, 8, "Amount", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(45, 8, "Avg Price", "1", 0, "C", true, 0, "")
+		pdf.Ln(8)
+
 		pdf.SetFont("Arial", "", 9)
+		pdf.SetFillColor(255, 255, 255)
 		limit := len(products)
-		if limit > 12 { limit = 12 }
+		if limit > 15 { limit = 15 }
 		for i := 0; i < limit; i++ {
 			if pm, ok := products[i].(map[string]interface{}); ok {
+				// Check if we need a new page
+				if pdf.GetY() > 250 {
+					pdf.AddPage()
+					// Re-add headers
+					pdf.SetFont("Arial", "B", 12)
+					pdf.SetFillColor(220, 220, 220)
+					pdf.CellFormat(70, 8, "Product", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(30, 8, "Qty", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(45, 8, "Amount", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(45, 8, "Avg Price", "1", 0, "C", true, 0, "")
+					pdf.Ln(8)
+					pdf.SetFont("Arial", "", 9)
+					pdf.SetFillColor(255, 255, 255)
+				}
+
 				name := getStr(pm, "product_name", "name")
-				if len(name) > 42 { name = name[:39] + "..." }
-				qty := getNum(pm, "quantity", "qty")
-				amount := getNum(pm, "amount", "total_amount")
-				share := getNum(pm, "percentage", "share")
-				pdf.CellFormat(80, 6, name, "1", 0, "L", false, 0, "")
-				pdf.CellFormat(30, 6, fmt.Sprintf("%d", int(qty)), "1", 0, "C", false, 0, "")
-				pdf.CellFormat(40, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
-				pdf.CellFormat(40, 6, fmt.Sprintf("%.1f%%", share), "1", 1, "R", false, 0, "")
+				if len(name) > 30 { name = name[:27] + "..." }
+				qty := getNum(pm, "quantity_sold", "quantity", "qty")
+				amount := getNum(pm, "total_amount", "amount", "total_revenue")
+				avgPrice := getNum(pm, "average_price")
+
+				pdf.CellFormat(70, 6, name, "1", 0, "L", false, 0, "")
+				pdf.CellFormat(30, 6, fmt.Sprintf("%.0f", qty), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(45, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(45, 6, p.formatRupiah(avgPrice), "1", 0, "R", false, 0, "")
+				pdf.Ln(6)
 			}
 		}
 	}
+
+	// Sales by Status table
+	/*
+	if statuses := getList("sales_by_status"); len(statuses) > 0 {
+		pdf.Ln(5)
+		pdf.SetFont("Arial", "B", 12)
+		pdf.SetFillColor(220, 220, 220)
+		pdf.CellFormat(80, 8, "Status", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(50, 8, "Amount", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(60, 8, "Percentage", "1", 0, "C", true, 0, "")
+		pdf.Ln(8)
+
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetFillColor(255, 255, 255)
+		limit := len(statuses)
+		if limit > 10 { limit = 10 }
+		for i := 0; i < limit; i++ {
+			if sm, ok := statuses[i].(map[string]interface{}); ok {
+				// Check if we need a new page
+				if pdf.GetY() > 250 {
+					pdf.AddPage()
+					// Re-add headers
+					pdf.SetFont("Arial", "B", 12)
+					pdf.SetFillColor(220, 220, 220)
+					pdf.CellFormat(80, 8, "Status", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(50, 8, "Amount", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(60, 8, "Percentage", "1", 0, "C", true, 0, "")
+					pdf.Ln(8)
+					pdf.SetFont("Arial", "", 9)
+					pdf.SetFillColor(255, 255, 255)
+				}
+
+				status := getStr(sm, "status")
+				if len(status) > 35 { status = status[:32] + "..." }
+				amount := getNum(sm, "amount")
+				percentage := getNum(sm, "percentage")
+
+				pdf.CellFormat(80, 6, status, "1", 0, "L", false, 0, "")
+				pdf.CellFormat(50, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(60, 6, fmt.Sprintf("%.1f%%", percentage), "1", 0, "R", false, 0, "")
+				pdf.Ln(6)
+			}
+		}
+	}
+	*/
+
+	// Footer
+	pdf.Ln(10)
+	pdf.SetFont("Arial", "I", 8)
+	pdf.Cell(contentW, 4, fmt.Sprintf("Report generated on %s", time.Now().Format("02/01/2006 15:04")))
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {

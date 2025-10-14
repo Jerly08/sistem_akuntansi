@@ -31,12 +31,14 @@ export const API_ENDPOINTS = {
   },
   
   // Products (with /api/v1 prefix)
+  PRODUCTS: '/api/v1/products',
   PRODUCTS_BY_ID: (id: number) => `/api/v1/products/${id}`,
   PRODUCTS_ADJUST_STOCK: '/api/v1/products/adjust-stock',
   PRODUCTS_OPNAME: '/api/v1/products/opname',
   PRODUCTS_UPLOAD_IMAGE: '/api/v1/products/upload-image',
   
   // Categories (with /api/v1 prefix)
+  CATEGORIES: '/api/v1/categories',
   CATEGORIES_TREE: '/api/v1/categories/tree',
   CATEGORIES_BY_ID: (id: number) => `/api/v1/categories/${id}`,
   CATEGORIES_PRODUCTS: (id: number) => `/api/v1/categories/${id}/products`,
@@ -364,6 +366,43 @@ export const API_ENDPOINTS = {
   NOTIFICATIONS_BY_TYPE: (type: string) => `/api/v1/notifications/type/${type}`,
   NOTIFICATIONS_MARK_READ: (id: number) => `/api/v1/notifications/${id}/read`,
   NOTIFICATIONS_UNREAD_COUNT: '/api/v1/notifications/unread-count',
+  
+  // 🛒 Purchases endpoints (with /api/v1 prefix)
+  PURCHASES: '/api/v1/purchases',
+  PURCHASES_BY_ID: (id: number) => `/api/v1/purchases/${id}`,
+  PURCHASES_PENDING_APPROVAL: '/api/v1/purchases/pending-approval',
+  PURCHASES_APPROVE: (id: number) => `/api/v1/purchases/${id}/approve`,
+  PURCHASES_REJECT: (id: number) => `/api/v1/purchases/${id}/reject`,
+  PURCHASES_APPROVAL_HISTORY: (id: number) => `/api/v1/purchases/${id}/approval-history`,
+  PURCHASES_APPROVAL_STATS: '/api/v1/purchases/approval-stats',
+  PURCHASES_SUBMIT_APPROVAL: (id: number) => `/api/v1/purchases/${id}/submit-approval`,
+  PURCHASES_SUMMARY: '/api/v1/purchases/summary',
+  PURCHASES_FOR_PAYMENT: (id: number) => `/api/v1/purchases/${id}/for-payment`,
+  PURCHASES_INTEGRATED_PAYMENT: (id: number) => `/api/v1/purchases/${id}/integrated-payment`,
+  PURCHASES_PAYMENTS: (id: number) => `/api/v1/purchases/${id}/payments`,
+  PURCHASES_EXPORT_PDF: '/api/v1/purchases/export/pdf',
+  PURCHASES_EXPORT_CSV: '/api/v1/purchases/export/csv',
+  PURCHASES_RECEIPTS_BY_ID: (id: number) => `/api/v1/purchases/${id}/receipts`,
+  PURCHASES_RECEIPT_PDF: (id: number) => `/api/v1/purchases/receipts/${id}/pdf`,
+  PURCHASES_ALL_RECEIPTS_PDF: (id: number) => `/api/v1/purchases/${id}/receipts/pdf`,
+  
+  // 🏢 Assets endpoints (with /api/v1 prefix)
+  ASSETS: {
+    LIST: '/api/v1/assets',
+    CREATE: '/api/v1/assets',
+    GET_BY_ID: (id: number) => `/api/v1/assets/${id}`,
+    UPDATE: (id: number) => `/api/v1/assets/${id}`,
+    DELETE: (id: number) => `/api/v1/assets/${id}`,
+    SUMMARY: '/api/v1/assets/summary',
+    DEPRECIATION_REPORT: '/api/v1/assets/depreciation-report',
+    DEPRECIATION_SCHEDULE: (id: number) => `/api/v1/assets/${id}/depreciation-schedule`,
+    CALCULATE_DEPRECIATION: (id: number) => `/api/v1/assets/${id}/calculate-depreciation`,
+    UPLOAD_IMAGE: '/api/v1/assets/upload-image',
+    CATEGORIES: {
+      LIST: '/api/v1/assets/categories',
+      CREATE: '/api/v1/assets/categories',
+    }
+  },
   
   // 📊 Dashboard endpoints
   DASHBOARD_ANALYTICS: '/api/v1/dashboard/analytics',
