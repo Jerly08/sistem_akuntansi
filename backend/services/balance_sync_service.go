@@ -154,9 +154,15 @@ func (s *BalanceSyncService) updateParentChain(accountID uint) {
 		`, *parentID).Scan(&parentBalance)
 
 		// Update parent balance
-		s.db.Model(&models.Account{}).
+		err := s.db.Model(&models.Account{}).
 			Where("id = ?", *parentID).
-			Update("balance", parentBalance)
+			Update("balance", parentBalance).Error
+		
+		if err != nil {
+			log.Printf("Warning: Failed to update parent account %d balance: %v", *parentID, err)
+		} else {
+			log.Printf("✅ Updated parent account %d balance to %.2f", *parentID, parentBalance)
+		}
 
 		// Recursively update grandparent chain
 		s.updateParentChain(*parentID)

@@ -60,6 +60,17 @@ func (s *SalesJournalServiceV2) CreateSalesJournal(sale *models.Sale, tx *gorm.D
 		dbToUse = tx
 	}
 
+	// ✅ CRITICAL FIX: Check if journal already exists for this sale
+	// Prevent duplicate journal entries which cause double posting to COA
+	var existingCount int64
+	if err := dbToUse.Model(&models.SimpleSSOTJournal{}).
+		Where("transaction_type = ? AND transaction_id = ?", "SALES", sale.ID).
+		Count(&existingCount).Error; err == nil && existingCount > 0 {
+		log.Printf("⚠️ Journal already exists for Sale #%d (found %d entries), skipping creation to prevent duplicate", 
+			sale.ID, existingCount)
+		return nil // Don't create duplicate journal
+	}
+
 	// Create Simple SSOT Journal Entry
 	ssotEntry := &models.SimpleSSOTJournal{
 		EntryNumber:       fmt.Sprintf("SALES-%d", sale.ID),
@@ -210,6 +221,12 @@ func (s *SalesJournalServiceV2) CreateSalesJournal(sale *models.Sale, tx *gorm.D
 			log.Printf("⚠️ Warning: Failed to update COA balance for account %d: %v", item.AccountID, err)
 			// Continue processing, don't fail the entire transaction
 		}
+
+		// Update parent account balances after each account balance change
+		if err := s.updateParentAccountBalances(dbToUse, item.AccountID); err != nil {
+			log.Printf("⚠️ Warning: Failed to update parent balances for account %d: %v", item.AccountID, err)
+			// Continue processing, don't fail the entire transaction
+		}
 	}
 
 	log.Printf("✅ Successfully created journal entries for Sale #%d", sale.ID)
@@ -311,6 +328,17 @@ func (s *SalesJournalServiceV2) CreateSalesPaymentJournal(payment *models.SalePa
 		dbToUse = tx
 	}
 
+	// ✅ CRITICAL FIX: Check if payment journal already exists
+	// Prevent duplicate payment journal entries which cause double posting to COA
+	var existingCount int64
+	if err := dbToUse.Model(&models.SimpleSSOTJournal{}).
+		Where("transaction_type = ? AND transaction_id = ?", "SALES_PAYMENT", payment.ID).
+		Count(&existingCount).Error; err == nil && existingCount > 0 {
+		log.Printf("⚠️ Payment journal already exists for Payment #%d (found %d entries), skipping creation to prevent duplicate", 
+			payment.ID, existingCount)
+		return nil // Don't create duplicate journal
+	}
+
 	// Helper to resolve account by code
 	resolveByCode := func(code string) (*models.Account, error) {
 		var acc models.Account
@@ -401,6 +429,11 @@ func (s *SalesJournalServiceV2) CreateSalesPaymentJournal(payment *models.SalePa
 		if err := s.updateCOABalance(dbToUse, item.AccountID, item.Debit, item.Credit); err != nil {
 			log.Printf("⚠️ Warning: Failed to update COA balance for account %d: %v", item.AccountID, err)
 		}
+
+		// Update parent account balances after each account balance change
+		if err := s.updateParentAccountBalances(dbToUse, item.AccountID); err != nil {
+			log.Printf("⚠️ Warning: Failed to update parent balances for account %d: %v", item.AccountID, err)
+		}
 	}
 
 	log.Printf("✅ Created payment journal for Payment #%d (Amount: %.2f)", payment.ID, payment.Amount)
@@ -409,24 +442,59 @@ func (s *SalesJournalServiceV2) CreateSalesPaymentJournal(payment *models.SalePa
 
 // Helper function to update COA balance
 func (s *SalesJournalServiceV2) updateCOABalance(db *gorm.DB, accountID uint, debit, credit float64) error {
-	var coa models.COA
-	if err := db.First(&coa, accountID).Error; err != nil {
-		return fmt.Errorf("COA account %d not found: %v", accountID, err)
+	var account models.Account
+	if err := db.First(&account, accountID).Error; err != nil {
+		return fmt.Errorf("Account %d not found: %v", accountID, err)
 	}
 
 	// Update balance based on account type
 	netChange := debit - credit
 	
-	switch coa.Type {
+	switch account.Type {
 	case "ASSET", "EXPENSE":
 		// Assets and Expenses increase with debit
-		coa.Balance += netChange
+		account.Balance += netChange
 	case "LIABILITY", "EQUITY", "REVENUE":
 		// Liabilities, Equity, and Revenue increase with credit
-		coa.Balance -= netChange
+		account.Balance -= netChange
 	}
 
-	return db.Save(&coa).Error
+	return db.Save(&account).Error
+}
+
+// updateParentAccountBalances updates parent account balances for a given account
+func (s *SalesJournalServiceV2) updateParentAccountBalances(db *gorm.DB, accountID uint) error {
+	var parentID *uint
+	
+	// Get parent ID
+	if err := db.Raw("SELECT parent_id FROM accounts WHERE id = ? AND deleted_at IS NULL", accountID).Scan(&parentID).Error; err != nil {
+		return fmt.Errorf("failed to get parent ID for account %d: %w", accountID, err)
+	}
+	
+	// If has parent, update parent and continue up the chain
+	if parentID != nil {
+		// Calculate parent balance as sum of children
+		var parentBalance float64
+		if err := db.Raw(`
+			SELECT COALESCE(SUM(balance), 0)
+			FROM accounts 
+			WHERE parent_id = ? AND deleted_at IS NULL
+		`, *parentID).Scan(&parentBalance).Error; err != nil {
+			return fmt.Errorf("failed to calculate parent balance for account %d: %w", *parentID, err)
+		}
+
+		// Update parent balance
+		if err := db.Model(&models.Account{}).
+			Where("id = ? AND deleted_at IS NULL", *parentID).
+			Update("balance", parentBalance).Error; err != nil {
+			return fmt.Errorf("failed to update parent balance for account %d: %w", *parentID, err)
+		}
+
+		// Recursively update grandparent chain
+		return s.updateParentAccountBalances(db, *parentID)
+	}
+	
+	return nil
 }
 
 // GetDisplayBalance returns the balance formatted for frontend display

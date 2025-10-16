@@ -93,7 +93,7 @@ func LoadConfig() *Config {
 
 	config := &Config{
 		// Database
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:password@localhost/sistem_akuntansi?sslmode=disable"),
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost/sistem_akuntansi?sslmode=disable"),
 		
 		// JWT Configuration
 		JWTAccessSecret:  getEnv("JWT_ACCESS_SECRET", getEnv("JWT_SECRET", generateDefaultSecret())),
@@ -229,5 +229,6 @@ func parseStringSlice(value string) []string {
 
 func generateDefaultSecret() string {
 	// This is ONLY for development. In production, this will trigger a fatal error
-	return "DEVELOPMENT-ONLY-SECRET-CHANGE-IN-PRODUCTION-" + strconv.FormatInt(time.Now().Unix(), 10)
+	// Use a consistent secret for development to prevent JWT validation issues
+	return "DEVELOPMENT-ONLY-SECRET-CHANGE-IN-PRODUCTION-ACCOUNTING-SYSTEM-2024"
 }

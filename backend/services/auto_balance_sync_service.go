@@ -115,11 +115,23 @@ func (s *AutoBalanceSyncService) updateParentAccountBalances(tx *gorm.DB, accoun
 		return fmt.Errorf("failed to calculate children sum for parent ID %d: %w", parentID, err)
 	}
 
+	// Get current parent balance for comparison
+	var currentParentBalance float64
+	tx.Model(&models.Account{}).
+		Where("id = ? AND deleted_at IS NULL", parentID).
+		Select("balance").
+		Scan(&currentParentBalance)
+
 	// Update parent balance
 	if err := tx.Model(&models.Account{}).
 		Where("id = ? AND deleted_at IS NULL", parentID).
 		Update("balance", childrenSum).Error; err != nil {
 		return fmt.Errorf("failed to update parent balance for ID %d: %w", parentID, err)
+	}
+
+	// Log the update for debugging
+	if currentParentBalance != childrenSum {
+		log.Printf("🔄 Updated parent account %d balance: %.2f → %.2f", parentID, currentParentBalance, childrenSum)
 	}
 
 	// Recursively update parent's parent

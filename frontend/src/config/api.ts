@@ -406,6 +406,14 @@ export const API_ENDPOINTS = {
   
   // 📊 Dashboard endpoints
   DASHBOARD_ANALYTICS: '/api/v1/dashboard/analytics',
+  DASHBOARD_FINANCE: '/api/v1/dashboard/finance',
+  DASHBOARD_EMPLOYEE: '/api/v1/dashboard/employee',
+  DASHBOARD_EMPLOYEE_WORKFLOWS: '/api/v1/dashboard/employee/workflows',
+  DASHBOARD_EMPLOYEE_PURCHASE_REQUESTS: '/api/v1/dashboard/employee/purchase-requests',
+  DASHBOARD_EMPLOYEE_APPROVAL_NOTIFICATIONS: '/api/v1/dashboard/employee/approval-notifications',
+  DASHBOARD_EMPLOYEE_PURCHASE_APPROVAL_STATUS: '/api/v1/dashboard/employee/purchase-approval-status',
+  DASHBOARD_EMPLOYEE_NOTIFICATIONS_SUMMARY: '/api/v1/dashboard/employee/notifications-summary',
+  DASHBOARD_EMPLOYEE_NOTIFICATIONS_READ: (id: number) => `/api/v1/dashboard/employee/notifications/${id}/read`,
   DASHBOARD_STOCK_ALERTS: '/api/v1/dashboard/stock-alerts',
   DASHBOARD_STOCK_ALERTS_DISMISS: (id: number) => `/api/v1/dashboard/stock-alerts/${id}/dismiss`,
   

@@ -79,6 +79,10 @@ func main() {
 	startupService := services.NewStartupService(db)
 	startupService.RunStartupTasks()
 
+	// Initialize and start session cleanup service
+	sessionCleanupService := services.NewSessionCleanupService(db)
+	go sessionCleanupService.StartCleanupWorker()
+
 	// Initialize Gin router without default middleware
 	r := gin.New()
 

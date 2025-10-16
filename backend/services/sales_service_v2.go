@@ -127,6 +127,21 @@ func (s *SalesServiceV2) CreateSale(request models.SaleCreateRequest, userID uin
 			discountPercent = &defaultDiscount
 		}
 		
+		// Set default revenue account if not provided or 0
+		revenueAccountID := itemRequest.RevenueAccountID
+		if revenueAccountID == 0 {
+			// Get default sales revenue account (4101)
+			var defaultAccount models.Account
+			if err := tx.Where("code = ? AND deleted_at IS NULL", "4101").First(&defaultAccount).Error; err != nil {
+				// Fallback to any revenue account if 4101 doesn't exist
+				if err := tx.Where("type = ? AND deleted_at IS NULL", "REVENUE").First(&defaultAccount).Error; err != nil {
+					tx.Rollback()
+					return nil, fmt.Errorf("failed to find default revenue account: %v", err)
+				}
+			}
+			revenueAccountID = defaultAccount.ID
+		}
+
 		item := models.SaleItem{
 			ProductID:       itemRequest.ProductID,
 			Description:     itemRequest.Description,
@@ -134,7 +149,7 @@ func (s *SalesServiceV2) CreateSale(request models.SaleCreateRequest, userID uin
 			UnitPrice:       itemRequest.UnitPrice,
 			DiscountPercent: *discountPercent,
 			Taxable:         getOrDefault(itemRequest.Taxable, true),
-			RevenueAccountID: itemRequest.RevenueAccountID,
+			RevenueAccountID: revenueAccountID,
 		}
 
 		// Calculate item totals
@@ -259,6 +274,21 @@ func (s *SalesServiceV2) UpdateSale(saleID uint, request models.SaleUpdateReques
 				discountPercent = &defaultDiscount
 			}
 			
+			// Set default revenue account if not provided or 0
+			revenueAccountID := itemRequest.RevenueAccountID
+			if revenueAccountID == 0 {
+				// Get default sales revenue account (4101)
+				var defaultAccount models.Account
+				if err := tx.Where("code = ? AND deleted_at IS NULL", "4101").First(&defaultAccount).Error; err != nil {
+					// Fallback to any revenue account if 4101 doesn't exist
+					if err := tx.Where("type = ? AND deleted_at IS NULL", "REVENUE").First(&defaultAccount).Error; err != nil {
+						tx.Rollback()
+						return nil, fmt.Errorf("failed to find default revenue account: %v", err)
+					}
+				}
+				revenueAccountID = defaultAccount.ID
+			}
+
 			item := models.SaleItem{
 				SaleID:          sale.ID,
 				ProductID:       itemRequest.ProductID,
@@ -267,7 +297,7 @@ func (s *SalesServiceV2) UpdateSale(saleID uint, request models.SaleUpdateReques
 				UnitPrice:       itemRequest.UnitPrice,
 				DiscountPercent: *discountPercent,
 				Taxable:         getOrDefault(itemRequest.Taxable, true),
-				RevenueAccountID: itemRequest.RevenueAccountID,
+				RevenueAccountID: revenueAccountID,
 			}
 
 			// Calculate item totals

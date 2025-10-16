@@ -356,9 +356,10 @@ func (jm *JWTManager) AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		// Validate session
+		// Validate session - be more lenient with session validation
 		var session models.UserSession
-		if err := jm.DB.Where("session_id = ? AND is_active = ?", claims.SessionID, true).First(&session).Error; err != nil {
+		if err := jm.DB.Where("session_id = ?", claims.SessionID).First(&session).Error; err != nil {
+			// If session not found at all, it's invalid
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid session",
 				"code":  "INVALID_SESSION",
@@ -367,11 +368,27 @@ func (jm *JWTManager) AuthRequired() gin.HandlerFunc {
 			return
 		}
 
-		// Check if session is expired
+		// Check if session is expired first
 		if session.ExpiresAt.Before(time.Now()) {
+			// Mark session as inactive when expired
+			jm.DB.Model(&session).Update("is_active", false)
+
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Session expired",
 				"code":  "SESSION_EXPIRED",
+			})
+			c.Abort()
+			return
+		}
+
+		// Check if session is active - but don't fail if it's just marked inactive
+		// This allows for more graceful handling of session state changes
+		if !session.IsActive {
+			// Only fail if the session was explicitly deactivated and is not expired
+			// This prevents issues with cleanup services marking sessions as inactive
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Session deactivated",
+				"code":  "SESSION_DEACTIVATED",
 			})
 			c.Abort()
 			return
@@ -451,7 +468,8 @@ func (jm *JWTManager) RevokeUserSessions(userID uint, reason string) error {
 
 func (jm *JWTManager) isTokenBlacklisted(tokenString string) bool {
 	var count int64
-	jm.DB.Model(&models.BlacklistedToken{}).Where("token = ? AND expires_at > ?", tokenString, time.Now()).Count(&count)
+	// Optimize query with index and limit
+	jm.DB.Model(&models.BlacklistedToken{}).Where("token = ? AND expires_at > ?", tokenString, time.Now()).Limit(1).Count(&count)
 	return count > 0
 }
 

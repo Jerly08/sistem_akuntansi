@@ -68,6 +68,20 @@ api.interceptors.response.use(
     // Log for 401 and 403 errors 
     if (status === 401) {
       console.log('API Interceptor - 401 Error on:', originalRequest.url);
+      // Check if it's a session-related error
+      if (error.response?.data?.code === 'SESSION_EXPIRED' || 
+          error.response?.data?.code === 'SESSION_DEACTIVATED' ||
+          error.response?.data?.code === 'INVALID_SESSION') {
+        console.log('Session-related error detected:', error.response?.data?.code);
+        // Clear auth data and redirect to login immediately
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('token');
+          window.localStorage.removeItem('refreshToken');
+          window.localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
     } else if (status === 403) {
       console.log('API Interceptor - 403 Forbidden on:', originalRequest.url);
       // Log current user info from localStorage for debugging

@@ -105,10 +105,13 @@ const LoginContent = () => {
       
       router.push('/dashboard');
     } catch (err) {
-      setError('Invalid email or password');
+      // Use the actual error message from the caught exception
+      const errorMessage = err instanceof Error ? err.message : 'Invalid email or password';
+      setError(errorMessage);
+      
       toast({
         title: 'Login Failed',
-        description: err instanceof Error ? err.message : 'Invalid credentials',
+        description: errorMessage,
         status: 'error',
         duration: 5000,
         isClosable: true,

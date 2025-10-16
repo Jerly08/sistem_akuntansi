@@ -23,7 +23,20 @@ func NewContactController(contactService services.ContactService) *ContactContro
 
 // GetContacts returns a list of contacts
 func (cc *ContactController) GetContacts(c *gin.Context) {
-	contacts, err := cc.contactService.GetAllContacts()
+	// Check if type query parameter is provided
+	contactType := c.Query("type")
+	
+	var contacts []models.Contact
+	var err error
+	
+	if contactType != "" {
+		// If type is specified, filter by type
+		contacts, err = cc.contactService.GetContactsByType(contactType)
+	} else {
+		// Otherwise, get all contacts
+		contacts, err = cc.contactService.GetAllContacts()
+	}
+	
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

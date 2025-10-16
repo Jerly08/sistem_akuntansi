@@ -399,8 +399,49 @@ func (r *JournalEntryRepo) updateAccountBalancesInTx(tx *gorm.DB, entry *models.
 			fmt.Printf("✅ Updated balance for account %s (%s): change=%.2f, new_balance=%.2f\n",
 				updatedAccount.Code, updatedAccount.Name, balanceChange, updatedAccount.Balance)
 		}
+
+		// Update parent account balances after each account balance change
+		if err := r.updateParentAccountBalances(tx, line.AccountID); err != nil {
+			fmt.Printf("⚠️ Warning: Failed to update parent balances for account %d: %v\n", line.AccountID, err)
+			// Continue processing, don't fail the entire transaction
+		}
 	}
 
+	return nil
+}
+
+// updateParentAccountBalances updates parent account balances for a given account
+func (r *JournalEntryRepo) updateParentAccountBalances(tx *gorm.DB, accountID uint) error {
+	var parentID *uint
+	
+	// Get parent ID
+	if err := tx.Raw("SELECT parent_id FROM accounts WHERE id = ? AND deleted_at IS NULL", accountID).Scan(&parentID).Error; err != nil {
+		return fmt.Errorf("failed to get parent ID for account %d: %w", accountID, err)
+	}
+	
+	// If has parent, update parent and continue up the chain
+	if parentID != nil {
+		// Calculate parent balance as sum of children
+		var parentBalance float64
+		if err := tx.Raw(`
+			SELECT COALESCE(SUM(balance), 0)
+			FROM accounts 
+			WHERE parent_id = ? AND deleted_at IS NULL
+		`, *parentID).Scan(&parentBalance).Error; err != nil {
+			return fmt.Errorf("failed to calculate parent balance for account %d: %w", *parentID, err)
+		}
+
+		// Update parent balance
+		if err := tx.Model(&models.Account{}).
+			Where("id = ? AND deleted_at IS NULL", *parentID).
+			Update("balance", parentBalance).Error; err != nil {
+			return fmt.Errorf("failed to update parent balance for account %d: %w", *parentID, err)
+		}
+
+		// Recursively update grandparent chain
+		return r.updateParentAccountBalances(tx, *parentID)
+	}
+	
 	return nil
 }
 

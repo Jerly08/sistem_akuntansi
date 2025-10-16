@@ -241,6 +241,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Initialize JWT Manager
 	jwtManager := middleware.NewJWTManager(db)
 	
+	// Initialize Session Cleanup Service and Controller
+	sessionCleanupService := services.NewSessionCleanupService(db)
+	sessionController := controllers.NewSessionController(sessionCleanupService)
+	
+	// Initialize Debug Auth Controller
+	debugAuthController := controllers.NewDebugAuthController()
+	
 	// Initialize Permission Middleware
 	permMiddleware := middleware.NewPermissionMiddleware(db)
 	
@@ -273,6 +280,18 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			
 			// Token validation endpoint (requires auth)
 			auth.GET("/validate-token", jwtManager.AuthRequired(), authController.ValidateToken)
+			auth.GET("/session-info", jwtManager.AuthRequired(), authController.GetSessionInfo)
+		}
+		
+		// 🔍 Debug auth routes (development only)
+		if isDevelopmentMode() {
+			debugAuth := v1.Group("/debug-auth")
+			{
+				// Public debug endpoint - no auth required
+				debugAuth.GET("/headers", debugAuthController.DebugAuthHeader)
+				// Protected debug endpoint - requires auth
+				debugAuth.GET("/session", jwtManager.AuthRequired(), debugAuthController.DebugSessionValidation)
+			}
 		}
 		
 		// 📊 Journal Entry Drilldown routes at API level (accessible by finance, admin, director)
@@ -971,6 +990,11 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				// Token monitoring
 				monitoring.GET("/token-stats", monitoringController.GetTokenStats)
 				monitoring.GET("/refresh-events", monitoringController.GetRecentRefreshEvents)
+				
+				// Session management
+				monitoring.GET("/sessions/stats", sessionController.GetSessionStats)
+				monitoring.POST("/sessions/cleanup", sessionController.ForceCleanup)
+				monitoring.GET("/sessions/active", jwtManager.AuthRequired(), sessionController.GetActiveSessions)
 
 				// User-specific monitoring
 				monitoring.GET("/users/:user_id/security-summary", monitoringController.GetUserSecuritySummary)

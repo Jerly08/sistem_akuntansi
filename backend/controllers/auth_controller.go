@@ -181,6 +181,19 @@ func (ac *AuthController) Login(c *gin.Context) {
 		return
 	}
 
+	// Check for existing active sessions and limit them
+	var existingSessions []models.UserSession
+	ac.DB.Where("user_id = ? AND is_active = ?", user.ID, true).Order("created_at DESC").Find(&existingSessions)
+	
+	// If user has more than 5 active sessions, deactivate the oldest ones (increased from 3)
+	if len(existingSessions) > 5 {
+		oldSessions := existingSessions[5:]
+		for _, session := range oldSessions {
+			ac.DB.Model(&session).Update("is_active", false)
+		}
+		log.Printf("Deactivated %d old sessions for user %d during login", len(oldSessions), user.ID)
+	}
+
 	// Initialize JWT Manager
 	jw := middleware.NewJWTManager(ac.DB)
 
@@ -336,5 +349,61 @@ func (ac *AuthController) ValidateToken(c *gin.Context) {
 			"email":    user.Email,
 			"role":     user.Role,
 		},
+	})
+}
+
+// GetSessionInfo returns current session information for debugging
+// @Summary Get session information
+// @Description Get current session information for debugging purposes
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{} "Session information"
+// @Failure 401 {object} models.ErrorResponse "Unauthorized"
+// @Router /auth/session-info [get]
+func (ac *AuthController) GetSessionInfo(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	sessionID, _ := c.Get("session_id")
+	
+	// Get session details
+	var session models.UserSession
+	if err := ac.DB.Where("session_id = ?", sessionID).First(&session).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Session not found",
+			"code":  "SESSION_NOT_FOUND",
+		})
+		return
+	}
+	
+	// Get user details
+	var user models.User
+	if err := ac.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "User not found",
+			"code":  "USER_NOT_FOUND",
+		})
+		return
+	}
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"session": gin.H{
+			"session_id":    session.SessionID,
+			"is_active":     session.IsActive,
+			"created_at":    session.CreatedAt,
+			"expires_at":    session.ExpiresAt,
+			"last_activity": session.LastActivity,
+			"ip_address":    session.IPAddress,
+			"device_info":   session.DeviceInfo,
+		},
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+			"role":     user.Role,
+			"is_active": user.IsActive,
+		},
+		"timestamp": time.Now(),
 	})
 }

@@ -68,8 +68,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Validate token before auto-login
             const userData = JSON.parse(storedUser);
             
-            // Basic validation of stored data
-            if (userData && userData.id && userData.email && storedToken.length > 20) {
+            // Check if token is expired by parsing JWT
+            let isTokenExpired = false;
+            try {
+              const tokenParts = storedToken.split('.');
+              if (tokenParts.length === 3) {
+                const payload = JSON.parse(atob(tokenParts[1]));
+                const currentTime = Math.floor(Date.now() / 1000);
+                if (payload.exp && payload.exp < currentTime) {
+                  isTokenExpired = true;
+                  console.log('Stored token is expired, clearing auth data');
+                }
+              }
+            } catch (e) {
+              console.log('Error parsing token, treating as expired');
+              isTokenExpired = true;
+            }
+            
+            if (isTokenExpired) {
+              localStorage.removeItem('token');
+              localStorage.removeItem('refreshToken');
+              localStorage.removeItem('user');
+            } else if (userData && userData.id && userData.email && storedToken.length > 20) {
               // Try to validate the token by making a quick API call
               try {
                 const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.VALIDATE_TOKEN}`, {
@@ -194,7 +214,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('user', JSON.stringify(userData));
       }
     } catch (error) {
-      console.error('Login error:', error);
+      // Log authentication failures as warnings instead of errors since they're expected behavior
+      if (error instanceof Error && error.message === 'Invalid email or password') {
+        console.warn('Authentication failed:', error.message);
+      } else {
+        console.error('Login error:', error);
+      }
       throw error;
     } finally {
       setIsLoading(false);
@@ -309,7 +334,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // Try to refresh the token if it's about to expire
       if (refreshToken) {
-        const response = await fetch(`${API_URL}${API_ENDPOINTS.REFRESH}`, {
+        const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.REFRESH}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

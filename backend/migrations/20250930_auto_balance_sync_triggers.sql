@@ -78,6 +78,7 @@ RETURNS VOID AS $$
 DECLARE
     parent_id INTEGER;
     parent_balance DECIMAL(15,2);
+    current_parent_balance DECIMAL(15,2);
 BEGIN
     -- Get the parent of the current account
     SELECT parent_id INTO parent_id
@@ -87,6 +88,12 @@ BEGIN
     
     -- If there's a parent, update its balance
     IF parent_id IS NOT NULL THEN
+        -- Get current parent balance for comparison
+        SELECT balance INTO current_parent_balance
+        FROM accounts 
+        WHERE id = parent_id 
+        AND deleted_at IS NULL;
+        
         -- Calculate sum of all children balances
         SELECT COALESCE(SUM(balance), 0)
         INTO parent_balance
@@ -94,13 +101,18 @@ BEGIN
         WHERE parent_id = parent_id 
         AND deleted_at IS NULL;
         
-        -- Update parent balance
-        UPDATE accounts 
-        SET 
-            balance = parent_balance,
-            updated_at = NOW()
-        WHERE id = parent_id 
-        AND deleted_at IS NULL;
+        -- Update parent balance only if it's different
+        IF ABS(current_parent_balance - parent_balance) > 0.01 THEN
+            UPDATE accounts 
+            SET 
+                balance = parent_balance,
+                updated_at = NOW()
+            WHERE id = parent_id 
+            AND deleted_at IS NULL;
+            
+            -- Log the update
+            RAISE NOTICE 'Updated parent account % balance: % → %', parent_id, current_parent_balance, parent_balance;
+        END IF;
         
         -- Recursively update parent's parent
         PERFORM update_parent_account_balances(parent_id);
@@ -129,12 +141,14 @@ BEGIN
         -- Auto-correct the balance if it doesn't match
         IF ABS(NEW.balance - calculated_balance) > 0.01 THEN
             NEW.balance := calculated_balance;
+            RAISE NOTICE 'Auto-corrected header account % balance: % → %', NEW.id, OLD.balance, calculated_balance;
         END IF;
     END IF;
     
     -- Update parent balances when a child balance changes
     IF OLD.balance IS DISTINCT FROM NEW.balance THEN
         PERFORM update_parent_account_balances(NEW.id);
+        RAISE NOTICE 'Triggered parent balance update for account % (balance changed from % to %)', NEW.id, OLD.balance, NEW.balance;
     END IF;
     
     RETURN NEW;

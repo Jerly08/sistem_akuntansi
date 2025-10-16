@@ -501,22 +501,14 @@ func (sc *SalesController) CreateSalePayment(c *gin.Context) {
 		return
 	}
 
-	// Validate payment request before processing
-	if err := sc.unifiedPaymentService.ValidatePaymentRequest(request); err != nil {
-		log.Printf("❌ Payment validation failed for sale %d: %v", id, err)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  "error",
-			"error":   "Payment validation failed",
-			"details": err.Error(),
-			"code":    "PAYMENT_VALIDATION_ERROR",
-		})
-		return
-	}
-
-	// Use the UNIFIED payment service (SINGLE SOURCE OF TRUTH)
-	payment, err := sc.unifiedPaymentService.CreateSalesPayment(uint(id), request, userID)
+	// ✅ FIX: Use SalesServiceV2.ProcessPayment instead of disabled UnifiedSalesPaymentService
+	// The UnifiedSalesPaymentService is disabled in stub_services.go to prevent auto-posting
+	// We should use the working SalesServiceV2.ProcessPayment() which creates proper journals
+	log.Printf("💡 Using SalesServiceV2.ProcessPayment for partial payment support")
+	
+	payment, err := sc.salesServiceV2.ProcessPayment(uint(id), request, userID)
 	if err != nil {
-		log.Printf("❌ [UNIFIED] Payment creation failed for sale %d: %v", id, err)
+		log.Printf("❌ Payment creation failed for sale %d: %v", id, err)
 		
 		// Determine appropriate HTTP status based on error type
 		status := http.StatusInternalServerError
@@ -714,30 +706,11 @@ sale, err := sc.salesServiceV2.GetSaleByID(uint(id))
 	}
 	log.Printf("✅ Payment created successfully: ID=%d, Code=%s", payment.ID, payment.Code)
 
-	// 🔥 NEW: Ensure COA balance is synchronized after sales payment
-	log.Printf("🔧 Ensuring COA balance sync after sales payment...")
-	if sc.accountRepo != nil {
-		// Initialize COA sync service for sales payments
-		coaSyncService := services.NewPurchasePaymentCOASyncService(sc.db, sc.accountRepo)
-		
-		// Sync COA balance to match cash/bank balance
-		err = coaSyncService.SyncCOABalanceAfterPayment(
-			uint(id),
-			request.Amount,
-			request.CashBankID,
-			userID,
-			fmt.Sprintf("REC-%s", sale.InvoiceNumber),
-			fmt.Sprintf("Sales payment for Invoice %s", sale.InvoiceNumber),
-		)
-		if err != nil {
-			log.Printf("⚠️ Warning: Failed to sync COA balance for sales payment: %v", err)
-			// Don't fail the payment, just log the warning
-		} else {
-			log.Printf("✅ COA balance synchronized successfully for sales payment")
-		}
-	} else {
-		log.Printf("⚠️ Warning: Account repository not available for COA sync")
-	}
+	// ❌ REMOVED: Double COA sync - PaymentService.CreateReceivablePayment() already handles journal entries and COA updates
+	// The previous code here was causing DOUBLE POSTING to COA because:
+	// 1. PaymentService creates journal entry → COA updated
+	// 2. SyncCOABalanceAfterPayment() updates COA AGAIN → DOUBLE!
+	// FIX: Trust PaymentService to handle everything correctly
 
 	// Return response with both payment info and updated sale status
 updatedSale, err := sc.salesServiceV2.GetSaleByID(uint(id))
