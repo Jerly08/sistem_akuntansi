@@ -152,14 +152,14 @@ func (s *SSOTProfitLossService) getAccountBalancesFromLegacy(startDate, endDate 
 	var balances []SSOTAccountBalance
 	legacyQuery := `
 		SELECT 
-			a.id as account_id,
+			MIN(a.id) as account_id,
 			a.code as account_code,
-			a.name as account_name,
-			a.type as account_type,
+			MAX(a.name) as account_name,
+			MAX(a.type) as account_type,
 			COALESCE(SUM(jl.debit_amount), 0) as debit_total,
 			COALESCE(SUM(jl.credit_amount), 0) as credit_total,
 			CASE 
-				WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
+				WHEN UPPER(MAX(a.type)) IN ('ASSET', 'EXPENSE') THEN 
 					COALESCE(SUM(jl.debit_amount), 0) - COALESCE(SUM(jl.credit_amount), 0)
 				ELSE 
 					COALESCE(SUM(jl.credit_amount), 0) - COALESCE(SUM(jl.debit_amount), 0)
@@ -169,7 +169,7 @@ func (s *SSOTProfitLossService) getAccountBalancesFromLegacy(startDate, endDate 
 		LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status = 'POSTED' AND je.deleted_at IS NULL
 		WHERE je.entry_date >= ? AND je.entry_date <= ?
 		  AND COALESCE(a.is_header, false) = false
-		GROUP BY a.id, a.code, a.name, a.type
+		GROUP BY a.code
 		HAVING (COALESCE(SUM(jl.debit_amount), 0) <> 0 OR COALESCE(SUM(jl.credit_amount), 0) <> 0)
 		ORDER BY a.code`
 	if err := s.db.Raw(legacyQuery, startDate, endDate).Scan(&balances).Error; err != nil {
@@ -185,14 +185,14 @@ func (s *SSOTProfitLossService) getAccountBalancesFromSSOT(startDate, endDate st
 	
 	query := `
 		SELECT 
-			a.id as account_id,
+			MIN(a.id) as account_id,
 			a.code as account_code,
-			a.name as account_name,
-			a.type as account_type,
+			MAX(a.name) as account_name,
+			MAX(a.type) as account_type,
 			COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
 			COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
 			CASE 
-				WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
+				WHEN UPPER(MAX(a.type)) IN ('ASSET', 'EXPENSE') THEN 
 					COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
 				ELSE 
 					COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
@@ -202,7 +202,7 @@ func (s *SSOTProfitLossService) getAccountBalancesFromSSOT(startDate, endDate st
 		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id AND uje.status = 'POSTED' AND uje.deleted_at IS NULL
 		WHERE uje.entry_date >= ? AND uje.entry_date <= ?
 		  AND COALESCE(a.is_header, false) = false
-		GROUP BY a.id, a.code, a.name, a.type
+		GROUP BY a.code
 		HAVING (COALESCE(SUM(ujl.debit_amount), 0) <> 0 OR COALESCE(SUM(ujl.credit_amount), 0) <> 0)
 		ORDER BY a.code
 	`
@@ -247,16 +247,19 @@ func (s *SSOTProfitLossService) getPLFromAccountsBalance() ([]SSOTAccountBalance
 	var balances []SSOTAccountBalance
 	query := `
 		SELECT 
-			id as account_id,
+			MIN(id) as account_id,
 			code as account_code,
-			name as account_name,
-			type as account_type,
+			MAX(name) as account_name,
+			MAX(type) as account_type,
 			0 as debit_total,
 			0 as credit_total,
-			CASE WHEN UPPER(type) = 'EXPENSE' THEN balance ELSE balance END as net_balance
+			SUM(CASE WHEN UPPER(type) = 'EXPENSE' THEN balance ELSE balance END) as net_balance
 		FROM accounts
 		WHERE (code LIKE '4%%' OR code LIKE '5%%')
 		  AND COALESCE(is_header,false) = false
+		  AND deleted_at IS NULL
+		GROUP BY code
+		HAVING SUM(balance) != 0
 		ORDER BY code`
 	if err := s.db.Raw(query).Scan(&balances).Error; err != nil {
 		return nil, fmt.Errorf("accounts balance PL fallback failed: %v", err)
@@ -268,7 +271,11 @@ func (s *SSOTProfitLossService) getPLFromAccountsBalance() ([]SSOTAccountBalance
 func (s *SSOTProfitLossService) generateProfitLossFromBalances(balances []SSOTAccountBalance, start, end time.Time) *SSOTProfitLossData {
 	plData := &SSOTProfitLossData{
 		Company: CompanyInfo{
-			Name: "PT. Sistem Akuntansi",
+			Name:    "PT. Sistem Akuntansi",
+			Address: "Jl. Teknologi No. 123",
+			City:    "Jakarta Selatan",
+			Phone:   "+62 21 1234 5678",
+			Email:   "info@sistemakuntansi.com",
 		},
 		StartDate:   start,
 		EndDate:     end,
@@ -283,12 +290,32 @@ func (s *SSOTProfitLossService) generateProfitLossFromBalances(balances []SSOTAc
 	plData.OperatingExpenses.Administrative.Items = []PLSectionItem{}
 	plData.OperatingExpenses.SellingMarketing.Items = []PLSectionItem{}
 	plData.OperatingExpenses.General.Items = []PLSectionItem{}
-	plData.AccountDetails = balances
 	plData.OtherIncomeItems = []PLSectionItem{}
 	plData.OtherExpenseItems = []PLSectionItem{}
 	
-	// Process each account balance
+	// Deduplicate balances by account code first (in case GROUP BY didn't work in query)
+	balancesByCode := make(map[string]SSOTAccountBalance)
 	for _, balance := range balances {
+		if existing, found := balancesByCode[balance.AccountCode]; found {
+			// Merge: sum the balances
+			existing.NetBalance += balance.NetBalance
+			existing.DebitTotal += balance.DebitTotal
+			existing.CreditTotal += balance.CreditTotal
+			balancesByCode[balance.AccountCode] = existing
+		} else {
+			balancesByCode[balance.AccountCode] = balance
+		}
+	}
+	
+	// Convert deduplicated map back to slice for AccountDetails
+	deduplicatedBalances := []SSOTAccountBalance{}
+	for _, balance := range balancesByCode {
+		deduplicatedBalances = append(deduplicatedBalances, balance)
+	}
+	plData.AccountDetails = deduplicatedBalances  // Use deduplicated balances
+	
+	// Process each unique account balance
+	for _, balance := range balancesByCode {
 		code := balance.AccountCode
 		amount := balance.NetBalance
 		

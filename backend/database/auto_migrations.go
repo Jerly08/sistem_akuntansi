@@ -94,6 +94,28 @@ func RunAutoMigrations(db *gorm.DB) error {
 	}
 	log.Println("============================================")
 
+	// Prevent duplicate accounts system
+	log.Println("============================================")
+	log.Println("🔒 INSTALLING DUPLICATE ACCOUNT PREVENTION SYSTEM")
+	log.Println("============================================")
+	if err := RunPreventDuplicateAccountsMigration(db); err != nil {
+		log.Printf("⚠️  DUPLICATE PREVENTION MIGRATION FAILED: %v", err)
+	} else {
+		log.Println("✅ DUPLICATE PREVENTION SYSTEM INSTALLED SUCCESSFULLY")
+	}
+	log.Println("============================================")
+
+	// Fix revenue duplication issue (account name variations + parent accounts)
+	log.Println("============================================")
+	log.Println("💰 FIXING REVENUE DUPLICATION ISSUE")
+	log.Println("============================================")
+	if err := fixRevenueDuplication(db); err != nil {
+		log.Printf("⚠️  REVENUE DUPLICATION FIX FAILED: %v", err)
+	} else {
+		log.Println("✅ REVENUE DUPLICATION FIX COMPLETED SUCCESSFULLY")
+	}
+	log.Println("============================================")
+
 	log.Println("✅ Auto-migrations completed")
 	return nil
 }
@@ -1581,5 +1603,132 @@ func ensureInvoiceNumberFunctions(db *gorm.DB) error {
 		return fmt.Errorf("failed to create preview_next_invoice_number function: %w", err)
 	}
 	
+	return nil
+}
+
+// fixRevenueDuplication fixes the revenue duplication issue caused by:
+// 1. Account name variations in journal entries (case sensitivity)
+// 2. Parent accounts not marked as headers
+func fixRevenueDuplication(db *gorm.DB) error {
+	log.Println("[AUTO-FIX] Starting revenue duplication fix...")
+
+	// Step 1: Mark parent accounts as headers
+	log.Println("[AUTO-FIX] Step 1/5: Marking parent accounts as headers...")
+	parentAccounts := []string{"1000", "1100", "1500", "2000", "2100", "3000", "4000", "5000"}
+	
+	result := db.Exec(`
+		UPDATE accounts 
+		SET is_header = true, 
+		    updated_at = NOW()
+		WHERE code IN (?)
+		  AND COALESCE(is_header, false) = false
+	`, parentAccounts)
+	
+	if result.Error != nil {
+		return fmt.Errorf("failed to mark parent accounts as headers: %v", result.Error)
+	}
+	if result.RowsAffected > 0 {
+		log.Printf("[AUTO-FIX] ✓ Marked %d parent accounts as headers", result.RowsAffected)
+	}
+
+	// Step 2: Standardize account names in journal_entries for revenue (4xxx)
+	log.Println("[AUTO-FIX] Step 2/5: Standardizing revenue account names in journal_entries...")
+	result = db.Exec(`
+		UPDATE journal_entries je
+		INNER JOIN accounts a ON a.code = je.account_code
+		SET je.account_name = a.name,
+		    je.updated_at = NOW()
+		WHERE je.account_name != a.name
+		  AND je.account_code LIKE '4%'
+	`)
+	
+	if result.Error != nil {
+		log.Printf("[AUTO-FIX] ⚠ Warning: Could not standardize journal_entries (4xxx): %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("[AUTO-FIX] ✓ Standardized %d revenue journal entries", result.RowsAffected)
+	}
+
+	// Step 3: Standardize account names in journal_entries for expenses (5xxx)
+	log.Println("[AUTO-FIX] Step 3/5: Standardizing expense account names in journal_entries...")
+	result = db.Exec(`
+		UPDATE journal_entries je
+		INNER JOIN accounts a ON a.code = je.account_code
+		SET je.account_name = a.name,
+		    je.updated_at = NOW()
+		WHERE je.account_name != a.name
+		  AND je.account_code LIKE '5%'
+	`)
+	
+	if result.Error != nil {
+		log.Printf("[AUTO-FIX] ⚠ Warning: Could not standardize journal_entries (5xxx): %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("[AUTO-FIX] ✓ Standardized %d expense journal entries", result.RowsAffected)
+	}
+
+	// Step 4: Standardize unified_journal_lines for revenue (4xxx)
+	log.Println("[AUTO-FIX] Step 4/5: Standardizing unified journal lines (4xxx)...")
+	result = db.Exec(`
+		UPDATE unified_journal_lines ujl
+		INNER JOIN accounts a ON a.id = ujl.account_id
+		SET ujl.account_name = a.name,
+		    ujl.updated_at = NOW()
+		WHERE ujl.account_name != a.name
+		  AND ujl.account_code LIKE '4%'
+	`)
+	
+	if result.Error != nil {
+		log.Printf("[AUTO-FIX] ⚠ Warning: unified_journal_lines not updated (4xxx): %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("[AUTO-FIX] ✓ Standardized %d unified revenue lines", result.RowsAffected)
+	}
+
+	// Step 5: Standardize unified_journal_lines for expenses (5xxx)
+	log.Println("[AUTO-FIX] Step 5/5: Standardizing unified journal lines (5xxx)...")
+	result = db.Exec(`
+		UPDATE unified_journal_lines ujl
+		INNER JOIN accounts a ON a.id = ujl.account_id
+		SET ujl.account_name = a.name,
+		    ujl.updated_at = NOW()
+		WHERE ujl.account_name != a.name
+		  AND ujl.account_code LIKE '5%'
+	`)
+	
+	if result.Error != nil {
+		log.Printf("[AUTO-FIX] ⚠ Warning: unified_journal_lines not updated (5xxx): %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("[AUTO-FIX] ✓ Standardized %d unified expense lines", result.RowsAffected)
+	}
+
+	// Verification
+	log.Println("[AUTO-FIX] Verifying fix...")
+	
+	type VerifyResult struct {
+		AccountCode  string `gorm:"column:account_code"`
+		NameCount    int    `gorm:"column:name_count"`
+		AllNames     string `gorm:"column:all_names"`
+	}
+	
+	var dupes []VerifyResult
+	db.Raw(`
+		SELECT 
+			je.account_code,
+			COUNT(DISTINCT je.account_name) as name_count,
+			GROUP_CONCAT(DISTINCT je.account_name SEPARATOR ' | ') as all_names
+		FROM journal_entries je
+		WHERE je.account_code LIKE '4%'
+		GROUP BY je.account_code
+		HAVING COUNT(DISTINCT je.account_name) > 1
+	`).Scan(&dupes)
+	
+	if len(dupes) > 0 {
+		log.Printf("[AUTO-FIX] ⚠ WARNING: Still found %d accounts with name variations:", len(dupes))
+		for _, d := range dupes {
+			log.Printf("[AUTO-FIX]   - Account %s has %d variations: %s", d.AccountCode, d.NameCount, d.AllNames)
+		}
+	} else {
+		log.Println("[AUTO-FIX] ✅ Verification passed: No duplicate account names")
+	}
+
+	log.Println("[AUTO-FIX] Revenue duplication fix completed!")
 	return nil
 }

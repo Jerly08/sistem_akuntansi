@@ -173,12 +173,30 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		
 		// If we have detailed items, use them
 		if len(ssotData.Revenue.Items) > 0 {
+			// Deduplicate by account code and sum amounts
+			itemsByCode := make(map[string]gin.H)
 			for _, item := range ssotData.Revenue.Items {
-				revenueItems = append(revenueItems, gin.H{
-					"name":         item.AccountName,
-					"amount":       item.Amount,
-					"account_code": item.AccountCode,
-				})
+				if existing, found := itemsByCode[item.AccountCode]; found {
+					// Account code already exists, sum the amounts
+					existingAmount := existing["amount"].(float64)
+					itemsByCode[item.AccountCode] = gin.H{
+						"name":         existing["name"],
+						"amount":       existingAmount + item.Amount,
+						"account_code": item.AccountCode,
+					}
+				} else {
+					// First occurrence of this account code
+					itemsByCode[item.AccountCode] = gin.H{
+						"name":         item.AccountName,
+						"amount":       item.Amount,
+						"account_code": item.AccountCode,
+					}
+				}
+			}
+			
+			// Convert map to slice
+			for _, item := range itemsByCode {
+				revenueItems = append(revenueItems, item)
 			}
 		} else if ssotData.Revenue.TotalRevenue > 0 {
 			// If no detailed items but has total revenue, create a generic item
@@ -189,9 +207,15 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 			})
 		}
 		
+		// Recalculate total from deduplicated items to ensure consistency
+		actualTotal := 0.0
+		for _, item := range revenueItems {
+			actualTotal += item["amount"].(float64)
+		}
+		
 		sections = append(sections, gin.H{
 			"name":  "REVENUE",
-			"total": ssotData.Revenue.TotalRevenue,
+			"total": actualTotal,  // Use actual total from deduplicated items
 			"items": revenueItems,
 		})
 	}
@@ -234,16 +258,33 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		}
 		
 		if ssotData.COGS.OtherCOGS != 0 {
-			otherItems := []gin.H{}
+			// Deduplicate other COGS items
+			itemsByCode := make(map[string]gin.H)
 			for _, item := range ssotData.COGS.Items {
 				if len(item.AccountCode) >= 3 && (item.AccountCode[:3] == "513" || item.AccountCode[:3] == "514" || item.AccountCode[:3] == "519") {
-					otherItems = append(otherItems, gin.H{
-						"name":         item.AccountName,
-						"amount":       item.Amount,
-						"account_code": item.AccountCode,
-					})
+					if existing, found := itemsByCode[item.AccountCode]; found {
+						existingAmount := existing["amount"].(float64)
+						itemsByCode[item.AccountCode] = gin.H{
+							"name":         existing["name"],
+							"amount":       existingAmount + item.Amount,
+							"account_code": item.AccountCode,
+						}
+					} else {
+						itemsByCode[item.AccountCode] = gin.H{
+							"name":         item.AccountName,
+							"amount":       item.Amount,
+							"account_code": item.AccountCode,
+						}
+					}
 				}
 			}
+			
+			// Convert map to slice
+			otherItems := []gin.H{}
+			for _, item := range itemsByCode {
+				otherItems = append(otherItems, item)
+			}
+			
 			if len(otherItems) > 0 {
 				cogsSubsections = append(cogsSubsections, gin.H{
 					"name":  "Other COGS",
@@ -284,14 +325,7 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		opexSubsections := []gin.H{}
 		
 		if ssotData.OperatingExpenses.Administrative.Subtotal != 0 {
-			adminItems := []gin.H{}
-			for _, item := range ssotData.OperatingExpenses.Administrative.Items {
-				adminItems = append(adminItems, gin.H{
-					"name":         item.AccountName,
-					"amount":       item.Amount,
-					"account_code": item.AccountCode,
-				})
-			}
+			adminItems := c.deduplicateItems(ssotData.OperatingExpenses.Administrative.Items)
 			opexSubsections = append(opexSubsections, gin.H{
 				"name":  "Administrative Expenses",
 				"total": ssotData.OperatingExpenses.Administrative.Subtotal,
@@ -300,14 +334,7 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		}
 		
 		if ssotData.OperatingExpenses.SellingMarketing.Subtotal != 0 {
-			sellItems := []gin.H{}
-			for _, item := range ssotData.OperatingExpenses.SellingMarketing.Items {
-				sellItems = append(sellItems, gin.H{
-					"name":         item.AccountName,
-					"amount":       item.Amount,
-					"account_code": item.AccountCode,
-				})
-			}
+			sellItems := c.deduplicateItems(ssotData.OperatingExpenses.SellingMarketing.Items)
 			opexSubsections = append(opexSubsections, gin.H{
 				"name":  "Selling & Marketing",
 				"total": ssotData.OperatingExpenses.SellingMarketing.Subtotal,
@@ -316,14 +343,7 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		}
 		
 		if ssotData.OperatingExpenses.General.Subtotal != 0 {
-			genItems := []gin.H{}
-			for _, item := range ssotData.OperatingExpenses.General.Items {
-				genItems = append(genItems, gin.H{
-					"name":         item.AccountName,
-					"amount":       item.Amount,
-					"account_code": item.AccountCode,
-				})
-			}
+			genItems := c.deduplicateItems(ssotData.OperatingExpenses.General.Items)
 			opexSubsections = append(opexSubsections, gin.H{
 				"name":  "General Expenses",
 				"total": ssotData.OperatingExpenses.General.Subtotal,
@@ -427,13 +447,30 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 		})
 	}
 
+	// Calculate total expenses for summary
+	totalExpenses := ssotData.COGS.TotalCOGS + ssotData.OperatingExpenses.TotalOpEx + ssotData.OtherExpenses
+	
+	// Calculate net profit and net loss (mutually exclusive)
+	var netProfit, netLoss float64
+	if ssotData.NetIncome > 0 {
+		netProfit = ssotData.NetIncome
+		netLoss = 0
+	} else {
+		netProfit = 0
+		netLoss = -ssotData.NetIncome
+	}
+	
 	// Create the frontend-compatible response
 	return gin.H{
 		"title":   "Enhanced Profit and Loss Statement",
 		"period":  ssotData.StartDate.Format("2006-01-02") + " - " + ssotData.EndDate.Format("2006-01-02"),
 		"company": gin.H{
-			"name":   ssotData.Company.Name,
-			"period": ssotData.StartDate.Format("02/01/2006") + " - " + ssotData.EndDate.Format("02/01/2006"),
+			"name":    ssotData.Company.Name,
+			"address": ssotData.Company.Address,
+			"city":    ssotData.Company.City,
+			"phone":   ssotData.Company.Phone,
+			"email":   ssotData.Company.Email,
+			"period":  ssotData.StartDate.Format("02/01/2006") + " - " + ssotData.EndDate.Format("02/01/2006"),
 		},
 		"sections": sections,
 		"enhanced": ssotData.Enhanced,
@@ -448,6 +485,12 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 			"netIncome":          ssotData.NetIncome,
 			"netIncomeMargin":    ssotData.NetIncomeMargin,
 		},
+		// Summary fields for frontend display
+		"total_revenue":  ssotData.Revenue.TotalRevenue,
+		"total_expenses": totalExpenses,
+		"net_profit":     netProfit,
+		"net_loss":       netLoss,
+		// Date and metadata fields
 		"start_date":      ssotData.StartDate.Format("2006-01-02"),
 		"end_date":        ssotData.EndDate.Format("2006-01-02"),
 		"generated_at":    ssotData.GeneratedAt.Format(time.RFC3339),
@@ -468,20 +511,70 @@ func (c *SSOTProfitLossController) TransformToFrontendFormat(ssotData *services.
 	}
 }
 
-// filterItemsByPrefix filters items by account code prefix
-func (c *SSOTProfitLossController) filterItemsByPrefix(items []services.PLSectionItem, prefix string) []gin.H {
-	var filtered []gin.H
-	var filteredItems []services.PLSectionItem
+// deduplicateItems deduplicates items by account code and sums amounts
+func (c *SSOTProfitLossController) deduplicateItems(items []services.PLSectionItem) []gin.H {
+	itemsByCode := make(map[string]gin.H)
+	
 	for _, item := range items {
-		if len(item.AccountCode) >= len(prefix) && item.AccountCode[:len(prefix)] == prefix {
-			filtered = append(filtered, gin.H{
+		if existing, found := itemsByCode[item.AccountCode]; found {
+			// Account code already exists, sum the amounts
+			existingAmount := existing["amount"].(float64)
+			itemsByCode[item.AccountCode] = gin.H{
+				"name":         existing["name"],
+				"amount":       existingAmount + item.Amount,
+				"account_code": item.AccountCode,
+			}
+		} else {
+			// First occurrence of this account code
+			itemsByCode[item.AccountCode] = gin.H{
 				"name":         item.AccountName,
 				"amount":       item.Amount,
 				"account_code": item.AccountCode,
-			})
-			filteredItems = append(filteredItems, item)
+			}
 		}
 	}
+	
+	// Convert map to slice
+	var result []gin.H
+	for _, item := range itemsByCode {
+		result = append(result, item)
+	}
+	
+	return result
+}
+
+// filterItemsByPrefix filters items by account code prefix with deduplication
+func (c *SSOTProfitLossController) filterItemsByPrefix(items []services.PLSectionItem, prefix string) []gin.H {
+	// Use map to deduplicate by account code
+	itemsByCode := make(map[string]gin.H)
+	
+	for _, item := range items {
+		if len(item.AccountCode) >= len(prefix) && item.AccountCode[:len(prefix)] == prefix {
+			if existing, found := itemsByCode[item.AccountCode]; found {
+				// Account code already exists, sum the amounts
+				existingAmount := existing["amount"].(float64)
+				itemsByCode[item.AccountCode] = gin.H{
+					"name":         existing["name"],
+					"amount":       existingAmount + item.Amount,
+					"account_code": item.AccountCode,
+				}
+			} else {
+				// First occurrence of this account code
+				itemsByCode[item.AccountCode] = gin.H{
+					"name":         item.AccountName,
+					"amount":       item.Amount,
+					"account_code": item.AccountCode,
+				}
+			}
+		}
+	}
+	
+	// Convert map to slice
+	var filtered []gin.H
+	for _, item := range itemsByCode {
+		filtered = append(filtered, item)
+	}
+	
 	return filtered
 }
 
@@ -514,7 +607,11 @@ func (c *SSOTProfitLossController) transformToEnhancedFormat(ssotData *services.
 	// Transform to the enhanced format that the frontend expects
 	response := gin.H{
 		"company": gin.H{
-			"name": ssotData.Company.Name,
+			"name":    ssotData.Company.Name,
+			"address": ssotData.Company.Address,
+			"city":    ssotData.Company.City,
+			"phone":   ssotData.Company.Phone,
+			"email":   ssotData.Company.Email,
 		},
 		"start_date": ssotData.StartDate.Format("2006-01-02"),
 		"end_date":   ssotData.EndDate.Format("2006-01-02"),

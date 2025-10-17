@@ -312,6 +312,7 @@ export const API_ENDPOINTS = {
   SSOT_REPORTS_GENERAL_LEDGER: '/api/v1/ssot-reports/general-ledger',
   SSOT_REPORTS_INTEGRATED: '/api/v1/ssot-reports/integrated',
   SSOT_REPORTS_JOURNAL_ANALYSIS: '/api/v1/ssot-reports/journal-analysis',
+  SSOT_REPORTS_PROFIT_LOSS: '/api/v1/reports/ssot-profit-loss',
   SSOT_REPORTS_PURCHASE_REPORT: '/api/v1/ssot-reports/purchase-report',
   SSOT_REPORTS_PURCHASE_VALIDATE: '/api/v1/ssot-reports/purchase-report/validate',
   SSOT_REPORTS_PURCHASE_SUMMARY: '/api/v1/ssot-reports/purchase-summary',
@@ -333,6 +334,7 @@ export const API_ENDPOINTS = {
     PURCHASE_REPORT: '/api/v1/ssot-reports/purchase-report',
     PURCHASE_SUMMARY: '/api/v1/ssot-reports/purchase-summary',
     PURCHASE_VALIDATE: '/api/v1/ssot-reports/purchase-report/validate',
+    PROFIT_LOSS: '/api/v1/reports/ssot-profit-loss',
 
     TRIAL_BALANCE: '/api/v1/ssot-reports/trial-balance',
     GENERAL_LEDGER: '/api/v1/ssot-reports/general-ledger',

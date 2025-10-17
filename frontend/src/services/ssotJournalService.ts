@@ -1,5 +1,5 @@
 import { API_ENDPOINTS } from '@/config/api';
-import { getAuthHeaders } from '../utils/authTokenUtils';
+import { getAuthHeaders } from '@/utils/authTokenUtils';
 
 // SSOT Journal Entry Structure (aligned with backend)
 export interface SSOTJournalEntry {

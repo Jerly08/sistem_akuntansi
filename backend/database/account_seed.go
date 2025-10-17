@@ -1,9 +1,12 @@
 package database
 
 import (
+	"fmt"
+	"log"
+	"strings"
+	
 	"app-sistem-akuntansi/models"
 	"gorm.io/gorm"
-	"log"
 )
 
 // SeedAccounts creates initial chart of accounts
@@ -58,17 +61,35 @@ func SeedAccounts(db *gorm.DB) error {
 
 	// First pass: create accounts to get IDs
 	for _, account := range accounts {
-		var existingAccount models.Account
-		result := db.Where("code = ?", account.Code).First(&existingAccount)
+		var existingAccounts []models.Account
+		
+		// Check for ALL accounts with this code (case-insensitive)
+		result := db.Where("LOWER(code) = LOWER(?) AND deleted_at IS NULL", account.Code).Find(&existingAccounts)
 
-		if result.Error != nil {
+		if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
+			return fmt.Errorf("failed to check existing account %s: %v", account.Code, result.Error)
+		}
+
+		if len(existingAccounts) == 0 {
 			// Account doesn't exist, create it
 			if err := db.Create(&account).Error; err != nil {
-				return err
+				// Check if error is due to unique constraint violation
+				if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
+					log.Printf("⚠️  Account %s already exists (caught by constraint), skipping creation", account.Code)
+					// Try to find it again
+					var foundAccount models.Account
+					if err := db.Where("LOWER(code) = LOWER(?)", account.Code).First(&foundAccount).Error; err == nil {
+						accountMap[account.Code] = foundAccount.ID
+					}
+					continue
+				}
+				return fmt.Errorf("failed to create account %s: %v", account.Code, err)
 			}
+			log.Printf("✅ Created new account: %s - %s", account.Code, account.Name)
 			accountMap[account.Code] = account.ID
-		} else {
+		} else if len(existingAccounts) == 1 {
 			// Account exists, update it but PRESERVE EXISTING BALANCE
+			existingAccount := existingAccounts[0]
 			log.Printf("🔒 Preserving balance for account %s (%s): %.2f", existingAccount.Code, existingAccount.Name, existingAccount.Balance)
 			existingAccount.Name = account.Name
 			existingAccount.Type = account.Type
@@ -80,9 +101,23 @@ func SeedAccounts(db *gorm.DB) error {
 			// REMOVED: existingAccount.Balance = account.Balance (preserving existing balances)
 
 			if err := db.Save(&existingAccount).Error; err != nil {
-				return err
+				return fmt.Errorf("failed to update account %s: %v", account.Code, err)
 			}
 			accountMap[account.Code] = existingAccount.ID
+		} else {
+			// Multiple accounts with same code found - this should not happen!
+			log.Printf("⚠️  WARNING: Found %d accounts with code %s! Using the oldest one.", len(existingAccounts), account.Code)
+			// Use the oldest account (lowest ID)
+			var oldestAccount models.Account
+			oldestID := uint(0)
+			for _, acc := range existingAccounts {
+				if oldestID == 0 || acc.ID < oldestID {
+					oldestID = acc.ID
+					oldestAccount = acc
+				}
+			}
+			accountMap[account.Code] = oldestAccount.ID
+			log.Printf("   Using account ID %d for code %s", oldestAccount.ID, account.Code)
 		}
 	}
 

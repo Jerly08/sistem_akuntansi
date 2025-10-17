@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useEffect } from 'react';
 import SimpleLayout from '@/components/layout/SimpleLayout';
@@ -58,6 +58,7 @@ import {
 // Legacy reportService removed - now using SSOT services only
 import { ssotBalanceSheetReportService, SSOTBalanceSheetData } from '../../src/services/ssotBalanceSheetReportService';
 import { ssotCashFlowReportService, SSOTCashFlowData } from '../../src/services/ssotCashFlowReportService';
+import { ssotProfitLossService, SSOTProfitLossData } from '../../src/services/ssotProfitLossService';
 import { ssotSalesSummaryService, SSOTSalesSummaryData } from '../../src/services/ssotSalesSummaryService';
 // Vendor Analysis removed - replaced with Purchase Report
 import { ssotTrialBalanceService, SSOTTrialBalanceData } from '../../src/services/ssotTrialBalanceService';
@@ -178,7 +179,7 @@ const ReportsPage: React.FC = () => {
   
   // State untuk SSOT Profit Loss
   const [ssotPLOpen, setSSOTPLOpen] = useState(false);
-  const [ssotPLData, setSSOTPLData] = useState<any>(null);
+  const [ssotPLData, setSSOTPLData] = useState<SSOTProfitLossData | null>(null);
   const [ssotPLLoading, setSSOTPLLoading] = useState(false);
   const [ssotPLError, setSSOTPLError] = useState<string | null>(null);
   const [ssotStartDate, setSSOTStartDate] = useState('');
@@ -556,19 +557,99 @@ const ReportsPage: React.FC = () => {
     setSSOTPLError(null);
     
     try {
-      const result = await reportService.generateReport('profit-loss', {
+      const result = await ssotProfitLossService.generateSSOTProfitLoss({
         start_date: ssotStartDate,
         end_date: ssotEndDate,
         format: 'json'
       });
 
       console.log('SSOT P&L Data received:', result);
-      setSSOTPLData(result as any);
+      setSSOTPLData(result);
+      
+      toast({
+        title: 'Success',
+        description: 'SSOT P&L report generated successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
     } catch (error) {
       console.error('Error fetching SSOT P&L report:', error);
-      setSSOTPLError(error instanceof Error ? error.message : 'An error occurred');
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      setSSOTPLError(errorMessage);
+      
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     } finally {
       setSSOTPLLoading(false);
+    }
+  };
+
+  // Enhanced export handlers for SSOT Profit Loss
+  const handleSSOTProfitLossExport = async (format: 'pdf' | 'csv') => {
+    if (!ssotPLData) {
+      toast({
+        title: 'Error',
+        description: 'No data available to export',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      let blob: Blob;
+      let filename: string;
+
+      if (format === 'pdf') {
+        blob = await ssotProfitLossService.generateSSOTProfitLossPDF({
+          start_date: ssotStartDate,
+          end_date: ssotEndDate,
+          format: 'pdf'
+        });
+        filename = `SSOT_Profit_Loss_${ssotStartDate}_to_${ssotEndDate}.pdf`;
+      } else {
+        blob = await ssotProfitLossService.generateSSOTProfitLossCSV({
+          start_date: ssotStartDate,
+          end_date: ssotEndDate,
+          format: 'csv'
+        });
+        filename = `SSOT_Profit_Loss_${ssotStartDate}_to_${ssotEndDate}.csv`;
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Success',
+        description: `${format.toUpperCase()} export completed successfully`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error(`Error exporting SSOT P&L as ${format}:`, error);
+      toast({
+        title: 'Export Error',
+        description: `Failed to export as ${format.toUpperCase()}`,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     }
   };
 
@@ -1999,18 +2080,51 @@ leftIcon={<FiTrendingUp />}
 
             {ssotPLData && !ssotPLLoading && (
               <VStack spacing={6} align="stretch">
+                {/* Company Header */}
+                {ssotPLData.company && (
+                  <Box bg="purple.50" p={4} borderRadius="md">
+                    <HStack justify="space-between" align="start">
+                      <VStack align="start" spacing={1}>
+                        <Text fontSize="lg" fontWeight="bold" color="purple.800">
+                          {ssotPLData.company.name || 'Company Name Not Available'}
+                        </Text>
+                        <Text fontSize="sm" color="purple.600">
+                          {ssotPLData.company.address ? (
+                            ssotPLData.company.city ? `${ssotPLData.company.address}, ${ssotPLData.company.city}` : ssotPLData.company.address
+                          ) : 'Address not available'}
+                        </Text>
+                        {ssotPLData.company.phone && (
+                          <Text fontSize="sm" color="purple.600">
+                            {ssotPLData.company.phone} | {ssotPLData.company.email}
+                          </Text>
+                        )}
+                      </VStack>
+                      <VStack align="end" spacing={1}>
+                        <Text fontSize="sm" color="purple.600">
+                          Currency: {ssotPLData.currency || 'IDR'}
+                        </Text>
+                        <Text fontSize="xs" color="purple.500">
+                          Generated: {ssotPLData.generated_at ? new Date(ssotPLData.generated_at).toLocaleString('id-ID') : 'N/A'}
+                        </Text>
+                      </VStack>
+                    </HStack>
+                  </Box>
+                )}
+
+                {/* Report Header */}
                 <Box textAlign="center" bg={summaryBg} p={4} borderRadius="md">
                   <Heading size="md" color={headingColor}>
-                    {ssotPLData.company?.name || 'PT. Sistem Akuntansi'}
+                    {ssotPLData.title || 'Profit and Loss Statement'}
                   </Heading>
-                  <Text fontSize="lg" fontWeight="semibold" mt={1}>
-                    {ssotPLData.title || 'Enhanced Profit and Loss Statement'}
-                  </Text>
                   <Text fontSize="sm" color={descriptionColor}>
                     Period: {ssotPLData.period || `${ssotStartDate} - ${ssotEndDate}`}
                   </Text>
+                  <Text fontSize="xs" color={descriptionColor} mt={1}>
+                    Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
+                  </Text>
                 </Box>
 
+                {/* Analysis Message */}
                 {ssotPLData.message && (
                   <Box bg="blue.50" p={4} borderRadius="md" border="1px" borderColor="blue.200">
                     <Text fontSize="sm" color="blue.800">
@@ -2019,9 +2133,143 @@ leftIcon={<FiTrendingUp />}
                   </Box>
                 )}
 
-                {ssotPLData.hasData && ssotPLData.sections && (
+                {/* Summary Statistics */}
+                <SimpleGrid columns={[1, 2, 4]} spacing={4}>
+                  <Box bg="purple.50" p={4} borderRadius="md" textAlign="center">
+                    <Text fontSize="2xl" fontWeight="bold" color="purple.600">
+                      {formatCurrency(ssotPLData.total_revenue || 0)}
+                    </Text>
+                    <Text fontSize="sm" color="purple.800">Total Revenue</Text>
+                  </Box>
+                  <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
+                    <Text fontSize="2xl" fontWeight="bold" color="blue.600">
+                      {formatCurrency(ssotPLData.total_expenses || 0)}
+                    </Text>
+                    <Text fontSize="sm" color="blue.800">Total Expenses</Text>
+                  </Box>
+                  <Box bg="orange.50" p={4} borderRadius="md" textAlign="center">
+                    <Text fontSize="2xl" fontWeight="bold" color="orange.600">
+                      {formatCurrency(ssotPLData.net_profit || 0)}
+                    </Text>
+                    <Text fontSize="sm" color="orange.800">Net Profit</Text>
+                  </Box>
+                  <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
+                    <Text fontSize="2xl" fontWeight="bold" color="green.600">
+                      {formatCurrency(ssotPLData.net_loss || 0)}
+                    </Text>
+                    <Text fontSize="sm" color="green.800">Net Loss</Text>
+                  </Box>
+                </SimpleGrid>
+
+                {/* Revenue Details */}
+                {ssotPLData.revenue_details && ssotPLData.revenue_details.length > 0 && (
+                  <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
+                    <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
+                      Revenue Details
+                    </Text>
+                    <SimpleGrid columns={[1, 2, 3]} spacing={4}>
+                      {ssotPLData.revenue_details.map((revenue: any) => (
+                        <Box key={revenue.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="sm" color="gray.700">
+                              Account ID: {revenue.account_id}
+                            </Text>
+                            <Text fontSize="sm" color="gray.700">
+                              Account Name: {revenue.account_name || 'Unnamed Account'}
+                            </Text>
+                            <Text fontSize="sm" color="gray.700">
+                              Amount: {formatCurrency(revenue.amount || 0)}
+                            </Text>
+                          </VStack>
+                        </Box>
+                      ))}
+                    </SimpleGrid>
+                  </Box>
+                )}
+
+                {/* Expense Details */}
+                {ssotPLData.expense_details && ssotPLData.expense_details.length > 0 && (
+                  <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
+                    <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
+                      Expense Details
+                    </Text>
+                    <SimpleGrid columns={[1, 2, 3]} spacing={4}>
+                      {ssotPLData.expense_details.map((expense: any) => (
+                        <Box key={expense.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
+                          <VStack align="start" spacing={0}>
+                            <Text fontSize="sm" color="gray.700">
+                              Account ID: {expense.account_id}
+                            </Text>
+                            <Text fontSize="sm" color="gray.700">
+                              Account Name: {expense.account_name || 'Unnamed Account'}
+                            </Text>
+                            <Text fontSize="sm" color="gray.700">
+                              Amount: {formatCurrency(expense.amount || 0)}
+                            </Text>
+                          </VStack>
+                        </Box>
+                      ))}
+                    </SimpleGrid>
+                  </Box>
+                )}
+
+                {/* Financial Metrics Summary */}
+                {ssotPLData.financialMetrics && (
+                  <Box bg="green.50" p={4} borderRadius="md" border="1px" borderColor="green.200">
+                    <Text fontSize="md" fontWeight="bold" color="green.800" mb={3}>
+                      Key Financial Metrics
+                    </Text>
+                    <SimpleGrid columns={[1, 2]} spacing={3}>
+                      <VStack spacing={2}>
+                        <HStack justify="space-between" w="full">
+                          <Text fontSize="sm" color="green.700">Gross Profit:</Text>
+                          <Text fontSize="sm" fontWeight="semibold">
+                            {formatCurrency(ssotPLData.financialMetrics.grossProfit || 0)}
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between" w="full">
+                          <Text fontSize="sm" color="green.700">Gross Margin:</Text>
+                          <Text fontSize="sm" fontWeight="semibold">
+                            {ssotPLData.financialMetrics.grossProfitMargin || 0}%
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between" w="full">
+                          <Text fontSize="sm" color="green.700">Operating Income:</Text>
+                          <Text fontSize="sm" fontWeight="semibold">
+                            {formatCurrency(ssotPLData.financialMetrics.operatingIncome || 0)}
+                          </Text>
+                        </HStack>
+                      </VStack>
+                      <VStack spacing={2}>
+                        <HStack justify="space-between" w="full">
+                          <Text fontSize="sm" color="green.700">Operating Margin:</Text>
+                          <Text fontSize="sm" fontWeight="semibold">
+                            {ssotPLData.financialMetrics.operatingMargin || 0}%
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between" w="full">
+                          <Text fontSize="sm" color="green.700">Net Income:</Text>
+                          <Text fontSize="sm" fontWeight="semibold">
+                            {formatCurrency(ssotPLData.financialMetrics.netIncome || 0)}
+                          </Text>
+                        </HStack>
+                        <HStack justify="space-between" w="full">
+                          <Text fontSize="sm" color="green.700">Net Margin:</Text>
+                          <Text fontSize="sm" fontWeight="semibold">
+                            {ssotPLData.financialMetrics.netIncomeMargin || 0}%
+                          </Text>
+                        </HStack>
+                      </VStack>
+                    </SimpleGrid>
+                  </Box>
+                )}
+
+                {/* Sections Data (if available) */}
+                {ssotPLData.sections && ssotPLData.sections.length > 0 && (
                   <VStack spacing={4} align="stretch">
-                    {/* Display sections data */}
+                    <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+                      Detailed Breakdown
+                    </Text>
                     {ssotPLData.sections.map((section: any, index: number) => (
                       <Box key={index} bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
                         <VStack spacing={3} align="stretch">
@@ -2055,60 +2303,10 @@ leftIcon={<FiTrendingUp />}
                         </VStack>
                       </Box>
                     ))}
-                    
-                    {/* Financial Metrics Summary */}
-                    {ssotPLData.financialMetrics && (
-                      <Box bg="green.50" p={4} borderRadius="md" border="1px" borderColor="green.200">
-                        <Text fontSize="md" fontWeight="bold" color="green.800" mb={3}>
-                          Key Financial Metrics
-                        </Text>
-                        <SimpleGrid columns={[1, 2]} spacing={3}>
-                          <VStack spacing={2}>
-                            <HStack justify="space-between" w="full">
-                              <Text fontSize="sm" color="green.700">Gross Profit:</Text>
-                              <Text fontSize="sm" fontWeight="semibold">
-                                {formatCurrency(ssotPLData.financialMetrics.grossProfit || 0)}
-                              </Text>
-                            </HStack>
-                            <HStack justify="space-between" w="full">
-                              <Text fontSize="sm" color="green.700">Gross Margin:</Text>
-                              <Text fontSize="sm" fontWeight="semibold">
-                                {ssotPLData.financialMetrics.grossProfitMargin || 0}%
-                              </Text>
-                            </HStack>
-                            <HStack justify="space-between" w="full">
-                              <Text fontSize="sm" color="green.700">Operating Income:</Text>
-                              <Text fontSize="sm" fontWeight="semibold">
-                                {formatCurrency(ssotPLData.financialMetrics.operatingIncome || 0)}
-                              </Text>
-                            </HStack>
-                          </VStack>
-                          <VStack spacing={2}>
-                            <HStack justify="space-between" w="full">
-                              <Text fontSize="sm" color="green.700">Operating Margin:</Text>
-                              <Text fontSize="sm" fontWeight="semibold">
-                                {ssotPLData.financialMetrics.operatingMargin || 0}%
-                              </Text>
-                            </HStack>
-                            <HStack justify="space-between" w="full">
-                              <Text fontSize="sm" color="green.700">Net Income:</Text>
-                              <Text fontSize="sm" fontWeight="semibold">
-                                {formatCurrency(ssotPLData.financialMetrics.netIncome || 0)}
-                              </Text>
-                            </HStack>
-                            <HStack justify="space-between" w="full">
-                              <Text fontSize="sm" color="green.700">Net Margin:</Text>
-                              <Text fontSize="sm" fontWeight="semibold">
-                                {ssotPLData.financialMetrics.netIncomeMargin || 0}%
-                              </Text>
-                            </HStack>
-                          </VStack>
-                        </SimpleGrid>
-                      </Box>
-                    )}
                   </VStack>
                 )}
 
+                {/* No Data State */}
                 {!ssotPLData.hasData && (
                   <Box bg="yellow.50" p={6} borderRadius="md" textAlign="center">
                     <Icon as={FiTrendingUp} boxSize={12} color="yellow.400" mb={4} />
@@ -2135,7 +2333,7 @@ leftIcon={<FiTrendingUp />}
                     variant="outline"
                     size="sm"
                     leftIcon={<FiFilePlus />}
-                    onClick={() => handleQuickDownload({id: 'profit-loss', name: 'Profit & Loss Statement'}, 'pdf')}
+                    onClick={() => handleSSOTProfitLossExport('pdf')}
                   >
                     Export PDF
                   </Button>
@@ -2144,7 +2342,7 @@ leftIcon={<FiTrendingUp />}
                     variant="outline"
                     size="sm"
                     leftIcon={<FiFileText />}
-                    onClick={() => handleQuickDownload({id: 'profit-loss', name: 'Profit & Loss Statement'}, 'csv')}
+                    onClick={() => handleSSOTProfitLossExport('csv')}
                   >
                     Export CSV
                   </Button>
@@ -2245,7 +2443,7 @@ leftIcon={<FiBarChart />}
                     As of: {ssotBSData.as_of_date ? new Date(ssotBSData.as_of_date).toLocaleDateString('id-ID') : ssotAsOfDate}
                   </Text>
                   {ssotBSData.is_balanced ? (
-                    <Badge colorScheme="green" mt={2}>Balanced ✓</Badge>
+                    <Badge colorScheme="green" mt={2}>Balanced âœ“</Badge>
                   ) : (
                     <Badge colorScheme="red" mt={2}>Not Balanced (Diff: {formatCurrency(ssotBSData.balance_difference || 0)})</Badge>
                   )}
@@ -3210,1431 +3408,6 @@ As of: {ssotTBAsOfDate}
                     size="sm"
                     leftIcon={<FiFileText />}
                     onClick={() => handleGeneralLedgerExport('csv')}
-                  >
-                    Export CSV
-                  </Button>
-                </>
-              )}
-            </HStack>
-            <Button variant="ghost" onClick={() => setSSOTGLOpen(false)}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* SSOT Profit and Loss Modal */}
-      <Modal isOpen={ssotPLOpen} onClose={() => setSSOTPLOpen(false)} size="6xl">
-        <ModalOverlay />
-        <ModalContent bg={modalContentBg}>
-          <ModalHeader>
-            <HStack>
-              <Icon as={FiTrendingUp} color="purple.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  Profit and Loss (SSOT)
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  {ssotStartDate} - {ssotEndDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <Box mb={4}>
-              <HStack spacing={4} mb={4} flexWrap="wrap">
-                <FormControl>
-                  <FormLabel>Start Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotStartDate} 
-                    onChange={(e) => setSSOTStartDate(e.target.value)} 
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>End Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotEndDate} 
-                    onChange={(e) => setSSOTEndDate(e.target.value)} 
-                  />
-                </FormControl>
-                <Button
-                  colorScheme="blue"
-                  onClick={fetchSSOTPLReport}
-                  isLoading={ssotPLLoading}
-                  leftIcon={<FiDollarSign />}
-                  size="md"
-                  mt={8}
-                  whiteSpace="nowrap"
-                >
-                  Generate Report
-                </Button>
-              </HStack>
-            </Box>
-
-            {ssotPLLoading && (
-              <Box textAlign="center" py={8}>
-                <VStack spacing={4}>
-                  <Spinner size="xl" thickness="4px" speed="0.65s" color="purple.500" />
-                  <VStack spacing={2}>
-                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                      Generating Profit and Loss
-                    </Text>
-                    <Text fontSize="sm" color={descriptionColor}>
-                      Analyzing journal entries from SSOT journal system...
-                    </Text>
-                  </VStack>
-                </VStack>
-              </Box>
-            )}
-
-            {ssotPLError && (
-              <Box bg="red.50" p={4} borderRadius="md" mb={4}>
-                <Text color="red.600" fontWeight="medium">Error: {ssotPLError}</Text>
-                <Button
-                  mt={2}
-                  size="sm"
-                  colorScheme="red"
-                  variant="outline"
-                  onClick={fetchSSOTPLReport}
-                >
-                  Retry
-                </Button>
-              </Box>
-            )}
-
-            {ssotPLData && !ssotPLLoading && (
-              <VStack spacing={6} align="stretch">
-                {/* Company Header */}
-                {ssotPLData.company && (
-                  <Box bg="purple.50" p={4} borderRadius="md">
-                    <HStack justify="space-between" align="start">
-                      <VStack align="start" spacing={1}>
-                        <Text fontSize="lg" fontWeight="bold" color="purple.800">
-                          {ssotPLData.company.name || 'Company Name Not Available'}
-                        </Text>
-                        <Text fontSize="sm" color="purple.600">
-{ssotPLData.company.address ? (
-                            ssotPLData.company.city ? `${ssotPLData.company.address}, ${ssotPLData.company.city}` : ssotPLData.company.address
-                          ) : 'Address not available'}
-                        </Text>
-                        {ssotPLData.company.phone && (
-                          <Text fontSize="sm" color="purple.600">
-                            {ssotPLData.company.phone} | {ssotPLData.company.email}
-                          </Text>
-                        )}
-                      </VStack>
-                      <VStack align="end" spacing={1}>
-                        <Text fontSize="sm" color="purple.600">
-                          Currency: {ssotPLData.currency || 'IDR'}
-                        </Text>
-                        <Text fontSize="xs" color="purple.500">
-                          Generated: {ssotPLData.generated_at ? new Date(ssotPLData.generated_at).toLocaleString('id-ID') : 'N/A'}
-                        </Text>
-                      </VStack>
-                    </HStack>
-                  </Box>
-                )}
-
-                {/* Report Header */}
-                <Box textAlign="center" bg={summaryBg} p={4} borderRadius="md">
-                  <Heading size="md" color={headingColor}>
-                    Profit and Loss
-                  </Heading>
-                  <Text fontSize="sm" color={descriptionColor}>
-                    Period: {ssotStartDate} - {ssotEndDate}
-                  </Text>
-                  <Text fontSize="xs" color={descriptionColor} mt={1}>
-                    Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
-                  </Text>
-                </Box>
-
-                {/* Summary Statistics */}
-                <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                  <Box bg="purple.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="purple.600">
-                      {formatCurrency(ssotPLData.total_revenue || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="purple.800">Total Revenue</Text>
-                  </Box>
-                  <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-                      {formatCurrency(ssotPLData.total_expenses || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="blue.800">Total Expenses</Text>
-                  </Box>
-                  <Box bg="orange.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="orange.600">
-                      {formatCurrency(ssotPLData.net_profit || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="orange.800">Net Profit</Text>
-                  </Box>
-                  <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="green.600">
-                      {formatCurrency(ssotPLData.net_loss || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="green.800">Net Loss</Text>
-                  </Box>
-                </SimpleGrid>
-
-                {/* Revenue Details */}
-                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                    Revenue Details
-                  </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotPLData.revenue_details.map((revenue: any) => (
-                      <Box key={revenue.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Account ID: {revenue.account_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Name: {revenue.account_name || 'Unnamed Account'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Amount: {formatCurrency(revenue.amount || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
-                  </SimpleGrid>
-                </Box>
-
-                {/* Expense Details */}
-                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                    Expense Details
-                  </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotPLData.expense_details.map((expense: any) => (
-                      <Box key={expense.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Account ID: {expense.account_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Name: {expense.account_name || 'Unnamed Account'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Amount: {formatCurrency(expense.amount || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
-                  </SimpleGrid>
-                </Box>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <HStack spacing={3}>
-              {ssotPLData && !ssotPLLoading && (
-                <>
-                  <Button
-                    colorScheme="red"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFilePlus />}
-                    onClick={() => handleProfitAndLossExport('pdf')}
-                  >
-                    Export PDF
-                  </Button>
-                  <Button
-                    colorScheme="green"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFileText />}
-                    onClick={() => handleProfitAndLossExport('csv')}
-                  >
-                    Export CSV
-                  </Button>
-                </>
-              )}
-            </HStack>
-            <Button variant="ghost" onClick={() => setSSOTPLOpen(false)}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* SSOT Balance Sheet Modal */}
-      <Modal isOpen={ssotBSOpen} onClose={() => setSSOTBSOpen(false)} size="6xl">
-        <ModalOverlay />
-        <ModalContent bg={modalContentBg}>
-          <ModalHeader>
-            <HStack>
-              <Icon as={FiFileText} color="orange.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  Balance Sheet (SSOT)
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  {ssotStartDate} - {ssotEndDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <Box mb={4}>
-              <HStack spacing={4} mb={4} flexWrap="wrap">
-                <FormControl>
-                  <FormLabel>Start Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotStartDate} 
-                    onChange={(e) => setSSOTStartDate(e.target.value)} 
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>End Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotEndDate} 
-                    onChange={(e) => setSSOTEndDate(e.target.value)} 
-                  />
-                </FormControl>
-                <Button
-                  colorScheme="blue"
-                  onClick={fetchSSOTBalanceSheetReport}
-                  isLoading={ssotBSLoading}
-                  leftIcon={<FiFileText />}
-                  size="md"
-                  mt={8}
-                  whiteSpace="nowrap"
-                >
-                  Generate Report
-                </Button>
-              </HStack>
-            </Box>
-
-            {ssotBSLoading && (
-              <Box textAlign="center" py={8}>
-                <VStack spacing={4}>
-                  <Spinner size="xl" thickness="4px" speed="0.65s" color="orange.500" />
-                  <VStack spacing={2}>
-                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                      Generating Balance Sheet
-                    </Text>
-                    <Text fontSize="sm" color={descriptionColor}>
-                      Analyzing journal entries from SSOT journal system...
-                    </Text>
-                  </VStack>
-                </VStack>
-              </Box>
-            )}
-
-            {ssotBSError && (
-              <Box bg="red.50" p={4} borderRadius="md" mb={4}>
-                <Text color="red.600" fontWeight="medium">Error: {ssotBSError}</Text>
-                <Button
-                  mt={2}
-                  size="sm"
-                  colorScheme="red"
-                  variant="outline"
-                  onClick={fetchSSOTBalanceSheetReport}
-                >
-                  Retry
-                </Button>
-              </Box>
-            )}
-
-            {ssotBSData && !ssotBSLoading && (
-              <VStack spacing={6} align="stretch">
-                {/* Company Header */}
-                {ssotBSData.company && (
-                  <Box bg="orange.50" p={4} borderRadius="md">
-                    <HStack justify="space-between" align="start">
-                      <VStack align="start" spacing={1}>
-                        <Text fontSize="lg" fontWeight="bold" color="orange.800">
-                          {ssotBSData.company.name || 'Company Name Not Available'}
-                        </Text>
-                        <Text fontSize="sm" color="orange.600">
-{ssotBSData.company.address ? (
-                            ssotBSData.company.city ? `${ssotBSData.company.address}, ${ssotBSData.company.city}` : ssotBSData.company.address
-                          ) : 'Address not available'}
-                        </Text>
-                        {ssotBSData.company.phone && (
-                          <Text fontSize="sm" color="orange.600">
-                            {ssotBSData.company.phone} | {ssotBSData.company.email}
-                          </Text>
-                        )}
-                      </VStack>
-                      <VStack align="end" spacing={1}>
-                        <Text fontSize="sm" color="orange.600">
-                          Currency: {ssotBSData.currency || 'IDR'}
-                        </Text>
-                        <Text fontSize="xs" color="orange.500">
-                          Generated: {ssotBSData.generated_at ? new Date(ssotBSData.generated_at).toLocaleString('id-ID') : 'N/A'}
-                        </Text>
-                      </VStack>
-                    </HStack>
-                  </Box>
-                )}
-
-                {/* Report Header */}
-                <Box textAlign="center" bg={summaryBg} p={4} borderRadius="md">
-                  <Heading size="md" color={headingColor}>
-                    Balance Sheet
-                  </Heading>
-                  <Text fontSize="sm" color={descriptionColor}>
-                    Period: {ssotStartDate} - {ssotEndDate}
-                  </Text>
-                </Box>
-
-                {/* Summary Statistics */}
-                <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                  <Box bg="orange.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="orange.600">
-                      {formatCurrency(ssotBSData.total_assets || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="orange.800">Total Assets</Text>
-                  </Box>
-                  <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-                      {formatCurrency(ssotBSData.total_liabilities || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="blue.800">Total Liabilities</Text>
-                  </Box>
-                  <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="green.600">
-                      {formatCurrency(ssotBSData.total_equity || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="green.800">Total Equity</Text>
-                  </Box>
-                  <Box bg="purple.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="purple.600">
-                      {formatCurrency(ssotBSData.net_worth || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="purple.800">Net Worth</Text>
-                  </Box>
-                </SimpleGrid>
-
-                {/* Asset Details */}
-                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                    Asset Details
-                  </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotBSData.asset_details.map((asset: any) => (
-                      <Box key={asset.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Account ID: {asset.account_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Name: {asset.account_name || 'Unnamed Account'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Amount: {formatCurrency(asset.amount || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
-                  </SimpleGrid>
-                </Box>
-
-                {/* Liability Details */}
-                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                    Liability Details
-                  </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotBSData.liability_details.map((liability: any) => (
-                      <Box key={liability.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Account ID: {liability.account_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Name: {liability.account_name || 'Unnamed Account'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Amount: {formatCurrency(liability.amount || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
-                  </SimpleGrid>
-                </Box>
-
-                {/* Equity Details */}
-                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                    Equity Details
-                  </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotBSData.equity_details.map((equity: any) => (
-                      <Box key={equity.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Account ID: {equity.account_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Name: {equity.account_name || 'Unnamed Account'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Amount: {formatCurrency(equity.amount || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
-                  </SimpleGrid>
-                </Box>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <HStack spacing={3}>
-              {ssotBSData && !ssotBSLoading && (
-                <>
-                  <Button
-                    colorScheme="red"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFilePlus />}
-                    onClick={() => handleBalanceSheetExport('pdf')}
-                  >
-                    Export PDF
-                  </Button>
-                  <Button
-                    colorScheme="green"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFileText />}
-                    onClick={() => handleBalanceSheetExport('csv')}
-                  >
-                    Export CSV
-                  </Button>
-                </>
-              )}
-            </HStack>
-            <Button variant="ghost" onClick={() => setSSOTBSOpen(false)}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* SSOT Cash Flow Modal */}
-      <Modal isOpen={ssotCFOpen} onClose={() => setSSOTCFOpen(false)} size="6xl">
-        <ModalOverlay />
-        <ModalContent bg={modalContentBg}>
-          <ModalHeader>
-            <HStack>
-              <Icon as={FiDollarSign} color="green.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  Profit and Loss (SSOT)
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  {ssotStartDate} - {ssotEndDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <Box mb={4}>
-              <HStack spacing={4} mb={4} flexWrap="wrap">
-                <FormControl>
-                  <FormLabel>Start Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotCFStartDate} 
-                    onChange={(e) => setSSOTCFStartDate(e.target.value)} 
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>End Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotCFEndDate} 
-                    onChange={(e) => setSSOTCFEndDate(e.target.value)} 
-                  />
-                </FormControl>
-                <Button
-                  colorScheme="blue"
-                  onClick={fetchSSOTCashFlowReport}
-                  isLoading={ssotCFLoading}
-                  leftIcon={<FiDollarSign />}
-                  size="md"
-                  mt={8}
-                  whiteSpace="nowrap"
-                >
-                  Generate Report
-                </Button>
-              </HStack>
-            </Box>
-
-            {ssotCFLoading && (
-              <Box textAlign="center" py={8}>
-                <VStack spacing={4}>
-                  <Spinner size="xl" thickness="4px" speed="0.65s" color="green.500" />
-                  <VStack spacing={2}>
-                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                      Generating Cash Flow
-                    </Text>
-                    <Text fontSize="sm" color={descriptionColor}>
-                      Analyzing journal entries from SSOT journal system...
-                    </Text>
-                  </VStack>
-                </VStack>
-              </Box>
-            )}
-
-            {ssotCFError && (
-              <Box bg="red.50" p={4} borderRadius="md" mb={4}>
-                <Text color="red.600" fontWeight="medium">Error: {ssotCFError}</Text>
-                <Button
-                  mt={2}
-                  size="sm"
-                  colorScheme="red"
-                  variant="outline"
-                  onClick={fetchSSOTCashFlowReport}
-                >
-                  Retry
-                </Button>
-              </Box>
-            )}
-
-            {ssotCFData && !ssotCFLoading && (
-              <VStack spacing={6} align="stretch">
-                {/* Company Header */}
-                {ssotCFData.company && (
-                  <Box bg="green.50" p={4} borderRadius="md">
-                    <HStack justify="space-between" align="start">
-                      <VStack align="start" spacing={1}>
-                        <Text fontSize="lg" fontWeight="bold" color="green.800">
-                          {ssotCFData.company.name || 'Company Name Not Available'}
-                        </Text>
-                        <Text fontSize="sm" color="green.600">
-{ssotCFData.company.address ? (
-                            ssotCFData.company.city ? `${ssotCFData.company.address}, ${ssotCFData.company.city}` : ssotCFData.company.address
-                          ) : 'Address not available'}
-                        </Text>
-                        {ssotCFData.company.phone && (
-                          <Text fontSize="sm" color="green.600">
-                            {ssotCFData.company.phone} | {ssotCFData.company.email}
-                          </Text>
-                        )}
-                      </VStack>
-                      <VStack align="end" spacing={1}>
-                        <Text fontSize="sm" color="green.600">
-                          Currency: {ssotCFData.currency || 'IDR'}
-                        </Text>
-                        <Text fontSize="xs" color="green.500">
-                          Generated: {ssotCFData.generated_at ? new Date(ssotCFData.generated_at).toLocaleString('id-ID') : 'N/A'}
-                        </Text>
-                      </VStack>
-                    </HStack>
-                  </Box>
-                )}
-
-                {/* Report Header */}
-                <Box textAlign="center" bg={summaryBg} p={4} borderRadius="md">
-                  <Heading size="md" color={headingColor}>
-                    Cash Flow
-                  </Heading>
-                  <Text fontSize="sm" color={descriptionColor}>
-                    Period: {ssotCFStartDate} - {ssotCFEndDate}
-                  </Text>
-                  <Text fontSize="xs" color={descriptionColor} mt={1}>
-                    Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
-                  </Text>
-                </Box>
-
-                {/* Summary Statistics */}
-                <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                  <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="green.600">
-                      {formatCurrency(ssotCFData.total_cash_inflows || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="green.800">Total Cash Inflows</Text>
-                  </Box>
-                  <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-                      {formatCurrency(ssotCFData.total_cash_outflows || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="blue.800">Total Cash Outflows</Text>
-                  </Box>
-                  <Box bg="orange.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="orange.600">
-                      {formatCurrency(ssotCFData.net_cash_flow || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="orange.800">Net Cash Flow</Text>
-                  </Box>
-                  <Box bg="purple.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="purple.600">
-                      {formatCurrency(ssotCFData.closing_balance || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="purple.800">Closing Balance</Text>
-                  </Box>
-                </SimpleGrid>
-
-                {/* Cash Inflow Details */}
-                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                    Cash Inflow Details
-                  </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotCFData.cash_inflow_details.map((inflow: any) => (
-                      <Box key={inflow.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Account ID: {inflow.account_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Name: {inflow.account_name || 'Unnamed Account'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Amount: {formatCurrency(inflow.amount || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
-                  </SimpleGrid>
-                </Box>
-
-                {/* Cash Outflow Details */}
-                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                    Cash Outflow Details
-                  </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotCFData.cash_outflow_details.map((outflow: any) => (
-                      <Box key={outflow.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Account ID: {outflow.account_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Name: {outflow.account_name || 'Unnamed Account'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Amount: {formatCurrency(outflow.amount || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
-                  </SimpleGrid>
-                </Box>
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <HStack spacing={3}>
-              {ssotCFData && !ssotCFLoading && (
-                <>
-                  <Button
-                    colorScheme="red"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFilePlus />}
-                    onClick={() => handleCashFlowExport('pdf')}
-                  >
-                    Export PDF
-                  </Button>
-                  <Button
-                    colorScheme="green"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFileText />}
-                    onClick={() => handleCashFlowExport('csv')}
-                  >
-                    Export CSV
-                  </Button>
-                </>
-              )}
-            </HStack>
-            <Button variant="ghost" onClick={() => setSSOTCFOpen(false)}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-
-
-      {/* SSOT Trial Balance Modal */}
-      <Modal isOpen={ssotTBOpen} onClose={() => setSSOTTBOpen(false)} size="6xl">
-        <ModalOverlay />
-        <ModalContent bg={modalContentBg}>
-          <ModalHeader>
-            <HStack>
-              <Icon as={FiList} color="purple.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  SSOT Trial Balance
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  As of {ssotTBAsOfDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <Box mb={4}>
-<HStack spacing={4} mb={4} flexWrap="wrap">
-                <FormControl>
-                  <FormLabel>As Of Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotTBAsOfDate} 
-                    onChange={(e) => setSSOTTBAsOfDate(e.target.value)} 
-                  />
-                </FormControl>
-                <Button
-                  colorScheme="blue"
-                  onClick={fetchSSOTTrialBalanceReport}
-                  isLoading={ssotTBLoading}
-leftIcon={<FiList />}
-                  size="md"
-                  mt={8}
-                  whiteSpace="nowrap"
-                >
-                  Generate Report
-                </Button>
-              </HStack>
-            </Box>
-
-            {ssotTBLoading && (
-              <Box textAlign="center" py={8}>
-                <VStack spacing={4}>
-                  <Spinner size="xl" thickness="4px" speed="0.65s" color="purple.500" />
-                  <VStack spacing={2}>
-                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                      Generating SSOT Trial Balance
-                    </Text>
-                    <Text fontSize="sm" color={descriptionColor}>
-                      Calculating account balances from SSOT journal system...
-                    </Text>
-                  </VStack>
-                </VStack>
-              </Box>
-            )}
-
-            {ssotTBError && (
-              <Box bg="red.50" p={4} borderRadius="md" mb={4}>
-                <Text color="red.600" fontWeight="medium">Error: {ssotTBError}</Text>
-                <Button
-                  mt={2}
-                  size="sm"
-                  colorScheme="red"
-                  variant="outline"
-                  onClick={fetchSSOTTrialBalanceReport}
-                >
-                  Retry
-                </Button>
-              </Box>
-            )}
-
-            {ssotTBData && !ssotTBLoading && (
-              <VStack spacing={6} align="stretch">
-                {/* Company Header */}
-                {ssotTBData.company && (
-                  <Box bg="purple.50" p={4} borderRadius="md">
-                    <HStack justify="space-between" align="start">
-                      <VStack align="start" spacing={1}>
-                        <Text fontSize="lg" fontWeight="bold" color="purple.800">
-                          {ssotTBData.company.name || 'Company Name Not Available'}
-                        </Text>
-                        <Text fontSize="sm" color="purple.600">
-{ssotTBData.company.address ? (
-                            ssotTBData.company.city ? `${ssotTBData.company.address}, ${ssotTBData.company.city}` : ssotTBData.company.address
-                          ) : 'Address not available'}
-                        </Text>
-                        {ssotTBData.company.phone && (
-                          <Text fontSize="sm" color="purple.600">
-                            {ssotTBData.company.phone} | {ssotTBData.company.email}
-                          </Text>
-                        )}
-                      </VStack>
-                      <VStack align="end" spacing={1}>
-                        <Text fontSize="sm" color="purple.600">
-                          Currency: {ssotTBData.currency || 'IDR'}
-                        </Text>
-                        <Text fontSize="xs" color="purple.500">
-                          Generated: {ssotTBData.generated_at ? new Date(ssotTBData.generated_at).toLocaleString('id-ID') : 'N/A'}
-                        </Text>
-                      </VStack>
-                    </HStack>
-                  </Box>
-                )}
-
-                {/* Report Header */}
-                <Box textAlign="center" bg={summaryBg} p={4} borderRadius="md">
-                  <Heading size="md" color={headingColor}>
-                    Trial Balance Report
-                  </Heading>
-                  <Text fontSize="sm" color={descriptionColor}>
-                    As of: {new Date(ssotTBAsOfDate).toLocaleDateString('id-ID')}
-                  </Text>
-                  <Text fontSize="xs" color={descriptionColor} mt={1}>
-                    Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
-                  </Text>
-                  <HStack justify="center" mt={3}>
-                    {ssotTBData.is_balanced ? (
-                      <Badge colorScheme="green" size="lg" p={2}>Balanced ✓</Badge>
-                    ) : (
-                      <Badge colorScheme="red" size="lg" p={2}>Not Balanced ⚠</Badge>
-                    )}
-                  </HStack>
-                </Box>
-
-                {/* Summary Statistics */}
-                <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                  <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="sm" color="green.600">Total Debits</Text>
-                    <Text fontSize="2xl" fontWeight="bold" color="green.700">
-                      {formatCurrency(ssotTBData.total_debits || 0)}
-                    </Text>
-                  </Box>
-                  <Box bg="red.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="sm" color="red.600">Total Credits</Text>
-                    <Text fontSize="2xl" fontWeight="bold" color="red.700">
-                      {formatCurrency(ssotTBData.total_credits || 0)}
-                    </Text>
-                  </Box>
-                  <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="sm" color="blue.600">Difference</Text>
-                    <Text fontSize="2xl" fontWeight="bold" color={Math.abs((ssotTBData.total_debits || 0) - (ssotTBData.total_credits || 0)) === 0 ? 'green.700' : 'red.700'}>
-                      {formatCurrency(Math.abs((ssotTBData.total_debits || 0) - (ssotTBData.total_credits || 0)))}
-                    </Text>
-                  </Box>
-                </SimpleGrid>
-
-                {/* Account Details */}
-                {ssotTBData.accounts && ssotTBData.accounts.length > 0 && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Account Balances ({ssotTBData.accounts.length} accounts)
-                    </Heading>
-                    
-                    {/* Account Table Header */}
-                    <Box bg="purple.50" p={3} borderRadius="md" mb={2} border="1px solid" borderColor="purple.200">
-                      <SimpleGrid columns={[1, 2, 4]} spacing={2} fontSize="sm" fontWeight="bold" color="purple.800">
-                        <Text>Account</Text>
-                        <Text>Type</Text>
-                        <Text textAlign="right">Debit Balance</Text>
-                        <Text textAlign="right">Credit Balance</Text>
-                      </SimpleGrid>
-                    </Box>
-                    
-                    {/* Account Rows */}
-                    <VStack spacing={1} align="stretch" maxH="400px" overflow="auto">
-                      {ssotTBData.accounts.map((account, index) => (
-                        <Box key={index} border="1px solid" borderColor="gray.100" borderRadius="sm" p={3} bg="white" _hover={{ bg: 'gray.50' }}>
-                          <SimpleGrid columns={[1, 2, 4]} spacing={2} fontSize="sm">
-                            <VStack align="start" spacing={0}>
-                              <Text fontWeight="medium" color="gray.800">
-                                {account.account_name || account.name || 'Unnamed Account'}
-                              </Text>
-                              {account.account_code && (
-                                <Text fontSize="xs" color="gray.600">
-                                  Code: {account.account_code}
-                                </Text>
-                              )}
-                            </VStack>
-                            <VStack align="start" spacing={0}>
-                              {account.account_type && (
-                                <Badge colorScheme="blue" size="sm">
-                                  {account.account_type}
-                                </Badge>
-                              )}
-                              {account.parent_account && (
-                                <Text fontSize="xs" color="gray.500">
-                                  Parent: {account.parent_account}
-                                </Text>
-                              )}
-                            </VStack>
-                            <Text textAlign="right" fontSize="sm" fontWeight="medium" color={account.debit_balance > 0 ? 'green.600' : 'gray.400'}>
-                              {account.debit_balance > 0 ? formatCurrency(account.debit_balance) : '-'}
-                            </Text>
-                            <Text textAlign="right" fontSize="sm" fontWeight="medium" color={account.credit_balance > 0 ? 'red.600' : 'gray.400'}>
-                              {account.credit_balance > 0 ? formatCurrency(account.credit_balance) : '-'}
-                            </Text>
-                          </SimpleGrid>
-                        </Box>
-                      ))}
-                    </VStack>
-                    
-                    {/* Totals Row */}
-                    <Box bg="purple.100" p={3} borderRadius="md" mt={2} border="2px solid" borderColor="purple.300">
-                      <SimpleGrid columns={[1, 2, 4]} spacing={2} fontSize="md" fontWeight="bold">
-                        <Text color="purple.800">TOTALS:</Text>
-                        <Text></Text>
-                        <Text textAlign="right" color="green.700">
-                          {formatCurrency(ssotTBData.total_debits || 0)}
-                        </Text>
-                        <Text textAlign="right" color="red.700">
-                          {formatCurrency(ssotTBData.total_credits || 0)}
-                        </Text>
-                      </SimpleGrid>
-                    </Box>
-                  </Box>
-                )}
-
-                {/* Account Type Summary */}
-                {ssotTBData.account_type_summary && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Summary by Account Type
-                    </Heading>
-                    <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                      {Object.entries(ssotTBData.account_type_summary).map(([type, data]) => (
-                        <Box key={type} border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white">
-                          <VStack spacing={2}>
-                            <Text fontWeight="bold" fontSize="md" color="gray.800">
-                              {type}
-                            </Text>
-                            <VStack spacing={1}>
-                              <Text fontSize="sm" color="gray.600">
-                                {data.account_count || 0} accounts
-                              </Text>
-                              <Text fontSize="lg" fontWeight="bold" color="blue.600">
-                                {formatCurrency(data.total_balance || 0)}
-                              </Text>
-                            </VStack>
-                          </VStack>
-                        </Box>
-                      ))}
-                    </SimpleGrid>
-                  </Box>
-                )}
-
-                {/* Empty state when no account data */}
-                {(!ssotTBData.accounts || ssotTBData.accounts.length === 0) && !ssotTBData.account_type_summary && (
-                  <Box bg="yellow.50" p={4} borderRadius="md" border="1px solid" borderColor="yellow.200" textAlign="center">
-                    <Text fontSize="md" fontWeight="semibold" color="yellow.800">No account data</Text>
-                    <Text fontSize="sm" color="yellow.700">
-                      Tidak ada saldo akun untuk tanggal ini. Coba ganti tanggal atau pastikan jurnal sudah berstatus POSTED.
-                    </Text>
-                  </Box>
-                )}
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <HStack spacing={3}>
-              {ssotTBData && !ssotTBLoading && (
-                <>
-                  <Button
-                    colorScheme="red"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFilePlus />}
-                    onClick={() => handleQuickDownload({id: 'trial-balance', name: 'Trial Balance'}, 'pdf')}
-                  >
-                    Export PDF
-                  </Button>
-                  <Button
-                    colorScheme="green"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFileText />}
-                    onClick={() => handleQuickDownload({id: 'trial-balance', name: 'Trial Balance'}, 'csv')}
-                  >
-                    Export CSV
-                  </Button>
-                </>
-              )}
-            </HStack>
-            <Button variant="ghost" onClick={() => setSSOTTBOpen(false)}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* SSOT General Ledger Modal */}
-      <Modal isOpen={ssotGLOpen} onClose={() => setSSOTGLOpen(false)} size="6xl">
-        <ModalOverlay />
-        <ModalContent bg={modalContentBg}>
-          <ModalHeader>
-            <HStack>
-              <Icon as={FiBook} color="indigo.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  SSOT General Ledger
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  {ssotGLStartDate} - {ssotGLEndDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <Box mb={4}>
-<HStack spacing={4} mb={4} flexWrap="wrap">
-                <FormControl>
-                  <FormLabel>Start Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotGLStartDate} 
-                    onChange={(e) => setSSOTGLStartDate(e.target.value)} 
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>End Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotGLEndDate} 
-                    onChange={(e) => setSSOTGLEndDate(e.target.value)} 
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>Account ID (Optional)</FormLabel>
-                  <Input 
-                    type="text" 
-                    value={ssotGLAccountId} 
-                    onChange={(e) => setSSOTGLAccountId(e.target.value)}
-                    placeholder="Leave empty for all accounts"
-                  />
-                </FormControl>
-                <Button
-                  colorScheme="blue"
-                  onClick={fetchSSOTGeneralLedgerReport}
-                  isLoading={ssotGLLoading}
-leftIcon={<FiBook />}
-                  size="md"
-                  mt={8}
-                  whiteSpace="nowrap"
-                >
-                  Generate Report
-                </Button>
-              </HStack>
-            </Box>
-
-            {ssotGLLoading && (
-              <Box textAlign="center" py={8}>
-                <VStack spacing={4}>
-                  <Spinner size="xl" thickness="4px" speed="0.65s" color="indigo.500" />
-                  <VStack spacing={2}>
-                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                      Generating SSOT General Ledger
-                    </Text>
-                    <Text fontSize="sm" color={descriptionColor}>
-                      Retrieving account transactions from SSOT journal system...
-                    </Text>
-                  </VStack>
-                </VStack>
-              </Box>
-            )}
-
-            {ssotGLError && (
-              <Box bg="red.50" p={4} borderRadius="md" mb={4}>
-                <Text color="red.600" fontWeight="medium">Error: {ssotGLError}</Text>
-                <Button
-                  mt={2}
-                  size="sm"
-                  colorScheme="red"
-                  variant="outline"
-                  onClick={fetchSSOTGeneralLedgerReport}
-                >
-                  Retry
-                </Button>
-              </Box>
-            )}
-
-            {ssotGLData && !ssotGLLoading && (
-              <VStack spacing={6} align="stretch">
-                {/* Company Header */}
-                {ssotGLData.company && (
-                  <Box bg="blue.50" p={4} borderRadius="md">
-                    <HStack justify="space-between" align="start">
-                      <VStack align="start" spacing={1}>
-                        <Text fontSize="lg" fontWeight="bold" color="blue.800">
-                          {ssotGLData.company.name}
-                        </Text>
-                        <Text fontSize="sm" color="blue.600">
-                          {ssotGLData.company.address}, {ssotGLData.company.city}
-                        </Text>
-                        {ssotGLData.company.phone && (
-                          <Text fontSize="sm" color="blue.600">
-                            {ssotGLData.company.phone} | {ssotGLData.company.email}
-                          </Text>
-                        )}
-                      </VStack>
-                      <VStack align="end" spacing={1}>
-                        <Text fontSize="sm" color="blue.600">
-                          Currency: {ssotGLData.currency || 'IDR'}
-                        </Text>
-                        <Text fontSize="xs" color="blue.500">
-                          Generated: {ssotGLData.generated_at ? new Date(ssotGLData.generated_at).toLocaleString('id-ID') : 'N/A'}
-                        </Text>
-                      </VStack>
-                    </HStack>
-                  </Box>
-                )}
-
-                {/* Account Summary */}
-                {ssotGLData.account && (
-                  <Box border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white">
-                    <HStack justify="space-between" mb={4}>
-                      <VStack align="start" spacing={1}>
-                        <Text fontSize="lg" fontWeight="bold" color="gray.800">
-                          {ssotGLData.account.name || 'All Accounts'}
-                        </Text>
-                        {ssotGLData.account.code && (
-                          <Text fontSize="sm" color="gray.600">
-                            Account Code: {ssotGLData.account.code}
-                          </Text>
-                        )}
-                        {ssotGLData.account.type && (
-                          <Badge colorScheme="blue" size="sm">
-                            {ssotGLData.account.type}
-                          </Badge>
-                        )}
-                      </VStack>
-                      <VStack align="end" spacing={1}>
-                        <Text fontSize="lg" fontWeight="bold" color="green.600">
-                          Closing Balance: {formatCurrency(Math.abs(ssotGLData.closing_balance || 0))}
-                        </Text>
-                        <Text fontSize="sm" color="gray.600">
-                          Opening Balance: {formatCurrency(ssotGLData.opening_balance || 0)}
-                        </Text>
-                      </VStack>
-                    </HStack>
-
-                    {/* Balance Summary Grid */}
-                    <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                      <Box bg="green.50" p={3} borderRadius="md" textAlign="center">
-                        <Text fontSize="lg" fontWeight="bold" color="green.600">
-                          {formatCurrency(ssotGLData.total_debits || 0)}
-                        </Text>
-                        <Text fontSize="sm" color="green.800">Total Debits</Text>
-                      </Box>
-                      <Box bg="red.50" p={3} borderRadius="md" textAlign="center">
-                        <Text fontSize="lg" fontWeight="bold" color="red.600">
-                          {formatCurrency(ssotGLData.total_credits || 0)}
-                        </Text>
-                        <Text fontSize="sm" color="red.800">Total Credits</Text>
-                      </Box>
-                      <Box bg="blue.50" p={3} borderRadius="md" textAlign="center">
-                        <Text fontSize="lg" fontWeight="bold" color="blue.600">
-                          {ssotGLData.transactions ? ssotGLData.transactions.length : 0}
-                        </Text>
-                        <Text fontSize="sm" color="blue.800">Transactions</Text>
-                      </Box>
-                      <Box bg="purple.50" p={3} borderRadius="md" textAlign="center">
-                        <Text fontSize="lg" fontWeight="bold" color="purple.600">
-                          {formatCurrency(Math.abs((ssotGLData.total_debits || 0) - (ssotGLData.total_credits || 0)))}
-                        </Text>
-                        <Text fontSize="sm" color="purple.800">Net Change</Text>
-                      </Box>
-                    </SimpleGrid>
-                  </Box>
-                )}
-
-                {/* Transaction History */}
-                {ssotGLData.transactions && ssotGLData.transactions.length > 0 && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Transaction History ({ssotGLData.transactions.length} entries)
-                    </Heading>
-                    
-                    {/* Transaction Table Header */}
-                    <Box bg="gray.50" p={3} borderRadius="md" mb={2}>
-                      <Grid 
-                        templateColumns={{
-                          base: "1fr",
-                          md: "minmax(100px, 120px) minmax(200px, 1fr) minmax(100px, 150px) minmax(100px, 120px) minmax(100px, 120px) minmax(100px, 120px)",
-                          lg: "120px 1fr 150px 120px 120px 120px"
-                        }}
-                        gap={3} 
-                        fontSize="sm" 
-                        fontWeight="bold" 
-                        color="gray.700"
-                        alignItems="center"
-                      >
-                        <Text>Date</Text>
-                        <Text>Description</Text>
-                        <Text>Reference</Text>
-                        <Text textAlign="right">Debit</Text>
-                        <Text textAlign="right">Credit</Text>
-                        <Text textAlign="right">Balance</Text>
-                      </Grid>
-                    </Box>
-                    
-                    {/* Transaction Rows */}
-                    <VStack spacing={1} align="stretch" maxH="400px" overflow="auto">
-                      {ssotGLData.transactions.map((transaction, index) => (
-                        <Box 
-                          key={index} 
-                          border="1px solid" 
-                          borderColor="gray.100" 
-                          borderRadius="sm" 
-                          p={3} 
-                          bg="white" 
-                          _hover={{ bg: 'gray.50' }}
-                          minH="60px"
-                        >
-                          <Grid 
-                            templateColumns={{
-                              base: "1fr",
-                              md: "minmax(100px, 120px) minmax(200px, 1fr) minmax(100px, 150px) minmax(100px, 120px) minmax(100px, 120px) minmax(100px, 120px)",
-                              lg: "120px 1fr 150px 120px 120px 120px"
-                            }}
-                            gap={3} 
-                            fontSize="sm"
-                            alignItems="center"
-                            minH="inherit"
-                          >
-                            <VStack align="start" spacing={0} justify="center">
-                              <Text 
-                                fontWeight="medium" 
-                                color="gray.800"
-                                fontSize="sm"
-                                wordBreak="break-word"
-                                overflowWrap="break-word"
-                              >
-                                {new Date(transaction.date).toLocaleDateString('id-ID')}
-                              </Text>
-                              {transaction.journal_code && (
-                                <Text 
-                                  fontSize="xs" 
-                                  color="blue.600"
-                                  wordBreak="break-word"
-                                  overflowWrap="break-word"
-                                >
-                                  {transaction.journal_code}
-                                </Text>
-                              )}
-                            </VStack>
-                            <VStack align="start" spacing={0} justify="center" w="100%">
-                              <Text 
-                                fontSize="sm" 
-                                color="gray.800" 
-                                wordBreak="break-word"
-                                overflowWrap="break-word"
-                                whiteSpace="normal"
-                                lineHeight="1.3"
-                              >
-                                {transaction.description || 'No description'}
-                              </Text>
-                              {transaction.entry_type && (
-                                <Badge size="sm" colorScheme={getEntryTypeBadgeColor(transaction.entry_type)} mt={1}>
-                                  {transaction.entry_type}
-                                </Badge>
-                              )}
-                            </VStack>
-                            <Text 
-                              fontSize="sm" 
-                              color="gray.600"
-                              wordBreak="break-word"
-                              overflowWrap="break-word"
-                            >
-                              {transaction.reference || '-'}
-                            </Text>
-                            <Text 
-                              textAlign="right" 
-                              fontSize="sm" 
-                              fontWeight="medium" 
-                              color={transaction.debit_amount > 0 ? 'green.600' : 'gray.400'}
-                              wordBreak="break-word"
-                              overflowWrap="break-word"
-                            >
-                              {transaction.debit_amount > 0 ? formatCurrency(transaction.debit_amount) : '-'}
-                            </Text>
-                            <Text 
-                              textAlign="right" 
-                              fontSize="sm" 
-                              fontWeight="medium" 
-                              color={transaction.credit_amount > 0 ? 'red.600' : 'gray.400'}
-                              wordBreak="break-word"
-                              overflowWrap="break-word"
-                            >
-                              {transaction.credit_amount > 0 ? formatCurrency(transaction.credit_amount) : '-'}
-                            </Text>
-                            <Text 
-                              textAlign="right" 
-                              fontSize="sm" 
-                              fontWeight="bold" 
-                              color="green.600"
-                              wordBreak="break-word"
-                              overflowWrap="break-word"
-                            >
-                              {formatCurrency(Math.abs(transaction.balance))}
-                            </Text>
-                          </Grid>
-                        </Box>
-                      ))}
-                    </VStack>
-                    
-                    {ssotGLData.transactions.length === 0 && (
-                      <Text textAlign="center" color="gray.500" py={8}>
-                        No transactions found for the selected period
-                      </Text>
-                    )}
-                  </Box>
-                )}
-
-                {/* Monthly Summary */}
-                {ssotGLData.monthly_summary && ssotGLData.monthly_summary.length > 0 && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Monthly Summary
-                    </Heading>
-                    <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                      {ssotGLData.monthly_summary.map((month, index) => (
-                        <Box key={index} border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white">
-                          <Text fontWeight="bold" mb={2} color="gray.800">
-                            {month.month || `Month ${index + 1}`}
-                          </Text>
-                          <VStack spacing={1} align="stretch">
-                            <HStack justify="space-between">
-                              <Text fontSize="sm" color="gray.600">Debits:</Text>
-                              <Text fontSize="sm" fontWeight="medium" color="green.600">
-                                {formatCurrency(month.total_debits || 0)}
-                              </Text>
-                            </HStack>
-                            <HStack justify="space-between">
-                              <Text fontSize="sm" color="gray.600">Credits:</Text>
-                              <Text fontSize="sm" fontWeight="medium" color="red.600">
-                                {formatCurrency(month.total_credits || 0)}
-                              </Text>
-                            </HStack>
-                            <HStack justify="space-between">
-                              <Text fontSize="sm" color="gray.600">Net:</Text>
-                              <Text fontSize="sm" fontWeight="bold" color={(month.total_debits || 0) >= (month.total_credits || 0) ? 'green.600' : 'red.600'}>
-                                {formatCurrency((month.total_debits || 0) - (month.total_credits || 0))}
-                              </Text>
-                            </HStack>
-                          </VStack>
-                        </Box>
-                      ))}
-                    </SimpleGrid>
-                  </Box>
-                )}
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <HStack spacing={3}>
-              {ssotGLData && !ssotGLLoading && (
-                <>
-                  <Button
-                    colorScheme="red"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFilePlus />}
-                    onClick={() => handleQuickDownload({id: 'general-ledger', name: 'General Ledger'}, 'pdf')}
-                  >
-                    Export PDF
-                  </Button>
-                  <Button
-                    colorScheme="green"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFileText />}
-                    onClick={() => handleQuickDownload({id: 'general-ledger', name: 'General Ledger'}, 'csv')}
                   >
                     Export CSV
                   </Button>
