@@ -22,6 +22,20 @@ import {
   TabPanels,
   Tab,
   TabPanel,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  useDisclosure,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogContent,
+  AlertDialogOverlay,
 } from '@chakra-ui/react';
 import { 
   FiBell, 
@@ -31,9 +45,11 @@ import {
   FiShoppingCart,
   FiPackage, 
   FiAlertTriangle, 
-  FiAlertCircle 
+  FiAlertCircle,
+  FiLogOut
 } from 'react-icons/fi';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import approvalService from '../../services/approvalService';
 import axios from 'axios';
 import { API_BASE_URL, API_ENDPOINTS } from '@/config/api';
@@ -70,7 +86,11 @@ const UnifiedNotifications: React.FC = () => {
   const [approvalUnreadCount, setApprovalUnreadCount] = useState(0);
   const [stockUnreadCount, setStockUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
+  const [authError, setAuthError] = useState(false);
+  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { isOpen: isAuthErrorOpen, onOpen: onAuthErrorOpen, onClose: onAuthErrorClose } = useDisclosure();
+  const cancelRef = React.useRef<HTMLButtonElement>(null);
 
   // Determine if user can see stock notifications
   const canViewStockNotifications = user?.role === 'admin' || user?.role === 'inventory_manager';
@@ -102,7 +122,11 @@ const UnifiedNotifications: React.FC = () => {
       const unreadCount = (response.data.notifications || []).filter((n: NotificationItem) => !n.is_read).length;
       setApprovalUnreadCount(unreadCount);
     } catch (error: any) {
-      if (error.response?.status !== 401 && error.response?.status !== 403) {
+      if (error.response?.status === 401) {
+        // Token expired or invalid - show user-friendly modal
+        setAuthError(true);
+        onAuthErrorOpen();
+      } else if (error.response?.status !== 403) {
         console.error('Failed to fetch approval notifications:', error);
       }
       setApprovalNotifications([]);
@@ -139,8 +163,14 @@ const UnifiedNotifications: React.FC = () => {
       const unreadCount = allStockNotifs.filter((n: NotificationItem) => !n.is_read).length;
       setStockUnreadCount(unreadCount);
       
-    } catch (error) {
-      console.error('Failed to fetch stock notifications:', error);
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        // Token expired or invalid - show user-friendly modal
+        setAuthError(true);
+        onAuthErrorOpen();
+      } else {
+        console.error('Failed to fetch stock notifications:', error);
+      }
       setStockNotifications([]);
       setStockUnreadCount(0);
     }
@@ -161,11 +191,15 @@ const UnifiedNotifications: React.FC = () => {
       }
     } catch (error: any) {
       // Handle specific error cases
-      if (error.response?.status === 500) {
+      if (error.response?.status === 401) {
+        // Token expired or invalid - show user-friendly modal
+        setAuthError(true);
+        onAuthErrorOpen();
+      } else if (error.response?.status === 500) {
         console.warn('Stock alerts service temporarily unavailable');
       } else if (error.response?.status === 403) {
         console.info('User not authorized to view stock alerts');
-      } else if (error.response?.status !== 401) {
+      } else {
         console.error('Failed to fetch stock alerts:', error.response?.data || error.message);
       }
       setStockAlerts([]);
@@ -239,6 +273,17 @@ const UnifiedNotifications: React.FC = () => {
       default:
         return <FiPackage color="#3182ce" />;
     }
+  };
+
+  const handleLogout = () => {
+    onAuthErrorClose();
+    logout();
+    router.push('/login');
+  };
+
+  const handleCloseAuthError = () => {
+    setAuthError(false);
+    onAuthErrorClose();
   };
 
   const formatDate = (dateString: string) => {
@@ -513,6 +558,60 @@ const UnifiedNotifications: React.FC = () => {
           </Box>
         )}
       </MenuList>
+
+      {/* Authentication Error Alert Dialog */}
+      <AlertDialog
+        isOpen={isAuthErrorOpen}
+        leastDestructiveRef={cancelRef}
+        onClose={handleCloseAuthError}
+        isCentered
+      >
+        <AlertDialogOverlay>
+          <AlertDialogContent>
+            <AlertDialogHeader fontSize="lg" fontWeight="bold">
+              🔐 Sesi Berakhir
+            </AlertDialogHeader>
+
+            <AlertDialogBody>
+              <VStack align="start" spacing={3}>
+                <Text>
+                  Sesi login Anda telah berakhir atau token tidak valid.
+                </Text>
+                <Alert status="warning" borderRadius="md">
+                  <AlertIcon />
+                  <Box flex="1">
+                    <Text fontSize="sm">
+                      Untuk keamanan akun Anda, silakan login kembali untuk melanjutkan.
+                    </Text>
+                  </Box>
+                </Alert>
+                <Text fontSize="sm" color="gray.600">
+                  Kemungkinan penyebab:
+                </Text>
+                <VStack align="start" spacing={1} pl={4} fontSize="sm" color="gray.600">
+                  <Text>• Token keamanan telah kedaluwarsa</Text>
+                  <Text>• Anda telah login dari perangkat lain</Text>
+                  <Text>• Sesi telah melebihi batas waktu</Text>
+                </VStack>
+              </VStack>
+            </AlertDialogBody>
+
+            <AlertDialogFooter>
+              <Button ref={cancelRef} onClick={handleCloseAuthError} variant="ghost">
+                Tutup
+              </Button>
+              <Button 
+                colorScheme="blue" 
+                onClick={handleLogout} 
+                ml={3}
+                leftIcon={<FiLogOut />}
+              >
+                Login Ulang
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialogOverlay>
+      </AlertDialog>
     </Menu>
   );
 };

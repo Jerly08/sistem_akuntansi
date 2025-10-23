@@ -52,7 +52,12 @@ export interface InvoiceCounter {
   counter: number;
   created_at: string;
   updated_at: string;
-  invoice_type: InvoiceType;
+  invoice_type?: InvoiceType;
+}
+
+export interface ResetCounterRequest {
+  year: number;
+  counter: number;
 }
 
 class InvoiceTypeService {
@@ -292,6 +297,30 @@ class InvoiceTypeService {
       
       // Return empty array on error to keep UI functional
       return [];
+    }
+  }
+
+  // Reset counter for a specific invoice type and year
+  async resetCounter(id: number, data: ResetCounterRequest): Promise<any> {
+    try {
+      console.log('InvoiceTypeService: Resetting counter for invoice type', id, 'with data:', data);
+      const response = await api.post(API_ENDPOINTS.INVOICE_TYPES_RESET_COUNTER(id), data);
+      console.log('InvoiceTypeService: Reset counter response:', response);
+      
+      // Handle null or undefined response
+      if (!response || !response.data) {
+        throw new Error('No response received from server');
+      }
+      
+      // Handle different response structures
+      if (response.data.data) {
+        return response.data.data;
+      } else {
+        return response.data;
+      }
+    } catch (error: any) {
+      console.error('InvoiceTypeService: Error resetting counter:', error);
+      throw error;
     }
   }
 

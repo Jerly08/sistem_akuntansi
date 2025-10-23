@@ -39,6 +39,19 @@ export interface VendorPurchaseSummary {
   last_purchase_date: string;
   payment_method: string;
   status: string;
+  items?: PurchaseItemDetail[]; // Items purchased from this vendor
+}
+
+export interface PurchaseItemDetail {
+  product_id: number;
+  product_code: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  unit: string;
+  purchase_date: string;
+  invoice_number?: string;
 }
 
 export interface MonthlyPurchaseSummary {

@@ -58,7 +58,8 @@ import {
   FiInfo,
   FiRefreshCw,
   FiCheck,
-  FiActivity
+  FiActivity,
+  FiLock
 } from 'react-icons/fi';
 
 interface AccountOption {
@@ -68,6 +69,7 @@ interface AccountOption {
   type: string;
   category: string;
   is_active: boolean;
+  is_system_critical?: boolean; // Lock critical accounts from modification
 }
 
 interface TaxAccountSettings {
@@ -165,6 +167,17 @@ const TaxAccountSettingsPage: React.FC = () => {
   const greenColor = useColorModeValue('green.500', 'green.300');
   const purpleColor = useColorModeValue('purple.500', 'purple.300');
   const orangeColor = useColorModeValue('orange.500', 'orange.300');
+
+  // Critical accounts that should not be changed
+  const isCriticalAccount = (fieldName: string): boolean => {
+    const criticalAccounts = [
+      'sales_receivable',   // 1201 - Used in ALL credit sales
+      'sales_revenue',      // 4101 - Used in ALL sales
+      'sales_output_vat',   // 2103 - Tax regulation (DJP)
+      'purchase_payable',   // 2001 - Used in ALL credit purchases
+    ];
+    return criticalAccounts.includes(fieldName);
+  };
 
   // Fetch current settings
   const fetchSettings = async () => {
@@ -492,12 +505,23 @@ const TaxAccountSettingsPage: React.FC = () => {
     const hasError = validationErrors[fieldName];
     const options = getAccountOptions(accountTypes, categories);
     
+    // Check if critical from field name OR from selected account's database flag
+    const isCritical = isCriticalAccount(fieldName);
+    const selectedAccount = availableAccounts.find(acc => acc.id === currentValue);
+    const isSelectedCritical = selectedAccount?.is_system_critical === true;
+    
     return (
       <FormControl isRequired={isRequired} isInvalid={!!hasError}>
         <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
           <HStack>
             <Text>{label}</Text>
             {isRequired && <Badge colorScheme="red" size="sm">Required</Badge>}
+            {(isCritical || isSelectedCritical) && (
+              <HStack spacing={1}>
+                <Icon as={FiLock} color="red.500" boxSize={3} />
+                <Badge colorScheme="red" size="sm">LOCKED</Badge>
+              </HStack>
+            )}
           </HStack>
         </FormLabel>
         <Select
@@ -505,7 +529,11 @@ const TaxAccountSettingsPage: React.FC = () => {
           onChange={(e) => handleAccountChange(fieldName, e.target.value)}
           placeholder={`Select ${label.toLowerCase()}`}
           variant="filled"
-          _hover={{ bg: 'gray.100' }}
+          isDisabled={isCritical || isSelectedCritical}
+          bg={(isCritical || isSelectedCritical) ? 'gray.200' : undefined}
+          cursor={(isCritical || isSelectedCritical) ? 'not-allowed' : undefined}
+          opacity={(isCritical || isSelectedCritical) ? 0.7 : 1}
+          _hover={{ bg: (isCritical || isSelectedCritical) ? 'gray.200' : 'gray.100' }}
           _focus={{ bg: 'white', borderColor: 'blue.500' }}
         >
           {options.map((account) => (
@@ -515,7 +543,19 @@ const TaxAccountSettingsPage: React.FC = () => {
           ))}
         </Select>
         {hasError && <FormErrorMessage>{hasError}</FormErrorMessage>}
-        {description && !hasError && (
+        {(isCritical || isSelectedCritical) && !hasError && (
+          <FormHelperText fontSize="xs" color="red.600" fontWeight="medium">
+            <HStack spacing={1}>
+              <Icon as={FiInfo} />
+              <Text>
+                🔒 This account is system critical and locked to ensure data integrity. 
+                Changing it would break journal entries and reports.
+                {isSelectedCritical && ' (Locked in database)'}
+              </Text>
+            </HStack>
+          </FormHelperText>
+        )}
+        {description && !hasError && !isCritical && !isSelectedCritical && (
           <FormHelperText fontSize="xs" color="gray.500">
             {description}
           </FormHelperText>

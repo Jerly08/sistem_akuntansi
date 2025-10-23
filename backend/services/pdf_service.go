@@ -1457,6 +1457,120 @@ func (p *PDFService) GenerateSalesSummaryPDF(summary interface{}) ([]byte, error
 	}
 	*/
 
+	// Items Sold section - grouped by customer (similar to purchase report)
+	if customers := getList("sales_by_customer", "top_customers", "TopCustomers"); len(customers) > 0 {
+		hasItems := false
+		for _, c := range customers {
+			if cm, ok := c.(map[string]interface{}); ok {
+				if items, ok := cm["items"].([]interface{}); ok && len(items) > 0 {
+					hasItems = true
+					break
+				}
+			}
+		}
+		
+		if hasItems {
+			// Check if we need a new page for items section
+			_, pageH := pdf.GetPageSize()
+			if pdf.GetY() > pageH-80 {
+				pdf.AddPage()
+			}
+			
+			pdf.Ln(10)
+			pdf.SetFont("Arial", "B", 12)
+			pdf.Cell(0, 8, "Items Sold")
+			pdf.Ln(10)
+			
+			// Loop through customers and their items
+			for _, c := range customers {
+				if cm, ok := c.(map[string]interface{}); ok {
+					if items, ok := cm["items"].([]interface{}); ok && len(items) > 0 {
+						// Check if we need a new page for this customer
+						if pdf.GetY() > pageH-60 {
+							pdf.AddPage()
+						}
+						
+						// Customer name header
+						customerName := getStr(cm, "customer_name", "name")
+						if len(customerName) > 40 {
+							customerName = customerName[:37] + "..."
+						}
+						pdf.SetFont("Arial", "B", 10)
+						pdf.SetFillColor(230, 240, 255) // Light blue
+						pdf.CellFormat(140, 7, customerName, "1", 0, "L", true, 0, "")
+						pdf.CellFormat(50, 7, fmt.Sprintf("%d items", len(items)), "1", 1, "R", true, 0, "")
+						
+						// Items table header
+						pdf.SetFont("Arial", "B", 8)
+						pdf.SetFillColor(245, 245, 245)
+						pdf.CellFormat(70, 6, "Product", "1", 0, "L", true, 0, "")
+						pdf.CellFormat(20, 6, "Qty", "1", 0, "R", true, 0, "")
+						pdf.CellFormat(35, 6, "Unit Price", "1", 0, "R", true, 0, "")
+						pdf.CellFormat(35, 6, "Total", "1", 0, "R", true, 0, "")
+						pdf.CellFormat(30, 6, "Date", "1", 1, "C", true, 0, "")
+						
+						// Items rows
+						pdf.SetFont("Arial", "", 8)
+						for _, item := range items {
+							if im, ok := item.(map[string]interface{}); ok {
+								// Check if we need a new page
+								if pdf.GetY() > pageH-25 {
+									pdf.AddPage()
+									// Reprint header
+									pdf.SetFont("Arial", "B", 8)
+									pdf.SetFillColor(245, 245, 245)
+									pdf.CellFormat(70, 6, "Product", "1", 0, "L", true, 0, "")
+									pdf.CellFormat(20, 6, "Qty", "1", 0, "R", true, 0, "")
+									pdf.CellFormat(35, 6, "Unit Price", "1", 0, "R", true, 0, "")
+									pdf.CellFormat(35, 6, "Total", "1", 0, "R", true, 0, "")
+									pdf.CellFormat(30, 6, "Date", "1", 1, "C", true, 0, "")
+									pdf.SetFont("Arial", "", 8)
+								}
+								
+								productName := getStr(im, "product_name", "name")
+								if len(productName) > 35 {
+									productName = productName[:32] + "..."
+								}
+								
+								qty := getNum(im, "quantity", "qty")
+								unit := getStr(im, "unit")
+								qtyStr := fmt.Sprintf("%.0f %s", qty, unit)
+								
+								unitPrice := getNum(im, "unit_price", "price")
+								totalPrice := getNum(im, "total_price", "line_total", "total")
+								
+								// Parse sale_date
+								dateStr := getStr(im, "sale_date", "date")
+								var formattedDate string
+								if dateStr != "" {
+									if t, err := time.Parse(time.RFC3339, dateStr); err == nil {
+										formattedDate = t.Format("02/01/2006")
+									} else {
+										formattedDate = dateStr
+									}
+								}
+								
+								pdf.CellFormat(70, 6, productName, "1", 0, "L", false, 0, "")
+								pdf.CellFormat(20, 6, qtyStr, "1", 0, "R", false, 0, "")
+								pdf.CellFormat(35, 6, p.formatRupiah(unitPrice), "1", 0, "R", false, 0, "")
+								pdf.CellFormat(35, 6, p.formatRupiah(totalPrice), "1", 0, "R", false, 0, "")
+								pdf.CellFormat(30, 6, formattedDate, "1", 1, "C", false, 0, "")
+							}
+						}
+						
+						// Customer subtotal
+						customerTotal := getNum(cm, "total_amount", "amount", "total_sales")
+						pdf.SetFont("Arial", "B", 9)
+						pdf.SetFillColor(230, 245, 255)
+						pdf.CellFormat(125, 6, fmt.Sprintf("Subtotal (%s)", getStr(cm, "customer_name", "name")), "1", 0, "R", true, 0, "")
+						pdf.CellFormat(65, 6, p.formatRupiah(customerTotal), "1", 1, "R", true, 0, "")
+						pdf.Ln(4)
+					}
+				}
+			}
+		}
+	}
+
 	// Footer
 	pdf.Ln(10)
 	pdf.SetFont("Arial", "I", 8)
@@ -1569,19 +1683,21 @@ pdf.SetTextColor(102,102,102)
 pdf.Cell(contentW-25,5,time.Now().Format("02/01/2006 15:04"))
 pdf.Ln(10)
 
-	// Table headers (fit 180mm content width)
-	pdf.SetFont("Arial", "B", 9)
+	// Table headers with optimized widths (fit 180mm content width)
+	// Date: 18mm, Reference: 25mm, Description: 75mm, Debit: 20mm, Credit: 20mm, Balance: 22mm
+	pdf.SetFont("Arial", "B", 8)
 	pdf.SetFillColor(220, 220, 220)
-	pdf.CellFormat(20, 8, "Date", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(25, 8, "Reference", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(70, 8, "Description", "1", 0, "L", true, 0, "")
-	pdf.CellFormat(22, 8, "Debit", "1", 0, "R", true, 0, "")
-	pdf.CellFormat(22, 8, "Credit", "1", 0, "R", true, 0, "")
-	pdf.CellFormat(21, 8, "Balance", "1", 0, "R", true, 0, "")
-	pdf.Ln(8)
+	pdf.CellFormat(18, 7, "Date", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(25, 7, "Reference", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(75, 7, "Description", "1", 0, "L", true, 0, "")
+	pdf.CellFormat(20, 7, "Debit", "1", 0, "R", true, 0, "")
+	pdf.CellFormat(20, 7, "Credit", "1", 0, "R", true, 0, "")
+	pdf.CellFormat(22, 7, "Balance", "1", 0, "R", true, 0, "")
+	pdf.Ln(7)
 
 	// Process ledger data based on its structure
-	pdf.SetFont("Arial", "", 8)
+	// Use smaller font (6pt) for better fit
+	pdf.SetFont("Arial", "", 6)
 	pdf.SetFillColor(255, 255, 255)
 	
 	// Normalize input to map[string]interface{} so we can iterate regardless of struct/map input
@@ -1604,10 +1720,27 @@ pdf.Ln(10)
 					}
 				}
 			}
+		} else if transactions, exists := ledgerMap["transactions"]; exists {
+			// New field name from backend
+			if transactionsSlice, ok := transactions.([]interface{}); ok {
+				openingBalance := 0.0
+				if opening, exists := ledgerMap["opening_balance"]; exists {
+					if openingFloat, ok := opening.(float64); ok {
+						openingBalance = openingFloat
+					}
+				}
+				p.addEntriesToLedgerPDF(pdf, transactionsSlice, openingBalance)
+			}
 		} else if entries, exists := ledgerMap["entries"]; exists {
-			// Single account structure
+			// Legacy field name
 			if entriesSlice, ok := entries.([]interface{}); ok {
-				p.addEntriesToLedgerPDF(pdf, entriesSlice, 0.0)
+				openingBalance := 0.0
+				if opening, exists := ledgerMap["opening_balance"]; exists {
+					if openingFloat, ok := opening.(float64); ok {
+						openingBalance = openingFloat
+					}
+				}
+				p.addEntriesToLedgerPDF(pdf, entriesSlice, openingBalance)
 			}
 		} else {
 			// Fallback: treat entire data as single account
@@ -1693,10 +1826,97 @@ func (p *PDFService) addAccountToLedgerPDF(pdf *gofpdf.Fpdf, accountData map[str
 	pdf.Ln(5)
 }
 
+// splitDescriptionToTwoLines splits description text into maximum 2 lines
+// Each line fits within the given width (in characters)
+func splitDescriptionToTwoLines(text string, maxCharsPerLine int) (string, string) {
+	if len(text) <= maxCharsPerLine {
+		return text, ""
+	}
+	
+	// Try to find a good break point (space, comma, pipe, dash)
+	line1 := text[:maxCharsPerLine]
+	line2 := text[maxCharsPerLine:]
+	
+	// Find last delimiter in line1 for better word wrap
+	// Check last 20 chars for delimiter
+	lastDelimiter := -1
+	for i := len(line1) - 1; i >= max(0, maxCharsPerLine-20); i-- {
+		if line1[i] == ' ' || line1[i] == '|' || line1[i] == '-' || line1[i] == ',' {
+			lastDelimiter = i
+			break
+		}
+	}
+	
+	if lastDelimiter > 0 {
+		line2 = line1[lastDelimiter+1:] + line2
+		line1 = line1[:lastDelimiter]
+	}
+	
+	// Truncate line2 if too long - be conservative
+	if len(line2) > maxCharsPerLine {
+		line2 = line2[:maxCharsPerLine-3] + "..."
+	}
+	
+	return strings.TrimSpace(line1), strings.TrimSpace(line2)
+}
+
+// max helper function
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// truncateToWidth truncates text to fit within specified width in mm
+func truncateToWidth(pdf *gofpdf.Fpdf, text string, maxWidthMM float64) string {
+	// Get current font settings
+	currentWidth := pdf.GetStringWidth(text)
+	
+	// If it fits, return as is
+	if currentWidth <= maxWidthMM {
+		return text
+	}
+	
+	// Binary search for the right length
+	left := 0
+	right := len(text)
+	result := text
+	
+	for left < right {
+		mid := (left + right + 1) / 2
+		testStr := text[:mid] + "..."
+		testWidth := pdf.GetStringWidth(testStr)
+		
+		if testWidth <= maxWidthMM {
+			result = testStr
+			left = mid
+		} else {
+			right = mid - 1
+		}
+	}
+	
+	return result
+}
+
 // addEntriesToLedgerPDF adds individual entries to the PDF
 func (p *PDFService) addEntriesToLedgerPDF(pdf *gofpdf.Fpdf, entries []interface{}, openingBalance float64) {
-	pdf.SetFont("Arial", "", 8)
+	pdf.SetFont("Arial", "", 6)
 	pdf.SetFillColor(255, 255, 255)
+	
+	// Add opening balance row if non-zero
+	if openingBalance != 0 {
+		pdf.SetFont("Arial", "I", 6)
+		pdf.SetFillColor(250, 250, 250)
+		pdf.CellFormat(18, 6, "", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(25, 6, "", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(75, 6, "Opening Balance", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(20, 6, "", "1", 0, "R", true, 0, "")
+		pdf.CellFormat(20, 6, "", "1", 0, "R", true, 0, "")
+		pdf.CellFormat(22, 6, p.formatRupiah(openingBalance), "1", 0, "R", true, 0, "")
+		pdf.Ln(6)
+		pdf.SetFillColor(255, 255, 255)
+	}
 	
 	runningBalance := openingBalance
 	
@@ -1712,9 +1932,11 @@ func (p *PDFService) addEntriesToLedgerPDF(pdf *gofpdf.Fpdf, entries []interface
 			if dateVal, exists := entryMap["date"]; exists {
 				if dateStr, ok := dateVal.(string); ok {
 					if parsedDate, err := time.Parse("2006-01-02", dateStr); err == nil {
-						date = parsedDate.Format("02/01")
-					} else {
-						date = dateStr[:10] // Take first 10 chars
+						date = parsedDate.Format("02/01/2006")
+					} else if parsedDate, err := time.Parse(time.RFC3339, dateStr); err == nil {
+						date = parsedDate.Format("02/01/2006")
+					} else if len(dateStr) >= 10 {
+						date = dateStr[:10]
 					}
 				}
 			}
@@ -1722,17 +1944,27 @@ func (p *PDFService) addEntriesToLedgerPDF(pdf *gofpdf.Fpdf, entries []interface
 			if refVal, exists := entryMap["reference"]; exists {
 				if refStr, ok := refVal.(string); ok {
 					ref = refStr
-					if len(ref) > 20 {
-						ref = ref[:20] + "..."
+					// Smart truncation for reference (max 22 chars for 25mm width at font 7)
+					if len(ref) > 22 {
+						ref = ref[:19] + "..."
 					}
 				}
 			}
 			
+			descLine1 := ""
+			descLine2 := ""
 			if descVal, exists := entryMap["description"]; exists {
 				if descStr, ok := descVal.(string); ok {
 					desc = descStr
-					if len(desc) > 40 {
-						desc = desc[:40] + "..."
+					// Split description into max 2 lines (70 chars per line for 75mm width at font 6)
+					// More conservative limit to prevent overflow
+					descLine1, descLine2 = splitDescriptionToTwoLines(desc, 70)
+					
+					// Additional safety: truncate based on actual width (73mm available after padding)
+					pdf.SetFont("Arial", "", 6)
+					descLine1 = truncateToWidth(pdf, descLine1, 73)
+					if descLine2 != "" {
+						descLine2 = truncateToWidth(pdf, descLine2, 73)
 					}
 				}
 			}
@@ -1762,40 +1994,77 @@ func (p *PDFService) addEntriesToLedgerPDF(pdf *gofpdf.Fpdf, entries []interface
 			// Calculate running balance
 			runningBalance += debit - credit
 			
-			// Add row to PDF
-	pdf.CellFormat(20, 6, date, "1", 0, "C", false, 0, "")
-	pdf.CellFormat(25, 6, ref, "1", 0, "L", false, 0, "")
-	pdf.CellFormat(70, 6, desc, "1", 0, "L", false, 0, "")
-	
-	if debit > 0 {
-		pdf.CellFormat(22, 6, p.formatRupiah(debit), "1", 0, "R", false, 0, "")
-	} else {
-		pdf.CellFormat(22, 6, "-", "1", 0, "R", false, 0, "")
-	}
-	
-	if credit > 0 {
-		pdf.CellFormat(22, 6, p.formatRupiah(credit), "1", 0, "R", false, 0, "")
-	} else {
-		pdf.CellFormat(22, 6, "-", "1", 0, "R", false, 0, "")
-	}
-	
-	pdf.CellFormat(21, 6, p.formatRupiah(runningBalance), "1", 0, "R", false, 0, "")
-			pdf.Ln(6)
+			// Determine row height based on description lines
+			rowHeight := 6.0
+			if descLine2 != "" {
+				rowHeight = 10.0 // Double height for 2-line description
+			}
+			
+			// Add row to PDF with updated column widths
+			pdf.SetFont("Arial", "", 6)
+			pdf.CellFormat(18, rowHeight, date, "1", 0, "C", false, 0, "")
+			pdf.CellFormat(25, rowHeight, ref, "1", 0, "L", false, 0, "")
+			
+			// Description column with multi-line support
+			descX, descY := pdf.GetXY()
+			
+			// Use MultiCell for better text wrapping control
+			pdf.SetXY(descX, descY)
+			pdf.SetFont("Arial", "", 6)
+			
+			if descLine2 != "" {
+				// Two lines - draw cell border first
+				currentX, currentY := pdf.GetXY()
+				pdf.Rect(currentX, currentY, 75, rowHeight, "D") // Draw border
+				
+				// Draw text inside with padding
+				pdf.SetXY(currentX+1, currentY+1)
+				pdf.Cell(73, 4, descLine1)
+				pdf.SetXY(currentX+1, currentY+5)
+				pdf.Cell(73, 4, descLine2)
+				
+				// Move to end of cell
+				pdf.SetXY(currentX+75, currentY)
+			} else {
+				// Single line - use CellFormat with proper alignment
+				pdf.CellFormat(75, rowHeight, descLine1, "1", 0, "L", false, 0, "")
+			}
+			
+			// Move to next columns
+			pdf.SetXY(descX+75, descY)
+			
+			// Debit column
+			if debit > 0 {
+				pdf.CellFormat(20, rowHeight, p.formatRupiah(debit), "1", 0, "R", false, 0, "")
+			} else {
+				pdf.CellFormat(20, rowHeight, "-", "1", 0, "R", false, 0, "")
+			}
+			
+			// Credit column
+			if credit > 0 {
+				pdf.CellFormat(20, rowHeight, p.formatRupiah(credit), "1", 0, "R", false, 0, "")
+			} else {
+				pdf.CellFormat(20, rowHeight, "-", "1", 0, "R", false, 0, "")
+			}
+			
+			// Balance column
+			pdf.CellFormat(22, rowHeight, p.formatRupiah(runningBalance), "1", 0, "R", false, 0, "")
+			pdf.Ln(rowHeight)
 			
 			// Check if we need a new page
 			if pdf.GetY() > 260 {
 				pdf.AddPage()
-				// Re-add headers
-				pdf.SetFont("Arial", "B", 9)
+				// Re-add headers with matching widths and fonts
+				pdf.SetFont("Arial", "B", 8)
 				pdf.SetFillColor(220, 220, 220)
-				pdf.CellFormat(20, 8, "Date", "1", 0, "C", true, 0, "")
-				pdf.CellFormat(25, 8, "Reference", "1", 0, "C", true, 0, "")
-				pdf.CellFormat(70, 8, "Description", "1", 0, "L", true, 0, "")
-				pdf.CellFormat(22, 8, "Debit", "1", 0, "R", true, 0, "")
-				pdf.CellFormat(22, 8, "Credit", "1", 0, "R", true, 0, "")
-				pdf.CellFormat(21, 8, "Balance", "1", 0, "R", true, 0, "")
-				pdf.Ln(8)
-				pdf.SetFont("Arial", "", 8)
+				pdf.CellFormat(18, 7, "Date", "1", 0, "C", true, 0, "")
+				pdf.CellFormat(25, 7, "Reference", "1", 0, "C", true, 0, "")
+				pdf.CellFormat(75, 7, "Description", "1", 0, "L", true, 0, "")
+				pdf.CellFormat(20, 7, "Debit", "1", 0, "R", true, 0, "")
+				pdf.CellFormat(20, 7, "Credit", "1", 0, "R", true, 0, "")
+				pdf.CellFormat(22, 7, "Balance", "1", 0, "R", true, 0, "")
+				pdf.Ln(7)
+				pdf.SetFont("Arial", "", 6)
 				pdf.SetFillColor(255, 255, 255)
 			}
 		}

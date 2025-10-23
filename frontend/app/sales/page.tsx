@@ -115,6 +115,17 @@ const SalesPage: React.FC = () => {
         loading: false
       }));
     } catch (error: any) {
+      // Don't show error for 401 (authentication) - modal handles it
+      if (error.response?.status === 401) {
+        setState(prev => ({
+          ...prev,
+          loading: false,
+          error: null // Clear error for auth issues
+        }));
+        return; // Exit early, modal will handle auth error
+      }
+      
+      // Handle other errors normally
       setState(prev => ({
         ...prev,
         error: error.response?.data?.message || 'Failed to load sales data',

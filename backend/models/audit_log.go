@@ -7,7 +7,7 @@ import (
 
 type AuditLog struct {
 	ID           uint           `json:"id" gorm:"primaryKey"`
-	UserID       uint           `json:"user_id" gorm:"not null;index"`
+	UserID       *uint          `json:"user_id" gorm:"index"` // Nullable for anonymous/unauthenticated users
 	Action       string         `json:"action" gorm:"not null;size:20"` // CREATE, UPDATE, DELETE
 	TableName    string         `json:"table_name" gorm:"not null;size:100"`
 	RecordID     uint           `json:"record_id" gorm:"not null;index"`
@@ -20,7 +20,7 @@ type AuditLog struct {
 	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
 
 	// Relations
-	User User `json:"user" gorm:"foreignKey:UserID"`
+	User *User `json:"user,omitempty" gorm:"foreignKey:UserID"`
 }
 
 // Audit Actions Constants

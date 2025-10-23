@@ -87,6 +87,118 @@ class SSOTTrialBalanceService {
   validateBalance(totalDebits: number, totalCredits: number, tolerance: number = 0.01): boolean {
     return Math.abs(totalDebits - totalCredits) < tolerance;
   }
+
+  /**
+   * Export Trial Balance as PDF
+   */
+  async exportToPDF(params: { as_of_date?: string }): Promise<void> {
+    try {
+      const queryParams = new URLSearchParams({
+        format: 'pdf'
+      });
+
+      if (params.as_of_date) {
+        queryParams.append('as_of_date', params.as_of_date);
+      }
+
+      const url = `${API_ENDPOINTS.SSOT_REPORTS.TRIAL_BALANCE}?${queryParams.toString()}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // Use default error message if JSON parsing fails
+        }
+        throw new Error(errorMessage);
+      }
+
+      const blob = await response.blob();
+      if (blob.size === 0) {
+        throw new Error('Empty file received from server');
+      }
+
+      const filename = `Trial_Balance_${params.as_of_date || new Date().toISOString().split('T')[0]}.pdf`;
+      
+      // Trigger download
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+    } catch (error) {
+      console.error('PDF export error:', error);
+      throw new Error(`Failed to export Trial Balance as PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Export Trial Balance as CSV
+   */
+  async exportToCSV(params: { as_of_date?: string }): Promise<void> {
+    try {
+      const queryParams = new URLSearchParams({
+        format: 'csv'
+      });
+
+      if (params.as_of_date) {
+        queryParams.append('as_of_date', params.as_of_date);
+      }
+
+      const url = `${API_ENDPOINTS.SSOT_REPORTS.TRIAL_BALANCE}?${queryParams.toString()}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          // Use default error message if JSON parsing fails
+        }
+        throw new Error(errorMessage);
+      }
+
+      const blob = await response.blob();
+      if (blob.size === 0) {
+        throw new Error('Empty file received from server');
+      }
+
+      const filename = `Trial_Balance_${params.as_of_date || new Date().toISOString().split('T')[0]}.csv`;
+      
+      // Trigger download
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+    } catch (error) {
+      console.error('CSV export error:', error);
+      throw new Error(`Failed to export Trial Balance as CSV: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 export const ssotTrialBalanceService = new SSOTTrialBalanceService();

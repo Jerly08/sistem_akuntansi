@@ -386,10 +386,18 @@ func (s *SSOTProfitLossService) generateProfitLossFromBalances(balances []SSOTAc
 			// General expenses (540x-599x)
 			plData.OperatingExpenses.General.Subtotal += amount
 			plData.OperatingExpenses.General.Items = append(plData.OperatingExpenses.General.Items, item)
+		
+		case strings.HasPrefix(code, "60"), strings.HasPrefix(code, "61"):
+			// Operating expenses (60xx-61xx) - including account 6001 Beban Operasional
+			// These should be part of Operating Expenses, not Other Expenses
+			plData.OperatingExpenses.General.Subtotal += amount
+			plData.OperatingExpenses.General.Items = append(plData.OperatingExpenses.General.Items, item)
 
 		// OTHER INCOME/EXPENSES
-		case strings.HasPrefix(code, "6"):
-			// Other expenses (6xxx)
+		case strings.HasPrefix(code, "62"), strings.HasPrefix(code, "63"), strings.HasPrefix(code, "64"),
+			 strings.HasPrefix(code, "65"), strings.HasPrefix(code, "66"), strings.HasPrefix(code, "67"),
+			 strings.HasPrefix(code, "68"), strings.HasPrefix(code, "69"):
+			// Other/Non-operating expenses (62xx-69xx)
 			plData.OtherExpenses += amount
 			plData.OtherExpenseItems = append(plData.OtherExpenseItems, item)
 			
@@ -440,10 +448,19 @@ func (s *SSOTProfitLossService) calculatePLTotalsAndRatios(plData *SSOTProfitLos
 	// Calculate income before tax
 	plData.IncomeBeforeTax = plData.OperatingIncome + plData.OtherIncome - plData.OtherExpenses
 	
-	// Estimate tax expense (assume 25% rate if income is positive)
-	if plData.IncomeBeforeTax > 0 {
-		plData.TaxExpense = plData.IncomeBeforeTax * 0.25
-	}
+	// 🔥 FIX: DO NOT auto-calculate tax expense
+	// Tax expense should come from actual tax accounts (8xxx) in the ledger
+	// If you want to calculate tax, it should be from actual tax journal entries
+	// For now, we'll leave it at 0 unless there are actual tax expense entries
+	// 
+	// OLD BUGGY CODE (caused incorrect net income):
+	// if plData.IncomeBeforeTax > 0 {
+	//     plData.TaxExpense = plData.IncomeBeforeTax * 0.25  // ❌ This was wrong!
+	// }
+	//
+	// The tax expense will be captured from actual accounting entries in 8xxx accounts
+	// if they are recorded. Otherwise, it remains 0 for accurate reporting.
+	plData.TaxExpense = 0 // Will be set from actual tax expense accounts if recorded
 	
 	// Calculate net income and margin
 	plData.NetIncome = plData.IncomeBeforeTax - plData.TaxExpense

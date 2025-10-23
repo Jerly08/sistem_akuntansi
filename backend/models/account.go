@@ -10,7 +10,7 @@ type COA = Account
 
 type Account struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	Code        string         `json:"code" gorm:"not null;size:20;index"`
+	Code        string         `json:"code" gorm:"not null;size:20;uniqueIndex:idx_accounts_code_active,where:deleted_at IS NULL"`
 	Name        string         `json:"name" gorm:"not null;size:100"`
 	Description string         `json:"description" gorm:"type:text"`
 	Type        string         `json:"type" gorm:"not null;size:20"` // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
@@ -19,6 +19,7 @@ type Account struct {
 	Level       int            `json:"level" gorm:"default:1"`
 	IsHeader    bool           `json:"is_header" gorm:"default:false"`
 	IsActive    bool           `json:"is_active" gorm:"default:true"`
+	IsSystemCritical bool      `json:"is_system_critical" gorm:"default:false"` // Lock critical accounts from modification
 	Balance     float64        `json:"balance" gorm:"type:decimal(20,2);default:0"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`

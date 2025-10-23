@@ -119,8 +119,8 @@ func (s *PurchaseJournalServiceEnhanced) CreatePurchaseJournal(purchase *models.
 		accountID, err := s.taxAccountService.GetAccountID("purchase_input_vat")
 		if err != nil {
 			log.Printf("⚠️ Failed to get purchase input VAT account from settings: %v", err)
-			// Fallback to hardcoded
-			accountID, err = s.taxAccountService.GetAccountByCode("1105")
+			// Fallback to hardcoded (1240 is the standard PPN Masukan account)
+			accountID, err = s.taxAccountService.GetAccountByCode("1240")
 			if err != nil {
 				return fmt.Errorf("failed to find input VAT account: %v", err)
 			}

@@ -209,9 +209,16 @@ func generateProfitLoss(balances []AccountBalance, startDate, endDate string) Pr
 			 strings.HasPrefix(code, "57") || strings.HasPrefix(code, "58") || strings.HasPrefix(code, "59"):
 			// General expenses (540x-599x)
 			pl.OperatingExpenses.GeneralExpenses += amount
+		
+		case strings.HasPrefix(code, "60") || strings.HasPrefix(code, "61"):
+			// Operating expenses (60xx-61xx) - including account 6001 Beban Operasional
+			pl.OperatingExpenses.GeneralExpenses += amount
 
 		// OTHER INCOME/EXPENSES
-		case strings.HasPrefix(code, "6"):
+		case strings.HasPrefix(code, "62") || strings.HasPrefix(code, "63") || strings.HasPrefix(code, "64") ||
+			 strings.HasPrefix(code, "65") || strings.HasPrefix(code, "66") || strings.HasPrefix(code, "67") ||
+			 strings.HasPrefix(code, "68") || strings.HasPrefix(code, "69"):
+			// Other/Non-operating expenses (62xx-69xx)
 			// Other expenses (6xxx)
 			pl.OtherExpenses += amount
 			

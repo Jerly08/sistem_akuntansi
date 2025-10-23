@@ -43,15 +43,29 @@ type PurchaseReportData struct {
 
 // VendorPurchaseSummary represents purchase summary by vendor
 type VendorPurchaseSummary struct {
-	VendorID        uint64  `json:"vendor_id"`
-	VendorName      string  `json:"vendor_name"`
-	TotalPurchases  int64   `json:"total_purchases"`
-	TotalAmount     float64 `json:"total_amount"`
-	TotalPaid       float64 `json:"total_paid"`
-	Outstanding     float64 `json:"outstanding"`
-	LastPurchaseDate time.Time `json:"last_purchase_date"`
-	PaymentMethod   string  `json:"payment_method"`
-	Status          string  `json:"status"`
+	VendorID        uint64               `json:"vendor_id"`
+	VendorName      string               `json:"vendor_name"`
+	TotalPurchases  int64                `json:"total_purchases"`
+	TotalAmount     float64              `json:"total_amount"`
+	TotalPaid       float64              `json:"total_paid"`
+	Outstanding     float64              `json:"outstanding"`
+	LastPurchaseDate time.Time           `json:"last_purchase_date"`
+	PaymentMethod   string               `json:"payment_method"`
+	Status          string               `json:"status"`
+	Items           []PurchaseItemDetail `json:"items,omitempty"`
+}
+
+// PurchaseItemDetail represents individual item purchased
+type PurchaseItemDetail struct {
+	ProductID     uint64    `json:"product_id"`
+	ProductCode   string    `json:"product_code"`
+	ProductName   string    `json:"product_name"`
+	Quantity      float64   `json:"quantity"`
+	UnitPrice     float64   `json:"unit_price"`
+	TotalPrice    float64   `json:"total_price"`
+	Unit          string    `json:"unit"`
+	PurchaseDate  time.Time `json:"purchase_date"`
+	InvoiceNumber string    `json:"invoice_number,omitempty"`
 }
 
 // MonthlyPurchaseSummary represents purchase summary by month
@@ -320,7 +334,59 @@ func (s *SSOTPurchaseReportService) getPurchasesByVendor(ctx context.Context, st
 	}
 
 	log.Printf("Valid vendors found: %d out of %d total groups", validVendorCount, len(vendors))
+	
+	// Fetch items for each vendor using SSOT journal source_id
+	for i := range result {
+		items, err := s.getPurchaseItemsFromSSOT(ctx, startDate, endDate, result[i].VendorName)
+		if err != nil {
+			log.Printf("Warning: Failed to get items for vendor %s: %v", result[i].VendorName, err)
+			continue
+		}
+		result[i].Items = items
+		if len(items) > 0 {
+			log.Printf("✅ Loaded %d items for vendor: %s", len(items), result[i].VendorName)
+		}
+	}
+	
 	return result, nil
+}
+
+// getPurchaseItemsFromSSOT gets detailed items purchased from SSOT journal
+func (s *SSOTPurchaseReportService) getPurchaseItemsFromSSOT(ctx context.Context, startDate, endDate time.Time, vendorName string) ([]PurchaseItemDetail, error) {
+	// Query items using SSOT journal source_id to link to purchases
+	query := `
+		SELECT 
+			COALESCE(pi.product_id, 0) as product_id,
+			COALESCE(p.code, 'N/A') as product_code,
+			COALESCE(p.name, 'Unknown Product') as product_name,
+			pi.quantity,
+			pi.unit_price,
+			pi.total_price,
+			COALESCE(p.unit, 'pcs') as unit,
+			pur.date as purchase_date,
+			COALESCE(pur.code, '') as invoice_number
+		FROM unified_journal_ledger ujl
+		INNER JOIN purchases pur ON pur.id = ujl.source_id
+		INNER JOIN purchase_items pi ON pi.purchase_id = pur.id
+		INNER JOIN contacts v ON v.id = pur.vendor_id
+		LEFT JOIN products p ON p.id = pi.product_id
+		WHERE ujl.source_type = 'PURCHASE'
+		  AND ujl.entry_date BETWEEN ? AND ?
+		  AND ujl.deleted_at IS NULL
+		  AND pur.deleted_at IS NULL
+		  AND pi.deleted_at IS NULL
+		  AND v.name = ?
+		ORDER BY pur.date DESC, pi.id
+	`
+	
+	var items []PurchaseItemDetail
+	err := s.db.WithContext(ctx).Raw(query, startDate, endDate, vendorName).Scan(&items).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to query purchase items from SSOT: %w", err)
+	}
+	
+	log.Printf("🔍 Query items for vendor '%s': found %d items", vendorName, len(items))
+	return items, nil
 }
 
 // getPurchasesByMonth gets purchase summary grouped by month

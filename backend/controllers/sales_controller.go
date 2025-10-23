@@ -241,6 +241,16 @@ func (sc *SalesController) CreateSale(c *gin.Context) {
 		switch {
 		case strings.Contains(errorMsg, "customer not found"):
 			utils.SendNotFound(c, "Customer not found")
+		case strings.Contains(errorMsg, "stock tidak mencukupi") || 
+		     strings.Contains(errorMsg, "stock habis") ||
+		     strings.Contains(errorMsg, "stock tidak cukup"):
+			// Stock validation failed - return 400 with clear message
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Stock Validation Failed",
+				"message": errorMsg,
+				"code":    "INSUFFICIENT_STOCK",
+			})
 		case strings.Contains(errorMsg, "validation"):
 			utils.SendValidationError(c, "Sale validation failed", map[string]string{
 				"details": errorMsg,
@@ -382,10 +392,58 @@ func (sc *SalesController) InvoiceSale(c *gin.Context) {
 
 	invoice, err := sc.salesServiceV2.CreateInvoice(uint(id), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		log.Printf("❌ Failed to create invoice for sale %d: %v", id, err)
+		
+		// Handle specific error types with appropriate status codes and messages
+		errorMsg := err.Error()
+		switch {
+		case strings.Contains(errorMsg, "stock tidak cukup") || 
+		     strings.Contains(errorMsg, "stock habis") ||
+		     strings.Contains(errorMsg, "gagal mengurangi stock"):
+			// Stock validation failed - return 400 with clear message
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Stock Tidak Mencukupi",
+				"message": errorMsg,
+				"code":    "INSUFFICIENT_STOCK",
+				"details": "Silakan periksa ketersediaan stock produk sebelum membuat invoice.",
+			})
+		case strings.Contains(errorMsg, "sale not found"):
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"error":   "Sale Not Found",
+				"message": "Sale dengan ID tersebut tidak ditemukan",
+				"code":    "SALE_NOT_FOUND",
+			})
+		case strings.Contains(errorMsg, "only DRAFT or CONFIRMED"):
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invalid Sale Status",
+				"message": errorMsg,
+				"code":    "INVALID_STATUS",
+			})
+		case strings.Contains(errorMsg, "failed to generate invoice number"):
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Invoice Number Generation Failed",
+				"message": "Gagal generate nomor invoice. Silakan coba lagi.",
+				"code":    "INVOICE_NUMBER_ERROR",
+				"details": errorMsg,
+			})
+		default:
+			// Generic internal error
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"error":   "Failed to Create Invoice",
+				"message": "Terjadi kesalahan saat membuat invoice. Silakan coba lagi.",
+				"code":    "INVOICE_CREATION_ERROR",
+				"details": errorMsg,
+			})
+		}
 		return
 	}
 
+	log.Printf("✅ Invoice created successfully for sale %d", id)
 	c.JSON(http.StatusOK, invoice)
 }
 

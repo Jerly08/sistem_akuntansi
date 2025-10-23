@@ -204,6 +204,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	journalRepo := repositories.NewJournalEntryRepository(db)
 	pdfService := services.NewPDFService(db)
 	coaService := services.NewCOAService(db)
+	
+	// Initialize Purchase Journal Service SSOT (unified_journal_ledger - for Balance Sheet integration)
+	purchaseJournalServiceSSOT := services.NewPurchaseJournalServiceSSOT(db, coaService)
+	
 	purchaseService := services.NewPurchaseService(
 		db,
 		purchaseRepo,
@@ -216,6 +220,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 		pdfService,
 		unifiedJournalService, // Add unified journal service for SSOT integration
 		coaService, // Add COA service for journal V2 integration
+		purchaseJournalServiceSSOT, // NEW: SSOT service for Balance Sheet integration
 	)
 	// Handlers that depend on services (purchaseController will be initialized later)
 	purchaseApprovalHandler := handlers.NewPurchaseApprovalHandler(purchaseService, approvalService)
@@ -226,6 +231,14 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Initialize security middleware
 	middleware.InitAuditLogger(db)       // Initialize audit logging
 	middleware.InitTokenMonitor(db)      // Initialize token monitoring
+	
+	// 📝 Initialize Activity Logger Service and Middleware
+	activityLoggerService := services.NewActivityLoggerService(db, "./logs")
+	middleware.InitActivityLogger(activityLoggerService)
+	log.Println("✅ Activity Logger initialized successfully")
+	
+	// Initialize Activity Log Controller
+	activityLogController := controllers.NewActivityLogController()
 	
 	// Initialize Security controller for security dashboard
 	securityController := controllers.NewSecurityController(db)
@@ -258,7 +271,12 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	r.Use(enhancedSecurity.SecurityHeaders())     // Security headers pada semua requests
 	r.Use(enhancedSecurity.RequestMonitoring())   // Monitor semua requests untuk threats
 	r.Use(middleware.APIUsageMiddleware())        // 📊 Track API usage for optimization
+	r.Use(middleware.ActivityLoggerMiddleware())  // 📝 Log all user activities
 	
+	// 📋 Apply audit logging middleware for financial transactions
+	if middleware.GlobalAuditLogger != nil {
+		r.Use(middleware.GlobalAuditLogger.AuditMiddleware())  // 📋 Audit critical transactions
+	}
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -556,7 +574,10 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 			coaService := services.NewCOAService(db)
 			
 			// Initialize Sales Journal Service V2 (clean implementation)
-salesJournalServiceV2 := services.NewSalesJournalServiceV2(db, journalRepo, coaService)
+			salesJournalServiceV2 := services.NewSalesJournalServiceV2(db, journalRepo, coaService)
+			
+			// Initialize Sales Journal Service SSOT (unified_journal_ledger - for Balance Sheet integration)
+			salesJournalServiceSSOT := services.NewSalesJournalServiceSSOT(db, coaService)
 			
 			// Initialize Stock Service (can be nil if not available)
 			stockService := services.NewStockService(db)
@@ -569,7 +590,7 @@ salesJournalServiceV2 := services.NewSalesJournalServiceV2(db, journalRepo, coaS
 			invoiceTypeService := services.NewInvoiceTypeService(db)
 			
 			// Initialize Sales Service V2 (clean implementation with proper status-based journal posting)
-			salesServiceV2 := services.NewSalesServiceV2(db, salesRepo, salesJournalServiceV2, stockService, notificationService, settingsService, invoiceNumberService)
+			salesServiceV2 := services.NewSalesServiceV2(db, salesRepo, salesJournalServiceV2, salesJournalServiceSSOT, stockService, notificationService, settingsService, invoiceNumberService)
 
 // Initialize Payment repositories, services and controllers
 	paymentRepo := repositories.NewPaymentRepository(db)
@@ -890,6 +911,9 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 			// 🚀 SSOT REPORT INTEGRATION ROUTES: Single Source of Truth integration with all financial reports
 			RegisterSSOTReportRoutesInMain(v1, db, unifiedJournalService, enhancedReportService, jwtManager)
 
+			// 📋 CONTACT HISTORY REPORTS: Customer and Vendor transaction history reports
+			RegisterContactHistoryRoutes(r, db, pdfService)
+
 			// ⚡ OPTIMIZED FINANCIAL REPORTS: Ultra-fast reports using materialized view
 			SetupOptimizedReportsRoutes(r, db)
 			
@@ -950,6 +974,18 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 			{
 				// Main P&L endpoint for frontend - matches the format expected by EnhancedProfitLossModal
 				ssotReports.GET("/ssot-profit-loss", ssotPLController.GetSSOTProfitLoss)
+			}
+
+			// 💰 COGS Management Routes - Cost of Goods Sold tracking and backfill
+			cogsController := controllers.NewCOGSController(db)
+			cogsRoutes := v1.Group("/cogs")
+			cogsRoutes.Use(jwtManager.AuthRequired())
+			cogsRoutes.Use(middleware.RoleRequired("finance", "admin", "director"))
+			{
+				cogsRoutes.GET("/summary", cogsController.GetCOGSSummary)           // Get COGS summary for period
+				cogsRoutes.GET("/missing", cogsController.GetSalesWithoutCOGS)      // Get sales without COGS entries
+				cogsRoutes.POST("/backfill", cogsController.BackfillCOGS)           // Backfill COGS for existing sales
+				cogsRoutes.POST("/record/:sale_id", cogsController.RecordCOGSForSale) // Record COGS for specific sale
 			}
 
 			// 📊 SSOT Balance Sheet Controller - Direct Balance Sheet endpoint for frontend
@@ -1068,6 +1104,19 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				// CashBank GL account links management
 				adminRoutes.GET("/check-cashbank-gl-links", fixCashBankController.CheckCashBankGLLinks)
 				adminRoutes.POST("/fix-cashbank-gl-links", fixCashBankController.FixCashBankGLLinks)
+				
+				// 📝 Activity Logs Management (Admin only)
+				adminRoutes.GET("/activity-logs", activityLogController.GetActivityLogs)
+				adminRoutes.GET("/activity-logs/summary", activityLogController.GetActivitySummary)
+				adminRoutes.GET("/activity-logs/stats", activityLogController.GetActivityStats)
+				adminRoutes.POST("/activity-logs/cleanup", activityLogController.CleanupOldLogs)
+			}
+			
+			// 📝 Activity Logs - User self-access routes (any authenticated user)
+			activityLogs := protected.Group("/activity-logs")
+			{
+				// Users can view their own activity logs
+				activityLogs.GET("/me", activityLogController.GetMyActivityLogs)
 			}
 			
 			// 🏥 Balance Health routes (admin only)

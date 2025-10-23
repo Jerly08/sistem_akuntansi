@@ -498,6 +498,38 @@ func (ers *EnhancedReportService) sortCustomersByRevenue(customerMap map[uint]*C
 	return customers
 }
 
+// getSaleItemsForCustomer fetches detailed sale items for a specific customer
+func (ers *EnhancedReportService) getSaleItemsForCustomer(customerID uint, startDate, endDate time.Time) ([]SaleItemDetail, error) {
+	query := `
+		SELECT 
+			COALESCE(si.product_id, 0) as product_id,
+			COALESCE(p.code, 'N/A') as product_code,
+			COALESCE(p.name, 'Unknown Product') as product_name,
+			si.quantity,
+			si.unit_price as unit_price,
+			si.line_total as total_price,
+			COALESCE(p.unit, 'pcs') as unit,
+			s.date as sale_date,
+			COALESCE(s.code, '') as invoice_number
+		FROM sales s
+		INNER JOIN sale_items si ON si.sale_id = s.id
+		LEFT JOIN products p ON p.id = si.product_id
+		WHERE s.customer_id = ?
+		  AND s.date BETWEEN ? AND ?
+		  AND s.deleted_at IS NULL
+		  AND si.deleted_at IS NULL
+		ORDER BY s.date DESC, si.id
+	`
+	
+	var items []SaleItemDetail
+	err := ers.db.Raw(query, customerID, startDate, endDate).Scan(&items).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to query sale items: %w", err)
+	}
+	
+	return items, nil
+}
+
 // sortProductsBySales sorts products by sales amount
 func (ers *EnhancedReportService) sortProductsBySales(productMap map[uint]*ProductSalesData) []ProductSalesData {
 	var products []ProductSalesData

@@ -39,6 +39,15 @@ import {
   MenuList,
   MenuItem,
   MenuDivider,
+  Table,
+  Thead,
+  Tbody,
+  Tfoot,
+  Tr,
+  Th,
+  Td,
+  TableContainer,
+  Divider,
 } from '@chakra-ui/react';
 import { 
   FiFileText, 
@@ -53,7 +62,9 @@ import {
   FiDatabase,
   FiFilePlus,
   FiChevronDown,
-  FiDollarSign
+  FiDollarSign,
+  FiUsers,
+  FiTruck
 } from 'react-icons/fi';
 // Legacy reportService removed - now using SSOT services only
 import { ssotBalanceSheetReportService, SSOTBalanceSheetData } from '../../src/services/ssotBalanceSheetReportService';
@@ -63,7 +74,6 @@ import { ssotSalesSummaryService, SSOTSalesSummaryData } from '../../src/service
 // Vendor Analysis removed - replaced with Purchase Report
 import { ssotTrialBalanceService, SSOTTrialBalanceData } from '../../src/services/ssotTrialBalanceService';
 import { ssotGeneralLedgerService, SSOTGeneralLedgerData } from '../../src/services/ssotGeneralLedgerService';
-import { ssotJournalAnalysisService, SSOTJournalAnalysisData } from '../../src/services/ssotJournalAnalysisService';
 import { reportService, ReportParameters } from '../../src/services/reportService';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/config/api';
@@ -123,11 +133,18 @@ const getAvailableReports = (t: any) => [
     icon: FiBook
   },
   {
-    id: 'journal-entry-analysis',
-    name: 'Journal Entry Analysis',
-    description: 'Complete analysis of all journal entries showing all transactions with detailed breakdown by accounts, dates, and amounts',
-    type: 'FINANCIAL',
-    icon: FiDatabase
+    id: 'customer-history',
+    name: 'Customer History',
+    description: 'Complete record of customer activities including sales transactions and payment history. Filter by customer name to view detailed transaction timeline.',
+    type: 'OPERATIONAL',
+    icon: FiUsers
+  },
+  {
+    id: 'vendor-history',
+    name: 'Vendor History',
+    description: 'Complete record of vendor activities including purchase transactions and payment history. Filter by vendor name to view detailed transaction timeline.',
+    type: 'OPERATIONAL',
+    icon: FiTruck
   }
 ];
 
@@ -232,14 +249,25 @@ const ReportsPage: React.FC = () => {
   const [ssotGLEndDate, setSSOTGLEndDate] = useState('');
   const [ssotGLAccountId, setSSOTGLAccountId] = useState<string>('');
 
-  // State untuk SSOT Journal Analysis
-  const [ssotJAOpen, setSSOTJAOpen] = useState(false);
-  const [ssotJAData, setSSOTJAData] = useState<SSOTJournalAnalysisData | null>(null);
-  const [ssotJALoading, setSSOTJALoading] = useState(false);
-  const [ssotJAError, setSSOTJAError] = useState<string | null>(null);
-  const [ssotJAStartDate, setSSOTJAStartDate] = useState('');
-  const [ssotJAEndDate, setSSOTJAEndDate] = useState('');
+  // State untuk Customer History
+  const [customerHistoryOpen, setCustomerHistoryOpen] = useState(false);
+  const [customerHistoryData, setCustomerHistoryData] = useState<any>(null);
+  const [customerHistoryLoading, setCustomerHistoryLoading] = useState(false);
+  const [customerHistoryError, setCustomerHistoryError] = useState<string | null>(null);
+  const [customerHistoryStartDate, setCustomerHistoryStartDate] = useState('');
+  const [customerHistoryEndDate, setCustomerHistoryEndDate] = useState('');
+  const [customerHistoryCustomerId, setCustomerHistoryCustomerId] = useState<string>('');
+  const [customers, setCustomers] = useState<any[]>([]);
 
+  // State untuk Vendor History
+  const [vendorHistoryOpen, setVendorHistoryOpen] = useState(false);
+  const [vendorHistoryData, setVendorHistoryData] = useState<any>(null);
+  const [vendorHistoryLoading, setVendorHistoryLoading] = useState(false);
+  const [vendorHistoryError, setVendorHistoryError] = useState<string | null>(null);
+  const [vendorHistoryStartDate, setVendorHistoryStartDate] = useState('');
+  const [vendorHistoryEndDate, setVendorHistoryEndDate] = useState('');
+  const [vendorHistoryVendorId, setVendorHistoryVendorId] = useState<string>('');
+  const [vendors, setVendors] = useState<any[]>([]);
 
   // Modal and report generation states
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -272,8 +300,10 @@ const ReportsPage: React.FC = () => {
         setSSOTTBAsOfDate(range.endISO);
         // General Ledger
         setSSOTGLStartDate(range.startISO); setSSOTGLEndDate(range.endISO);
-        // Journal Analysis
-        setSSOTJAStartDate(range.startISO); setSSOTJAEndDate(range.endISO);
+        // Customer History
+        setCustomerHistoryStartDate(range.startISO); setCustomerHistoryEndDate(range.endISO);
+        // Vendor History
+        setVendorHistoryStartDate(range.startISO); setVendorHistoryEndDate(range.endISO);
       } catch (e) {
         // Fallback to current calendar year
         const today = new Date();
@@ -287,10 +317,61 @@ const ReportsPage: React.FC = () => {
         setSSOTPRStartDate(s); setSSOTPREndDate(eiso);
         setSSOTTBAsOfDate(eiso);
         setSSOTGLStartDate(s); setSSOTGLEndDate(eiso);
-        setSSOTJAStartDate(s); setSSOTJAEndDate(eiso);
+        setCustomerHistoryStartDate(s); setCustomerHistoryEndDate(eiso);
+        setVendorHistoryStartDate(s); setVendorHistoryEndDate(eiso);
       }
     };
     load();
+  }, []);
+
+  // Load customers and vendors for filter dropdowns
+  useEffect(() => {
+    const loadContacts = async () => {
+      try {
+        console.log('Loading customers and vendors...');
+        
+        // Load customers
+        const customersResp = await api.get('/api/v1/contacts', {
+          params: { type: 'CUSTOMER', limit: 1000 }
+        });
+        console.log('Customers response:', customersResp.data);
+        
+        if (customersResp.data?.data) {
+          console.log('Setting customers:', customersResp.data.data.length, 'items');
+          setCustomers(customersResp.data.data);
+        } else if (Array.isArray(customersResp.data)) {
+          // Fallback if data is directly in response
+          console.log('Setting customers (direct array):', customersResp.data.length, 'items');
+          setCustomers(customersResp.data);
+        }
+
+        // Load vendors
+        const vendorsResp = await api.get('/api/v1/contacts', {
+          params: { type: 'VENDOR', limit: 1000 }
+        });
+        console.log('Vendors response:', vendorsResp.data);
+        
+        if (vendorsResp.data?.data) {
+          console.log('Setting vendors:', vendorsResp.data.data.length, 'items');
+          setVendors(vendorsResp.data.data);
+        } else if (Array.isArray(vendorsResp.data)) {
+          // Fallback if data is directly in response
+          console.log('Setting vendors (direct array):', vendorsResp.data.length, 'items');
+          setVendors(vendorsResp.data);
+        }
+      } catch (error: any) {
+        console.error('Failed to load contacts:', error);
+        console.error('Error details:', error.response?.data || error.message);
+        toast({
+          title: 'Error Loading Contacts',
+          description: 'Failed to load customers and vendors list',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    };
+    loadContacts();
   }, []);
 
   // Function untuk fetch SSOT Sales Summary Report
@@ -400,8 +481,182 @@ const ReportsPage: React.FC = () => {
     }
   };
 
+  // Function untuk fetch Customer History Report
+  const fetchCustomerHistory = async () => {
+    // Validasi input
+    if (!customerHistoryCustomerId) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select a customer',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (!customerHistoryStartDate || !customerHistoryEndDate) {
+      toast({
+        title: 'Validation Error',
+        description: 'Start Date and End Date are required',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // Validasi start date tidak boleh lebih besar dari end date
+    if (new Date(customerHistoryStartDate) > new Date(customerHistoryEndDate)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Start Date cannot be greater than End Date',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setCustomerHistoryLoading(true);
+    setCustomerHistoryError(null);
+    
+    try {
+      const response = await api.get('/api/v1/reports/customer-history', {
+        params: {
+          customer_id: customerHistoryCustomerId,
+          start_date: customerHistoryStartDate,
+          end_date: customerHistoryEndDate,
+          format: 'json'
+        }
+      });
+      
+      console.log('Customer History Data received:', response.data);
+      setCustomerHistoryData(response.data.data || response.data);
+      
+      toast({
+        title: 'Success',
+        description: 'Customer History generated successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to generate customer history';
+      setCustomerHistoryError(errorMessage);
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setCustomerHistoryLoading(false);
+    }
+  };
+
+  // Function untuk fetch Vendor History Report
+  const fetchVendorHistory = async () => {
+    // Validasi input
+    if (!vendorHistoryVendorId) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select a vendor',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (!vendorHistoryStartDate || !vendorHistoryEndDate) {
+      toast({
+        title: 'Validation Error',
+        description: 'Start Date and End Date are required',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // Validasi start date tidak boleh lebih besar dari end date
+    if (new Date(vendorHistoryStartDate) > new Date(vendorHistoryEndDate)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Start Date cannot be greater than End Date',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setVendorHistoryLoading(true);
+    setVendorHistoryError(null);
+    
+    try {
+      const response = await api.get('/api/v1/reports/vendor-history', {
+        params: {
+          vendor_id: vendorHistoryVendorId,
+          start_date: vendorHistoryStartDate,
+          end_date: vendorHistoryEndDate,
+          format: 'json'
+        }
+      });
+      
+      console.log('Vendor History Data received:', response.data);
+      setVendorHistoryData(response.data.data || response.data);
+      
+      toast({
+        title: 'Success',
+        description: 'Vendor History generated successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to generate vendor history';
+      setVendorHistoryError(errorMessage);
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setVendorHistoryLoading(false);
+    }
+  };
+
   // Function untuk fetch SSOT General Ledger Report
   const fetchSSOTGeneralLedgerReport = async () => {
+    // Validasi input
+    if (!ssotGLStartDate || !ssotGLEndDate) {
+      toast({
+        title: 'Validation Error',
+        description: 'Start Date and End Date are required for General Ledger',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    // Validasi start date tidak boleh lebih besar dari end date
+    if (new Date(ssotGLStartDate) > new Date(ssotGLEndDate)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Start Date cannot be greater than End Date',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
     setSSOTGLLoading(true);
     setSSOTGLError(null);
     
@@ -424,52 +679,17 @@ const ReportsPage: React.FC = () => {
         isClosable: true,
       });
     } catch (error: any) {
-      setSSOTGLError(error.message || 'Failed to generate general ledger');
+      const errorMessage = error.response?.data?.message || error.message || 'Failed to generate general ledger';
+      setSSOTGLError(errorMessage);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to generate general ledger',
+        description: errorMessage,
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
     } finally {
       setSSOTGLLoading(false);
-    }
-  };
-
-  // Function untuk fetch SSOT Journal Analysis Report
-  const fetchSSOTJournalAnalysisReport = async () => {
-    setSSOTJALoading(true);
-    setSSOTJAError(null);
-    
-    try {
-      const journalAnalysisData = await ssotJournalAnalysisService.generateSSOTJournalAnalysis({
-        start_date: ssotJAStartDate,
-        end_date: ssotJAEndDate,
-        format: 'json'
-      });
-      
-      console.log('SSOT Journal Analysis Data received:', journalAnalysisData);
-      setSSOTJAData(journalAnalysisData);
-      
-      toast({
-        title: 'Success',
-        description: 'SSOT Journal Analysis generated successfully',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error: any) {
-      setSSOTJAError(error.message || 'Failed to generate journal analysis');
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to generate journal analysis',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      setSSOTJALoading(false);
     }
   };
 
@@ -523,6 +743,12 @@ const ReportsPage: React.FC = () => {
         end_date: ssotCFEndDate,
         format: 'json'
       });
+      
+      // Debug: Log the data structure
+      console.log('Cash Flow Data Structure:', JSON.stringify(cashFlowData, null, 2));
+      console.log('Operating Activities:', cashFlowData?.operating_activities);
+      console.log('Investing Activities:', cashFlowData?.investing_activities);
+      console.log('Financing Activities:', cashFlowData?.financing_activities);
       
       setSSOTCFData(cashFlowData as SSOTCashFlowData);
       
@@ -945,12 +1171,12 @@ const ReportsPage: React.FC = () => {
     }
   };
 
-  // Journal Analysis Export Handler with correct date parameters
-  const handleJournalAnalysisExport = async (format: 'pdf' | 'csv') => {
-    if (!ssotJAData || !ssotJAStartDate || !ssotJAEndDate) {
+  // Trial Balance Export Handlers
+  const handleTrialBalanceExport = async (format: 'pdf' | 'csv') => {
+    if (!ssotTBData || !ssotTBAsOfDate) {
       toast({
         title: 'Export Failed',
-        description: 'No Journal Analysis data available or missing date parameters',
+        description: 'No Trial Balance data available or missing date parameter',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -960,41 +1186,284 @@ const ReportsPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const params = {
-        start_date: ssotJAStartDate,
-        end_date: ssotJAEndDate,
-        format: format,
-        status: 'POSTED', // Use the same status filter as modal
-        reference_type: 'ALL' // Use the same reference type filter as modal
-      };
-
-      console.log('Exporting Journal Analysis with params:', params);
-      
-      const result = await reportService.generateReport('journal-entry-analysis', params);
-      
-      if (result instanceof Blob) {
-        if (result.size === 0) {
-          throw new Error('Empty file received from server');
-        }
-        
-        const fileName = `journal_entry_analysis_${format}_${ssotJAStartDate}_to_${ssotJAEndDate}.${format}`;
-        await reportService.downloadReport(result, fileName);
-        
-        toast({
-          title: 'Export Successful',
-          description: `Journal Entry Analysis has been downloaded as ${format.toUpperCase()}`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
+      if (format === 'pdf') {
+        await ssotTrialBalanceService.exportToPDF({
+          as_of_date: ssotTBAsOfDate
         });
       } else {
-        throw new Error('Invalid response format from server');
+        await ssotTrialBalanceService.exportToCSV({
+          as_of_date: ssotTBAsOfDate
+        });
       }
       
+      toast({
+        title: 'Export Successful',
+        description: `Trial Balance has been downloaded as ${format.toUpperCase()}`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
     } catch (error: any) {
       toast({
         title: 'Export Failed',
-        description: error.message || 'Failed to export Journal Analysis',
+        description: error.message || `Failed to export ${format.toUpperCase()}`,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // General Ledger Export Handlers
+  const handleGeneralLedgerExport = async (format: 'pdf' | 'csv') => {
+    if (!ssotGLData || !ssotGLStartDate || !ssotGLEndDate) {
+      toast({
+        title: 'Export Failed',
+        description: 'No General Ledger data available or missing date parameters',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (format === 'pdf') {
+        await ssotGeneralLedgerService.exportToPDF({
+          start_date: ssotGLStartDate,
+          end_date: ssotGLEndDate,
+          account_id: ssotGLAccountId || undefined
+        });
+      } else {
+        await ssotGeneralLedgerService.exportToCSV({
+          start_date: ssotGLStartDate,
+          end_date: ssotGLEndDate,
+          account_id: ssotGLAccountId || undefined
+        });
+      }
+      
+      toast({
+        title: 'Export Successful',
+        description: `General Ledger has been downloaded as ${format.toUpperCase()}`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Export Failed',
+        description: error.message || `Failed to export ${format.toUpperCase()}`,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Customer History Export Handler
+  const handleCustomerHistoryExport = async (format: 'pdf' | 'csv') => {
+    if (!customerHistoryData || !customerHistoryCustomerId || !customerHistoryStartDate || !customerHistoryEndDate) {
+      toast({
+        title: 'Export Failed',
+        description: 'No Customer History data available or missing parameters',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await api.get('/api/v1/reports/customer-history', {
+        params: {
+          customer_id: customerHistoryCustomerId,
+          start_date: customerHistoryStartDate,
+          end_date: customerHistoryEndDate,
+          format: format
+        },
+        responseType: format === 'pdf' ? 'blob' : 'json'
+      });
+
+      if (format === 'pdf') {
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Customer_History_${customerHistoryStartDate}_to_${customerHistoryEndDate}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else {
+        // CSV export - convert JSON to CSV
+        const data = response.data.data || response.data;
+        const csvLines: string[] = [];
+        
+        // Header
+        csvLines.push('Customer History Report');
+        csvLines.push(`Period: ${customerHistoryStartDate} to ${customerHistoryEndDate}`);
+        csvLines.push(`Customer: ${data.customer?.name || 'N/A'}`);
+        csvLines.push('');
+        
+        // Transactions
+        csvLines.push('Date,Type,Code,Description,Reference,Amount,Paid,Outstanding,Status');
+        if (data.transactions && Array.isArray(data.transactions)) {
+          data.transactions.forEach((tx: any) => {
+            csvLines.push([
+              tx.date || '',
+              tx.transaction_type || '',
+              tx.transaction_code || '',
+              `"${tx.description || ''}"`,
+              tx.reference || '',
+              tx.amount || 0,
+              tx.paid_amount || 0,
+              tx.outstanding || 0,
+              tx.status || ''
+            ].join(','));
+          });
+        }
+        
+        // Summary
+        csvLines.push('');
+        csvLines.push('Summary');
+        csvLines.push(`Total Transactions,${data.summary?.total_transactions || 0}`);
+        csvLines.push(`Total Amount,${data.summary?.total_amount || 0}`);
+        csvLines.push(`Total Paid,${data.summary?.total_paid || 0}`);
+        csvLines.push(`Total Outstanding,${data.summary?.total_outstanding || 0}`);
+        
+        const csvContent = csvLines.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Customer_History_${customerHistoryStartDate}_to_${customerHistoryEndDate}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
+
+      toast({
+        title: 'Export Successful',
+        description: `Customer History has been downloaded as ${format.toUpperCase()}`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Export Failed',
+        description: error.message || `Failed to export ${format.toUpperCase()}`,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Vendor History Export Handler
+  const handleVendorHistoryExport = async (format: 'pdf' | 'csv') => {
+    if (!vendorHistoryData || !vendorHistoryVendorId || !vendorHistoryStartDate || !vendorHistoryEndDate) {
+      toast({
+        title: 'Export Failed',
+        description: 'No Vendor History data available or missing parameters',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await api.get('/api/v1/reports/vendor-history', {
+        params: {
+          vendor_id: vendorHistoryVendorId,
+          start_date: vendorHistoryStartDate,
+          end_date: vendorHistoryEndDate,
+          format: format
+        },
+        responseType: format === 'pdf' ? 'blob' : 'json'
+      });
+
+      if (format === 'pdf') {
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Vendor_History_${vendorHistoryStartDate}_to_${vendorHistoryEndDate}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } else {
+        // CSV export - convert JSON to CSV
+        const data = response.data.data || response.data;
+        const csvLines: string[] = [];
+        
+        // Header
+        csvLines.push('Vendor History Report');
+        csvLines.push(`Period: ${vendorHistoryStartDate} to ${vendorHistoryEndDate}`);
+        csvLines.push(`Vendor: ${data.vendor?.name || 'N/A'}`);
+        csvLines.push('');
+        
+        // Transactions
+        csvLines.push('Date,Type,Code,Description,Reference,Amount,Paid,Outstanding,Status');
+        if (data.transactions && Array.isArray(data.transactions)) {
+          data.transactions.forEach((tx: any) => {
+            csvLines.push([
+              tx.date || '',
+              tx.transaction_type || '',
+              tx.transaction_code || '',
+              `"${tx.description || ''}"`,
+              tx.reference || '',
+              tx.amount || 0,
+              tx.paid_amount || 0,
+              tx.outstanding || 0,
+              tx.status || ''
+            ].join(','));
+          });
+        }
+        
+        // Summary
+        csvLines.push('');
+        csvLines.push('Summary');
+        csvLines.push(`Total Transactions,${data.summary?.total_transactions || 0}`);
+        csvLines.push(`Total Amount,${data.summary?.total_amount || 0}`);
+        csvLines.push(`Total Paid,${data.summary?.total_paid || 0}`);
+        csvLines.push(`Total Outstanding,${data.summary?.total_outstanding || 0}`);
+        
+        const csvContent = csvLines.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Vendor_History_${vendorHistoryStartDate}_to_${vendorHistoryEndDate}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
+
+      toast({
+        title: 'Export Successful',
+        description: `Vendor History has been downloaded as ${format.toUpperCase()}`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Export Failed',
+        description: error.message || `Failed to export ${format.toUpperCase()}`,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1101,11 +1570,6 @@ const ReportsPage: React.FC = () => {
       } else if (report.id === 'general-ledger') {
         setSSOTGLOpen(true);
         await fetchSSOTGeneralLedgerReport();
-      } else if (report.id === 'journal-entry-analysis') {
-        setSSOTJAOpen(true);
-        await fetchSSOTJournalAnalysisReport();
-      } else if (report.id === 'simple-journal-entries') {
-        setSimpleJournalOpen(true);
       }
       
     } catch (error) {
@@ -1128,12 +1592,25 @@ const ReportsPage: React.FC = () => {
     setLoading(true);
     
     try {
+      // For customer-history and vendor-history, show message to use View Report first
+      if (report.id === 'customer-history' || report.id === 'vendor-history') {
+        toast({
+          title: 'Action Required',
+          description: `Please use "View Report" to select ${report.id === 'customer-history' ? 'customer' : 'vendor'} and date range, then export from there.`,
+          status: 'info',
+          duration: 6000,
+          isClosable: true,
+        });
+        setLoading(false);
+        return;
+      }
+      
       // Set default parameters based on report type
       let params: any = { format };
       
       if (report.id === 'balance-sheet' || report.id === 'trial-balance') {
         params.as_of_date = new Date().toISOString().split('T')[0];
-      } else if (['profit-loss', 'cash-flow', 'sales-summary', 'purchase-report', 'general-ledger', 'journal-entry-analysis'].includes(report.id)) {
+      } else if (['profit-loss', 'cash-flow', 'sales-summary', 'purchase-report', 'general-ledger'].includes(report.id)) {
         const today = new Date();
         const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         params.start_date = firstDayOfMonth.toISOString().split('T')[0];
@@ -1141,10 +1618,6 @@ const ReportsPage: React.FC = () => {
         
         if (report.id === 'general-ledger') {
           params.account_id = 'all';
-        }
-        if (report.id === 'journal-entry-analysis') {
-          params.status = 'POSTED';
-          params.reference_type = 'ALL';
         }
       }
       
@@ -1354,40 +1827,6 @@ const ReportsPage: React.FC = () => {
           csvLines.push(`Balanced: ${payload.is_balanced ? 'Yes' : 'No'}`);
         }
       }
-      // Journal Entry Analysis
-      else if (reportType === 'journal-entry-analysis') {
-        const companyName = payload.company?.name || 'PT. Sistem Akuntansi';
-        const period = `${payload.start_date || ''} to ${payload.end_date || ''}`;
-        csvLines.push(companyName);
-        csvLines.push('JOURNAL ENTRY ANALYSIS');
-        csvLines.push(`Period: ${period}`);
-        csvLines.push('');
-        csvLines.push('Metric,Value');
-        const summaryRows: Array<[string, any]> = [
-          ['Total Entries', payload.total_entries],
-          ['Posted Entries', payload.posted_entries],
-          ['Draft Entries', payload.draft_entries],
-          ['Reversed Entries', payload.reversed_entries],
-          ['Total Amount', payload.total_amount]
-        ];
-        summaryRows.forEach(([k, v]) => {
-          const val = (k.includes('Amount')) ? formatCurrencyForCSV(v) : (v ?? 0);
-          csvLines.push(`${escapeCSV(k)},${val}`);
-        });
-        if (Array.isArray(payload.entries_by_type)) {
-          csvLines.push('');
-          csvLines.push('Entries By Type,,,,');
-          csvLines.push('Source Type,Count,Amount,Percentage');
-          payload.entries_by_type.forEach((row: any) => {
-            csvLines.push([
-              escapeCSV(row.source_type || ''),
-              row.count ?? 0,
-              formatCurrencyForCSV(row.total_amount),
-              `${row.percentage ?? 0}%`
-            ].join(','));
-          });
-        }
-      }
       // Generic fallback
       else {
         csvLines.push('FINANCIAL REPORT');
@@ -1490,16 +1929,6 @@ const ReportsPage: React.FC = () => {
         end_date: today.toISOString().split('T')[0],
         format: 'pdf'
       });
-    } else if (report.id === 'journal-entry-analysis') {
-      const today = new Date();
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      setReportParams({
-        start_date: firstDayOfMonth.toISOString().split('T')[0],
-        end_date: today.toISOString().split('T')[0],
-        status: 'POSTED',
-        reference_type: 'ALL',
-        format: 'pdf'
-      });
     }
     
     onOpen();
@@ -1516,7 +1945,7 @@ const ReportsPage: React.FC = () => {
     setLoading(true);
     try {
       // Validate required parameters
-      if (['profit-loss', 'cash-flow', 'sales-summary', 'purchase-summary', 'purchase-report', 'general-ledger', 'journal-entry-analysis'].includes(selectedReport.id)) {
+      if (['profit-loss', 'cash-flow', 'sales-summary', 'purchase-summary', 'purchase-report', 'general-ledger'].includes(selectedReport.id)) {
         if (!reportParams.start_date || !reportParams.end_date) {
           throw new Error('Start date and end date are required for this report');
         }
@@ -1658,14 +2087,16 @@ const ReportsPage: React.FC = () => {
                             setSSOTTBOpen(true);
                           } else if (report.id === 'general-ledger') {
                             setSSOTGLOpen(true);
-                          } else if (report.id === 'journal-entry-analysis') {
-                            setSSOTJAOpen(true);
                           } else if (report.id === 'balance-sheet') {
                             setSSOTBSOpen(true);
                           } else if (report.id === 'cash-flow') {
                             setSSOTCFOpen(true);
                           } else if (report.id === 'profit-loss') {
                             setSSOTPLOpen(true);
+                          } else if (report.id === 'customer-history') {
+                            setCustomerHistoryOpen(true);
+                          } else if (report.id === 'vendor-history') {
+                            setVendorHistoryOpen(true);
                           } else {
                             // Use legacy modal for other reports
                             handleGenerateReport(report);
@@ -1882,58 +2313,6 @@ const ReportsPage: React.FC = () => {
                         value={reportParams.end_date || ''} 
                         onChange={handleInputChange} 
                       />
-                    </FormControl>
-                  </>
-                )}
-                
-                {/* Journal Entry Analysis Parameters */}
-                {selectedReport.id === 'journal-entry-analysis' && (
-                  <>
-                    <FormControl isRequired>
-                      <FormLabel>Start Date</FormLabel>
-                      <Input 
-                        type="date" 
-                        name="start_date" 
-                        value={reportParams.start_date || ''} 
-                        onChange={handleInputChange} 
-                      />
-                    </FormControl>
-                    <FormControl isRequired>
-                      <FormLabel>End Date</FormLabel>
-                      <Input 
-                        type="date" 
-                        name="end_date" 
-                        value={reportParams.end_date || ''} 
-                        onChange={handleInputChange} 
-                      />
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Status Filter</FormLabel>
-                      <Select 
-                        name="status" 
-                        value={reportParams.status || 'ALL'} 
-                        onChange={handleInputChange}
-                      >
-                        <option value="ALL">All Status</option>
-                        <option value="DRAFT">Draft</option>
-                        <option value="POSTED">Posted</option>
-                        <option value="REVERSED">Reversed</option>
-                      </Select>
-                    </FormControl>
-                    <FormControl>
-                      <FormLabel>Reference Type</FormLabel>
-                      <Select 
-                        name="reference_type" 
-                        value={reportParams.reference_type || 'ALL'} 
-                        onChange={handleInputChange}
-                      >
-                        <option value="ALL">All Types</option>
-                        <option value="MANUAL">Manual</option>
-                        <option value="SALES">Sales</option>
-                        <option value="PURCHASE">Purchase</option>
-                        <option value="PAYMENT">Payment</option>
-                        <option value="RECEIPT">Receipt</option>
-                      </Select>
                     </FormControl>
                   </>
                 )}
@@ -2700,6 +3079,7 @@ leftIcon={<FiActivity />}
 
             {ssotCFData && !ssotCFLoading && (
               <VStack spacing={6} align="stretch">
+                {/* Cash Position Summary */}
                 <Box bg={summaryBg} p={4} borderRadius="md" borderWidth="2px" borderColor={borderColor}>
                   <HStack justify="space-between">
                     <VStack align="start" spacing={1}>
@@ -2712,12 +3092,160 @@ leftIcon={<FiActivity />}
                     </VStack>
                     <VStack align="end" spacing={1}>
                       <Text fontSize="sm" color={descriptionColor}>Net Cash Flow</Text>
-                      <Text fontSize="xl" fontWeight="bold" color={ssotCFData.net_cash_flow >= 0 ? 'green.600' : 'red.600'}>
-                        {formatCurrency(ssotCFData.net_cash_flow)}
+                      <Text fontSize="xl" fontWeight="bold" color={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.600' : 'red.600'}>
+                        {formatCurrency(ssotCFData.net_cash_flow || 0)}
                       </Text>
                     </VStack>
                   </HStack>
                 </Box>
+
+                {/* Cash Balance Details */}
+                <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+                  <Box bg="blue.50" p={4} borderRadius="md" borderWidth="1px" borderColor="blue.200">
+                    <Text fontSize="sm" color="gray.600" mb={2}>Beginning Cash</Text>
+                    <Text fontSize="2xl" fontWeight="bold" color="blue.600">
+                      {formatCurrency(ssotCFData.cash_at_beginning || 0)}
+                    </Text>
+                  </Box>
+                  <Box bg={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.50' : 'red.50'} p={4} borderRadius="md" borderWidth="1px" borderColor={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.200' : 'red.200'}>
+                    <Text fontSize="sm" color="gray.600" mb={2}>Net Change</Text>
+                    <Text fontSize="2xl" fontWeight="bold" color={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.600' : 'red.600'}>
+                      {(ssotCFData.net_cash_flow || 0) >= 0 ? '+' : ''}{formatCurrency(ssotCFData.net_cash_flow || 0)}
+                    </Text>
+                  </Box>
+                  <Box bg="purple.50" p={4} borderRadius="md" borderWidth="1px" borderColor="purple.200">
+                    <Text fontSize="sm" color="gray.600" mb={2}>Ending Cash</Text>
+                    <Text fontSize="2xl" fontWeight="bold" color="purple.600">
+                      {formatCurrency(ssotCFData.cash_at_end || 0)}
+                    </Text>
+                  </Box>
+                </SimpleGrid>
+
+                {/* Operating Activities */}
+                {ssotCFData.operating_activities && (
+                  <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                    <Text fontSize="lg" fontWeight="bold" color="green.600" mb={3}>
+                      💼 Operating Activities
+                    </Text>
+                    <VStack align="stretch" spacing={2}>
+                      <HStack justify="space-between" bg="gray.50" p={2} borderRadius="md">
+                        <Text fontSize="sm" fontWeight="medium">Net Income</Text>
+                        <Text fontSize="sm" fontWeight="bold" color={(ssotCFData.operating_activities?.net_income || 0) >= 0 ? 'green.600' : 'red.600'}>
+                          {formatCurrency(ssotCFData.operating_activities?.net_income || 0)}
+                        </Text>
+                      </HStack>
+                      {ssotCFData.operating_activities?.working_capital_changes?.items?.length > 0 && (
+                        <Box mt={2}>
+                          <Text fontSize="sm" fontWeight="medium" color="gray.600" mb={2}>Working Capital Changes:</Text>
+                          {ssotCFData.operating_activities.working_capital_changes.items.map((item: any, idx: number) => (
+                            <HStack key={idx} justify="space-between" pl={4} py={1}>
+                              <Text fontSize="sm" color="gray.700">{item.account_name} ({item.account_code})</Text>
+                              <Text fontSize="sm" fontWeight="medium" color={(item.amount || 0) >= 0 ? 'green.600' : 'red.600'}>
+                                {formatCurrency(item.amount || 0)}
+                              </Text>
+                            </HStack>
+                          ))}
+                        </Box>
+                      )}
+                      <Divider />
+                      <HStack justify="space-between" bg="green.50" p={2} borderRadius="md">
+                        <Text fontWeight="bold" color="green.700">Total Operating Cash Flow</Text>
+                        <Text fontWeight="bold" color="green.700">
+                          {formatCurrency(ssotCFData.operating_activities?.total_operating_cash_flow || 0)}
+                        </Text>
+                      </HStack>
+                    </VStack>
+                  </Box>
+                )}
+
+                {/* Investing Activities */}
+                {ssotCFData.investing_activities?.items?.length > 0 && (
+                  <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                    <Text fontSize="lg" fontWeight="bold" color="blue.600" mb={3}>
+                      📊 Investing Activities
+                    </Text>
+                    <VStack align="stretch" spacing={2}>
+                      {ssotCFData.investing_activities.items.map((item: any, idx: number) => (
+                        <HStack key={idx} justify="space-between">
+                          <Text fontSize="sm" color="gray.700">{item.account_name} ({item.account_code})</Text>
+                          <Text fontSize="sm" fontWeight="medium" color={(item.amount || 0) >= 0 ? 'green.600' : 'red.600'}>
+                            {formatCurrency(item.amount || 0)}
+                          </Text>
+                        </HStack>
+                      ))}
+                      <Divider />
+                      <HStack justify="space-between" bg="blue.50" p={2} borderRadius="md">
+                        <Text fontWeight="bold" color="blue.700">Total Investing Cash Flow</Text>
+                        <Text fontWeight="bold" color="blue.700">
+                          {formatCurrency(ssotCFData.investing_activities?.total_investing_cash_flow || 0)}
+                        </Text>
+                      </HStack>
+                    </VStack>
+                  </Box>
+                )}
+
+                {/* Financing Activities */}
+                {ssotCFData.financing_activities?.items?.length > 0 && (
+                  <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                    <Text fontSize="lg" fontWeight="bold" color="purple.600" mb={3}>
+                      🏦 Financing Activities
+                    </Text>
+                    <VStack align="stretch" spacing={2}>
+                      {ssotCFData.financing_activities.items.map((item: any, idx: number) => (
+                        <HStack key={idx} justify="space-between">
+                          <Text fontSize="sm" color="gray.700">{item.account_name} ({item.account_code})</Text>
+                          <Text fontSize="sm" fontWeight="medium" color={(item.amount || 0) >= 0 ? 'green.600' : 'red.600'}>
+                            {formatCurrency(item.amount || 0)}
+                          </Text>
+                        </HStack>
+                      ))}
+                      <Divider />
+                      <HStack justify="space-between" bg="purple.50" p={2} borderRadius="md">
+                        <Text fontWeight="bold" color="purple.700">Total Financing Cash Flow</Text>
+                        <Text fontWeight="bold" color="purple.700">
+                          {formatCurrency(ssotCFData.financing_activities?.total_financing_cash_flow || 0)}
+                        </Text>
+                      </HStack>
+                    </VStack>
+                  </Box>
+                )}
+
+                {/* Account Transaction History */}
+                {ssotCFData.account_details && ssotCFData.account_details.length > 0 && (
+                  <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                    <Text fontSize="lg" fontWeight="bold" color={headingColor} mb={3}>
+                      📋 Transaction History by Account
+                    </Text>
+                    <TableContainer>
+                      <Table size="sm" variant="simple">
+                        <Thead>
+                          <Tr bg="gray.50">
+                            <Th>Account Code</Th>
+                            <Th>Account Name</Th>
+                            <Th isNumeric>Debit</Th>
+                            <Th isNumeric>Credit</Th>
+                            <Th isNumeric>Net Change</Th>
+                          </Tr>
+                        </Thead>
+                        <Tbody>
+                          {ssotCFData.account_details
+                            .filter((acc: any) => acc?.account_code?.startsWith('1101') || acc?.account_code?.startsWith('1102'))
+                            .map((account: any, idx: number) => (
+                            <Tr key={idx} _hover={{ bg: 'gray.50' }}>
+                              <Td fontFamily="mono" fontWeight="medium">{account.account_code || 'N/A'}</Td>
+                              <Td>{account.account_name || 'Unknown Account'}</Td>
+                              <Td isNumeric color="green.600">{formatCurrency(account.debit_total || 0)}</Td>
+                              <Td isNumeric color="red.600">{formatCurrency(account.credit_total || 0)}</Td>
+                              <Td isNumeric fontWeight="bold" color={(account.net_balance || 0) >= 0 ? 'green.600' : 'red.600'}>
+                                {formatCurrency(account.net_balance || 0)}
+                              </Td>
+                            </Tr>
+                          ))}
+                        </Tbody>
+                      </Table>
+                    </TableContainer>
+                  </Box>
+                )}
               </VStack>
             )}
           </ModalBody>
@@ -3104,64 +3632,108 @@ As of: {ssotTBAsOfDate}
                 </Box>
 
                 {/* Summary Statistics */}
-                <SimpleGrid columns={[1, 2, 4]} spacing={4}>
+                <SimpleGrid columns={[1, 2, 3]} spacing={4}>
                   <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
                     <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-                      {ssotTBData.total_accounts || 0}
+                      {ssotTBData.accounts?.length || 0}
                     </Text>
                     <Text fontSize="sm" color="blue.800">Total Accounts</Text>
                   </Box>
                   <Box bg="orange.50" p={4} borderRadius="md" textAlign="center">
                     <Text fontSize="2xl" fontWeight="bold" color="orange.600">
-                      {formatCurrency(ssotTBData.total_debit || 0)}
+                      {formatCurrency(ssotTBData.total_debits || 0)}
                     </Text>
-                    <Text fontSize="sm" color="orange.800">Total Debit</Text>
+                    <Text fontSize="sm" color="orange.800">Total Debits</Text>
                   </Box>
                   <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
                     <Text fontSize="2xl" fontWeight="bold" color="green.600">
-                      {formatCurrency(ssotTBData.total_credit || 0)}
+                      {formatCurrency(ssotTBData.total_credits || 0)}
                     </Text>
-                    <Text fontSize="sm" color="green.800">Total Credit</Text>
-                  </Box>
-                  <Box bg="purple.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="purple.600">
-                      {formatCurrency(ssotTBData.total_balance || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="purple.800">Total Balance</Text>
+                    <Text fontSize="sm" color="green.800">Total Credits</Text>
                   </Box>
                 </SimpleGrid>
 
-                {/* Account Details */}
+                {/* Balance Status */}
+                <Box bg={ssotTBData.is_balanced ? 'green.50' : 'red.50'} p={4} borderRadius="md" border="2px" borderColor={ssotTBData.is_balanced ? 'green.500' : 'red.500'}>
+                  <HStack justify="space-between">
+                    <VStack align="start" spacing={0}>
+                      <Text fontSize="lg" fontWeight="bold" color={ssotTBData.is_balanced ? 'green.700' : 'red.700'}>
+                        {ssotTBData.is_balanced ? '✓ Balanced' : '⚠ Not Balanced'}
+                    </Text>
+                      <Text fontSize="sm" color={ssotTBData.is_balanced ? 'green.600' : 'red.600'}>
+                        {ssotTBData.is_balanced ? 'Debits equal Credits' : `Difference: ${formatCurrency(ssotTBData.difference || 0)}`}
+                      </Text>
+                    </VStack>
+                    {!ssotTBData.is_balanced && (
+                      <Badge colorScheme="red" fontSize="md" p={2}>
+                        Investigation Required
+                      </Badge>
+                    )}
+                  </HStack>
+                  </Box>
+
+                {/* Account Details Table */}
                 <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
                   <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
                     Account Details
                   </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotTBData.accounts.map((account: any) => (
-                      <Box key={account.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Account ID: {account.account_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Name: {account.account_name || 'Unnamed Account'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Account Type: {account.account_type || 'N/A'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Debit: {formatCurrency(account.debit || 0)}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Credit: {formatCurrency(account.credit || 0)}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Balance: {formatCurrency(account.balance || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
-                  </SimpleGrid>
+                  <TableContainer>
+                    <Table size="sm" variant="striped">
+                      <Thead bg="gray.100">
+                        <Tr>
+                          <Th>Account Code</Th>
+                          <Th>Account Name</Th>
+                          <Th>Type</Th>
+                          <Th isNumeric>Debit Balance</Th>
+                          <Th isNumeric>Credit Balance</Th>
+                        </Tr>
+                      </Thead>
+                      <Tbody>
+                        {ssotTBData.accounts && ssotTBData.accounts.length > 0 ? (
+                          ssotTBData.accounts.map((account: any, index: number) => (
+                            <Tr key={account.account_id || index} _hover={{ bg: 'gray.50' }}>
+                              <Td fontFamily="mono" fontWeight="medium">{account.account_code || 'N/A'}</Td>
+                              <Td>{account.account_name || 'Unnamed Account'}</Td>
+                              <Td>
+                                <Badge colorScheme={
+                                  account.account_type === 'Asset' ? 'green' :
+                                  account.account_type === 'Liability' ? 'orange' :
+                                  account.account_type === 'Equity' ? 'purple' :
+                                  account.account_type === 'Revenue' ? 'blue' :
+                                  account.account_type === 'Expense' ? 'red' : 'gray'
+                                }>
+                                  {account.account_type || 'N/A'}
+                                </Badge>
+                              </Td>
+                              <Td isNumeric color="orange.600" fontWeight="medium">
+                                {(account.debit_balance && account.debit_balance > 0) ? formatCurrency(account.debit_balance) : '-'}
+                              </Td>
+                              <Td isNumeric color="green.600" fontWeight="medium">
+                                {(account.credit_balance && account.credit_balance > 0) ? formatCurrency(account.credit_balance) : '-'}
+                              </Td>
+                            </Tr>
+                          ))
+                        ) : (
+                          <Tr>
+                            <Td colSpan={5} textAlign="center" py={8}>
+                              <Text color="gray.500">No accounts found</Text>
+                            </Td>
+                          </Tr>
+                        )}
+                      </Tbody>
+                      <Thead bg="gray.200">
+                        <Tr>
+                          <Th colSpan={3} textAlign="right" fontSize="md">TOTAL</Th>
+                          <Th isNumeric fontSize="md" fontWeight="bold" color="orange.700">
+                            {formatCurrency(ssotTBData.total_debits || 0)}
+                          </Th>
+                          <Th isNumeric fontSize="md" fontWeight="bold" color="green.700">
+                            {formatCurrency(ssotTBData.total_credits || 0)}
+                          </Th>
+                        </Tr>
+                      </Thead>
+                    </Table>
+                  </TableContainer>
                 </Box>
               </VStack>
             )}
@@ -3176,6 +3748,7 @@ As of: {ssotTBAsOfDate}
                     size="sm"
                     leftIcon={<FiFilePlus />}
                     onClick={() => handleTrialBalanceExport('pdf')}
+                    isLoading={loading}
                   >
                     Export PDF
                   </Button>
@@ -3185,6 +3758,7 @@ As of: {ssotTBAsOfDate}
                     size="sm"
                     leftIcon={<FiFileText />}
                     onClick={() => handleTrialBalanceExport('csv')}
+                    isLoading={loading}
                   >
                     Export CSV
                   </Button>
@@ -3198,10 +3772,541 @@ As of: {ssotTBAsOfDate}
         </ModalContent>
       </Modal>
 
-      {/* SSOT General Ledger Modal */}
-      <Modal isOpen={ssotGLOpen} onClose={() => setSSOTGLOpen(false)} size="6xl">
+      {/* Customer History Modal */}
+      <Modal isOpen={customerHistoryOpen} onClose={() => setCustomerHistoryOpen(false)} size="6xl">
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
+          <ModalHeader>
+            <HStack>
+              <Icon as={FiUsers} color="blue.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  Customer Transaction History
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
+                  Complete record of customer activities and payment history
+                </Text>
+              </VStack>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <Box mb={4}>
+              <VStack spacing={4} align="stretch">
+                <HStack spacing={4} flexWrap="wrap">
+                  <FormControl flex="1" minW="250px" isRequired>
+                    <FormLabel>Select Customer</FormLabel>
+                    <Select
+                      placeholder="Choose a customer..."
+                      value={customerHistoryCustomerId}
+                      onChange={(e) => setCustomerHistoryCustomerId(e.target.value)}
+                      borderColor={!customerHistoryCustomerId ? 'red.300' : 'gray.200'}
+                    >
+                      {customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name} ({customer.code})
+                        </option>
+                      ))}
+                    </Select>
+                    <Text fontSize="xs" color="gray.500" mt={1}>
+                      {customers.length} customer{customers.length !== 1 ? 's' : ''} available
+                    </Text>
+                  </FormControl>
+                  <FormControl flex="1" minW="180px" isRequired>
+                    <FormLabel>Start Date</FormLabel>
+                    <Input
+                      type="date"
+                      value={customerHistoryStartDate}
+                      onChange={(e) => setCustomerHistoryStartDate(e.target.value)}
+                      borderColor={!customerHistoryStartDate ? 'red.300' : 'gray.200'}
+                    />
+                  </FormControl>
+                  <FormControl flex="1" minW="180px" isRequired>
+                    <FormLabel>End Date</FormLabel>
+                    <Input
+                      type="date"
+                      value={customerHistoryEndDate}
+                      onChange={(e) => setCustomerHistoryEndDate(e.target.value)}
+                      borderColor={!customerHistoryEndDate ? 'red.300' : 'gray.200'}
+                    />
+                  </FormControl>
+                  <Button
+                    colorScheme="blue"
+                    onClick={fetchCustomerHistory}
+                    isLoading={customerHistoryLoading}
+                    isDisabled={!customerHistoryCustomerId || !customerHistoryStartDate || !customerHistoryEndDate}
+                    leftIcon={<FiUsers />}
+                    size="md"
+                    mt={8}
+                    whiteSpace="nowrap"
+                  >
+                    Generate Report
+                  </Button>
+                </HStack>
+                <Text fontSize="xs" color={descriptionColor}>
+                  Select a customer and date range to view their transaction history
+                </Text>
+              </VStack>
+            </Box>
+
+            {customerHistoryLoading && (
+              <Box textAlign="center" py={8}>
+                <VStack spacing={4}>
+                  <Spinner size="xl" thickness="4px" speed="0.65s" color="blue.500" />
+                  <VStack spacing={2}>
+                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
+                      Loading Customer History
+                    </Text>
+                    <Text fontSize="sm" color={descriptionColor}>
+                      Fetching transactions and payment records...
+                    </Text>
+                  </VStack>
+                </VStack>
+              </Box>
+            )}
+
+            {customerHistoryError && (
+              <Box bg="red.50" p={4} borderRadius="md" mb={4}>
+                <Text color="red.600" fontWeight="medium">Error: {customerHistoryError}</Text>
+                <Button
+                  mt={2}
+                  size="sm"
+                  colorScheme="red"
+                  variant="outline"
+                  onClick={fetchCustomerHistory}
+                >
+                  Retry
+                </Button>
+              </Box>
+            )}
+
+            {customerHistoryData && !customerHistoryLoading && (
+              <VStack spacing={6} align="stretch">
+                {/* Customer Info */}
+                {customerHistoryData.customer && (
+                  <Box bg="blue.50" p={4} borderRadius="md" borderWidth="1px" borderColor="blue.200">
+                    <VStack align="start" spacing={2}>
+                      <HStack>
+                        <Text fontSize="lg" fontWeight="bold" color="blue.800">
+                          {customerHistoryData.customer.name}
+                        </Text>
+                        <Badge colorScheme="blue">{customerHistoryData.customer.code}</Badge>
+                      </HStack>
+                      <Text fontSize="sm" color="blue.600">
+                        {customerHistoryData.customer.email} | {customerHistoryData.customer.phone}
+                      </Text>
+                      {customerHistoryData.customer.address && (
+                        <Text fontSize="sm" color="blue.600">
+                          {customerHistoryData.customer.address}
+                        </Text>
+                      )}
+                    </VStack>
+                  </Box>
+                )}
+
+                {/* Summary */}
+                {customerHistoryData.summary && (
+                  <SimpleGrid columns={[1, 2, 4]} spacing={4}>
+                    <Box bg="green.50" p={4} borderRadius="md" borderWidth="1px" borderColor="green.200">
+                      <Text fontSize="sm" color="gray.600" mb={1}>Total Transactions</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="green.600">
+                        {customerHistoryData.summary.total_transactions || 0}
+                      </Text>
+                    </Box>
+                    <Box bg="blue.50" p={4} borderRadius="md" borderWidth="1px" borderColor="blue.200">
+                      <Text fontSize="sm" color="gray.600" mb={1}>Total Amount</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="blue.600">
+                        {formatCurrency(customerHistoryData.summary.total_amount || 0)}
+                      </Text>
+                    </Box>
+                    <Box bg="purple.50" p={4} borderRadius="md" borderWidth="1px" borderColor="purple.200">
+                      <Text fontSize="sm" color="gray.600" mb={1}>Total Paid</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="purple.600">
+                        {formatCurrency(customerHistoryData.summary.total_paid || 0)}
+                      </Text>
+                    </Box>
+                    <Box bg="orange.50" p={4} borderRadius="md" borderWidth="1px" borderColor="orange.200">
+                      <Text fontSize="sm" color="gray.600" mb={1}>Outstanding</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="orange.600">
+                        {formatCurrency(customerHistoryData.summary.total_outstanding || 0)}
+                      </Text>
+                    </Box>
+                  </SimpleGrid>
+                )}
+
+                {/* Transactions Table */}
+                <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                  <Text fontSize="lg" fontWeight="bold" color={headingColor} mb={3}>
+                    Transaction Details
+                  </Text>
+                  <Box overflowX="auto" maxH="500px" overflowY="auto">
+                    <Table size="sm" variant="striped" colorScheme="gray">
+                      <Thead bg="blue.600" position="sticky" top={0} zIndex={1}>
+                        <Tr>
+                          <Th color="white">Date</Th>
+                          <Th color="white">Type</Th>
+                          <Th color="white">Code</Th>
+                          <Th color="white">Description</Th>
+                          <Th color="white" isNumeric>Amount</Th>
+                          <Th color="white" isNumeric>Paid</Th>
+                          <Th color="white" isNumeric>Outstanding</Th>
+                          <Th color="white">Status</Th>
+                        </Tr>
+                      </Thead>
+                      <Tbody>
+                        {customerHistoryData.transactions && customerHistoryData.transactions.length > 0 ? (
+                          customerHistoryData.transactions.map((tx: any, index: number) => (
+                            <Tr key={index} _hover={{ bg: 'blue.50' }}>
+                              <Td fontSize="sm">
+                                {tx.date ? new Date(tx.date).toLocaleDateString('id-ID') : 'N/A'}
+                              </Td>
+                              <Td>
+                                <Badge colorScheme={
+                                  tx.transaction_type === 'SALE' ? 'green' :
+                                  tx.transaction_type === 'INVOICE' ? 'blue' :
+                                  tx.transaction_type === 'PAYMENT' ? 'purple' : 'gray'
+                                } size="sm">
+                                  {tx.transaction_type}
+                                </Badge>
+                              </Td>
+                              <Td fontSize="sm" fontFamily="mono" fontWeight="medium">{tx.transaction_code}</Td>
+                              <Td fontSize="sm" maxW="250px">{tx.description}</Td>
+                              <Td isNumeric fontSize="sm" fontWeight="bold" color="blue.700">
+                                {formatCurrency(tx.amount || 0)}
+                              </Td>
+                              <Td isNumeric fontSize="sm" color="green.600">
+                                {formatCurrency(tx.paid_amount || 0)}
+                              </Td>
+                              <Td isNumeric fontSize="sm" color="orange.600" fontWeight="medium">
+                                {formatCurrency(tx.outstanding || 0)}
+                              </Td>
+                              <Td>
+                                <Badge colorScheme={
+                                  tx.status === 'PAID' ? 'green' :
+                                  tx.status === 'UNPAID' ? 'red' :
+                                  tx.status === 'PARTIAL' ? 'yellow' : 'gray'
+                                } size="sm">
+                                  {tx.status}
+                                </Badge>
+                              </Td>
+                            </Tr>
+                          ))
+                        ) : (
+                          <Tr>
+                            <Td colSpan={8} textAlign="center" py={8}>
+                              <Text color="gray.500">No transactions found for this period</Text>
+                            </Td>
+                          </Tr>
+                        )}
+                      </Tbody>
+                    </Table>
+                  </Box>
+                </Box>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <HStack spacing={3}>
+              {customerHistoryData && !customerHistoryLoading && (
+                <>
+                  <Button
+                    colorScheme="red"
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<FiFilePlus />}
+                    onClick={() => handleCustomerHistoryExport('pdf')}
+                    isLoading={loading}
+                  >
+                    Export PDF
+                  </Button>
+                  <Button
+                    colorScheme="green"
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<FiFileText />}
+                    onClick={() => handleCustomerHistoryExport('csv')}
+                    isLoading={loading}
+                  >
+                    Export CSV
+                  </Button>
+                </>
+              )}
+            </HStack>
+            <Button variant="ghost" onClick={() => setCustomerHistoryOpen(false)}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Vendor History Modal */}
+      <Modal isOpen={vendorHistoryOpen} onClose={() => setVendorHistoryOpen(false)} size="6xl">
+        <ModalOverlay />
+        <ModalContent bg={modalContentBg}>
+          <ModalHeader>
+            <HStack>
+              <Icon as={FiTruck} color="orange.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  Vendor Transaction History
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
+                  Complete record of vendor activities and payment history
+                </Text>
+              </VStack>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody pb={6}>
+            <Box mb={4}>
+              <VStack spacing={4} align="stretch">
+                <HStack spacing={4} flexWrap="wrap">
+                  <FormControl flex="1" minW="250px" isRequired>
+                    <FormLabel>Select Vendor</FormLabel>
+                    <Select
+                      placeholder="Choose a vendor..."
+                      value={vendorHistoryVendorId}
+                      onChange={(e) => setVendorHistoryVendorId(e.target.value)}
+                      borderColor={!vendorHistoryVendorId ? 'red.300' : 'gray.200'}
+                    >
+                      {vendors.map((vendor) => (
+                        <option key={vendor.id} value={vendor.id}>
+                          {vendor.name} ({vendor.code})
+                        </option>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl flex="1" minW="180px" isRequired>
+                    <FormLabel>Start Date</FormLabel>
+                    <Input
+                      type="date"
+                      value={vendorHistoryStartDate}
+                      onChange={(e) => setVendorHistoryStartDate(e.target.value)}
+                      borderColor={!vendorHistoryStartDate ? 'red.300' : 'gray.200'}
+                    />
+                  </FormControl>
+                  <FormControl flex="1" minW="180px" isRequired>
+                    <FormLabel>End Date</FormLabel>
+                    <Input
+                      type="date"
+                      value={vendorHistoryEndDate}
+                      onChange={(e) => setVendorHistoryEndDate(e.target.value)}
+                      borderColor={!vendorHistoryEndDate ? 'red.300' : 'gray.200'}
+                    />
+                  </FormControl>
+                  <Button
+                    colorScheme="orange"
+                    onClick={fetchVendorHistory}
+                    isLoading={vendorHistoryLoading}
+                    isDisabled={!vendorHistoryVendorId || !vendorHistoryStartDate || !vendorHistoryEndDate}
+                    leftIcon={<FiTruck />}
+                    size="md"
+                    mt={8}
+                    whiteSpace="nowrap"
+                  >
+                    Generate Report
+                  </Button>
+                </HStack>
+                <Text fontSize="xs" color={descriptionColor}>
+                  Select a vendor and date range to view their transaction history
+                </Text>
+              </VStack>
+            </Box>
+
+            {vendorHistoryLoading && (
+              <Box textAlign="center" py={8}>
+                <VStack spacing={4}>
+                  <Spinner size="xl" thickness="4px" speed="0.65s" color="orange.500" />
+                  <VStack spacing={2}>
+                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
+                      Loading Vendor History
+                    </Text>
+                    <Text fontSize="sm" color={descriptionColor}>
+                      Fetching transactions and payment records...
+                    </Text>
+                  </VStack>
+                </VStack>
+              </Box>
+            )}
+
+            {vendorHistoryError && (
+              <Box bg="red.50" p={4} borderRadius="md" mb={4}>
+                <Text color="red.600" fontWeight="medium">Error: {vendorHistoryError}</Text>
+                <Button
+                  mt={2}
+                  size="sm"
+                  colorScheme="red"
+                  variant="outline"
+                  onClick={fetchVendorHistory}
+                >
+                  Retry
+                </Button>
+              </Box>
+            )}
+
+            {vendorHistoryData && !vendorHistoryLoading && (
+              <VStack spacing={6} align="stretch">
+                {/* Vendor Info */}
+                {vendorHistoryData.vendor && (
+                  <Box bg="orange.50" p={4} borderRadius="md" borderWidth="1px" borderColor="orange.200">
+                    <VStack align="start" spacing={2}>
+                      <HStack>
+                        <Text fontSize="lg" fontWeight="bold" color="orange.800">
+                          {vendorHistoryData.vendor.name}
+                        </Text>
+                        <Badge colorScheme="orange">{vendorHistoryData.vendor.code}</Badge>
+                      </HStack>
+                      <Text fontSize="sm" color="orange.600">
+                        {vendorHistoryData.vendor.email} | {vendorHistoryData.vendor.phone}
+                      </Text>
+                      {vendorHistoryData.vendor.address && (
+                        <Text fontSize="sm" color="orange.600">
+                          {vendorHistoryData.vendor.address}
+                        </Text>
+                      )}
+                    </VStack>
+                  </Box>
+                )}
+
+                {/* Summary */}
+                {vendorHistoryData.summary && (
+                  <SimpleGrid columns={[1, 2, 4]} spacing={4}>
+                    <Box bg="green.50" p={4} borderRadius="md" borderWidth="1px" borderColor="green.200">
+                      <Text fontSize="sm" color="gray.600" mb={1}>Total Transactions</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="green.600">
+                        {vendorHistoryData.summary.total_transactions || 0}
+                      </Text>
+                    </Box>
+                    <Box bg="blue.50" p={4} borderRadius="md" borderWidth="1px" borderColor="blue.200">
+                      <Text fontSize="sm" color="gray.600" mb={1}>Total Amount</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="blue.600">
+                        {formatCurrency(vendorHistoryData.summary.total_amount || 0)}
+                      </Text>
+                    </Box>
+                    <Box bg="purple.50" p={4} borderRadius="md" borderWidth="1px" borderColor="purple.200">
+                      <Text fontSize="sm" color="gray.600" mb={1}>Total Paid</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="purple.600">
+                        {formatCurrency(vendorHistoryData.summary.total_paid || 0)}
+                      </Text>
+                    </Box>
+                    <Box bg="orange.50" p={4} borderRadius="md" borderWidth="1px" borderColor="orange.200">
+                      <Text fontSize="sm" color="gray.600" mb={1}>Outstanding</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="orange.600">
+                        {formatCurrency(vendorHistoryData.summary.total_outstanding || 0)}
+                      </Text>
+                    </Box>
+                  </SimpleGrid>
+                )}
+
+                {/* Transactions Table */}
+                <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
+                  <Text fontSize="lg" fontWeight="bold" color={headingColor} mb={3}>
+                    Transaction Details
+                  </Text>
+                  <Box overflowX="auto" maxH="500px" overflowY="auto">
+                    <Table size="sm" variant="striped" colorScheme="gray">
+                      <Thead bg="orange.600" position="sticky" top={0} zIndex={1}>
+                        <Tr>
+                          <Th color="white">Date</Th>
+                          <Th color="white">Type</Th>
+                          <Th color="white">Code</Th>
+                          <Th color="white">Description</Th>
+                          <Th color="white" isNumeric>Amount</Th>
+                          <Th color="white" isNumeric>Paid</Th>
+                          <Th color="white" isNumeric>Outstanding</Th>
+                          <Th color="white">Status</Th>
+                        </Tr>
+                      </Thead>
+                      <Tbody>
+                        {vendorHistoryData.transactions && vendorHistoryData.transactions.length > 0 ? (
+                          vendorHistoryData.transactions.map((tx: any, index: number) => (
+                            <Tr key={index} _hover={{ bg: 'orange.50' }}>
+                              <Td fontSize="sm">
+                                {tx.date ? new Date(tx.date).toLocaleDateString('id-ID') : 'N/A'}
+                              </Td>
+                              <Td>
+                                <Badge colorScheme={
+                                  tx.transaction_type === 'PURCHASE' ? 'orange' :
+                                  tx.transaction_type === 'BILL' ? 'red' :
+                                  tx.transaction_type === 'PAYMENT' ? 'purple' : 'gray'
+                                } size="sm">
+                                  {tx.transaction_type}
+                                </Badge>
+                              </Td>
+                              <Td fontSize="sm" fontFamily="mono" fontWeight="medium">{tx.transaction_code}</Td>
+                              <Td fontSize="sm" maxW="250px">{tx.description}</Td>
+                              <Td isNumeric fontSize="sm" fontWeight="bold" color="orange.700">
+                                {formatCurrency(tx.amount || 0)}
+                              </Td>
+                              <Td isNumeric fontSize="sm" color="green.600">
+                                {formatCurrency(tx.paid_amount || 0)}
+                              </Td>
+                              <Td isNumeric fontSize="sm" color="red.600" fontWeight="medium">
+                                {formatCurrency(tx.outstanding || 0)}
+                              </Td>
+                              <Td>
+                                <Badge colorScheme={
+                                  tx.status === 'PAID' ? 'green' :
+                                  tx.status === 'UNPAID' ? 'red' :
+                                  tx.status === 'PARTIAL' ? 'yellow' : 'gray'
+                                } size="sm">
+                                  {tx.status}
+                                </Badge>
+                              </Td>
+                            </Tr>
+                          ))
+                        ) : (
+                          <Tr>
+                            <Td colSpan={8} textAlign="center" py={8}>
+                              <Text color="gray.500">No transactions found for this period</Text>
+                            </Td>
+                          </Tr>
+                        )}
+                      </Tbody>
+                    </Table>
+                  </Box>
+                </Box>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <HStack spacing={3}>
+              {vendorHistoryData && !vendorHistoryLoading && (
+                <>
+                  <Button
+                    colorScheme="red"
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<FiFilePlus />}
+                    onClick={() => handleVendorHistoryExport('pdf')}
+                    isLoading={loading}
+                  >
+                    Export PDF
+                  </Button>
+                  <Button
+                    colorScheme="green"
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<FiFileText />}
+                    onClick={() => handleVendorHistoryExport('csv')}
+                    isLoading={loading}
+                  >
+                    Export CSV
+                  </Button>
+                </>
+              )}
+            </HStack>
+            <Button variant="ghost" onClick={() => setVendorHistoryOpen(false)}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* SSOT General Ledger Modal */}
+      <Modal isOpen={ssotGLOpen} onClose={() => setSSOTGLOpen(false)} size="full">
+        <ModalOverlay />
+        <ModalContent bg={modalContentBg} maxW="95vw" m={4}>
           <ModalHeader>
             <HStack>
               <Icon as={FiBook} color="green.500" />
@@ -3218,27 +4323,42 @@ As of: {ssotTBAsOfDate}
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-              <HStack spacing={4} mb={4} flexWrap="wrap">
-                <FormControl>
+              <VStack spacing={4} align="stretch">
+                <HStack spacing={4} flexWrap="wrap">
+                  <FormControl flex="1" minW="200px" isRequired>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
                     type="date" 
                     value={ssotGLStartDate} 
                     onChange={(e) => setSSOTGLStartDate(e.target.value)} 
+                      isRequired
+                      borderColor={!ssotGLStartDate ? 'red.300' : 'gray.200'}
                   />
                 </FormControl>
-                <FormControl>
+                  <FormControl flex="1" minW="200px" isRequired>
                   <FormLabel>End Date</FormLabel>
                   <Input 
                     type="date" 
                     value={ssotGLEndDate} 
                     onChange={(e) => setSSOTGLEndDate(e.target.value)} 
+                      isRequired
+                      borderColor={!ssotGLEndDate ? 'red.300' : 'gray.200'}
+                    />
+                  </FormControl>
+                  <FormControl flex="1" minW="200px">
+                    <FormLabel>Account ID (Optional)</FormLabel>
+                    <Input 
+                      type="text" 
+                      placeholder="e.g., 1101 or leave empty for all"
+                      value={ssotGLAccountId} 
+                      onChange={(e) => setSSOTGLAccountId(e.target.value)} 
                   />
                 </FormControl>
                 <Button
                   colorScheme="blue"
                   onClick={fetchSSOTGeneralLedgerReport}
                   isLoading={ssotGLLoading}
+                    isDisabled={!ssotGLStartDate || !ssotGLEndDate}
                   leftIcon={<FiBook />}
                   size="md"
                   mt={8}
@@ -3247,6 +4367,10 @@ As of: {ssotTBAsOfDate}
                   Generate Report
                 </Button>
               </HStack>
+                <Text fontSize="xs" color={descriptionColor}>
+                  Leave Account ID empty to show all accounts, or enter a specific account code to filter
+                </Text>
+              </VStack>
             </Box>
 
             {ssotGLLoading && (
@@ -3327,64 +4451,185 @@ As of: {ssotTBAsOfDate}
                 </Box>
 
                 {/* Summary Statistics */}
-                <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                  <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="green.600">
-                      {ssotGLData.total_transactions || 0}
-                    </Text>
-                    <Text fontSize="sm" color="green.800">Total Transactions</Text>
-                  </Box>
-                  <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-                      {formatCurrency(ssotGLData.total_debit || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="blue.800">Total Debit</Text>
-                  </Box>
-                  <Box bg="orange.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="orange.600">
-                      {formatCurrency(ssotGLData.total_credit || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="orange.800">Total Credit</Text>
-                  </Box>
-                  <Box bg="purple.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="purple.600">
-                      {formatCurrency(ssotGLData.total_balance || 0)}
-                    </Text>
-                    <Text fontSize="sm" color="purple.800">Total Balance</Text>
-                  </Box>
-                </SimpleGrid>
-
-                {/* Transaction Details */}
-                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                    Transaction Details
-                  </Text>
-                  <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                    {ssotGLData.transactions.map((transaction: any) => (
-                      <Box key={transaction.transaction_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
-                        <VStack align="start" spacing={0}>
-                          <Text fontSize="sm" color="gray.700">
-                            Transaction ID: {transaction.transaction_id}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Date: {transaction.date ? new Date(transaction.date).toLocaleDateString('id-ID') : 'N/A'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Description: {transaction.description || 'N/A'}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Debit: {formatCurrency(transaction.debit || 0)}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Credit: {formatCurrency(transaction.credit || 0)}
-                          </Text>
-                          <Text fontSize="sm" color="gray.700">
-                            Balance: {formatCurrency(transaction.balance || 0)}
-                          </Text>
-                        </VStack>
-                      </Box>
-                    ))}
+                <Box bg="gray.50" p={6} borderRadius="lg" border="2px" borderColor="gray.300">
+                  <SimpleGrid columns={[1, 2, 5]} spacing={6}>
+                    <Box textAlign="center">
+                      <Text fontSize="xs" color="gray.600" mb={1} fontWeight="semibold" textTransform="uppercase">Total Entries</Text>
+                      <Text fontSize="3xl" fontWeight="bold" color="green.600">
+                        {ssotGLData.transactions?.length || 0}
+                      </Text>
+                    </Box>
+                    <Box textAlign="center">
+                      <Text fontSize="xs" color="gray.600" mb={1} fontWeight="semibold" textTransform="uppercase">Opening Balance</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="blue.600">
+                        {formatCurrency(ssotGLData.opening_balance || 0)}
+                      </Text>
+                    </Box>
+                    <Box textAlign="center">
+                      <Text fontSize="xs" color="gray.600" mb={1} fontWeight="semibold" textTransform="uppercase">Total Debits</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="cyan.600">
+                        {formatCurrency(ssotGLData.total_debits || 0)}
+                      </Text>
+                    </Box>
+                    <Box textAlign="center">
+                      <Text fontSize="xs" color="gray.600" mb={1} fontWeight="semibold" textTransform="uppercase">Total Credits</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="pink.600">
+                        {formatCurrency(ssotGLData.total_credits || 0)}
+                      </Text>
+                    </Box>
+                    <Box textAlign="center">
+                      <Text fontSize="xs" color="gray.600" mb={1} fontWeight="semibold" textTransform="uppercase">Closing Balance</Text>
+                      <Text fontSize="2xl" fontWeight="bold" color="purple.600">
+                        {formatCurrency(ssotGLData.closing_balance || 0)}
+                      </Text>
+                    </Box>
                   </SimpleGrid>
+                  
+                  <Divider my={4} />
+                  
+                  <SimpleGrid columns={[1, 2]} spacing={4}>
+                    <Box textAlign="center" py={2}>
+                      <Text fontSize="xs" color="gray.600" mb={1} fontWeight="semibold" textTransform="uppercase">Net Change</Text>
+                      <Text fontSize="xl" fontWeight="bold" color={
+                        ((ssotGLData.total_debits || 0) - (ssotGLData.total_credits || 0)) > 0 ? "green.600" : 
+                        ((ssotGLData.total_debits || 0) - (ssotGLData.total_credits || 0)) < 0 ? "red.600" : "gray.600"
+                      }>
+                        {formatCurrency((ssotGLData.total_debits || 0) - (ssotGLData.total_credits || 0))}
+                      </Text>
+                      <Badge colorScheme={
+                        (ssotGLData.total_debits || 0) === (ssotGLData.total_credits || 0) ? "green" :
+                        (ssotGLData.total_debits || 0) > (ssotGLData.total_credits || 0) ? "blue" : "orange"
+                      } size="sm" mt={1}>
+                        {(ssotGLData.total_debits || 0) === (ssotGLData.total_credits || 0) ? "Balanced" :
+                         (ssotGLData.total_debits || 0) > (ssotGLData.total_credits || 0) ? "Net Debit" : "Net Credit"}
+                      </Badge>
+                    </Box>
+                    <Box textAlign="center" py={2}>
+                      <Text fontSize="xs" color="gray.600" mb={1} fontWeight="semibold" textTransform="uppercase">Status</Text>
+                      <Badge colorScheme={
+                        ssotGLData.is_balanced ? "green" : "yellow"
+                      } size="lg" fontSize="md" px={3} py={1}>
+                        {ssotGLData.is_balanced ? "✓ Balanced" : "⚠ Unbalanced"}
+                      </Badge>
+                    </Box>
+                  </SimpleGrid>
+                </Box>
+
+                {/* Account Information */}
+                {ssotGLData.account && (
+                  <Box bg="blue.50" p={4} borderRadius="md" border="1px" borderColor="blue.200">
+                    <HStack justify="space-between">
+                      <VStack align="start" spacing={0}>
+                        <Text fontSize="lg" fontWeight="bold" color="blue.800">
+                          {ssotGLData.account.account_code} - {ssotGLData.account.account_name}
+                    </Text>
+                        <Text fontSize="sm" color="blue.600">
+                          Account Type: {ssotGLData.account.account_type || 'N/A'}
+                        </Text>
+                      </VStack>
+                    </HStack>
+                  </Box>
+                )}
+
+                {/* Transaction Details Table */}
+                <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor} overflowX="auto">
+                  <HStack justify="space-between" mb={3}>
+                    <Text fontSize="md" fontWeight="bold" color={headingColor}>
+                      Transaction Details
+                    </Text>
+                    <Badge colorScheme="blue" fontSize="sm" px={2} py={1}>
+                      {ssotGLData.transactions?.length || 0} entries
+                    </Badge>
+                  </HStack>
+                  <Box overflowX="auto" maxH="600px" overflowY="auto">
+                    <Table size="sm" variant="striped" colorScheme="gray">
+                      <Thead bg="blue.600" position="sticky" top={0} zIndex={1}>
+                        <Tr>
+                          <Th color="white" fontSize="xs" py={3}>Date</Th>
+                          <Th color="white" fontSize="xs" py={3}>Journal Code</Th>
+                          <Th color="white" fontSize="xs" py={3} minW="250px">Description</Th>
+                          <Th color="white" fontSize="xs" py={3}>Reference</Th>
+                          <Th color="white" fontSize="xs" py={3} minW="150px">Account</Th>
+                          <Th color="white" fontSize="xs" py={3} isNumeric>Debit</Th>
+                          <Th color="white" fontSize="xs" py={3} isNumeric>Credit</Th>
+                          <Th color="white" fontSize="xs" py={3} isNumeric>Balance</Th>
+                          <Th color="white" fontSize="xs" py={3}>Type</Th>
+                        </Tr>
+                      </Thead>
+                      <Tbody>
+                        {ssotGLData.transactions && ssotGLData.transactions.length > 0 ? (
+                          ssotGLData.transactions.map((entry: any, index: number) => (
+                            <Tr key={index} _hover={{ bg: 'blue.50' }}>
+                              <Td fontSize="sm" whiteSpace="nowrap">
+                                {entry.date ? new Date(entry.date).toLocaleDateString('id-ID') : 'N/A'}
+                              </Td>
+                              <Td fontSize="sm" fontFamily="mono" fontWeight="medium">
+                                {entry.journal_code || 'N/A'}
+                              </Td>
+                              <Td fontSize="sm" maxW="350px">
+                                {entry.description || 'No description'}
+                              </Td>
+                              <Td fontSize="sm">{entry.reference || '-'}</Td>
+                              <Td fontSize="sm">
+                                {entry.account_code ? (
+                                  <VStack align="start" spacing={0}>
+                                    <Text fontWeight="semibold" color="gray.700">{entry.account_code}</Text>
+                                    <Text fontSize="xs" color="gray.500">{entry.account_name || ''}</Text>
+                                  </VStack>
+                                ) : (
+                                  <Text color="gray.400">-</Text>
+                                )}
+                              </Td>
+                              <Td isNumeric fontSize="sm" fontWeight="semibold" color="blue.700">
+                                {(entry.debit_amount && entry.debit_amount > 0) ? formatCurrency(entry.debit_amount) : '-'}
+                              </Td>
+                              <Td isNumeric fontSize="sm" fontWeight="semibold" color="red.600">
+                                {(entry.credit_amount && entry.credit_amount > 0) ? formatCurrency(entry.credit_amount) : '-'}
+                              </Td>
+                              <Td isNumeric fontSize="sm" fontWeight="bold" color="purple.700" bg="purple.50">
+                                {entry.balance != null ? formatCurrency(entry.balance) : '-'}
+                              </Td>
+                              <Td>
+                                <Badge colorScheme={
+                                  entry.entry_type === 'SALE' ? 'green' :
+                                  entry.entry_type === 'PURCHASE' ? 'blue' :
+                                  entry.entry_type === 'PAYMENT' ? 'orange' : 'gray'
+                                } size="sm" fontSize="xs">
+                                  {entry.entry_type || 'N/A'}
+                                </Badge>
+                              </Td>
+                            </Tr>
+                          ))
+                        ) : (
+                          <Tr>
+                            <Td colSpan={9} textAlign="center" py={8}>
+                              <VStack spacing={2}>
+                                <Text color="gray.500" fontSize="md">No transactions found for this period</Text>
+                                <Text color="gray.400" fontSize="sm">Try adjusting your date range or filters</Text>
+                              </VStack>
+                            </Td>
+                          </Tr>
+                        )}
+                      </Tbody>
+                      {ssotGLData.transactions && ssotGLData.transactions.length > 0 && (
+                        <Tfoot bg="blue.700" position="sticky" bottom={0}>
+                          <Tr>
+                            <Th color="white" colSpan={5} textAlign="right" fontSize="md" py={4}>TOTAL</Th>
+                            <Th color="white" isNumeric fontSize="md" fontWeight="bold" py={4}>
+                              {formatCurrency(ssotGLData.total_debits || 0)}
+                            </Th>
+                            <Th color="white" isNumeric fontSize="md" fontWeight="bold" py={4}>
+                              {formatCurrency(ssotGLData.total_credits || 0)}
+                            </Th>
+                            <Th color="white" isNumeric fontSize="md" fontWeight="bold" py={4}>
+                              {formatCurrency((ssotGLData.total_debits || 0) - (ssotGLData.total_credits || 0))}
+                            </Th>
+                            <Th></Th>
+                          </Tr>
+                        </Tfoot>
+                      )}
+                    </Table>
+                  </Box>
                 </Box>
               </VStack>
             )}
@@ -3399,6 +4644,7 @@ As of: {ssotTBAsOfDate}
                     size="sm"
                     leftIcon={<FiFilePlus />}
                     onClick={() => handleGeneralLedgerExport('pdf')}
+                    isLoading={loading}
                   >
                     Export PDF
                   </Button>
@@ -3408,6 +4654,7 @@ As of: {ssotTBAsOfDate}
                     size="sm"
                     leftIcon={<FiFileText />}
                     onClick={() => handleGeneralLedgerExport('csv')}
+                    isLoading={loading}
                   >
                     Export CSV
                   </Button>
@@ -3415,438 +4662,6 @@ As of: {ssotTBAsOfDate}
               )}
             </HStack>
             <Button variant="ghost" onClick={() => setSSOTGLOpen(false)}>
-              Close
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      {/* SSOT Journal Analysis Modal */}
-      <Modal isOpen={ssotJAOpen} onClose={() => setSSOTJAOpen(false)} size="6xl">
-        <ModalOverlay />
-        <ModalContent bg={modalContentBg}>
-          <ModalHeader>
-            <HStack>
-              <Icon as={FiDatabase} color="teal.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  SSOT Journal Entry Analysis
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  {ssotJAStartDate} - {ssotJAEndDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
-            </HStack>
-          </ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <Box mb={4}>
-              <HStack spacing={4} mb={4} flexWrap="wrap">
-                <FormControl>
-                  <FormLabel>Start Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotJAStartDate} 
-                    onChange={(e) => setSSOTJAStartDate(e.target.value)} 
-                  />
-                </FormControl>
-                <FormControl>
-                  <FormLabel>End Date</FormLabel>
-                  <Input 
-                    type="date" 
-                    value={ssotJAEndDate} 
-                    onChange={(e) => setSSOTJAEndDate(e.target.value)} 
-                  />
-                </FormControl>
-                <Button
-                  colorScheme="blue"
-                  onClick={fetchSSOTJournalAnalysisReport}
-                  isLoading={ssotJALoading}
-                  leftIcon={<FiDatabase />}
-                  size="md"
-                  mt={8}
-                  whiteSpace="nowrap"
-                >
-                  Generate Report
-                </Button>
-              </HStack>
-            </Box>
-
-            {ssotJALoading && (
-              <Box textAlign="center" py={8}>
-                <VStack spacing={4}>
-                  <Spinner size="xl" thickness="4px" speed="0.65s" color="teal.500" />
-                  <VStack spacing={2}>
-                    <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                      Generating SSOT Journal Analysis
-                    </Text>
-                    <Text fontSize="sm" color={descriptionColor}>
-                      Analyzing journal entries from SSOT system...
-                    </Text>
-                  </VStack>
-                </VStack>
-              </Box>
-            )}
-
-            {ssotJAError && (
-              <Box bg="red.50" p={4} borderRadius="md" mb={4}>
-                <Text color="red.600" fontWeight="medium">Error: {ssotJAError}</Text>
-                <Button
-                  mt={2}
-                  size="sm"
-                  colorScheme="red"
-                  variant="outline"
-                  onClick={fetchSSOTJournalAnalysisReport}
-                >
-                  Retry
-                </Button>
-              </Box>
-            )}
-
-            {ssotJAData && !ssotJALoading && (
-              <VStack spacing={6} align="stretch">
-                {/* Company Header - Improved loading and display */}
-                <Box bg="teal.50" p={4} borderRadius="md">
-                  <HStack justify="space-between" align="start">
-                    <VStack align="start" spacing={1}>
-                      <Text fontSize="lg" fontWeight="bold" color="teal.800">
-                        {ssotJAData.company?.name || 'PT. Sistem Akuntansi Indonesia'}
-                      </Text>
-                      <Text fontSize="sm" color="teal.600">
-                        {ssotJAData.company?.address && ssotJAData.company?.city ? 
-                          `${ssotJAData.company.address}, ${ssotJAData.company.city}` : 
-                          'Address not available'
-                        }
-                      </Text>
-                      <Text fontSize="sm" color="teal.600">
-                        {ssotJAData.company?.phone || '+62-21-5551234'} | {ssotJAData.company?.email || 'info@sistemakuntansi.co.id'}
-                      </Text>
-                    </VStack>
-                    <VStack align="end" spacing={1}>
-                      <Text fontSize="sm" color="teal.600">
-                        Currency: {ssotJAData.currency || 'IDR'}
-                      </Text>
-                      <Text fontSize="xs" color="teal.500">
-                        Generated: {ssotJAData.generated_at ? new Date(ssotJAData.generated_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')}
-                      </Text>
-                    </VStack>
-                  </HStack>
-                </Box>
-
-                {/* Report Summary */}
-                <Box textAlign="center" bg={summaryBg} p={4} borderRadius="md">
-                  <Heading size="md" color={headingColor}>
-                    Journal Entry Analysis Report
-                  </Heading>
-                  <Text fontSize="sm" color={descriptionColor}>
-                    Period: {ssotJAStartDate} - {ssotJAEndDate}
-                  </Text>
-                  <Text fontSize="xs" color={descriptionColor} mt={1}>
-                    Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
-                  </Text>
-                </Box>
-
-                {/* Summary Statistics Grid */}
-                <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                  <Box bg="teal.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="teal.600">
-                      {ssotJAData.total_entries || 0}
-                    </Text>
-                    <Text fontSize="sm" color="teal.800">Total Entries</Text>
-                  </Box>
-                  <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="green.600">
-                      {ssotJAData.posted_entries || 0}
-                    </Text>
-                    <Text fontSize="sm" color="green.800">Posted Entries</Text>
-                  </Box>
-                  <Box bg="orange.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="orange.600">
-                      {ssotJAData.draft_entries || 0}
-                    </Text>
-                    <Text fontSize="sm" color="orange.800">Draft Entries</Text>
-                  </Box>
-                  <Box bg="red.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="2xl" fontWeight="bold" color="red.600">
-                      {ssotJAData.reversed_entries || 0}
-                    </Text>
-                    <Text fontSize="sm" color="red.800">Reversed Entries</Text>
-                  </Box>
-                </SimpleGrid>
-
-                {/* Total Amount */}
-                {ssotJAData.total_amount && Number(ssotJAData.total_amount) !== 0 && (
-                  <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
-                    <Text fontSize="sm" color="blue.600" mb={2}>Total Transaction Amount</Text>
-                    <Text fontSize="3xl" fontWeight="bold" color="blue.700">
-                      {formatCurrency(Number(ssotJAData.total_amount))}
-                    </Text>
-                  </Box>
-                )}
-
-                {/* Entry Type Analysis */}
-                {ssotJAData.entries_by_type && ssotJAData.entries_by_type.length > 0 && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Entry Type Distribution
-                    </Heading>
-                    <SimpleGrid columns={[1, 2]} spacing={4}>
-                      {ssotJAData.entries_by_type.map((type, index) => (
-                        <Box key={index} border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white">
-                          <HStack justify="space-between" align="start">
-                            <VStack align="start" spacing={2}>
-                              <Badge colorScheme={getEntryTypeBadgeColor(type.source_type)} size="lg">
-                                {type.source_type}
-                              </Badge>
-                              <VStack align="start" spacing={1}>
-                                <Text fontSize="lg" fontWeight="bold" color="gray.800">
-                                  {type.count} entries
-                                </Text>
-                                <Text fontSize="sm" color="gray.600">
-                                  {type.percentage.toFixed(2)}% of total
-                                </Text>
-                              </VStack>
-                            </VStack>
-                            <VStack align="end" spacing={1}>
-                              <Text fontSize="lg" fontWeight="bold" color="blue.600">
-                                {formatCurrency(Number(type.total_amount) || 0)}
-                              </Text>
-                              <Text fontSize="xs" color="gray.500">
-                                Total Amount
-                              </Text>
-                            </VStack>
-                          </HStack>
-                          
-                          {/* Progress Bar */}
-                          <Box mt={3}>
-                            <Box bg="gray.200" height="8px" borderRadius="full" overflow="hidden">
-                              <Box 
-                                bg={`${getEntryTypeBadgeColor(type.source_type)}.400`}
-                                height="100%" 
-                                width={`${type.percentage}%`}
-                                borderRadius="full"
-                              />
-                            </Box>
-                          </Box>
-                        </Box>
-                      ))}
-                    </SimpleGrid>
-                  </Box>
-                )}
-
-                {/* Account Breakdown Analysis */}
-                {ssotJAData.entries_by_account && ssotJAData.entries_by_account.length > 0 && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Account Breakdown Analysis
-                    </Heading>
-                    <Box border="1px solid" borderColor="gray.200" borderRadius="md" overflow="hidden">
-                      {/* Table Header */}
-                      <Box bg="gray.50" px={4} py={3} borderBottom="1px solid" borderBottomColor="gray.200">
-                        <SimpleGrid columns={[3, 5]} spacing={4} fontWeight="bold" fontSize="sm" color="gray.700">
-                          <Text>Account</Text>
-                          <Text display={['none', 'block']}>Code</Text>
-                          <Text textAlign="center">Count</Text>
-                          <Text textAlign="right">Debit</Text>
-                          <Text textAlign="right">Credit</Text>
-                        </SimpleGrid>
-                      </Box>
-                      
-                      {/* Table Body */}
-                      <Box bg="white" maxH="400px" overflowY="auto">
-                        {ssotJAData.entries_by_account.map((account, index) => (
-                          <Box key={index} px={4} py={3} borderBottom="1px solid" borderBottomColor="gray.100" _hover={{ bg: 'gray.50' }}>
-                            <SimpleGrid columns={[3, 5]} spacing={4} fontSize="sm" alignItems="center">
-                              <VStack align="start" spacing={1}>
-                                <Text fontWeight="medium" color="gray.800">
-                                  {account.account_name || 'Unknown Account'}
-                                </Text>
-                                <Text fontSize="xs" color="gray.500" display={['block', 'none']}>
-                                  {account.account_code || 'N/A'}
-                                </Text>
-                              </VStack>
-                              <Text fontSize="sm" color="gray.600" display={['none', 'block']}>
-                                {account.account_code || 'N/A'}
-                              </Text>
-                              <Text textAlign="center" fontWeight="medium">
-                                {account.count || 0}
-                              </Text>
-                              <Text textAlign="right" color={account.total_debit && account.total_debit > 0 ? 'green.600' : 'gray.400'}>
-                                {account.total_debit && account.total_debit > 0 ? formatCurrency(Number(account.total_debit)) : '-'}
-                              </Text>
-                              <Text textAlign="right" color={account.total_credit && account.total_credit > 0 ? 'blue.600' : 'gray.400'}>
-                                {account.total_credit && account.total_credit > 0 ? formatCurrency(Number(account.total_credit)) : '-'}
-                              </Text>
-                            </SimpleGrid>
-                          </Box>
-                        ))}
-                      </Box>
-                      
-                      {/* Total Row */}
-                      <Box bg="gray.50" px={4} py={3} borderTop="2px solid" borderTopColor="gray.300">
-                        <SimpleGrid columns={[3, 5]} spacing={4} fontWeight="bold" fontSize="sm">
-                          <Text color="gray.700">TOTAL</Text>
-                          <Text display={['none', 'block']}></Text>
-                          <Text textAlign="center" color="gray.700">
-                            {ssotJAData.entries_by_account.reduce((sum, acc) => sum + (acc.count || 0), 0)}
-                          </Text>
-                          <Text textAlign="right" color="green.600">
-                            {formatCurrency(ssotJAData.entries_by_account.reduce((sum, acc) => sum + (Number(acc.total_debit) || 0), 0))}
-                          </Text>
-                          <Text textAlign="right" color="blue.600">
-                            {formatCurrency(ssotJAData.entries_by_account.reduce((sum, acc) => sum + (Number(acc.total_credit) || 0), 0))}
-                          </Text>
-                        </SimpleGrid>
-                      </Box>
-                    </Box>
-                  </Box>
-                )}
-
-                {/* Period Breakdown Analysis */}
-                {ssotJAData.entries_by_period && ssotJAData.entries_by_period.length > 0 && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Period Distribution Analysis
-                    </Heading>
-                    <SimpleGrid columns={[1, 2, 3]} spacing={4}>
-                      {ssotJAData.entries_by_period.map((period, index) => (
-                        <Box key={index} border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white" _hover={{ bg: 'gray.50' }}>
-                          <VStack align="start" spacing={3}>
-                            <VStack align="start" spacing={1}>
-                              <Badge colorScheme="teal" size="lg">
-                                {period.period}
-                              </Badge>
-                              <Text fontSize="xs" color="gray.500">
-                                {period.start_date} - {period.end_date}
-                              </Text>
-                            </VStack>
-                            
-                            <VStack align="start" spacing={2} w="full">
-                              <HStack justify="space-between" w="full">
-                                <Text fontSize="sm" color="gray.600">Entries:</Text>
-                                <Text fontSize="lg" fontWeight="bold" color="teal.600">
-                                  {period.count || 0}
-                                </Text>
-                              </HStack>
-                              
-                              <HStack justify="space-between" w="full">
-                                <Text fontSize="sm" color="gray.600">Amount:</Text>
-                                <Text fontSize="md" fontWeight="medium" color="blue.600">
-                                  {formatCurrency(Number(period.total_amount) || 0)}
-                                </Text>
-                              </HStack>
-                            </VStack>
-                          </VStack>
-                        </Box>
-                      ))}
-                    </SimpleGrid>
-                  </Box>
-                )}
-
-                {/* Compliance Check */}
-                {ssotJAData.compliance_check && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Compliance Assessment
-                    </Heading>
-                    <Box border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white">
-                      <SimpleGrid columns={[1, 3]} spacing={4} mb={4}>
-                        <VStack>
-                          <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-                            {ssotJAData.compliance_check.total_checks || 0}
-                          </Text>
-                          <Text fontSize="sm" color="gray.600" textAlign="center">Total Checks</Text>
-                        </VStack>
-                        <VStack>
-                          <Text fontSize="2xl" fontWeight="bold" color="green.600">
-                            {ssotJAData.compliance_check.passed_checks || 0}
-                          </Text>
-                          <Text fontSize="sm" color="gray.600" textAlign="center">Passed</Text>
-                        </VStack>
-                        <VStack>
-                          <Text fontSize="2xl" fontWeight="bold" color="red.600">
-                            {ssotJAData.compliance_check.failed_checks || 0}
-                          </Text>
-                          <Text fontSize="sm" color="gray.600" textAlign="center">Failed</Text>
-                        </VStack>
-                      </SimpleGrid>
-                      
-                      {/* Compliance Score */}
-                      <Box textAlign="center" p={3} bg="gray.50" borderRadius="md">
-                        <Text fontSize="sm" color="gray.600" mb={1}>Compliance Score</Text>
-                        <Text fontSize="2xl" fontWeight="bold" color={ssotJAData.compliance_check.compliance_score >= 80 ? 'green.600' : ssotJAData.compliance_check.compliance_score >= 60 ? 'orange.600' : 'red.600'}>
-                          {ssotJAData.compliance_check.compliance_score || 0}%
-                        </Text>
-                      </Box>
-                    </Box>
-                  </Box>
-                )}
-
-                {/* Data Quality Metrics */}
-                {ssotJAData.data_quality_metrics && (
-                  <Box>
-                    <Heading size="sm" mb={4} color={headingColor}>
-                      Data Quality Assessment
-                    </Heading>
-                    <Box border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white">
-                      <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                        <VStack>
-                          <Text fontSize="xl" fontWeight="bold" color={ssotJAData.data_quality_metrics.overall_score >= 80 ? 'green.600' : ssotJAData.data_quality_metrics.overall_score >= 60 ? 'orange.600' : 'red.600'}>
-                            {ssotJAData.data_quality_metrics.overall_score || 0}%
-                          </Text>
-                          <Text fontSize="sm" color="gray.600" textAlign="center">Overall Score</Text>
-                        </VStack>
-                        <VStack>
-                          <Text fontSize="xl" fontWeight="bold" color="blue.600">
-                            {ssotJAData.data_quality_metrics.completeness_score || 0}%
-                          </Text>
-                          <Text fontSize="sm" color="gray.600" textAlign="center">Completeness</Text>
-                        </VStack>
-                        <VStack>
-                          <Text fontSize="xl" fontWeight="bold" color="purple.600">
-                            {ssotJAData.data_quality_metrics.accuracy_score || 0}%
-                          </Text>
-                          <Text fontSize="sm" color="gray.600" textAlign="center">Accuracy</Text>
-                        </VStack>
-                        <VStack>
-                          <Text fontSize="xl" fontWeight="bold" color="teal.600">
-                            {ssotJAData.data_quality_metrics.consistency_score || 0}%
-                          </Text>
-                          <Text fontSize="sm" color="gray.600" textAlign="center">Consistency</Text>
-                        </VStack>
-                      </SimpleGrid>
-                    </Box>
-                  </Box>
-                )}
-              </VStack>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <HStack spacing={3}>
-              {ssotJAData && !ssotJALoading && (
-                <>
-                  <Button
-                    colorScheme="red"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFilePlus />}
-                    onClick={() => handleJournalAnalysisExport('pdf')}
-                  >
-                    Export PDF
-                  </Button>
-                  <Button
-                    colorScheme="green"
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<FiFileText />}
-                    onClick={() => handleJournalAnalysisExport('csv')}
-                  >
-                    Export CSV
-                  </Button>
-                </>
-              )}
-            </HStack>
-            <Button variant="ghost" onClick={() => setSSOTJAOpen(false)}>
               Close
             </Button>
           </ModalFooter>

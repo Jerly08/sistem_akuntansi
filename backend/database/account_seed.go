@@ -20,6 +20,13 @@ func SeedAccounts(db *gorm.DB) error {
 		{Code: "1102", Name: "BANK", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: true, IsActive: true, Balance: 0},
 		{Code: "1200", Name: "ACCOUNTS RECEIVABLE", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
 		{Code: "1201", Name: "PIUTANG USAHA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		
+		// Tax Prepaid Accounts (Prepaid taxes/Input VAT)
+		{Code: "1114", Name: "PPh 21 DIBAYAR DIMUKA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1115", Name: "PPh 23 DIBAYAR DIMUKA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "1240", Name: "PPN MASUKAN", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		
+		// Inventory
 		{Code: "1301", Name: "PERSEDIAAN BARANG DAGANGAN", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 		{Code: "1500", Name: "FIXED ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 2, IsHeader: true, IsActive: true},
@@ -32,8 +39,8 @@ func SeedAccounts(db *gorm.DB) error {
 		{Code: "2000", Name: "LIABILITIES", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 1, IsHeader: true, IsActive: true},
 		{Code: "2100", Name: "CURRENT LIABILITIES", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 2, IsHeader: true, IsActive: true},
 		{Code: "2101", Name: "UTANG USAHA", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-		{Code: "1240", Name: "PPN MASUKAN", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "2103", Name: "PPN KELUARAN", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "2104", Name: "PPh YANG DIPOTONG", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 		// EQUITY (3xxx)
 		{Code: "3000", Name: "EQUITY", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 1, IsHeader: true, IsActive: true},
@@ -59,66 +66,59 @@ func SeedAccounts(db *gorm.DB) error {
 	// Set parent relationships based on account hierarchy
 	accountMap := make(map[string]uint)
 
-	// First pass: create accounts to get IDs
+	// First pass: create accounts to get IDs (using atomic FirstOrCreate)
 	for _, account := range accounts {
-		var existingAccounts []models.Account
+		var existingAccount models.Account
 		
-		// Check for ALL accounts with this code (case-insensitive)
-		result := db.Where("LOWER(code) = LOWER(?) AND deleted_at IS NULL", account.Code).Find(&existingAccounts)
+		// Use FirstOrCreate for atomic operation (prevents race conditions)
+		result := db.Where("code = ? AND deleted_at IS NULL", account.Code).
+			Assign(models.Account{
+				Name:        account.Name,
+				Type:        account.Type,
+				Category:    account.Category,
+				Level:       account.Level,
+				IsHeader:    account.IsHeader,
+				IsActive:    account.IsActive,
+				Description: account.Description,
+			}).
+			FirstOrCreate(&existingAccount, models.Account{
+				Code:        account.Code,
+				Name:        account.Name,
+				Type:        account.Type,
+				Category:    account.Category,
+				Level:       account.Level,
+				IsHeader:    account.IsHeader,
+				IsActive:    account.IsActive,
+				Balance:     account.Balance,
+				Description: account.Description,
+			})
 
-		if result.Error != nil && result.Error != gorm.ErrRecordNotFound {
-			return fmt.Errorf("failed to check existing account %s: %v", account.Code, result.Error)
+		if result.Error != nil {
+			// Check if it's a duplicate/unique constraint error
+			if strings.Contains(result.Error.Error(), "duplicate") || 
+			   strings.Contains(result.Error.Error(), "unique") {
+				// Constraint violation - account was created by another process
+				// Try to fetch it
+				log.Printf("⚠️  Account %s already exists (concurrent creation), fetching...", account.Code)
+				if err := db.Where("code = ? AND deleted_at IS NULL", account.Code).First(&existingAccount).Error; err != nil {
+					return fmt.Errorf("failed to fetch existing account %s: %v", account.Code, err)
+				}
+				accountMap[account.Code] = existingAccount.ID
+				log.Printf("ℹ️  Using existing account: %s - %s (ID: %d)", account.Code, existingAccount.Name, existingAccount.ID)
+				continue
+			}
+			return fmt.Errorf("failed to seed account %s: %v", account.Code, result.Error)
 		}
 
-		if len(existingAccounts) == 0 {
-			// Account doesn't exist, create it
-			if err := db.Create(&account).Error; err != nil {
-				// Check if error is due to unique constraint violation
-				if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
-					log.Printf("⚠️  Account %s already exists (caught by constraint), skipping creation", account.Code)
-					// Try to find it again
-					var foundAccount models.Account
-					if err := db.Where("LOWER(code) = LOWER(?)", account.Code).First(&foundAccount).Error; err == nil {
-						accountMap[account.Code] = foundAccount.ID
-					}
-					continue
-				}
-				return fmt.Errorf("failed to create account %s: %v", account.Code, err)
-			}
+		// Check if account was created or already existed
+		if result.RowsAffected > 0 {
 			log.Printf("✅ Created new account: %s - %s", account.Code, account.Name)
-			accountMap[account.Code] = account.ID
-		} else if len(existingAccounts) == 1 {
-			// Account exists, update it but PRESERVE EXISTING BALANCE
-			existingAccount := existingAccounts[0]
-			log.Printf("🔒 Preserving balance for account %s (%s): %.2f", existingAccount.Code, existingAccount.Name, existingAccount.Balance)
-			existingAccount.Name = account.Name
-			existingAccount.Type = account.Type
-			existingAccount.Category = account.Category
-			existingAccount.Level = account.Level
-			existingAccount.IsHeader = account.IsHeader
-			existingAccount.IsActive = account.IsActive
-			existingAccount.Description = account.Description
-			// REMOVED: existingAccount.Balance = account.Balance (preserving existing balances)
-
-			if err := db.Save(&existingAccount).Error; err != nil {
-				return fmt.Errorf("failed to update account %s: %v", account.Code, err)
-			}
-			accountMap[account.Code] = existingAccount.ID
 		} else {
-			// Multiple accounts with same code found - this should not happen!
-			log.Printf("⚠️  WARNING: Found %d accounts with code %s! Using the oldest one.", len(existingAccounts), account.Code)
-			// Use the oldest account (lowest ID)
-			var oldestAccount models.Account
-			oldestID := uint(0)
-			for _, acc := range existingAccounts {
-				if oldestID == 0 || acc.ID < oldestID {
-					oldestID = acc.ID
-					oldestAccount = acc
-				}
-			}
-			accountMap[account.Code] = oldestAccount.ID
-			log.Printf("   Using account ID %d for code %s", oldestAccount.ID, account.Code)
+			// Account already existed - preserve its existing balance
+			log.Printf("🔒 Preserving balance for account %s (%s): %.2f", existingAccount.Code, existingAccount.Name, existingAccount.Balance)
 		}
+		
+		accountMap[account.Code] = existingAccount.ID
 	}
 
 	// Define parent-child relationships
@@ -128,6 +128,9 @@ func SeedAccounts(db *gorm.DB) error {
 		"1102": "1100", // Bank -> CURRENT ASSETS
 		"1200": "1100", // ACCOUNTS RECEIVABLE -> CURRENT ASSETS
 		"1201": "1200", // Piutang Usaha -> ACCOUNTS RECEIVABLE
+		"1114": "1200", // PPh 21 Dibayar Dimuka -> ACCOUNTS RECEIVABLE
+		"1115": "1200", // PPh 23 Dibayar Dimuka -> ACCOUNTS RECEIVABLE
+		"1240": "1100", // PPN Masukan -> CURRENT ASSETS
 		"1301": "1100", // Persediaan Barang Dagangan -> CURRENT ASSETS
 		"1500": "1000", // FIXED ASSETS -> ASSETS
 		"1501": "1500", // Peralatan Kantor -> FIXED ASSETS
@@ -136,8 +139,8 @@ func SeedAccounts(db *gorm.DB) error {
 		"1509": "1500", // TRUK -> FIXED ASSETS
 		"2100": "2000", // CURRENT LIABILITIES -> LIABILITIES
 		"2101": "2100", // Utang Usaha -> CURRENT LIABILITIES
-		"1240": "1100", // PPN Masukan -> CURRENT ASSETS
 		"2103": "2100", // PPN Keluaran -> CURRENT LIABILITIES
+		"2104": "2100", // PPh Yang Dipotong -> CURRENT LIABILITIES
 		"3101": "3000", // Modal Pemilik -> EQUITY
 		"3201": "3000", // Laba Ditahan -> EQUITY
 		"4101": "4000", // Pendapatan Penjualan -> REVENUE
@@ -180,6 +183,26 @@ func FixAccountHierarchies(db *gorm.DB) error {
 			Code:        "2103",
 			ParentCode:  "2100",
 			Description: "Fix PPN Keluaran (LIABILITY) to be under CURRENT LIABILITIES",
+		},
+		{
+			Code:        "1240",
+			ParentCode:  "1100",
+			Description: "Fix PPN Masukan (ASSET) to be under CURRENT ASSETS",
+		},
+		{
+			Code:        "1114",
+			ParentCode:  "1200",
+			Description: "Fix PPh 21 Dibayar Dimuka to be under ACCOUNTS RECEIVABLE",
+		},
+		{
+			Code:        "1115",
+			ParentCode:  "1200",
+			Description: "Fix PPh 23 Dibayar Dimuka to be under ACCOUNTS RECEIVABLE",
+		},
+		{
+			Code:        "2104",
+			ParentCode:  "2100",
+			Description: "Fix PPh Yang Dipotong to be under CURRENT LIABILITIES",
 		},
 	}
 	

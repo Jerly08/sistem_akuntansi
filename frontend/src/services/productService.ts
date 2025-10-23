@@ -12,6 +12,7 @@ export interface Product {
   model?: string;
   unit: string;
   purchase_price: number;
+  cost_price: number; // ✅ ADDED: Harga Pokok (COGS calculation base)
   sale_price: number;
   pricing_tier?: string;
   stock: number;

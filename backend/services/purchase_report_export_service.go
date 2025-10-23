@@ -80,6 +80,49 @@ func (s *PurchaseReportExportService) ExportToCSV(data *PurchaseReportData, user
 		w.Write([]string{})
 	}
 
+	// Items Purchased section
+	hasItems := false
+	for _, v := range data.PurchasesByVendor {
+		if len(v.Items) > 0 {
+			hasItems = true
+			break
+		}
+	}
+	
+	if hasItems {
+		w.Write([]string{"Items Purchased"})
+		w.Write([]string{"Vendor", "Product Code", "Product Name", "Quantity", "Unit", "Unit Price", "Total Price", "Purchase Date", "Invoice"})
+		
+		for _, vendor := range data.PurchasesByVendor {
+			if len(vendor.Items) == 0 {
+				continue
+			}
+			
+			for _, item := range vendor.Items {
+				w.Write([]string{
+					vendor.VendorName,
+					item.ProductCode,
+					item.ProductName,
+					fmt.Sprintf("%.2f", item.Quantity),
+					item.Unit,
+					fmt.Sprintf("%.2f", item.UnitPrice),
+					fmt.Sprintf("%.2f", item.TotalPrice),
+					item.PurchaseDate.Format("2006-01-02"),
+					item.InvoiceNumber,
+				})
+			}
+			
+			// Vendor subtotal
+			w.Write([]string{
+				fmt.Sprintf("Subtotal (%s)", vendor.VendorName),
+				"", "", "", "", "",
+				fmt.Sprintf("%.2f", vendor.TotalAmount),
+				"", "",
+			})
+		}
+		w.Write([]string{})
+	}
+
 	w.Flush()
 	if err := w.Error(); err != nil {
 		return nil, fmt.Errorf("failed to write CSV: %v", err)
@@ -180,46 +223,153 @@ func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData, user
 	pdf.Ln(10)
 
 	// Summary block with localization
-	pdf.SetFont("Arial", "B", 12)
-	pdf.Cell(0, 8, utils.T("summary", language))
+	pdf.SetFont("Arial", "B", 11)
+	pdf.Cell(contentW, 6, utils.T("summary", language))
+	pdf.Ln(7)
+	
+	pdf.SetFont("Arial", "", 9)
+	pdf.SetFillColor(245, 245, 245) // Light gray background for better visibility
+	
+	// Summary items dengan background
+	summaryItems := []struct {
+		label string
+		value string
+	}{
+		{utils.T("total_purchases", language), fmt.Sprintf("%d", data.TotalPurchases)},
+		{utils.T("completed_purchases", language), fmt.Sprintf("%d", data.CompletedPurchases)},
+		{utils.T("total_amount", language), formatRupiahSimple(data.TotalAmount)},
+		{utils.T("total_paid", language), formatRupiahSimple(data.TotalPaid)},
+		{utils.T("outstanding_payables", language), formatRupiahSimple(data.OutstandingPayables)},
+	}
+	
+	for _, item := range summaryItems {
+		pdf.CellFormat(contentW*0.6, 6, item.label, "1", 0, "L", true, 0, "")
+		pdf.CellFormat(contentW*0.4, 6, item.value, "1", 1, "R", true, 0, "")
+	}
+	
 	pdf.Ln(8)
-	pdf.SetFont("Arial", "", 10)
-	pdf.CellFormat(90, 6, utils.T("total_purchases", language), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(90, 6, fmt.Sprintf("%d", data.TotalPurchases), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, utils.T("completed_purchases", language), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(90, 6, fmt.Sprintf("%d", data.CompletedPurchases), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, utils.T("total_amount", language), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(90, 6, formatRupiahSimple(data.TotalAmount), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, utils.T("total_paid", language), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(90, 6, formatRupiahSimple(data.TotalPaid), "1", 1, "R", false, 0, "")
-	pdf.CellFormat(90, 6, utils.T("outstanding_payables", language), "1", 0, "L", false, 0, "")
-	pdf.CellFormat(90, 6, formatRupiahSimple(data.OutstandingPayables), "1", 1, "R", false, 0, "")
-	pdf.Ln(6)
 
 	// Top vendors table with localization (limit to fit one page)
 	if len(data.PurchasesByVendor) > 0 {
-		pdf.SetFont("Arial", "B", 12)
-		pdf.Cell(0, 8, utils.T("top_vendors", language))
+		pdf.SetFont("Arial", "B", 11)
+		pdf.Cell(contentW, 6, utils.T("top_vendors", language))
 		pdf.Ln(8)
-		pdf.SetFont("Arial", "B", 9)
-		pdf.SetFillColor(220, 220, 220)
-		pdf.CellFormat(60, 7, utils.T("vendor", language), "1", 0, "L", true, 0, "")
-		pdf.CellFormat(25, 7, "Orders", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(35, 7, "Amount", "1", 0, "R", true, 0, "")
-		pdf.CellFormat(35, 7, "Paid", "1", 0, "R", true, 0, "")
-		pdf.CellFormat(35, 7, "Outstanding", "1", 1, "R", true, 0, "")
-		pdf.SetFont("Arial", "", 9)
+		
+		// Table header dengan background yang lebih jelas
+		pdf.SetFont("Arial", "B", 8)
+		pdf.SetFillColor(245, 245, 245) // Sama seperti sales report
+		pdf.CellFormat(60, 6, utils.T("vendor", language), "1", 0, "L", true, 0, "")
+		pdf.CellFormat(25, 6, utils.T("orders", language), "1", 0, "R", true, 0, "")
+		pdf.CellFormat(35, 6, utils.T("amount", language), "1", 0, "R", true, 0, "")
+		pdf.CellFormat(35, 6, utils.T("paid", language), "1", 0, "R", true, 0, "")
+		pdf.CellFormat(35, 6, utils.T("outstanding", language), "1", 1, "R", true, 0, "")
+		
+		pdf.SetFont("Arial", "", 8)
 		limit := len(data.PurchasesByVendor)
-		if limit > 12 { limit = 12 }
+		if limit > 20 { limit = 20 }
 		for i := 0; i < limit; i++ {
 			v := data.PurchasesByVendor[i]
 			name := v.VendorName
-			if len(name) > 30 { name = name[:27] + "..." }
+			if len(name) > 35 { name = name[:32] + "..." }
 			pdf.CellFormat(60, 6, name, "1", 0, "L", false, 0, "")
-			pdf.CellFormat(25, 6, fmt.Sprintf("%d", v.TotalPurchases), "1", 0, "C", false, 0, "")
+			pdf.CellFormat(25, 6, fmt.Sprintf("%d", v.TotalPurchases), "1", 0, "R", false, 0, "")
 			pdf.CellFormat(35, 6, formatRupiahSimple(v.TotalAmount), "1", 0, "R", false, 0, "")
 			pdf.CellFormat(35, 6, formatRupiahSimple(v.TotalPaid), "1", 0, "R", false, 0, "")
 			pdf.CellFormat(35, 6, formatRupiahSimple(v.Outstanding), "1", 1, "R", false, 0, "")
+		}
+		pdf.Ln(6)
+	}
+
+	// Items Purchased section - grouped by vendor
+	hasItems := false
+	for _, v := range data.PurchasesByVendor {
+		if len(v.Items) > 0 {
+			hasItems = true
+			break
+		}
+	}
+	
+	if hasItems {
+		// Check if we need a new page for items section
+		_, pageH := pdf.GetPageSize()
+		_, y := pdf.GetXY()
+		if y > pageH-80 {
+			pdf.AddPage()
+		}
+		
+		pdf.SetFont("Arial", "B", 12)
+		pdf.Cell(0, 8, utils.T("items_purchased", language))
+		pdf.Ln(10)
+		
+		// Loop through vendors and their items
+		for _, vendor := range data.PurchasesByVendor {
+			if len(vendor.Items) == 0 {
+				continue
+			}
+			
+			// Check if we need a new page for this vendor
+			_, y := pdf.GetXY()
+			if y > pageH-60 {
+				pdf.AddPage()
+			}
+			
+			// Vendor name header - menggunakan warna yang sama dengan sales customer header
+			pdf.SetFont("Arial", "B", 10)
+			pdf.SetFillColor(255, 250, 240) // Light orange/beige - mirip customer di sales
+			vendorName := vendor.VendorName
+			if len(vendorName) > 40 {
+				vendorName = vendorName[:37] + "..."
+			}
+			pdf.CellFormat(140, 7, vendorName, "1", 0, "L", true, 0, "")
+			pdf.CellFormat(50, 7, fmt.Sprintf("%d items", len(vendor.Items)), "1", 1, "R", true, 0, "")
+			
+			// Items table header
+			pdf.SetFont("Arial", "B", 8)
+			pdf.SetFillColor(245, 245, 245)
+			pdf.CellFormat(70, 6, utils.T("product", language), "1", 0, "L", true, 0, "")
+			pdf.CellFormat(20, 6, utils.T("qty", language), "1", 0, "R", true, 0, "")
+			pdf.CellFormat(35, 6, utils.T("unit_price", language), "1", 0, "R", true, 0, "")
+			pdf.CellFormat(35, 6, utils.T("total", language), "1", 0, "R", true, 0, "")
+			pdf.CellFormat(30, 6, utils.T("date", language), "1", 1, "C", true, 0, "")
+			
+			// Items rows
+			pdf.SetFont("Arial", "", 8)
+			for _, item := range vendor.Items {
+				// Check if we need a new page
+				_, y := pdf.GetXY()
+				if y > pageH-25 {
+					pdf.AddPage()
+					// Reprint header
+					pdf.SetFont("Arial", "B", 8)
+					pdf.SetFillColor(245, 245, 245)
+					pdf.CellFormat(70, 6, utils.T("product", language), "1", 0, "L", true, 0, "")
+					pdf.CellFormat(20, 6, utils.T("qty", language), "1", 0, "R", true, 0, "")
+					pdf.CellFormat(35, 6, utils.T("unit_price", language), "1", 0, "R", true, 0, "")
+					pdf.CellFormat(35, 6, utils.T("total", language), "1", 0, "R", true, 0, "")
+					pdf.CellFormat(30, 6, utils.T("date", language), "1", 1, "C", true, 0, "")
+					pdf.SetFont("Arial", "", 8)
+				}
+				
+				productName := item.ProductName
+				if len(productName) > 35 {
+					productName = productName[:32] + "..."
+				}
+				
+				qtyStr := fmt.Sprintf("%.0f %s", item.Quantity, item.Unit)
+				
+				pdf.CellFormat(70, 6, productName, "1", 0, "L", false, 0, "")
+				pdf.CellFormat(20, 6, qtyStr, "1", 0, "R", false, 0, "")
+				pdf.CellFormat(35, 6, formatRupiahSimple(item.UnitPrice), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(35, 6, formatRupiahSimple(item.TotalPrice), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(30, 6, item.PurchaseDate.Format("02/01/2006"), "1", 1, "C", false, 0, "")
+			}
+			
+			// Vendor subtotal - warna yang sama dengan customer subtotal
+			pdf.SetFont("Arial", "B", 9)
+			pdf.SetFillColor(255, 250, 240) // Sama dengan vendor header
+			pdf.CellFormat(125, 6, fmt.Sprintf("Subtotal (%s)", vendor.VendorName), "1", 0, "R", true, 0, "")
+			pdf.CellFormat(65, 6, formatRupiahSimple(vendor.TotalAmount), "1", 1, "R", true, 0, "")
+			pdf.Ln(4)
 		}
 	}
 

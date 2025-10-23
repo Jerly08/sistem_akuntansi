@@ -44,7 +44,7 @@ import {
   Input
 } from '@chakra-ui/react';
 import { formatCurrency } from '../../utils/formatters';
-import { SSOTPurchaseReportData, VendorPurchaseSummary } from '../../services/ssotPurchaseReportService';
+import { SSOTPurchaseReportData, VendorPurchaseSummary, PurchaseItemDetail } from '../../services/ssotPurchaseReportService';
 
 interface PurchaseReportModalProps {
   isOpen: boolean;
@@ -336,40 +336,34 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
 
               {renderSummaryMetrics()}
               
-              {/* Outstanding Payables Status */}
-              {data.outstanding_payables !== undefined && (
-                <Card>
-                  <CardBody>
-                    <Flex justify="space-between" align="center" mb={3}>
-                      <Heading size="md" color={textColor}>
-                        Payables Status
-                      </Heading>
-                      <Text fontWeight="bold" fontSize="lg" color={data.outstanding_payables < 0 ? 'green.600' : 'orange.600'}>
-                        {formatCurrency(Math.abs(data.outstanding_payables))}
-                      </Text>
-                    </Flex>
-                    
-                    <SimpleGrid columns={[1, 3]} spacing={4}>
-                      <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                        <Text fontSize="sm" color={secondaryTextColor}>Status</Text>
-                        <Badge colorScheme={data.outstanding_payables < 0 ? 'green' : 'orange'}>
-                          {data.outstanding_payables < 0 ? 'Overpaid (Credit)' : 'Outstanding Amount'}
-                        </Badge>
-                      </Box>
-                      <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                        <Text fontSize="sm" color={secondaryTextColor}>Total Paid</Text>
-                        <Text fontWeight="medium" color="green.600">
-                          {formatCurrency(data.total_paid || 0)}
-                        </Text>
-                      </Box>
-                      <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                        <Text fontSize="sm" color={secondaryTextColor}>Report Type</Text>
-                        <Text fontWeight="medium">SSOT Integration</Text>
-                      </Box>
-                    </SimpleGrid>
-                  </CardBody>
-                </Card>
-              )}
+              {/* Period Summary - matching Sales Summary style */}
+              <Card>
+                <CardBody>
+                  <Flex justify="space-between" align="center" mb={3}>
+                    <Heading size="md" color={textColor}>
+                      Purchase Performance
+                    </Heading>
+                    <Text fontWeight="bold" fontSize="lg" color="green.600">
+                      {formatCurrency(data.total_amount || 0)}
+                    </Text>
+                  </Flex>
+                  
+                  <SimpleGrid columns={[1, 3]} spacing={4}>
+                    <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
+                      <Text fontSize="sm" color={secondaryTextColor}>Period</Text>
+                      <Text fontWeight="medium">{startDate} to {endDate}</Text>
+                    </Box>
+                    <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
+                      <Text fontSize="sm" color={secondaryTextColor}>Report Type</Text>
+                      <Text fontWeight="medium">SSOT Integration</Text>
+                    </Box>
+                    <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
+                      <Text fontSize="sm" color={secondaryTextColor}>Status</Text>
+                      <Badge colorScheme="green">Active</Badge>
+                    </Box>
+                  </SimpleGrid>
+                </CardBody>
+              </Card>
 
               {/* Top Vendors Section */}
               {data.purchases_by_vendor && data.purchases_by_vendor.length > 0 && (
@@ -408,7 +402,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                 </Box>
               )}
 
-              {/* Purchases by Vendor Table */}
+              {/* Purchases by Vendor Table - matching Sales Summary style */}
               {data.purchases_by_vendor && data.purchases_by_vendor.length > 0 && (
                 <Box>
                   <Heading size="sm" mb={4} color={textColor}>
@@ -417,11 +411,10 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                   
                   {/* Vendor Table Header */}
                   <Box bg="orange.50" p={3} borderRadius="md" mb={2} border="1px solid" borderColor="orange.200">
-                    <SimpleGrid columns={[1, 4]} spacing={2} fontSize="sm" fontWeight="bold" color="orange.800">
+                    <SimpleGrid columns={[1, 3]} spacing={2} fontSize="sm" fontWeight="bold" color="orange.800">
                       <Text>Vendor</Text>
                       <Text textAlign="right">Total Amount</Text>
                       <Text textAlign="right">Purchases</Text>
-                      <Text textAlign="right">Outstanding</Text>
                     </SimpleGrid>
                   </Box>
                   
@@ -429,25 +422,17 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                   <VStack spacing={2} align="stretch" maxH="400px" overflow="auto">
                     {data.purchases_by_vendor.map((vendor: VendorPurchaseSummary, index: number) => (
                       <Box key={index} border="1px solid" borderColor="gray.200" borderRadius="md" p={4} bg="white" _hover={{ bg: 'gray.50' }}>
-                        <SimpleGrid columns={[1, 4]} spacing={2} fontSize="sm">
+                        <SimpleGrid columns={[1, 3]} spacing={2} fontSize="sm">
                           <VStack align="start" spacing={1}>
                             <Text fontWeight="bold" fontSize="md" color="gray.800">
                               {vendor.vendor_name || 'Unnamed Vendor'}
                             </Text>
                           </VStack>
-                          <Text textAlign="right" fontSize="sm" fontWeight="bold" color="orange.600">
+                          <Text textAlign="right" fontSize="sm" fontWeight="bold" color="green.600">
                             {formatCurrency(vendor.total_amount || 0)}
                           </Text>
                           <Text textAlign="right" fontSize="sm" fontWeight="medium" color="purple.600">
                             {vendor.total_purchases || 0}
-                          </Text>
-                          <Text textAlign="right" fontSize="sm" fontWeight="medium" color={vendor.outstanding > 0 ? 'red.600' : vendor.outstanding < 0 ? 'green.600' : 'gray.400'}>
-                            {vendor.outstanding !== 0 ? formatCurrency(Math.abs(vendor.outstanding)) : '-'}
-                            {vendor.outstanding < 0 && (
-                              <Text fontSize="xs" color="green.500" display="block">
-                                (Credit)
-                              </Text>
-                            )}
                           </Text>
                         </SimpleGrid>
                       </Box>
@@ -456,79 +441,94 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                 </Box>
               )}
 
-              {/* Payment Analysis */}
-              {data.payment_analysis && (
-                <Card>
-                  <CardHeader>
-                    <Heading size="sm">Payment Analysis</Heading>
-                  </CardHeader>
-                  <CardBody>
-                    <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                      <Box textAlign="center">
-                        <Text fontSize="sm" color={secondaryTextColor}>Cash Purchases</Text>
-                        <Text fontSize="2xl" fontWeight="bold" color="green.600">
-                          {data.payment_analysis.cash_purchases || 0}
-                        </Text>
-                        <Text fontSize="sm" color="green.600">
-                          {formatCurrency(data.payment_analysis.cash_amount || 0)}
-                        </Text>
-                      </Box>
-                      <Box textAlign="center">
-                        <Text fontSize="sm" color={secondaryTextColor}>Credit Purchases</Text>
-                        <Text fontSize="2xl" fontWeight="bold" color="orange.600">
-                          {data.payment_analysis.credit_purchases || 0}
-                        </Text>
-                        <Text fontSize="sm" color="orange.600">
-                          {formatCurrency(data.payment_analysis.credit_amount || 0)}
-                        </Text>
-                      </Box>
-                      <Box textAlign="center">
-                        <Text fontSize="sm" color={secondaryTextColor}>Cash Percentage</Text>
-                        <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-                          {(data.payment_analysis.cash_percentage || 0).toFixed(1)}%
-                        </Text>
-                      </Box>
-                      <Box textAlign="center">
-                        <Text fontSize="sm" color={secondaryTextColor}>Average Order Value</Text>
-                        <Text fontSize="2xl" fontWeight="bold" color="purple.600">
-                          {formatCurrency(data.payment_analysis.average_order_value || 0)}
-                        </Text>
-                      </Box>
-                    </SimpleGrid>
-                  </CardBody>
-                </Card>
+              {/* Purchase Items Detail */}
+              {data.purchases_by_vendor && data.purchases_by_vendor.some(v => v.items && v.items.length > 0) && (
+                <Box>
+                  <Heading size="sm" mb={4} color={textColor}>
+                    Items Purchased
+                  </Heading>
+                  
+                  <VStack spacing={4} align="stretch">
+                    {data.purchases_by_vendor
+                      .filter(vendor => vendor.items && vendor.items.length > 0)
+                      .map((vendor: VendorPurchaseSummary, vendorIndex: number) => (
+                        <Card key={vendorIndex}>
+                          <CardHeader bg="orange.50" py={3}>
+                            <HStack justify="space-between">
+                              <Heading size="xs" color="orange.800">
+                                {vendor.vendor_name}
+                              </Heading>
+                              <Badge colorScheme="orange">
+                                {vendor.items?.length || 0} items
+                              </Badge>
+                            </HStack>
+                          </CardHeader>
+                          <CardBody>
+                            {/* Items Table Header */}
+                            <Box bg="gray.50" p={2} borderRadius="md" mb={2}>
+                              <SimpleGrid columns={[1, 5]} spacing={2} fontSize="xs" fontWeight="bold" color="gray.700">
+                                <Text>Product</Text>
+                                <Text textAlign="right">Qty</Text>
+                                <Text textAlign="right">Unit Price</Text>
+                                <Text textAlign="right">Total</Text>
+                                <Text textAlign="center">Date</Text>
+                              </SimpleGrid>
+                            </Box>
+                            
+                            {/* Items Rows */}
+                            <VStack spacing={1} align="stretch">
+                              {vendor.items?.map((item: PurchaseItemDetail, itemIndex: number) => (
+                                <Box 
+                                  key={itemIndex} 
+                                  borderBottom="1px solid" 
+                                  borderColor="gray.100" 
+                                  py={2}
+                                  _hover={{ bg: 'gray.50' }}
+                                >
+                                  <SimpleGrid columns={[1, 5]} spacing={2} fontSize="sm">
+                                    <VStack align="start" spacing={0}>
+                                      <Text fontWeight="medium" color="gray.800">
+                                        {item.product_name}
+                                      </Text>
+                                      <Text fontSize="xs" color="gray.500">
+                                        {item.product_code}
+                                      </Text>
+                                    </VStack>
+                                    <Text textAlign="right" color="purple.600">
+                                      {item.quantity} {item.unit}
+                                    </Text>
+                                    <Text textAlign="right" color="gray.700">
+                                      {formatCurrency(item.unit_price)}
+                                    </Text>
+                                    <Text textAlign="right" fontWeight="bold" color="green.600">
+                                      {formatCurrency(item.total_price)}
+                                    </Text>
+                                    <Text textAlign="center" fontSize="xs" color="gray.600">
+                                      {new Date(item.purchase_date).toLocaleDateString('id-ID')}
+                                    </Text>
+                                  </SimpleGrid>
+                                </Box>
+                              ))}
+                            </VStack>
+                            
+                            {/* Vendor Total */}
+                            <Box mt={3} pt={3} borderTop="2px solid" borderColor="orange.200">
+                              <Flex justify="space-between" align="center">
+                                <Text fontWeight="bold" color="gray.700">
+                                  Subtotal ({vendor.vendor_name})
+                                </Text>
+                                <Text fontWeight="bold" fontSize="lg" color="orange.600">
+                                  {formatCurrency(vendor.total_amount)}
+                                </Text>
+                              </Flex>
+                            </Box>
+                          </CardBody>
+                        </Card>
+                      ))}
+                  </VStack>
+                </Box>
               )}
 
-              {/* Tax Analysis */}
-              {data.tax_analysis && (
-                <Card>
-                  <CardHeader>
-                    <Heading size="sm">Tax Analysis</Heading>
-                  </CardHeader>
-                  <CardBody>
-                    <SimpleGrid columns={[1, 3]} spacing={4}>
-                      <Box textAlign="center">
-                        <Text fontSize="sm" color={secondaryTextColor}>Taxable Amount</Text>
-                        <Text fontSize="2xl" fontWeight="bold" color="blue.600">
-                          {formatCurrency(data.tax_analysis.total_taxable_amount || 0)}
-                        </Text>
-                      </Box>
-                      <Box textAlign="center">
-                        <Text fontSize="sm" color={secondaryTextColor}>Tax Amount</Text>
-                        <Text fontSize="2xl" fontWeight="bold" color="purple.600">
-                          {formatCurrency(data.tax_analysis.total_tax_amount || 0)}
-                        </Text>
-                      </Box>
-                      <Box textAlign="center">
-                        <Text fontSize="sm" color={secondaryTextColor}>Average Tax Rate</Text>
-                        <Text fontSize="2xl" fontWeight="bold" color="orange.600">
-                          {(data.tax_analysis.average_tax_rate || 0).toFixed(2)}%
-                        </Text>
-                      </Box>
-                    </SimpleGrid>
-                  </CardBody>
-                </Card>
-              )}
             </VStack>
           )}
         </ModalBody>

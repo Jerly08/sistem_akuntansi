@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"time"
 	"app-sistem-akuntansi/models"
 	"github.com/shopspring/decimal"
@@ -296,6 +297,8 @@ type PDFServiceInterface interface {
 	GenerateSSOTProfitLossPDF(ssotData interface{}) ([]byte, error)
 	GenerateJournalAnalysisPDF(journalData interface{}, startDate, endDate string) ([]byte, error)
 	GenerateSalesSummaryPDF(summary interface{}) ([]byte, error)
+	GenerateCustomerHistoryPDF(historyData interface{}) ([]byte, error)
+	GenerateVendorHistoryPDF(historyData interface{}) ([]byte, error)
 	// Language returns current language based on settings
 	Language() string
 }
@@ -542,6 +545,25 @@ func (s *CashBankSSOTJournalAdapter) createActualOpeningBalanceJournalEntry(tx *
 	if err := tx.Create(creditLine).Error; err != nil {
 		return nil, fmt.Errorf("failed to create opening balance credit line: %v", err)
 	}
+	
+	// ✅ FIX: Update accounts.balance since journal is POSTED
+	// Update Cash/Bank Account (Debit = increase for Asset)
+	if err := tx.Model(&models.Account{}).
+		Where("id = ?", cashBank.AccountID).
+		UpdateColumn("balance", gorm.Expr("balance + ?", request.Amount.InexactFloat64())).Error; err != nil {
+		return nil, fmt.Errorf("failed to update cash/bank account balance: %v", err)
+	}
+	
+	// Update Equity Account (Credit = increase for Equity)
+	if err := tx.Model(&models.Account{}).
+		Where("id = ?", equityID).
+		UpdateColumn("balance", gorm.Expr("balance + ?", request.Amount.InexactFloat64())).Error; err != nil {
+		return nil, fmt.Errorf("failed to update equity account balance: %v", err)
+	}
+	
+	log.Printf("✅ Updated accounts.balance: Cash/Bank Account %d +%.2f, Equity Account %d +%.2f", 
+		cashBank.AccountID, request.Amount.InexactFloat64(), equityID, request.Amount.InexactFloat64())
+	
 	return journal, nil
 }
 

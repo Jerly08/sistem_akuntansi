@@ -16,6 +16,7 @@ type SSOTReportIntegrationController struct {
 	integrationService *services.SSOTReportIntegrationService
 	pdfService         services.PDFServiceInterface
 	settingsService    *services.SettingsService
+	salesExportService *services.SalesReportExportService
 }
 
 // NewSSOTReportIntegrationController creates a new SSOT report integration controller
@@ -24,6 +25,7 @@ func NewSSOTReportIntegrationController(integrationService *services.SSOTReportI
 		integrationService: integrationService,
 		pdfService:         services.NewPDFService(db),
 		settingsService:    services.NewSettingsService(db),
+		salesExportService: services.NewSalesReportExportService(db),
 	}
 }
 
@@ -135,8 +137,8 @@ func (c *SSOTReportIntegrationController) GetSSOTSalesSummary(ctx *gin.Context) 
 			"data":   salesSummary,
 		})
 case "pdf":
-		// Generate PDF using PDF service
-		pdfBytes, err := c.pdfService.GenerateSalesSummaryPDF(salesSummary)
+		// Generate PDF using Sales Export service (similar to Purchase Report)
+		pdfBytes, err := c.salesExportService.ExportToPDF(salesSummary, 0)
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"status":  "error",

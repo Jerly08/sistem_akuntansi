@@ -369,13 +369,23 @@ class AccountService {
     return response.blob();
   }
 
-  // Helper: Format balance for display with all accounts as positive values
+  // Helper: Format balance for display with proper negative value detection
   formatBalance(balance: number, currency = 'IDR', accountCode?: string, accountType?: string): string {
-    // 🎯 CRITICAL: Display all accounts as positive for user clarity per accounting principles
-    // Use absolute value to ensure all balances are displayed as positive
-    const displayBalance = Math.abs(balance);
+    // ✅ FIXED: Show ACTUAL balance, including negatives for error detection
+    // For ASSET accounts (like 1301 Persediaan), negative balance = ERROR that must be visible!
+    const displayBalance = balance;
     
-    console.log(`💡 Displaying ${accountCode} as positive: ${displayBalance} (original: ${balance})`);
+    // 🚨 Log warning for negative ASSET/EXPENSE balances (unusual situation)
+    if (balance < 0 && (accountType === 'ASSET' || accountType === 'EXPENSE')) {
+      console.warn(`⚠️ WARNING: ${accountCode} (${accountType}) has NEGATIVE balance: ${balance}! This may indicate an error.`);
+    }
+    
+    // For LIABILITY/EQUITY/REVENUE, negative balance might be normal in some cases
+    if (balance < 0 && (accountType === 'LIABILITY' || accountType === 'EQUITY' || accountType === 'REVENUE')) {
+      console.log(`ℹ️ Note: ${accountCode} (${accountType}) has negative balance: ${balance}`);
+    }
+    
+    console.log(`💡 Displaying ${accountCode} balance: ${displayBalance} (type: ${accountType})`);
     
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',

@@ -41,7 +41,14 @@ func (mc *MonitoringController) GetAuditLogs(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
-	logs, total, err := middleware.GlobalAuditLogger.GetAuditLogs(uint(userID), resource, limit, offset)
+	// Convert userID to *uint (nil if 0)
+	var userIDPtr *uint
+	if userID > 0 {
+		uid := uint(userID)
+		userIDPtr = &uid
+	}
+
+	logs, total, err := middleware.GlobalAuditLogger.GetAuditLogs(userIDPtr, resource, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to retrieve audit logs",
@@ -187,7 +194,13 @@ func (mc *MonitoringController) GetUserSecuritySummary(c *gin.Context) {
 
 	// Get audit summary if available
 	if middleware.GlobalAuditLogger != nil {
-		auditLogs, total, err := middleware.GlobalAuditLogger.GetAuditLogs(uint(userID), "", 10, 0)
+		// Convert userID to *uint (nil if 0)
+		var userIDPtr *uint
+		if userID > 0 {
+			uid := uint(userID)
+			userIDPtr = &uid
+		}
+		auditLogs, total, err := middleware.GlobalAuditLogger.GetAuditLogs(userIDPtr, "", 10, 0)
 		if err == nil {
 			summary["recent_activities"] = gin.H{
 				"total_logs":     total,

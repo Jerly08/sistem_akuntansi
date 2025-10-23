@@ -87,6 +87,7 @@ export const API_ENDPOINTS = {
   INVOICE_TYPES_TOGGLE: (id: number) => `/api/v1/invoice-types/${id}/toggle`,
   INVOICE_TYPES_PREVIEW_NUMBER: '/api/v1/invoice-types/preview-number',
   INVOICE_TYPES_COUNTER_HISTORY: (id: number) => `/api/v1/invoice-types/${id}/counter-history`,
+  INVOICE_TYPES_RESET_COUNTER: (id: number) => `/api/v1/invoice-types/${id}/reset-counter`,
 
   // Sales (with /api/v1 prefix)
   SALES: '/api/v1/sales',

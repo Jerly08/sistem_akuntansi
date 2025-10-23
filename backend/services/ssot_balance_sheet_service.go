@@ -128,53 +128,18 @@ func (s *SSOTBalanceSheetService) GenerateSSOTBalanceSheet(asOfDate string) (*SS
 }
 
 // getAccountBalancesFromSSOT retrieves account balances from SSOT journal system up to a specific date
+// This version deduplicates accounts by code and aggregates their balances
 func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([]SSOTAccountBalance, error) {
-	var balances []SSOTAccountBalance
+	var rawBalances []SSOTAccountBalance
 
-	// First, get all accounts with their direct balances to ensure we capture all accounts
-	allAccountsQuery := `
+	// Get all accounts with their transaction balances from SSOT
+	// This query deduplicates by account code and sums balances
+	query := `
 		SELECT 
-			a.id as account_id,
+			MIN(a.id) as account_id,
 			a.code as account_code,
-			a.name as account_name,
-			a.type as account_type,
-			0 as debit_total,
-			0 as credit_total,
-			a.balance as net_balance
-		FROM accounts a
-		WHERE COALESCE(a.is_header, false) = false
-		  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
-		  AND a.is_active = true
-		ORDER BY a.code
-	`
-
-	if err := s.db.Raw(allAccountsQuery).Scan(&balances).Error; err != nil {
-		return nil, fmt.Errorf("error executing all accounts query: %v", err)
-	}
-
-	fmt.Printf("[DEBUG] Retrieved %d accounts with direct balances\n", len(balances))
-	
-	// Log all liability accounts for debugging
-	for _, balance := range balances {
-		if strings.ToUpper(balance.AccountType) == "LIABILITY" {
-			fmt.Printf("[DEBUG] Liability Account - ID: %d, Code: %s, Name: %s, Type: %s, Balance: %.2f\n",
-				balance.AccountID, balance.AccountCode, balance.AccountName, balance.AccountType, balance.NetBalance)
-		}
-	}
-	
-	// Create a map of accounts by ID for quick lookup
-	accountMap := make(map[uint]*SSOTAccountBalance)
-	for i := range balances {
-		accountMap[balances[i].AccountID] = &balances[i]
-	}
-
-	// Then, get transaction data from unified journal ledger
-	transactionQuery := `
-		SELECT 
-			a.id as account_id,
-			a.code as account_code,
-			a.name as account_name,
-			a.type as account_type,
+			MAX(a.name) as account_name,
+			UPPER(a.type) as account_type,
 			COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
 			COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
 			CASE 
@@ -185,120 +150,107 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([
 			END as net_balance
 		FROM accounts a
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id AND uje.status = 'POSTED' AND uje.deleted_at IS NULL AND (uje.entry_date <= ? OR uje.entry_date IS NULL)
+		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id 
+			AND uje.status = 'POSTED' 
+			AND uje.deleted_at IS NULL 
+			AND uje.entry_date <= ?
 		WHERE COALESCE(a.is_header, false) = false
 		  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
 		  AND a.is_active = true
-		GROUP BY a.id, a.code, a.name, a.type
+		GROUP BY a.code, UPPER(a.type)
+		HAVING COALESCE(SUM(ujl.debit_amount), 0) <> 0 
+		    OR COALESCE(SUM(ujl.credit_amount), 0) <> 0
+		    OR MAX(a.balance) <> 0
 		ORDER BY a.code
 	`
 
-	var transactionBalances []SSOTAccountBalance
-	if err := s.db.Raw(transactionQuery, asOfDate).Scan(&transactionBalances).Error; err != nil {
-		return nil, fmt.Errorf("error executing transaction balances query: %v", err)
-	}
-	
-	// Log transaction data for all liability accounts
-	fmt.Printf("[DEBUG] Retrieved %d accounts with transaction data\n", len(transactionBalances))
-	for _, tb := range transactionBalances {
-		if strings.ToUpper(tb.AccountType) == "LIABILITY" {
-			fmt.Printf("[DEBUG] Transaction Data - ID: %d, Code: %s, Name: %s, Type: %s, Debit: %.2f, Credit: %.2f, Net: %.2f\n",
-				tb.AccountID, tb.AccountCode, tb.AccountName, tb.AccountType, tb.DebitTotal, tb.CreditTotal, tb.NetBalance)
-		}
+	if err := s.db.Raw(query, asOfDate).Scan(&rawBalances).Error; err != nil {
+		return nil, fmt.Errorf("error executing SSOT balances query: %v", err)
 	}
 
-	// Update accounts with transaction data where available
-	// Only update accounts that have actual transaction activity
-	for _, tb := range transactionBalances {
-		// Log transaction data for UTANG USAHA account for debugging
-		if tb.AccountCode == "2101" || strings.Contains(strings.ToUpper(tb.AccountName), "UTANG") {
-			fmt.Printf("[DEBUG] Transaction data for %s (%s): Debit=%.2f, Credit=%.2f, Net=%.2f, AccountID=%d\n",
-				tb.AccountCode, tb.AccountName, tb.DebitTotal, tb.CreditTotal, tb.NetBalance, tb.AccountID)
+	fmt.Printf("[DEBUG] Retrieved %d deduplicated accounts with transaction data\n", len(rawBalances))
+	
+	// If no transaction data found, try getting direct account balances (fallback)
+	if len(rawBalances) == 0 {
+		fmt.Printf("[DEBUG] No SSOT transaction data found, trying direct account balances\n")
+		
+		directQuery := `
+			SELECT 
+				MIN(a.id) as account_id,
+				a.code as account_code,
+				MAX(a.name) as account_name,
+				UPPER(a.type) as account_type,
+				0 as debit_total,
+				0 as credit_total,
+				SUM(COALESCE(a.balance, 0)) as net_balance
+			FROM accounts a
+			WHERE COALESCE(a.is_header, false) = false
+			  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
+			  AND a.is_active = true
+			GROUP BY a.code, UPPER(a.type)
+			HAVING SUM(COALESCE(a.balance, 0)) <> 0
+			ORDER BY a.code
+		`
+		
+		if err := s.db.Raw(directQuery).Scan(&rawBalances).Error; err != nil {
+			return nil, fmt.Errorf("error executing direct balances query: %v", err)
 		}
 		
-		// Only update if the account has actual transaction activity
-		// (either debit or credit amount is non-zero)
-		if tb.DebitTotal != 0 || tb.CreditTotal != 0 {
-			if account, exists := accountMap[tb.AccountID]; exists {
-				// Log when we're updating an account with transaction data
-				if tb.AccountCode == "2101" || strings.Contains(strings.ToUpper(tb.AccountName), "UTANG") {
-					fmt.Printf("[DEBUG] Updating %s (%s) with transaction data: %.2f -> %.2f\n",
-						tb.AccountCode, tb.AccountName, account.NetBalance, tb.NetBalance)
-				}
-				account.DebitTotal = tb.DebitTotal
-				account.CreditTotal = tb.CreditTotal
-				account.NetBalance = tb.NetBalance
-			}
-		} else {
-			// If account has no transaction activity but direct balance is zero, try to calculate it
-			if account, exists := accountMap[tb.AccountID]; exists {
-				if account.NetBalance == 0 {
-					// Try to calculate balance from transactions
-					calculatedBalance, err := s.calculateAccountBalanceFromTransactions(tb.AccountID, tb.AccountType)
-					if err == nil && calculatedBalance != 0 {
-						fmt.Printf("[DEBUG] Calculated balance for %s (%s) from transactions: %.2f\n",
-							tb.AccountCode, tb.AccountName, calculatedBalance)
-						account.NetBalance = calculatedBalance
-					} else if err == nil && calculatedBalance == 0 {
-						// If still zero, try to calculate from child accounts
-						childBalance, err := s.calculateAccountBalanceFromChildren(tb.AccountID, tb.AccountType)
-						if err == nil && childBalance != 0 {
-							fmt.Printf("[DEBUG] Calculated balance for %s (%s) from children: %.2f\n",
-								tb.AccountCode, tb.AccountName, childBalance)
-							account.NetBalance = childBalance
-						}
-					}
-				}
-				
-				// Log when an account has no transaction activity
-				if tb.AccountCode == "2101" || strings.Contains(strings.ToUpper(tb.AccountName), "UTANG") {
-					fmt.Printf("[DEBUG] Account %s (%s has no transaction activity, final balance: %.2f\n",
-						tb.AccountCode, tb.AccountName, account.NetBalance)
-				}
-			}
-		}
-		// If the account has no transactions, it will retain its direct balance from the accounts table
+		fmt.Printf("[DEBUG] Retrieved %d accounts with direct balances (fallback)\n", len(rawBalances))
 	}
-
-	// If no balances found, try legacy journals fallback
-	if len(balances) == 0 {
+	
+	// If still no data, try legacy journals as last resort
+	if len(rawBalances) == 0 {
 		legacy, lerr := s.getAccountBalancesFromLegacy(asOfDate)
 		if lerr == nil && len(legacy) > 0 {
-			fmt.Printf("[DEBUG] SSOT returned no data, using legacy: %d accounts\n", len(legacy))
+			fmt.Printf("[DEBUG] Using legacy journals: %d accounts\n", len(legacy))
 			return legacy, nil
 		}
 	}
 
-	fmt.Printf("[DEBUG] Retrieved %d account balances from SSOT for balance sheet\n", len(balances))
-	
-	// Log some sample balances for debugging
-	for i, balance := range balances {
-		if i < 10 || balance.AccountCode == "2101" || strings.Contains(strings.ToUpper(balance.AccountName), "UTANG") { // Always log UTANG USAHA for debugging
-			fmt.Printf("[DEBUG] Final Account %s (%s) Type: %s, Balance: %.2f, AccountID: %d\n", 
-				balance.AccountCode, balance.AccountName, balance.AccountType, balance.NetBalance, balance.AccountID)
+	// Log all liability accounts for debugging
+	fmt.Printf("[DEBUG] === DEDUPLICATED LIABILITY ACCOUNTS ===\n")
+	for _, balance := range rawBalances {
+		if strings.ToUpper(balance.AccountType) == "LIABILITY" {
+			fmt.Printf("[DEBUG] Liability: %s - %s | Balance: %.2f | Debit: %.2f | Credit: %.2f\n",
+				balance.AccountCode, balance.AccountName, balance.NetBalance, 
+				balance.DebitTotal, balance.CreditTotal)
 		}
 	}
 	
-	return balances, nil
+	// Log sample accounts for verification
+	fmt.Printf("[DEBUG] === SAMPLE ACCOUNTS (first 10) ===\n")
+	for i, balance := range rawBalances {
+		if i < 10 {
+			fmt.Printf("[DEBUG] %s - %s | Type: %s | Balance: %.2f\n", 
+				balance.AccountCode, balance.AccountName, balance.AccountType, balance.NetBalance)
+		}
+	}
+	
+	return rawBalances, nil
 }
 	
 
 // getAccountBalancesFromAccountTable gets account balances directly from accounts.balance when SSOT data is not available
+// This version deduplicates accounts by code and aggregates their balances
 func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAccountBalance, error) {
 	var balances []SSOTAccountBalance
 	
 	query := `
 		SELECT 
-			a.id as account_id,
+			MIN(a.id) as account_id,
 			a.code as account_code,
-			a.name as account_name,
-			a.type as account_type,
+			MAX(a.name) as account_name,
+			UPPER(a.type) as account_type,
 			0 as debit_total,
 			0 as credit_total,
-			a.balance as net_balance
+			SUM(COALESCE(a.balance, 0)) as net_balance
 		FROM accounts a
 		WHERE UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
 		  AND COALESCE(a.is_header, false) = false
+		  AND a.is_active = true
+		GROUP BY a.code, UPPER(a.type)
+		HAVING SUM(COALESCE(a.balance, 0)) <> 0
 		ORDER BY a.code
 	`
 	
@@ -306,7 +258,7 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAc
 		return nil, fmt.Errorf("error executing fallback account balances query: %v", err)
 	}
 	
-	fmt.Printf("[DEBUG] Fallback method: Found %d accounts with direct balances\n", len(balances))
+	fmt.Printf("[DEBUG] Fallback method: Found %d deduplicated accounts with direct balances\n", len(balances))
 	for i, balance := range balances {
 		if i < 10 && balance.NetBalance != 0 { // Log first 10 non-zero accounts
 			fmt.Printf("[DEBUG] Fallback Account %s (%s): Type=%s, Balance=%.2f\n", 
@@ -318,14 +270,17 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAc
 }
 
 // getAccountBalancesFromLegacy retrieves account balances using legacy journal tables up to an as-of date
+// This version also deduplicates accounts by code
 func (s *SSOTBalanceSheetService) getAccountBalancesFromLegacy(asOfDate string) ([]SSOTAccountBalance, error) {
 	var balances []SSOTAccountBalance
+	
+	// Legacy query with deduplication by account code
 	legacyQuery := `
 		SELECT 
-			a.id as account_id,
+			MIN(a.id) as account_id,
 			a.code as account_code,
-			a.name as account_name,
-			a.type as account_type,
+			MAX(a.name) as account_name,
+			UPPER(a.type) as account_type,
 			COALESCE(SUM(jl.debit_amount), 0) as debit_total,
 			COALESCE(SUM(jl.credit_amount), 0) as credit_total,
 			CASE 
@@ -336,39 +291,48 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromLegacy(asOfDate string) 
 			END as net_balance
 		FROM accounts a
 		LEFT JOIN journal_lines jl ON jl.account_id = a.id
-		LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status = 'POSTED' AND je.deleted_at IS NULL
-		WHERE (je.entry_date <= ? OR je.entry_date IS NULL)
-		  AND COALESCE(a.is_header, false) = false
+		LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id 
+			AND je.status = 'POSTED' 
+			AND je.deleted_at IS NULL
+			AND je.entry_date <= ?
+		WHERE COALESCE(a.is_header, false) = false
 		  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
-		GROUP BY a.id, a.code, a.name, a.type
-		-- Include accounts with either transaction activity OR non-zero balance
-		HAVING (COALESCE(SUM(jl.debit_amount), 0) <> 0 OR COALESCE(SUM(jl.credit_amount), 0) <> 0 OR a.balance <> 0)
-		ORDER BY a.code`
+		  AND a.is_active = true
+		GROUP BY a.code, UPPER(a.type)
+		HAVING COALESCE(SUM(jl.debit_amount), 0) <> 0 
+		    OR COALESCE(SUM(jl.credit_amount), 0) <> 0
+		    OR MAX(a.balance) <> 0
+		ORDER BY a.code
+	`
+	
 	if err := s.db.Raw(legacyQuery, asOfDate).Scan(&balances).Error; err != nil {
 		return nil, fmt.Errorf("legacy account balances query failed: %v", err)
 	}
 	
-	// If no balances found, try to get all accounts with their direct balances
+	// If no balances found, try to get all accounts with their direct balances (deduplicated)
 	if len(balances) == 0 {
 		fmt.Printf("[DEBUG] No legacy balances found, trying direct account balances\n")
 		allAccountsQuery := `
 			SELECT 
-				a.id as account_id,
+				MIN(a.id) as account_id,
 				a.code as account_code,
-				a.name as account_name,
-				a.type as account_type,
+				MAX(a.name) as account_name,
+				UPPER(a.type) as account_type,
 				0 as debit_total,
 				0 as credit_total,
-				a.balance as net_balance
+				SUM(COALESCE(a.balance, 0)) as net_balance
 			FROM accounts a
 			WHERE COALESCE(a.is_header, false) = false
 			  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
+			  AND a.is_active = true
+			GROUP BY a.code, UPPER(a.type)
+			HAVING SUM(COALESCE(a.balance, 0)) <> 0
 			ORDER BY a.code
 		`
 		if err := s.db.Raw(allAccountsQuery).Scan(&balances).Error; err != nil {
 			return nil, fmt.Errorf("error executing all accounts query: %v", err)
 		}
-		fmt.Printf("[DEBUG] Retrieved %d accounts with direct balances (legacy fallback)\n", len(balances))
+		fmt.Printf("[DEBUG] Retrieved %d accounts with direct balances (legacy fallback, deduplicated)\n", len(balances))
 	}
 	
 	return balances, nil
@@ -642,7 +606,13 @@ func (s *SSOTBalanceSheetService) addNetPPNToBalanceSheet(bsData *SSOTBalanceShe
 }
 
 // categorizeAssetAccount categorizes asset accounts into current and non-current assets
+// Only adds items with non-zero amounts to improve report clarity
 func (s *SSOTBalanceSheetService) categorizeAssetAccount(bsData *SSOTBalanceSheetData, item BSAccountItem, code string) {
+	// Skip zero-balance items for cleaner display
+	if item.Amount == 0 {
+		return
+	}
+	
 	switch {
 	// Current Assets (11xx)
 	case strings.HasPrefix(code, "110"): // Cash accounts
@@ -690,58 +660,57 @@ func (s *SSOTBalanceSheetService) categorizeAssetAccount(bsData *SSOTBalanceShee
 }
 
 // categorizeLiabilityAccount categorizes liability accounts into current and non-current liabilities
+// Only adds items with non-zero amounts to improve report clarity
 func (s *SSOTBalanceSheetService) categorizeLiabilityAccount(bsData *SSOTBalanceSheetData, item BSAccountItem, code string) {
-	// Log liability categorization for debugging
-	fmt.Printf("[DEBUG] Categorizing Liability: %s - %s (Amount: %.2f, Code: %s)\n", 
-		item.AccountCode, item.AccountName, item.Amount, code)
-	
 	// Ensure liability amounts are positive for proper categorization
 	amount := item.Amount
 	if amount < 0 {
 		amount = -amount // Make it positive
-		fmt.Printf("[DEBUG] Converted negative liability amount from %.2f to %.2f\n", item.Amount, amount)
+		fmt.Printf("[DEBUG] Converted negative liability %s from %.2f to %.2f\n", item.AccountCode, item.Amount, amount)
 	}
+	
+	// Skip zero-balance items for cleaner display
+	if amount == 0 {
+		return
+	}
+	
+	// Log liability categorization for debugging
+	fmt.Printf("[DEBUG] Categorizing Liability: %s - %s (Amount: %.2f)\n", 
+		item.AccountCode, item.AccountName, amount)
+	
+	// Update the item amount to be positive for consistency
+	item.Amount = amount
 	
 	switch {
 	// Current Liabilities (21xx)
 	case strings.HasPrefix(code, "210"): // Accounts Payable
 		bsData.Liabilities.CurrentLiabilities.AccountsPayable += amount
-		// Update the item amount to be positive for consistency
-		item.Amount = amount
 		bsData.Liabilities.CurrentLiabilities.Items = append(bsData.Liabilities.CurrentLiabilities.Items, item)
 		fmt.Printf("[DEBUG] Added to AccountsPayable: %.2f\n", amount)
 	
 	case strings.HasPrefix(code, "211"): // Short-term debt
 		bsData.Liabilities.CurrentLiabilities.ShortTermDebt += amount
-		// Update the item amount to be positive for consistency
-		item.Amount = amount
 		bsData.Liabilities.CurrentLiabilities.Items = append(bsData.Liabilities.CurrentLiabilities.Items, item)
 		fmt.Printf("[DEBUG] Added to ShortTermDebt: %.2f\n", amount)
 	
 	case strings.HasPrefix(code, "212"), strings.HasPrefix(code, "213"): // Accrued liabilities and taxes
-		if strings.Contains(strings.ToLower(item.AccountName), "tax") || strings.Contains(strings.ToLower(item.AccountName), "pajak") {
+		if strings.Contains(strings.ToLower(item.AccountName), "tax") || strings.Contains(strings.ToLower(item.AccountName), "pajak") || strings.Contains(strings.ToLower(item.AccountName), "pph") {
 			bsData.Liabilities.CurrentLiabilities.TaxPayable += amount
 			fmt.Printf("[DEBUG] Added to TaxPayable: %.2f\n", amount)
 		} else {
 			bsData.Liabilities.CurrentLiabilities.AccruedLiabilities += amount
 			fmt.Printf("[DEBUG] Added to AccruedLiabilities: %.2f\n", amount)
 		}
-		// Update the item amount to be positive for consistency
-		item.Amount = amount
 		bsData.Liabilities.CurrentLiabilities.Items = append(bsData.Liabilities.CurrentLiabilities.Items, item)
 	
 	case strings.HasPrefix(code, "21"): // Other current liabilities
 		bsData.Liabilities.CurrentLiabilities.OtherCurrentLiabilities += amount
-		// Update the item amount to be positive for consistency
-		item.Amount = amount
 		bsData.Liabilities.CurrentLiabilities.Items = append(bsData.Liabilities.CurrentLiabilities.Items, item)
 		fmt.Printf("[DEBUG] Added to OtherCurrentLiabilities: %.2f\n", amount)
 	
 	// Non-Current Liabilities (22xx, 23xx)
 	case strings.HasPrefix(code, "22"): // Long-term debt
 		bsData.Liabilities.NonCurrentLiabilities.LongTermDebt += amount
-		// Update the item amount to be positive for consistency
-		item.Amount = amount
 		bsData.Liabilities.NonCurrentLiabilities.Items = append(bsData.Liabilities.NonCurrentLiabilities.Items, item)
 		fmt.Printf("[DEBUG] Added to LongTermDebt: %.2f\n", amount)
 	
@@ -753,21 +722,23 @@ func (s *SSOTBalanceSheetService) categorizeLiabilityAccount(bsData *SSOTBalance
 			bsData.Liabilities.NonCurrentLiabilities.OtherNonCurrentLiabilities += amount
 			fmt.Printf("[DEBUG] Added to OtherNonCurrentLiabilities: %.2f\n", amount)
 		}
-		// Update the item amount to be positive for consistency
-		item.Amount = amount
 		bsData.Liabilities.NonCurrentLiabilities.Items = append(bsData.Liabilities.NonCurrentLiabilities.Items, item)
 	
 	default: // Other liabilities
 		bsData.Liabilities.NonCurrentLiabilities.OtherNonCurrentLiabilities += amount
-		// Update the item amount to be positive for consistency
-		item.Amount = amount
 		bsData.Liabilities.NonCurrentLiabilities.Items = append(bsData.Liabilities.NonCurrentLiabilities.Items, item)
 		fmt.Printf("[DEBUG] Added to OtherNonCurrentLiabilities (default): %.2f\n", amount)
 	}
 }
 
 // categorizeEquityAccount categorizes equity accounts
+// Only adds items with non-zero amounts to improve report clarity
 func (s *SSOTBalanceSheetService) categorizeEquityAccount(bsData *SSOTBalanceSheetData, item BSAccountItem, code string) {
+	// Skip zero-balance items for cleaner display
+	if item.Amount == 0 {
+		return
+	}
+	
 	switch {
 	case strings.HasPrefix(code, "31"): // Share Capital
 		bsData.Equity.ShareCapital += item.Amount
@@ -958,31 +929,32 @@ func (s *SSOTBalanceSheetService) removePPNAccountsFromDisplay(bsData *SSOTBalan
 	// Remove PPN Keluaran from liabilities display and adjust totals
 	var filteredLiabilities []BSAccountItem
 	var totalPPNKeluaranRemoved float64
-	for _, item := range bsData.Liabilities.CurrentLiabilities.Items {
-		if strings.Contains(strings.ToLower(item.AccountName), "ppn keluaran") && item.AccountCode != "PPN_NET" {
-			totalPPNKeluaranRemoved += item.Amount
-		} else if item.AccountCode != "PPN_NET" {
-			filteredLiabilities = append(filteredLiabilities, item)
-		}
-	}
-	
-	// Add back the PPN_NET item if it exists and calculate its amount
 	var ppnNetAmount float64
+	
 	for _, item := range bsData.Liabilities.CurrentLiabilities.Items {
-		if item.AccountCode == "PPN_NET" {
-			ppnNetAmount = item.Amount
+		// Check if this is PPN Keluaran (original, not net)
+		if strings.Contains(strings.ToLower(item.AccountName), "ppn keluaran") && item.AccountCode != "PPN_NET" {
+			// This is original PPN Keluaran - remove it from display
+			totalPPNKeluaranRemoved += item.Amount
+		} else {
+			// This is NOT PPN Keluaran, OR it's PPN_NET - keep it
 			filteredLiabilities = append(filteredLiabilities, item)
+			
+			// Track PPN_NET amount for total adjustment
+			if item.AccountCode == "PPN_NET" {
+				ppnNetAmount = item.Amount
+			}
 		}
 	}
 	
 	bsData.Liabilities.CurrentLiabilities.Items = filteredLiabilities
-	// Adjust the liability totals to remove the PPN Keluaran amounts and add the net PPN amount
-	bsData.Liabilities.CurrentLiabilities.AccountsPayable -= totalPPNKeluaranRemoved
-	bsData.Liabilities.CurrentLiabilities.AccountsPayable += ppnNetAmount // Add net PPN to AccountsPayable
-	bsData.Liabilities.CurrentLiabilities.TotalCurrentLiabilities -= totalPPNKeluaranRemoved
-	bsData.Liabilities.CurrentLiabilities.TotalCurrentLiabilities += ppnNetAmount // Add net PPN to total
-	bsData.Liabilities.TotalLiabilities -= totalPPNKeluaranRemoved
-	bsData.Liabilities.TotalLiabilities += ppnNetAmount // Add net PPN to total liabilities
+	
+	// CRITICAL FIX: Add PPN_NET to TaxPayable subcategory so it will be included in totals calculation
+	// Don't adjust totals here because calculateBalanceSheetTotals() will recalculate them anyway
+	if ppnNetAmount != 0 {
+		bsData.Liabilities.CurrentLiabilities.TaxPayable += ppnNetAmount
+		fmt.Printf("[DEBUG] Added PPN_NET (%.2f) to TaxPayable subcategory\n", ppnNetAmount)
+	}
 	
 	fmt.Printf("[DEBUG] Removed PPN accounts from display - Masukan: %.2f, Keluaran: %.2f, Net PPN added: %.2f\n", totalPPNMasukanRemoved, totalPPNKeluaranRemoved, ppnNetAmount)
 	fmt.Printf("[DEBUG] After removing PPN Keluaran - AccountsPayable: %.2f\n", bsData.Liabilities.CurrentLiabilities.AccountsPayable)

@@ -19,7 +19,7 @@ import (
 // AuditLog represents an audit log entry
 type AuditLog struct {
 	ID          uint      `json:"id" gorm:"primaryKey"`
-	UserID      uint      `json:"user_id" gorm:"index"`
+	UserID      *uint     `json:"user_id" gorm:"index"` // Nullable for anonymous users
 	Username    string    `json:"username" gorm:"size:100"`
 	Action      string    `json:"action" gorm:"size:50"`          // CREATE, UPDATE, DELETE, VIEW, LOGIN, LOGOUT
 	TableName   string    `json:"table_name" gorm:"size:100"`     // Table name for database compatibility
@@ -127,8 +127,15 @@ func (al *AuditLogger) AuditMiddleware() gin.HandlerFunc {
 		// Create audit log entry
 		resource := getResourceFromPath(c.Request.URL.Path)
 		resourceID := getResourceID(c.Request.URL.Path, c.Params)
+		
+		// Get user ID, set to nil if 0 (anonymous user)
+		var userID *uint
+		if uid := c.GetUint("user_id"); uid > 0 {
+			userID = &uid
+		}
+		
 		auditLog := &AuditLog{
-			UserID:       c.GetUint("user_id"),
+			UserID:       userID,
 			Username:     c.GetString("username"),
 			Action:       getActionFromMethod(c.Request.Method),
 			TableName:    getTableNameFromResource(resource),
@@ -177,8 +184,15 @@ func (al *AuditLogger) PaymentAuditMiddleware() gin.HandlerFunc {
 
 		// Create detailed payment audit log
 		resourceID := getResourceID(c.Request.URL.Path, c.Params)
+		
+		// Get user ID, set to nil if 0 (anonymous user)
+		var userID *uint
+		if uid := c.GetUint("user_id"); uid > 0 {
+			userID = &uid
+		}
+		
 		auditLog := &AuditLog{
-			UserID:       c.GetUint("user_id"),
+			UserID:       userID,
 			Username:     c.GetString("username"),
 			Action:       getPaymentAction(c.Request.Method, c.Request.URL.Path),
 			TableName:    "payments",
@@ -218,38 +232,81 @@ func (al *AuditLogger) logToDatabase(auditLog *AuditLog) {
 	}
 }
 
-// logToFile writes audit log to file
+// logToFile writes audit log to file in human-readable format
 func (al *AuditLogger) logToFile(auditLog *AuditLog) {
-	logData := map[string]interface{}{
-		"user_id":       auditLog.UserID,
-		"username":      auditLog.Username,
-		"action":        auditLog.Action,
-		"resource":      auditLog.Resource,
-		"resource_id":   auditLog.ResourceID,
-		"method":        auditLog.Method,
-		"endpoint":      auditLog.Endpoint,
-		"ip_address":    auditLog.IPAddress,
-		"response_code": auditLog.ResponseCode,
-		"duration_ms":   auditLog.Duration,
-		"success":       auditLog.Success,
-		"timestamp":     auditLog.Timestamp.Format(time.RFC3339),
+	// Format timestamp: YY-MM-DD HH:MM:SS.mmm
+	timestamp := auditLog.Timestamp.Format("06-01-02 15:04:05.000")
+	
+	// Determine status indicator
+	statusIcon := "✓"
+	if !auditLog.Success {
+		statusIcon = "✗"
 	}
-
-	if auditLog.ErrorMessage != "" {
-		logData["error"] = auditLog.ErrorMessage
+	
+	// Build resource identifier
+	resourceInfo := strings.ToUpper(auditLog.Resource)
+	if auditLog.ResourceID != "" {
+		resourceInfo = fmt.Sprintf("%s#%s", resourceInfo, auditLog.ResourceID)
 	}
-
-	jsonData, _ := json.Marshal(logData)
-	al.logger.Printf("%s\n", string(jsonData))
+	
+	// Format user info - handle nil UserID for anonymous users
+	userInfo := "anonymous"
+	if auditLog.UserID != nil {
+		userInfo = fmt.Sprintf("%s (ID:%d)", auditLog.Username, *auditLog.UserID)
+	} else if auditLog.Username != "" {
+		userInfo = auditLog.Username
+	}
+	
+	// Format: [YY-MM-DD HH:MM:SS.mmm >> RESOURCE::ACTION] ✓ User: username (ID:123) | Method /endpoint | Status: 200 | 45ms | IP: 192.168.1.100
+	logLine := fmt.Sprintf("[%s >> %s::%s] %s User: %s | %s %s | Status: %d | %dms | IP: %s",
+		timestamp,
+		resourceInfo,
+		auditLog.Action,
+		statusIcon,
+		userInfo,
+		auditLog.Method,
+		auditLog.Endpoint,
+		auditLog.ResponseCode,
+		auditLog.Duration,
+		auditLog.IPAddress,
+	)
+	
+	// Add error message if present
+	if !auditLog.Success && auditLog.ErrorMessage != "" {
+		logLine += fmt.Sprintf("\n    ⚠️  Error: %s", auditLog.ErrorMessage)
+	}
+	
+	// Add request data for CREATE/UPDATE operations (truncated)
+	if (auditLog.Action == "CREATE" || auditLog.Action == "UPDATE") && auditLog.RequestData != "" && len(auditLog.RequestData) > 0 {
+		requestData := auditLog.RequestData
+		if len(requestData) > 300 {
+			requestData = requestData[:300] + "..."
+		}
+		logLine += fmt.Sprintf("\n    📝 Data: %s", requestData)
+	}
+	
+	logLine += "\n"
+	
+	// Write to file (remove [AUDIT] prefix since we already have nice format)
+	al.logger.SetPrefix("")
+	al.logger.SetFlags(0)
+	al.logger.Printf("%s", logLine)
 }
 
 // logSecurityEvent logs security-related events
 func (al *AuditLogger) logSecurityEvent(auditLog *AuditLog) {
-	securityEvent := fmt.Sprintf("SECURITY_ALERT: Failed %s attempt on %s by user %s (%d) from %s - Response: %d",
+	// Format user info - handle nil UserID for anonymous users
+	userInfo := "anonymous"
+	if auditLog.UserID != nil {
+		userInfo = fmt.Sprintf("%s (ID:%d)", auditLog.Username, *auditLog.UserID)
+	} else if auditLog.Username != "" {
+		userInfo = auditLog.Username
+	}
+	
+	securityEvent := fmt.Sprintf("SECURITY_ALERT: Failed %s attempt on %s by user %s from %s - Response: %d",
 		auditLog.Action,
 		auditLog.Resource,
-		auditLog.Username,
-		auditLog.UserID,
+		userInfo,
 		auditLog.IPAddress,
 		auditLog.ResponseCode,
 	)
@@ -433,14 +490,14 @@ func getErrorMessage(responseBody string, statusCode int) string {
 }
 
 // GetAuditLogs retrieves audit logs with filters
-func (al *AuditLogger) GetAuditLogs(userID uint, resource string, limit int, offset int) ([]AuditLog, int64, error) {
+func (al *AuditLogger) GetAuditLogs(userID *uint, resource string, limit int, offset int) ([]AuditLog, int64, error) {
 	var logs []AuditLog
 	var total int64
 
 	query := al.db.Model(&AuditLog{})
 
-	if userID > 0 {
-		query = query.Where("user_id = ?", userID)
+	if userID != nil && *userID > 0 {
+		query = query.Where("user_id = ?", *userID)
 	}
 
 	if resource != "" {

@@ -14,6 +14,7 @@ import {
   Button,
   HStack,
   Flex,
+  Tooltip,
   useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react';
@@ -48,9 +49,18 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
   
   // Helper function to get balance for display
   const getDisplayBalance = (account: Account): number => {
-    // 🔧 ALWAYS use backend balance directly
-    // Now displaying as positive per accounting principles
-    return Math.abs(account.balance);
+    // ✅ FIXED: Display ACTUAL balance (including negatives) to detect errors
+    // Negative balance for ASSET accounts = BUG that must be visible!
+    return account.balance;
+  };
+  
+  // Helper to check if balance is abnormal
+  const isAbnormalBalance = (account: Account): boolean => {
+    // ASSET/EXPENSE accounts should not be negative (except rare cases)
+    if ((account.type === 'ASSET' || account.type === 'EXPENSE') && account.balance < 0) {
+      return true;
+    }
+    return false;
   };
 
   return (
@@ -161,13 +171,20 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
                 </Text>
               </Td>
               <Td px={6} py={4} borderColor={borderColor}>
-                <Text 
-                  fontSize="sm"
-                  fontWeight={account.is_header ? '600' : '400'}
-                  color={primaryTextColor}
-                >
-                  {accountService.formatBalance(getDisplayBalance(account), 'IDR', account.code, account.type)}
-                </Text>
+                <Flex align="center" gap={2}>
+                  {isAbnormalBalance(account) && (
+                    <Tooltip label={`⚠️ WARNING: ${account.type} account should not have negative balance! This may indicate an accounting error.`}>
+                      <span>⚠️</span>
+                    </Tooltip>
+                  )}
+                  <Text 
+                    fontSize="sm"
+                    fontWeight={account.is_header ? '600' : '400'}
+                    color={isAbnormalBalance(account) ? 'red.500' : primaryTextColor}
+                  >
+                    {accountService.formatBalance(getDisplayBalance(account), 'IDR', account.code, account.type)}
+                  </Text>
+                </Flex>
               </Td>
               <Td px={6} py={4} borderColor={borderColor}>
                 <Badge 

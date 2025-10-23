@@ -47,6 +47,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
     model: '',
     unit: '',
     purchase_price: 0,
+    cost_price: 0, // ✅ ADDED: Harga Pokok
     sale_price: 0,
     pricing_tier: '',
     stock: 0,
@@ -390,7 +391,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
         {/* Pricing */}
         <Box>
           <Text fontSize="lg" fontWeight="bold" mb={4}>Harga</Text>
-          <Grid templateColumns="repeat(4, 1fr)" gap={4}>
+          <Grid templateColumns="repeat(3, 1fr)" gap={4}>
             <GridItem>
               <CurrencyInput
                 value={formData.purchase_price || 0}
@@ -404,16 +405,27 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             </GridItem>
             <GridItem>
               <CurrencyInput
-                value={formData.sale_price || 0}
-                onChange={(value) => handleInputChange('sale_price', value)}
-                label="Harga Jual"
-                placeholder="Contoh: Rp 75.000"
+                value={formData.cost_price || 0}
+                onChange={(value) => handleInputChange('cost_price', value)}
+                label="Harga Pokok (COGS)"
+                placeholder="Contoh: Rp 300.000"
                 isRequired={true}
                 size="md"
                 min={0}
               />
             </GridItem>
-            <GridItem colSpan={2}>
+            <GridItem>
+              <CurrencyInput
+                value={formData.sale_price || 0}
+                onChange={(value) => handleInputChange('sale_price', value)}
+                label="Harga Jual"
+                placeholder="Contoh: Rp 1.200.000"
+                isRequired={true}
+                size="md"
+                min={0}
+              />
+            </GridItem>
+            <GridItem colSpan={3}>
               <FormControl>
                 <FormLabel>Tingkat Harga</FormLabel>
                 <Select

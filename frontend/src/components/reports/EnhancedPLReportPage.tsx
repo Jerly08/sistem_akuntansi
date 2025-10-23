@@ -27,12 +27,27 @@ import {
   IconButton,
   Switch,
   Flex,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  Progress,
+  Spinner,
 } from '@chakra-ui/react';
-import { FiTrendingUp, FiDownload, FiEye, FiDatabase, FiActivity, FiRefreshCw } from 'react-icons/fi';
+import { FiTrendingUp, FiDownload, FiEye, FiDatabase, FiActivity, FiRefreshCw, FiAlertTriangle, FiCheckCircle } from 'react-icons/fi';
 import { formatCurrency } from '@/utils/formatters';
 import { reportService } from '@/services/reportService';
 import { enhancedPLService } from '@/services/enhancedPLService';
+import { ssotProfitLossService } from '@/services/ssotProfitLossService';
 import { ssotJournalService } from '@/services/ssotJournalService';
+import { cogsService } from '@/services/cogsService';
 import { BalanceWebSocketClient } from '@/services/balanceWebSocketService';
 import { useAuth } from '@/contexts/AuthContext';
 import EnhancedProfitLossModal from './EnhancedProfitLossModal';
@@ -85,8 +100,15 @@ const EnhancedPLReportPage: React.FC = () => {
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
   const balanceClientRef = useRef<BalanceWebSocketClient | null>(null);
   
+  // COGS Health Check States
+  const [cogsHealth, setCogsHealth] = useState<any>(null);
+  const [checkingCOGS, setCheckingCOGS] = useState(false);
+  const [backfillingCOGS, setBackfillingCOGS] = useState(false);
+  const [showCOGSWarning, setShowCOGSWarning] = useState(false);
+  
   const { isOpen: isPLModalOpen, onOpen: onPLModalOpen, onClose: onPLModalClose } = useDisclosure();
   const { isOpen: isDrilldownModalOpen, onOpen: onDrilldownModalOpen, onClose: onDrilldownModalClose } = useDisclosure();
+  const { isOpen: isCOGSModalOpen, onOpen: onCOGSModalOpen, onClose: onCOGSModalClose } = useDisclosure();
 
   // Set default date range (current month)
   React.useEffect(() => {
@@ -166,6 +188,69 @@ const EnhancedPLReportPage: React.FC = () => {
     }
   };
 
+  // Check COGS Health before generating P&L
+  const checkCOGSHealth = async () => {
+    if (!reportParams.start_date || !reportParams.end_date) {
+      return null;
+    }
+
+    try {
+      setCheckingCOGS(true);
+      const health = await cogsService.getCOGSHealthStatus(
+        reportParams.start_date,
+        reportParams.end_date
+      );
+      setCogsHealth(health);
+      return health;
+    } catch (error) {
+      console.error('Error checking COGS health:', error);
+      return null;
+    } finally {
+      setCheckingCOGS(false);
+    }
+  };
+
+  // Auto-backfill COGS if needed
+  const handleBackfillCOGS = async () => {
+    if (!reportParams.start_date || !reportParams.end_date) {
+      return;
+    }
+
+    try {
+      setBackfillingCOGS(true);
+      
+      const result = await cogsService.backfillCOGS(
+        reportParams.start_date,
+        reportParams.end_date,
+        false // execute, not dry run
+      );
+
+      toast({
+        title: 'COGS Backfill Complete',
+        description: `Successfully processed ${result.sales_processed} sales transactions. COGS entries have been created.`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+
+      // Close modal and re-check health
+      onCOGSModalClose();
+      await checkCOGSHealth();
+      
+    } catch (error) {
+      console.error('Error backfilling COGS:', error);
+      toast({
+        title: 'Backfill Failed',
+        description: error instanceof Error ? error.message : 'Failed to backfill COGS',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setBackfillingCOGS(false);
+    }
+  };
+
   const generateEnhancedPL = async () => {
     if (!reportParams.start_date || !reportParams.end_date) {
       toast({
@@ -182,35 +267,47 @@ const EnhancedPLReportPage: React.FC = () => {
     try {
       console.log('Generating Enhanced P&L with params:', reportParams);
       
-      // Generate enhanced P&L using the journal integration service
-      const enhancedData = await enhancedPLService.generateEnhancedPLFromJournals({
+      // 🔍 STEP 1: Check COGS Health First
+      const health = await checkCOGSHealth();
+      
+      // 🚨 STEP 2: Show warning if COGS is missing
+      if (health && !health.healthy && health.sales_without_cogs > 0) {
+        setShowCOGSWarning(true);
+        onCOGSModalOpen();
+        setLoading(false);
+        return; // Stop here, let user decide
+      }
+      
+      // ✅ STEP 3: Generate SSOT P&L (includes COGS automatically)
+      const ssotData = await ssotProfitLossService.generateSSOTProfitLoss({
         start_date: reportParams.start_date,
         end_date: reportParams.end_date,
         format: 'json'
       });
 
-      console.log('Enhanced P&L data received:', enhancedData);
+      console.log('SSOT P&L data received:', ssotData);
 
-      // Convert to the format expected by EnhancedProfitLossModal
+      // Convert SSOT data to the format expected by EnhancedProfitLossModal
       const formattedData: EnhancedPLData = {
-        title: 'Enhanced Profit and Loss Statement',
-        period: `${new Date(reportParams.start_date).toLocaleDateString()} - ${new Date(reportParams.end_date).toLocaleDateString()}`,
-        company: enhancedData.company || { name: 'Your Company' },
-        enhanced: true,
-        sections: formatPLSections(enhancedData),
-        financialMetrics: {
-          grossProfit: enhancedData.gross_profit || 0,
-          grossProfitMargin: enhancedData.gross_profit_margin || 0,
-          operatingIncome: enhancedData.operating_income || 0,
-          operatingMargin: enhancedData.operating_margin || 0,
-          ebitda: enhancedData.ebitda || 0,
-          ebitdaMargin: enhancedData.ebitda_margin || 0,
-          netIncome: enhancedData.net_income || 0,
-          netIncomeMargin: enhancedData.net_income_margin || 0,
+        title: ssotData.title || 'Enhanced Profit and Loss Statement',
+        period: ssotData.period || `${new Date(reportParams.start_date).toLocaleDateString()} - ${new Date(reportParams.end_date).toLocaleDateString()}`,
+        company: ssotData.company || { name: 'PT. Sistem Akuntansi' },
+        enhanced: ssotData.enhanced || true,
+        sections: ssotData.sections || [],
+        financialMetrics: ssotData.financialMetrics || {
+          grossProfit: 0,
+          grossProfitMargin: 0,
+          operatingIncome: 0,
+          operatingMargin: 0,
+          ebitda: 0,
+          ebitdaMargin: 0,
+          netIncome: 0,
+          netIncomeMargin: 0,
         },
       };
 
       setPLData(formattedData);
+      setShowCOGSWarning(false); // Clear warning
       onPLModalOpen();
 
     } catch (error) {
@@ -681,6 +778,155 @@ const EnhancedPLReportPage: React.FC = () => {
           title={`Journal Entries: ${drilldownRequest.line_item_name || 'Selected Item'}`}
         />
       )}
+
+      {/* COGS Warning Modal */}
+      <Modal isOpen={isCOGSModalOpen} onClose={onCOGSModalClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            <HStack spacing={2}>
+              <FiAlertTriangle color="orange" />
+              <Text>COGS Data Missing</Text>
+            </HStack>
+          </ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4} align="stretch">
+              {cogsHealth && (
+                <>
+                  <Alert status="warning">
+                    <AlertIcon />
+                    <VStack align="start" spacing={1}>
+                      <AlertTitle>Cost of Goods Sold (COGS) entries are missing</AlertTitle>
+                      <AlertDescription>
+                        {cogsHealth.message}
+                      </AlertDescription>
+                    </VStack>
+                  </Alert>
+
+                  <Card>
+                    <CardBody>
+                      <VStack spacing={3} align="stretch">
+                        <Text fontWeight="semibold">COGS Status:</Text>
+                        <HStack justify="space-between">
+                          <Text fontSize="sm">Total Sales:</Text>
+                          <Badge colorScheme="blue">{cogsHealth.total_sales}</Badge>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="sm">Sales WITH COGS:</Text>
+                          <Badge colorScheme="green">{cogsHealth.sales_with_cogs}</Badge>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="sm">Sales WITHOUT COGS:</Text>
+                          <Badge colorScheme="red">{cogsHealth.sales_without_cogs}</Badge>
+                        </HStack>
+                        <HStack justify="space-between">
+                          <Text fontSize="sm">Completeness:</Text>
+                          <Badge colorScheme={cogsHealth.completeness_percentage >= 95 ? 'green' : 'red'}>
+                            {cogsHealth.completeness_percentage.toFixed(2)}%
+                          </Badge>
+                        </HStack>
+                      </VStack>
+                    </CardBody>
+                  </Card>
+
+                  <Alert status="info">
+                    <AlertIcon />
+                    <VStack align="start" spacing={1} fontSize="sm">
+                      <Text fontWeight="semibold">What is COGS?</Text>
+                      <Text>
+                        COGS (Cost of Goods Sold) represents the direct costs of producing goods sold by a company.
+                        Without COGS entries, your P&L report will show incorrect Net Profit.
+                      </Text>
+                    </VStack>
+                  </Alert>
+
+                  <Divider />
+
+                  <VStack spacing={2} align="stretch">
+                    <Text fontWeight="semibold" fontSize="sm">Options:</Text>
+                    <Button
+                      colorScheme="green"
+                      leftIcon={backfillingCOGS ? <Spinner size="sm" /> : <FiCheckCircle />}
+                      onClick={async () => {
+                        await handleBackfillCOGS();
+                        // After backfill, generate P&L again
+                        await generateEnhancedPL();
+                      }}
+                      isLoading={backfillingCOGS}
+                      loadingText="Creating COGS entries..."
+                    >
+                      Auto-Create COGS Entries (Recommended)
+                    </Button>
+                    <Text fontSize="xs" color="gray.600" px={2}>
+                      This will automatically create COGS journal entries for all sales without them.
+                    </Text>
+
+                    <Divider />
+
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        onCOGSModalClose();
+                        setShowCOGSWarning(false);
+                        // Continue without COGS check (using SSOT endpoint)
+                        setLoading(true);
+                        try {
+                          const ssotData = await ssotProfitLossService.generateSSOTProfitLoss({
+                            start_date: reportParams.start_date,
+                            end_date: reportParams.end_date,
+                            format: 'json'
+                          });
+                          const formattedData: EnhancedPLData = {
+                            title: ssotData.title || 'Enhanced Profit and Loss Statement',
+                            period: ssotData.period || `${new Date(reportParams.start_date).toLocaleDateString()} - ${new Date(reportParams.end_date).toLocaleDateString()}`,
+                            company: ssotData.company || { name: 'PT. Sistem Akuntansi' },
+                            enhanced: ssotData.enhanced || true,
+                            sections: ssotData.sections || [],
+                            financialMetrics: ssotData.financialMetrics || {
+                              grossProfit: 0,
+                              grossProfitMargin: 0,
+                              operatingIncome: 0,
+                              operatingMargin: 0,
+                              ebitda: 0,
+                              ebitdaMargin: 0,
+                              netIncome: 0,
+                              netIncomeMargin: 0,
+                            },
+                          };
+                          setPLData(formattedData);
+                          onPLModalOpen();
+                        } catch (error) {
+                          console.error('Error:', error);
+                          toast({
+                            title: 'Generation Failed',
+                            description: 'Failed to generate P&L report',
+                            status: 'error',
+                            duration: 5000,
+                            isClosable: true,
+                          });
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                    >
+                      Continue Anyway (Not Recommended)
+                    </Button>
+                    <Text fontSize="xs" color="gray.600" px={2}>
+                      Generate P&L without COGS. The report will show Expenses = 0 and incorrect Net Profit.
+                    </Text>
+                  </VStack>
+                </>
+              )}
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" onClick={onCOGSModalClose}>
+              Cancel
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

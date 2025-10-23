@@ -398,7 +398,7 @@ func GetDefaultTaxAccountSettings() *TaxAccountSettings {
 		PurchasePayableAccountID:   2001, // Hutang Usaha
 		PurchaseCashAccountID:      1101, // Kas
 		PurchaseBankAccountID:      1102, // Bank
-		PurchaseInputVATAccountID:  1105, // PPN Masukan
+		PurchaseInputVATAccountID:  1240, // PPN Masukan (standardized)
 		PurchaseExpenseAccountID:   6001, // Beban Operasional
 		
 		// Flags

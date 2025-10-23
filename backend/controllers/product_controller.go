@@ -190,6 +190,75 @@ func (pc *ProductController) CreateProduct(c *gin.Context) {
 		return
 	}
 
+	// ✅ VALIDATE PRICES - Prevent unreasonable values
+	// Maximum reasonable price: 10 Billion (10,000,000,000)
+	const maxReasonablePrice = 10000000000.0
+	
+	// ✅ AUTO-SET: If cost_price is 0, default to purchase_price
+	if product.CostPrice == 0 && product.PurchasePrice > 0 {
+		product.CostPrice = product.PurchasePrice
+		log.Printf("ℹ️ Auto-set cost_price = purchase_price (%.2f) for product '%s'", product.CostPrice, product.Name)
+	}
+	
+	if product.CostPrice < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cost price cannot be negative",
+			"field": "cost_price",
+		})
+		return
+	}
+	
+	if product.CostPrice > maxReasonablePrice {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Cost price is unreasonably high",
+			"message": fmt.Sprintf("Cost price (Rp %.0f) exceeds maximum allowed (Rp %.0f / 10 Miliar)", 
+				product.CostPrice, maxReasonablePrice),
+			"field":   "cost_price",
+			"value":   product.CostPrice,
+			"max":     maxReasonablePrice,
+		})
+		return
+	}
+	
+	if product.PurchasePrice < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Purchase price cannot be negative",
+			"field": "purchase_price",
+		})
+		return
+	}
+	
+	if product.PurchasePrice > maxReasonablePrice {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Purchase price is unreasonably high",
+			"message": fmt.Sprintf("Purchase price (Rp %.0f) exceeds maximum allowed (Rp %.0f / 10 Miliar)", 
+				product.PurchasePrice, maxReasonablePrice),
+			"field":   "purchase_price",
+		})
+		return
+	}
+	
+	if product.SalePrice < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Sale price cannot be negative",
+			"field": "sale_price",
+		})
+		return
+	}
+	
+	if product.SalePrice > maxReasonablePrice {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Sale price is unreasonably high",
+			"message": fmt.Sprintf("Sale price (Rp %.0f) exceeds maximum allowed (Rp %.0f / 10 Miliar)", 
+				product.SalePrice, maxReasonablePrice),
+			"field":   "sale_price",
+		})
+		return
+	}
+	
+	log.Printf("✅ Price validation passed for product '%s': CostPrice=%.2f, PurchasePrice=%.2f, SalePrice=%.2f", 
+		product.Name, product.CostPrice, product.PurchasePrice, product.SalePrice)
+
 	// Check if product code already exists
 	var existingProduct models.Product
 	if err := pc.DB.Where("code = ?", product.Code).First(&existingProduct).Error; err == nil {
@@ -232,6 +301,75 @@ func (pc *ProductController) UpdateProduct(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// ✅ VALIDATE PRICES - Prevent unreasonable values
+	// Maximum reasonable price: 10 Billion (10,000,000,000)
+	const maxReasonablePrice = 10000000000.0
+	
+	// ✅ AUTO-SET: If cost_price is 0, default to purchase_price
+	if updateData.CostPrice == 0 && updateData.PurchasePrice > 0 {
+		updateData.CostPrice = updateData.PurchasePrice
+		log.Printf("ℹ️ Auto-set cost_price = purchase_price (%.2f) for product update ID=%d", updateData.CostPrice, id)
+	}
+	
+	if updateData.CostPrice < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cost price cannot be negative",
+			"field": "cost_price",
+		})
+		return
+	}
+	
+	if updateData.CostPrice > maxReasonablePrice {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Cost price is unreasonably high",
+			"message": fmt.Sprintf("Cost price (Rp %.0f) exceeds maximum allowed (Rp %.0f / 10 Miliar)", 
+				updateData.CostPrice, maxReasonablePrice),
+			"field":   "cost_price",
+			"value":   updateData.CostPrice,
+			"max":     maxReasonablePrice,
+		})
+		return
+	}
+	
+	if updateData.PurchasePrice < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Purchase price cannot be negative",
+			"field": "purchase_price",
+		})
+		return
+	}
+	
+	if updateData.PurchasePrice > maxReasonablePrice {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Purchase price is unreasonably high",
+			"message": fmt.Sprintf("Purchase price (Rp %.0f) exceeds maximum allowed (Rp %.0f / 10 Miliar)", 
+				updateData.PurchasePrice, maxReasonablePrice),
+			"field":   "purchase_price",
+		})
+		return
+	}
+	
+	if updateData.SalePrice < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Sale price cannot be negative",
+			"field": "sale_price",
+		})
+		return
+	}
+	
+	if updateData.SalePrice > maxReasonablePrice {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Sale price is unreasonably high",
+			"message": fmt.Sprintf("Sale price (Rp %.0f) exceeds maximum allowed (Rp %.0f / 10 Miliar)", 
+				updateData.SalePrice, maxReasonablePrice),
+			"field":   "sale_price",
+		})
+		return
+	}
+	
+	log.Printf("✅ Price validation passed for product update ID=%d: CostPrice=%.2f, PurchasePrice=%.2f, SalePrice=%.2f", 
+		id, updateData.CostPrice, updateData.PurchasePrice, updateData.SalePrice)
 
 	// Check if new code conflicts with existing products
 	if updateData.Code != product.Code {

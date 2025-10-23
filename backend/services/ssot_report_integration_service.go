@@ -1031,6 +1031,19 @@ func (s *SSOTReportIntegrationService) generateGeneralLedger(ctx context.Context
 	if err != nil {
 		return nil, fmt.Errorf("failed to query general ledger: %w", err)
 	}
+	
+	// DEBUG LOGGING
+	log.Printf("[DEBUG GL] Query executed - Rows returned: %d", len(rows))
+	log.Printf("[DEBUG GL] Date range: %s to %s", startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	log.Printf("[DEBUG GL] Status filter: %s", models.SSOTStatusPosted)
+	if accountID != nil {
+		log.Printf("[DEBUG GL] Account ID filter: %d", *accountID)
+	} else {
+		log.Printf("[DEBUG GL] No account filter (showing all)")
+	}
+	if len(rows) == 0 {
+		log.Printf("[DEBUG GL] ⚠️  WARNING: No rows returned from query!")
+	}
 
 	// Group by account for organized display
 	accountEntries := make(map[uint64][]GeneralLedgerEntry)
@@ -1054,13 +1067,74 @@ func (s *SSOTReportIntegrationService) generateGeneralLedger(ctx context.Context
 		}
 	}
 
+	// Calculate opening balance (balance before start date) for all accounts
+	var openingBalance decimal.Decimal
+	var openingQuery string
+	var openingArgs []interface{}
+	
+	if accountID != nil {
+		// Opening balance for specific account
+		openingQuery = `
+			SELECT 
+				COALESCE(SUM(sjl.debit_amount), 0) - COALESCE(SUM(sjl.credit_amount), 0) as balance
+			FROM unified_journal_lines sjl
+			JOIN unified_journal_ledger sje ON sje.id = sjl.journal_id
+			WHERE sje.status = ? 
+				AND sje.entry_date < ?
+				AND sjl.account_id = ?
+		`
+		openingArgs = []interface{}{models.SSOTStatusPosted, startDate, *accountID}
+	} else {
+		// Opening balance for all accounts
+		openingQuery = `
+			SELECT 
+				COALESCE(SUM(sjl.debit_amount), 0) - COALESCE(SUM(sjl.credit_amount), 0) as balance
+			FROM unified_journal_lines sjl
+			JOIN unified_journal_ledger sje ON sje.id = sjl.journal_id
+			WHERE sje.status = ? 
+				AND sje.entry_date < ?
+		`
+		openingArgs = []interface{}{models.SSOTStatusPosted, startDate}
+	}
+	
+	var openingBalanceFloat float64
+	if err := s.db.WithContext(ctx).Raw(openingQuery, openingArgs...).Scan(&openingBalanceFloat).Error; err != nil {
+		log.Printf("[DEBUG GL] Warning: Failed to calculate opening balance: %v", err)
+		openingBalance = decimal.Zero
+	} else {
+		openingBalance = decimal.NewFromFloat(openingBalanceFloat)
+		log.Printf("[DEBUG GL] Opening balance calculated: %s", openingBalance.String())
+	}
+	
 	// Calculate running balances, organize entries, and compute totals
 	var totalDebits, totalCredits decimal.Decimal
 	accountBalances := make(map[uint64]decimal.Decimal) // Track final balance per account
+	accountOpeningBalances := make(map[uint64]decimal.Decimal) // Track opening balance per account
+	
+	// Calculate opening balance for each account if showing all accounts
+	if accountID == nil {
+		for accID := range accountEntries {
+			var accOpeningQuery = `
+				SELECT 
+					COALESCE(SUM(sjl.debit_amount), 0) - COALESCE(SUM(sjl.credit_amount), 0) as balance
+				FROM unified_journal_lines sjl
+				JOIN unified_journal_ledger sje ON sje.id = sjl.journal_id
+				WHERE sje.status = ? 
+					AND sje.entry_date < ?
+					AND sjl.account_id = ?
+			`
+			var accOpeningFloat float64
+			if err := s.db.WithContext(ctx).Raw(accOpeningQuery, models.SSOTStatusPosted, startDate, accID).Scan(&accOpeningFloat).Error; err != nil {
+				accountOpeningBalances[accID] = decimal.Zero
+			} else {
+				accountOpeningBalances[accID] = decimal.NewFromFloat(accOpeningFloat)
+			}
+		}
+	}
 	
 	for accID, entries := range accountEntries {
 		info := accountInfo[accID]
-		var runningBalance decimal.Decimal
+		runningBalance := accountOpeningBalances[accID] // Start with opening balance for this account
 		
 		for i, entry := range entries {
 			// Add to overall totals
@@ -1100,17 +1174,18 @@ func (s *SSOTReportIntegrationService) generateGeneralLedger(ctx context.Context
 		}
 	}
 	
-	// Calculate UI-friendly metrics
-	netPositionChange := totalAccountBalances.InexactFloat64()
+	// Calculate proper balances
+	netChange := totalDebits.Sub(totalCredits)
+	closingBalance := openingBalance.Add(netChange)
 	totalTransactionVolume := totalDebits.InexactFloat64() // Total transaction activity
 	cashImpact := cashAccountBalance.InexactFloat64()
 	isBalanced := totalDebits.Equal(totalCredits)
 	
 	// Determine status messages
 	var netPositionStatus string
-	if netPositionChange == 0 {
+	if netChange.IsZero() {
 		netPositionStatus = "Balanced"
-	} else if netPositionChange > 0 {
+	} else if netChange.IsPositive() {
 		netPositionStatus = "Net Debit Position"
 	} else {
 		netPositionStatus = "Net Credit Position"
@@ -1128,14 +1203,17 @@ func (s *SSOTReportIntegrationService) generateGeneralLedger(ctx context.Context
 	// Update result with calculated totals and enhanced UI fields
 	result.TotalDebits = totalDebits.InexactFloat64()
 	result.TotalCredits = totalCredits.InexactFloat64()
-	result.OpeningBalance = 0.0 // Starting point for period
-	result.ClosingBalance = netPositionChange
-	result.NetPositionChange = netPositionChange
+	result.OpeningBalance = openingBalance.InexactFloat64()
+	result.ClosingBalance = closingBalance.InexactFloat64()
+	result.NetPositionChange = netChange.InexactFloat64()
 	result.NetPositionStatus = netPositionStatus
 	result.TotalTransactionVol = totalTransactionVolume
 	result.CashImpact = cashImpact
 	result.CashImpactStatus = cashImpactStatus
 	result.IsBalanced = isBalanced
+	
+	log.Printf("[DEBUG GL] Calculated balances - Opening: %s, Debits: %s, Credits: %s, Net: %s, Closing: %s",
+		openingBalance.String(), totalDebits.String(), totalCredits.String(), netChange.String(), closingBalance.String())
 
 	return result, nil
 }

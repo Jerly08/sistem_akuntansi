@@ -231,6 +231,7 @@ func (s *SSOTCashFlowService) getCashBalances(startDate, endDate string) (float6
 	var beginningCash, endingCash float64
 	
 	// Get beginning cash balance (before start date)
+	// Include all Cash (1101%) and Bank (1102%) accounts per Indonesian COA standard
 	beginningQuery := `
 		SELECT 
 			COALESCE(SUM(
@@ -245,10 +246,11 @@ func (s *SSOTCashFlowService) getCashBalances(startDate, endDate string) (float6
 		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
 		WHERE uje.status = 'POSTED' 
 			AND uje.entry_date < ?
-			AND a.code LIKE '110%'
+			AND (a.code LIKE '1101%' OR a.code LIKE '1102%')
 	`
 	
 	// Get ending cash balance (up to end date)
+	// Include all Cash (1101%) and Bank (1102%) accounts per Indonesian COA standard
 	endingQuery := `
 		SELECT 
 			COALESCE(SUM(
@@ -263,7 +265,7 @@ func (s *SSOTCashFlowService) getCashBalances(startDate, endDate string) (float6
 		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
 		WHERE uje.status = 'POSTED' 
 			AND uje.entry_date < ?
-			AND a.code LIKE '110%'
+			AND (a.code LIKE '1101%' OR a.code LIKE '1102%')
 	`
 	
 	var beginResult struct {

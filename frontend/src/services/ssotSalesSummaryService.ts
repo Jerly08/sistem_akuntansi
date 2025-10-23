@@ -34,6 +34,19 @@ export interface CustomerSalesData {
   transaction_count: number;
   average_transaction: number;
   percentage_of_total: number;
+  items?: SaleItemDetail[];
+}
+
+export interface SaleItemDetail {
+  product_id: number;
+  product_code: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  unit: string;
+  sale_date: string;
+  invoice_number?: string;
 }
 
 export interface ProductSalesData {

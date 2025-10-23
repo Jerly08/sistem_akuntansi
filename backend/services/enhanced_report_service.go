@@ -491,13 +491,26 @@ type PeriodData struct {
 }
 
 type CustomerSalesData struct {
-	CustomerID       uint    `json:"customer_id"`
-	CustomerName     string  `json:"customer_name"`
-	TotalAmount      float64 `json:"total_sales"`
-	TransactionCount int64   `json:"transaction_count"`
-	AverageOrder     float64 `json:"average_transaction"`
-	LastOrderDate    time.Time `json:"last_order_date"`
-	FirstOrderDate   time.Time `json:"first_order_date"`
+	CustomerID       uint              `json:"customer_id"`
+	CustomerName     string            `json:"customer_name"`
+	TotalAmount      float64           `json:"total_sales"`
+	TransactionCount int64             `json:"transaction_count"`
+	AverageOrder     float64           `json:"average_transaction"`
+	LastOrderDate    time.Time         `json:"last_order_date"`
+	FirstOrderDate   time.Time         `json:"first_order_date"`
+	Items            []SaleItemDetail  `json:"items,omitempty"`
+}
+
+type SaleItemDetail struct {
+	ProductID     uint      `json:"product_id"`
+	ProductCode   string    `json:"product_code"`
+	ProductName   string    `json:"product_name"`
+	Quantity      float64   `json:"quantity"`
+	UnitPrice     float64   `json:"unit_price"`
+	TotalPrice    float64   `json:"total_price"`
+	Unit          string    `json:"unit"`
+	SaleDate      time.Time `json:"sale_date"`
+	InvoiceNumber string    `json:"invoice_number,omitempty"`
 }
 
 type ProductSalesData struct {
@@ -1249,6 +1262,27 @@ func (ers *EnhancedReportService) GenerateSalesSummary(startDate, endDate time.T
 
 	// Convert maps to slices and sort
 	summary.SalesByCustomer = ers.sortCustomersByRevenue(customerMap)
+	
+	// Fetch items for each customer
+	for i := range summary.SalesByCustomer {
+		items, err := ers.getSaleItemsForCustomer(summary.SalesByCustomer[i].CustomerID, startDate, endDate)
+		if err != nil {
+			utils.ReportLog.WithFields(utils.Fields{
+				"customer_id": summary.SalesByCustomer[i].CustomerID,
+				"customer_name": summary.SalesByCustomer[i].CustomerName,
+				"error": err.Error(),
+			}).Warn("Failed to fetch sale items for customer")
+			continue
+		}
+		summary.SalesByCustomer[i].Items = items
+		if len(items) > 0 {
+			utils.ReportLog.WithFields(utils.Fields{
+				"customer_name": summary.SalesByCustomer[i].CustomerName,
+				"items_count": len(items),
+			}).Debug("Loaded sale items for customer")
+		}
+	}
+	
 	summary.SalesByProduct = ers.sortProductsBySales(productMap)
 	summary.SalesByPeriod = ers.sortPeriodsByDate(periodMap)
 	summary.SalesByStatus = ers.convertStatusMapToSlice(statusMap)

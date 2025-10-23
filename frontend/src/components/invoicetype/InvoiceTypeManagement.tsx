@@ -37,11 +37,11 @@ import {
   AlertTitle,
   useDisclosure
 } from '@chakra-ui/react';
-import { FiPlus, FiEdit, FiTrash2, FiSave, FiX, FiSettings, FiLock } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiSave, FiX, FiSettings, FiLock, FiHash } from 'react-icons/fi';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModulePermissions } from '@/hooks/usePermissions';
-import invoiceTypeService, { InvoiceType, InvoiceTypeCreateRequest, InvoiceTypeUpdateRequest } from '@/services/invoiceTypeService';
+import invoiceTypeService, { InvoiceType, InvoiceTypeCreateRequest, InvoiceTypeUpdateRequest, InvoiceCounter, ResetCounterRequest } from '@/services/invoiceTypeService';
 import ErrorAlert, { ErrorDetail } from '@/components/common/ErrorAlert';
 import ErrorHandler, { ParsedValidationError } from '@/utils/errorHandler';
 
@@ -49,6 +49,11 @@ interface FormData {
   name: string;
   code: string;
   is_active: boolean;
+}
+
+interface CounterFormData {
+  year: number;
+  counter: number;
 }
 
 const InvoiceTypeManagement: React.FC = () => {
@@ -74,14 +79,19 @@ const InvoiceTypeManagement: React.FC = () => {
   const [validationError, setValidationError] = useState<ParsedValidationError | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const [isReadOnlyMode, setIsReadOnlyMode] = useState(false);
+  const [selectedTypeForCounter, setSelectedTypeForCounter] = useState<InvoiceType | null>(null);
+  const [counterHistory, setCounterHistory] = useState<InvoiceCounter[]>([]);
+  const [loadingCounter, setLoadingCounter] = useState(false);
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen: isCounterModalOpen, onOpen: onCounterModalOpen, onClose: onCounterModalClose } = useDisclosure();
 
   // Color mode values
   const bg = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const headingColor = useColorModeValue('gray.700', 'gray.200');
   const textColor = useColorModeValue('gray.600', 'gray.400');
+  const counterHistoryItemBg = useColorModeValue('gray.50', 'gray.700');
 
   const {
     register,
@@ -89,6 +99,14 @@ const InvoiceTypeManagement: React.FC = () => {
     reset,
     formState: { errors }
   } = useForm<FormData>();
+
+  const {
+    register: registerCounter,
+    handleSubmit: handleSubmitCounter,
+    reset: resetCounter,
+    setValue: setCounterValue,
+    formState: { errors: counterErrors }
+  } = useForm<CounterFormData>();
 
   useEffect(() => {
     loadInvoiceTypes();
@@ -308,6 +326,86 @@ const InvoiceTypeManagement: React.FC = () => {
     }
   };
 
+  const handleOpenCounterModal = async (type: InvoiceType) => {
+    setSelectedTypeForCounter(type);
+    setLoadingCounter(true);
+    
+    try {
+      // Load counter history
+      const history = await invoiceTypeService.getCounterHistory(type.id);
+      setCounterHistory(history);
+      
+      // Set default values for the form
+      const currentYear = new Date().getFullYear();
+      const currentCounter = history.find(h => h.year === currentYear);
+      
+      resetCounter({
+        year: currentYear,
+        counter: currentCounter?.counter || 0
+      });
+      
+      onCounterModalOpen();
+    } catch (error: any) {
+      console.error('Error loading counter history:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load counter history',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoadingCounter(false);
+    }
+  };
+
+  const handleCloseCounterModal = () => {
+    setSelectedTypeForCounter(null);
+    setCounterHistory([]);
+    resetCounter();
+    onCounterModalClose();
+  };
+
+  const onSubmitCounter = async (data: CounterFormData) => {
+    if (!selectedTypeForCounter) return;
+    
+    try {
+      setIsSubmitting(true);
+      
+      await invoiceTypeService.resetCounter(selectedTypeForCounter.id, {
+        year: data.year,
+        counter: data.counter
+      });
+      
+      toast({
+        title: 'Success',
+        description: `Counter for ${selectedTypeForCounter.name} (${data.year}) has been set to ${data.counter}`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
+      handleCloseCounterModal();
+      
+      // Reload counter history if modal is still open
+      if (selectedTypeForCounter) {
+        const history = await invoiceTypeService.getCounterHistory(selectedTypeForCounter.id);
+        setCounterHistory(history);
+      }
+    } catch (error: any) {
+      console.error('Error resetting counter:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reset counter',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <Box p={6}>
@@ -385,8 +483,9 @@ const InvoiceTypeManagement: React.FC = () => {
                 <Th>Name</Th>
                 <Th>Code</Th>
                 <Th>Status</Th>
+                <Th>Last Invoice No</Th>
                 <Th>Created By</Th>
-                <Th width="200px">Actions</Th>
+                <Th width="220px">Actions</Th>
               </Tr>
             </Thead>
             <Tbody>
@@ -406,6 +505,11 @@ const InvoiceTypeManagement: React.FC = () => {
                     </Badge>
                   </Td>
                   <Td>
+                    <Text fontSize="sm" fontFamily="monospace" color={textColor}>
+                      {new Date().getFullYear()} • Current
+                    </Text>
+                  </Td>
+                  <Td>
                     <Text fontSize="sm" color={textColor}>
                       {type.creator ? [type.creator.first_name, type.creator.last_name].filter(Boolean).join(' ') || type.creator.username : 'Unknown'}
                     </Text>
@@ -413,12 +517,22 @@ const InvoiceTypeManagement: React.FC = () => {
                   <Td>
                     <HStack spacing={2}>
                       {canEdit && (
-                        <IconButton
-                          size="sm"
-                          aria-label="Edit"
-                          icon={<FiEdit />}
-                          onClick={() => handleOpenModal(type)}
-                        />
+                        <>
+                          <IconButton
+                            size="sm"
+                            aria-label="Edit"
+                            icon={<FiEdit />}
+                            onClick={() => handleOpenModal(type)}
+                          />
+                          <IconButton
+                            size="sm"
+                            aria-label="Manage Counter"
+                            icon={<FiHash />}
+                            colorScheme="purple"
+                            onClick={() => handleOpenCounterModal(type)}
+                            title="Manage Invoice Counter"
+                          />
+                        </>
                       )}
                       {canDelete && (
                         <IconButton
@@ -492,8 +606,8 @@ const InvoiceTypeManagement: React.FC = () => {
                         message: 'Code must be at most 10 characters'
                       },
                       pattern: {
-                        value: /^[A-Z0-9-]+$/,
-                        message: 'Code must contain only uppercase letters, numbers, and hyphens'
+                        value: /^[a-zA-Z0-9.,\-_/<> ]+$/,
+                        message: 'Code can contain letters, numbers, dots, commas, hyphens, underscores, slashes, angle brackets, and spaces'
                       }
                     })}
                     placeholder="e.g., STA-C"
@@ -550,6 +664,121 @@ const InvoiceTypeManagement: React.FC = () => {
                   loadingText={editingType ? 'Updating...' : 'Creating...'}
                 >
                   {editingType ? 'Update' : 'Create'}
+                </Button>
+              </HStack>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
+
+      {/* Counter Management Modal */}
+      <Modal isOpen={isCounterModalOpen} onClose={handleCloseCounterModal} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>
+            Manage Invoice Counter: {selectedTypeForCounter?.name} ({selectedTypeForCounter?.code})
+          </ModalHeader>
+          <ModalCloseButton />
+          
+          <form onSubmit={handleSubmitCounter(onSubmitCounter)}>
+            <ModalBody>
+              <VStack spacing={6} align="stretch">
+                {/* Info Alert */}
+                <Alert status="info" borderRadius="md">
+                  <AlertIcon />
+                  <Box flex="1">
+                    <AlertTitle fontSize="sm">Invoice Counter Management</AlertTitle>
+                    <AlertDescription fontSize="xs">
+                      Set the last invoice number used for this invoice type. The next invoice will use counter + 1.
+                      <br />
+                      <Text mt={1} fontWeight="bold">Example:</Text> If you set counter to 120, the next invoice will be 0121/CODE/MONTH-YEAR
+                    </AlertDescription>
+                  </Box>
+                </Alert>
+
+                {/* Counter Form */}
+                <FormControl isRequired isInvalid={!!counterErrors.year}>
+                  <FormLabel>Year</FormLabel>
+                  <Input
+                    type="number"
+                    {...registerCounter('year', {
+                      required: 'Year is required',
+                      min: {
+                        value: 2020,
+                        message: 'Year must be at least 2020'
+                      },
+                      max: {
+                        value: 2050,
+                        message: 'Year must be at most 2050'
+                      },
+                      valueAsNumber: true
+                    })}
+                  />
+                  <FormErrorMessage>{counterErrors.year?.message}</FormErrorMessage>
+                </FormControl>
+
+                <FormControl isRequired isInvalid={!!counterErrors.counter}>
+                  <FormLabel>Last Invoice Number (Counter)</FormLabel>
+                  <Input
+                    type="number"
+                    {...registerCounter('counter', {
+                      required: 'Counter is required',
+                      min: {
+                        value: 0,
+                        message: 'Counter must be at least 0'
+                      },
+                      valueAsNumber: true
+                    })}
+                  />
+                  <FormErrorMessage>{counterErrors.counter?.message}</FormErrorMessage>
+                  <Text fontSize="xs" color={textColor} mt={1}>
+                    This is the LAST used number. Next invoice will be counter + 1
+                  </Text>
+                </FormControl>
+
+                {/* Counter History */}
+                {counterHistory.length > 0 && (
+                  <Box>
+                    <Text fontWeight="bold" mb={2}>Counter History:</Text>
+                    <Box maxH="200px" overflowY="auto" border="1px" borderColor={borderColor} borderRadius="md" p={3}>
+                      <VStack align="stretch" spacing={2}>
+                        {counterHistory.map((counter) => (
+                          <HStack key={counter.id} justify="space-between" p={2} bg={counterHistoryItemBg} borderRadius="md">
+                            <Text fontWeight="medium">Year {counter.year}</Text>
+                            <Badge colorScheme="blue" fontSize="sm" px={3} py={1}>
+                              Counter: {counter.counter}
+                            </Badge>
+                          </HStack>
+                        ))}
+                      </VStack>
+                    </Box>
+                  </Box>
+                )}
+
+                {loadingCounter && (
+                  <Text color={textColor} fontSize="sm">Loading counter data...</Text>
+                )}
+              </VStack>
+            </ModalBody>
+
+            <ModalFooter>
+              <HStack spacing={3}>
+                <Button
+                  leftIcon={<FiX />}
+                  variant="ghost"
+                  onClick={handleCloseCounterModal}
+                  isDisabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  leftIcon={<FiSave />}
+                  colorScheme="purple"
+                  type="submit"
+                  isLoading={isSubmitting}
+                  loadingText="Saving..."
+                >
+                  Set Counter
                 </Button>
               </HStack>
             </ModalFooter>

@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 	"math"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -30,7 +31,8 @@ type PurchaseService struct {
 	// Asset capitalization
 	assetCapitalizationSvc    *AssetCapitalizationService
 	// Journal Service V2 for COA balance updates
-	journalServiceV2          *PurchaseJournalServiceV2
+	journalServiceV2          *PurchaseJournalServiceV2          // Legacy (simple_ssot_journals)
+	journalServiceSSOT        *PurchaseJournalServiceSSOT        // NEW: unified_journal_ledger (for Balance Sheet)
 	coaService                *COAService
 }
 
@@ -54,16 +56,17 @@ func NewPurchaseService(
 	pdfService PDFServiceInterface,
 	unifiedJournalService *UnifiedJournalService,
 	coaService *COAService,
+	purchaseJournalServiceSSOT *PurchaseJournalServiceSSOT,
 ) *PurchaseService {
 	// Initialize SSOT Journal Adapter (wired to unified journal service)
 	// Use TaxAccountService so account mapping is flexible (no hardcoded codes)
 	taxAccountService := NewTaxAccountService(db)
 	ssotAdapter := NewPurchaseSSOTJournalAdapter(db, unifiedJournalService, accountRepo, taxAccountService)
 	
-	// Initialize PurchaseJournalServiceV2 for COA balance updates
+	// Initialize PurchaseJournalServiceV2 for COA balance updates (legacy)
 	journalServiceV2 := NewPurchaseJournalServiceV2(db, journalRepo, coaService)
 	
-ps := &PurchaseService{
+	ps := &PurchaseService{
 		db:                        db,
 		purchaseRepo:              purchaseRepo,
 		productRepo:               productRepo,
@@ -76,6 +79,7 @@ ps := &PurchaseService{
 		unifiedJournalService:     unifiedJournalService,
 		ssotJournalAdapter:        ssotAdapter,
 		journalServiceV2:          journalServiceV2,
+		journalServiceSSOT:        purchaseJournalServiceSSOT,
 		coaService:                coaService,
 	}
 	// Asset capitalization service (reuses existing repos and unified journal)
@@ -1037,21 +1041,34 @@ func (s *PurchaseService) OnPurchaseApproved(purchaseID uint) error {
 		fmt.Printf("✅ Successfully updated product stock\n")
 	}
 	
-	// 2. Create SSOT journal entries
-	fmt.Printf("🏗️ Creating SSOT journal entries for approved purchase %s\n", purchase.Code)
-	err = s.createSSOTPurchaseJournalEntries(purchase, purchase.UserID)
-	if err != nil {
-		fmt.Printf("⚠️ Warning: Failed to create SSOT journal entries: %v\n", err)
-		// Continue processing even if journal creation fails
+	// 2. Create journal entries - PRIORITIZE SSOT (no double posting)
+	fmt.Printf("🏗️ Creating journal entries for approved purchase %s\n", purchase.Code)
+	
+	// ✅ CRITICAL FIX: Use SSOT service ONLY (prevent double posting)
+	if s.journalServiceSSOT != nil {
+		if err := s.journalServiceSSOT.CreatePurchaseJournal(purchase, nil); err != nil {
+			fmt.Printf("⚠️ Warning: SSOT journal creation failed: %v\n", err)
+			
+			// 🔄 Fallback to V2 journal service only if SSOT fails
+			fmt.Printf("🔄 Attempting fallback to V2 journal service\n")
+			if err := s.handlePurchaseJournalUpdate(purchase, "PENDING", nil); err != nil {
+				fmt.Printf("❌ Both SSOT and V2 journal creation failed: %v\n", err)
+				// Continue processing - journal can be recreated later
+			} else {
+				fmt.Printf("✅ [V2] Created purchase journal entries (fallback)\n")
+			}
+		} else {
+			fmt.Printf("✅ [SSOT] Created purchase journal entries for Balance Sheet integration\n")
+			// ✅ SUCCESS: SSOT journal created, skip V2 to prevent double posting
+		}
 	} else {
-		fmt.Printf("✅ Successfully created SSOT journal entries\n")
-	}
-
-	// 2b. Update journal entries using V2 service for COA balance updates
-	if err := s.handlePurchaseJournalUpdate(purchase, "PENDING", nil); err != nil {
-		fmt.Printf("⚠️ Warning: Failed to update journal entries (callback): %v\n", err)
-	} else {
-		fmt.Printf("📗 Journal entries updated (callback) for purchase %s\n", purchase.Code)
+		// No SSOT service available, use V2 as primary
+		fmt.Printf("⚠️ SSOT journal service not available, using V2 journal service\n")
+		if err := s.handlePurchaseJournalUpdate(purchase, "PENDING", nil); err != nil {
+			fmt.Printf("⚠️ Warning: Failed to create V2 journal entries: %v\n", err)
+		} else {
+			fmt.Printf("📗 [V2] Created purchase journal entries\n")
+		}
 	}
 	
 	// 3. Update cash/bank balance for immediate payment methods
@@ -1757,17 +1774,50 @@ func (s *PurchaseService) updateCashBankBalanceForPurchase(purchase *models.Purc
 		return nil // No balance update needed for credit purchases
 	}
 	
-	// Check if bank account is specified
-	if purchase.BankAccountID == nil {
-		fmt.Printf("⚠️ Warning: No bank account specified for immediate payment purchase %s\n", purchase.Code)
-		return fmt.Errorf("bank account is required for %s payment method", purchase.PaymentMethod)
-	}
-	fmt.Printf("ℹ️ Using bank account ID %d for balance update\n", *purchase.BankAccountID)
+	// ✅ CRITICAL FIX: Determine cash/bank account with fallback
+	var cashBankID uint
 	
-	// Get bank account details
+	if purchase.BankAccountID != nil && *purchase.BankAccountID > 0 {
+		// Use specified bank account
+		cashBankID = *purchase.BankAccountID
+		fmt.Printf("ℹ️ Using specified bank account ID %d for balance update\n", cashBankID)
+	} else {
+		// ✅ FALLBACK: Find default cash_bank account based on payment method
+		fmt.Printf("⚠️ No bank account specified, using fallback to default account\n")
+		
+		var defaultAccountCode string
+		method := strings.ToUpper(strings.TrimSpace(purchase.PaymentMethod))
+		if method == "CASH" || method == "TUNAI" {
+			defaultAccountCode = "1101" // Kas
+		} else {
+			defaultAccountCode = "1102" // Bank
+		}
+		
+		// Find account by code
+		var account models.Account
+		if err := s.db.Where("code = ? AND deleted_at IS NULL", defaultAccountCode).First(&account).Error; err != nil {
+			fmt.Printf("❌ Default account %s not found: %v\n", defaultAccountCode, err)
+			return fmt.Errorf("default account %s not found: %v", defaultAccountCode, err)
+		}
+		
+		// Find cash_bank linked to this account
+		var cashBank models.CashBank
+		if err := s.db.Where("account_id = ? AND deleted_at IS NULL", account.ID).First(&cashBank).Error; err != nil {
+			fmt.Printf("❌ Cash/Bank record for account %s not found: %v\n", defaultAccountCode, err)
+			return fmt.Errorf("cash_bank record for account %s not found: %v", defaultAccountCode, err)
+		}
+		
+		cashBankID = cashBank.ID
+		fmt.Printf("✅ Using fallback cash/bank: %s (ID: %d, Code: %s)\n", cashBank.Name, cashBankID, defaultAccountCode)
+		
+		// Update purchase.BankAccountID for consistency
+		purchase.BankAccountID = &cashBankID
+	}
+	
+	// Get bank account details using determined cashBankID
 	var cashBank models.CashBank
-	if err := s.db.First(&cashBank, *purchase.BankAccountID).Error; err != nil {
-		fmt.Printf("❌ Failed to retrieve bank account %d: %v\n", *purchase.BankAccountID, err)
+	if err := s.db.First(&cashBank, cashBankID).Error; err != nil {
+		fmt.Printf("❌ Failed to retrieve bank account %d: %v\n", cashBankID, err)
 		return fmt.Errorf("bank account not found: %v", err)
 	}
 	fmt.Printf("📋 Bank account retrieved: %s (Current Balance: %.2f)\n", cashBank.Name, cashBank.Balance)

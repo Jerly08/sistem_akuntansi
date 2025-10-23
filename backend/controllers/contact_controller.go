@@ -41,7 +41,7 @@ func (cc *ContactController) GetContacts(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, contacts)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": contacts})
 }
 
 // GetContact returns a contact by ID
@@ -104,7 +104,7 @@ func (cc *ContactController) GetContactsByType(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, contacts)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": contacts})
 }
 
 // SearchContacts searches contacts by query
@@ -120,7 +120,7 @@ func (cc *ContactController) SearchContacts(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, contacts)
+	c.JSON(http.StatusOK, gin.H{"status": "success", "data": contacts})
 }
 
 // ImportContacts imports contacts from JSON

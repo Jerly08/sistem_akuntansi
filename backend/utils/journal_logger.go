@@ -273,9 +273,10 @@ func (jl *JournalLogger) saveToDatabase(entry JournalLogEntry) {
 	
 	// Set UserID properly
 	if entry.UserID != nil {
-		auditLog.UserID = *entry.UserID
+		auditLog.UserID = entry.UserID
 	} else {
-		auditLog.UserID = 1 // Default system user
+		defaultUserID := uint(1) // Default system user
+		auditLog.UserID = &defaultUserID
 	}
 	
 	if entry.JournalID != nil {

@@ -14,6 +14,8 @@ import {
   FormLabel,
   FormErrorMessage,
   Input,
+  InputGroup,
+  InputLeftAddon,
   Select,
   Textarea,
   RadioGroup,
@@ -86,6 +88,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [autoCreateGL, setAutoCreateGL] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
+  const [openingBalanceDisplay, setOpeningBalanceDisplay] = useState<string>('');
   const toast = useToast();
 
   // Color mode values
@@ -168,6 +171,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           account_id: account.account_id
         });
         setAutoCreateGL(false); // Disable auto-create when editing
+        setOpeningBalanceDisplay(''); // Clear display for edit mode
       } else if (mode === 'create') {
         reset({
           name: '',
@@ -181,6 +185,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           account_id: undefined
         });
         setAutoCreateGL(true); // Enable auto-create for new accounts
+        setOpeningBalanceDisplay(''); // Clear display for create mode
       }
       setActiveTab(0); // Reset to first tab
     }
@@ -499,30 +504,43 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                 name="opening_balance"
                                 control={control}
                                 render={({ field }) => (
-                                  <NumberInput
-                                    {...field}
-                                    min={0}
-                                    precision={0}
-                                    format={(value) => {
-                                      if (!value || value === '0') return 'Rp 0';
-                                      const numValue = parseFloat(String(value));
-                                      return formatIDR(numValue);
-                                    }}
-                                    parse={(value) => {
-                                      const parsed = parseIDR(value);
-                                      return parsed.toString();
-                                    }}
-                                    onChange={(_, value) => field.onChange(value || 0)}
-                                  >
-                                    <NumberInputField 
-                                      placeholder="Rp 0"
-                                      textAlign="left"
+                                  <InputGroup>
+                                    <InputLeftAddon 
+                                      children="Rp" 
+                                      bg={useColorModeValue('gray.50', 'gray.700')}
+                                      color={textColor}
+                                      fontWeight="medium"
                                     />
-                                    <NumberInputStepper>
-                                      <NumberIncrementStepper />
-                                      <NumberDecrementStepper />
-                                    </NumberInputStepper>
-                                  </NumberInput>
+                                    <Input
+                                      placeholder="0"
+                                      value={openingBalanceDisplay}
+                                      onChange={(e) => {
+                                        const input = e.target.value;
+                                        // Remove non-digits
+                                        const digitsOnly = input.replace(/\D/g, '');
+                                        
+                                        if (digitsOnly === '') {
+                                          setOpeningBalanceDisplay('');
+                                          field.onChange(0);
+                                          return;
+                                        }
+                                        
+                                        // Parse to number
+                                        const numValue = parseInt(digitsOnly, 10);
+                                        
+                                        // Format with thousand separator
+                                        const formatted = numValue.toLocaleString('id-ID');
+                                        setOpeningBalanceDisplay(formatted);
+                                        
+                                        // Update form value as pure number
+                                        field.onChange(numValue);
+                                      }}
+                                      onFocus={(e) => {
+                                        // Select all for easy replacement
+                                        e.target.select();
+                                      }}
+                                    />
+                                  </InputGroup>
                                 )}
                               />
                               <Text fontSize="xs" color={mutedTextColor} mt={1}>

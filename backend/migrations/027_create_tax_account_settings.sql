@@ -171,7 +171,7 @@ BEGIN
             COALESCE((SELECT id FROM accounts WHERE code = '1101' AND is_active = true LIMIT 1), 1),
             COALESCE((SELECT id FROM accounts WHERE code = '1102' AND is_active = true LIMIT 1), 
                      (SELECT id FROM accounts WHERE code = '1101' AND is_active = true LIMIT 1), 1), -- fallback to cash account
-            COALESCE((SELECT id FROM accounts WHERE code = '1105' AND is_active = true LIMIT 1), 1),
+            COALESCE((SELECT id FROM accounts WHERE code = '1240' AND is_active = true LIMIT 1), 1), -- PPN Masukan (standardized)
             COALESCE((SELECT id FROM accounts WHERE code = '6001' AND is_active = true LIMIT 1), 
                      (SELECT id FROM accounts WHERE code = '5101' AND is_active = true LIMIT 1), 1), -- fallback to COGS
             

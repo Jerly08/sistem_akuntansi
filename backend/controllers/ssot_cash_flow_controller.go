@@ -275,6 +275,8 @@ func (c *SSOTCashFlowController) TransformToFrontendFormat(ssotData *services.SS
 	return gin.H{
 		"title":   "Cash Flow Statement",
 		"period":  ssotData.StartDate.Format("2006-01-02") + " - " + ssotData.EndDate.Format("2006-01-02"),
+		"start_date": ssotData.StartDate.Format("2006-01-02"),
+		"end_date":   ssotData.EndDate.Format("2006-01-02"),
 		"company": gin.H{
 			"name":   ssotData.Company.Name,
 			"period": ssotData.StartDate.Format("02/01/2006") + " - " + ssotData.EndDate.Format("02/01/2006"),
@@ -286,6 +288,62 @@ func (c *SSOTCashFlowController) TransformToFrontendFormat(ssotData *services.SS
 		"net_cash_flow":     ssotData.NetCashFlow,
 		"cash_at_beginning": ssotData.CashAtBeginning,
 		"cash_at_end":       ssotData.CashAtEnd,
+		"currency":          ssotData.Currency,
+		"generated_at":      ssotData.GeneratedAt.Format(time.RFC3339),
+		"data_source":       "SSOT Journal System",
+		// Add structured activity sections for direct frontend access
+		"operating_activities": gin.H{
+			"net_income": ssotData.OperatingActivities.NetIncome,
+			"adjustments": gin.H{
+				"depreciation":                 ssotData.OperatingActivities.Adjustments.Depreciation,
+				"amortization":                 ssotData.OperatingActivities.Adjustments.Amortization,
+				"bad_debt_expense":             ssotData.OperatingActivities.Adjustments.BadDebtExpense,
+				"gain_loss_on_asset_disposal":  ssotData.OperatingActivities.Adjustments.GainLossOnAssetDisposal,
+				"other_non_cash_items":         ssotData.OperatingActivities.Adjustments.OtherNonCashItems,
+				"total_adjustments":            ssotData.OperatingActivities.Adjustments.TotalAdjustments,
+				"items":                        c.transformCFItemsToFrontendFormat(ssotData.OperatingActivities.Adjustments.Items),
+			},
+			"working_capital_changes": gin.H{
+				"accounts_receivable_change":   ssotData.OperatingActivities.WorkingCapitalChanges.AccountsReceivableChange,
+				"inventory_change":             ssotData.OperatingActivities.WorkingCapitalChanges.InventoryChange,
+				"prepaid_expenses_change":      ssotData.OperatingActivities.WorkingCapitalChanges.PrepaidExpensesChange,
+				"accounts_payable_change":      ssotData.OperatingActivities.WorkingCapitalChanges.AccountsPayableChange,
+				"accrued_liabilities_change":   ssotData.OperatingActivities.WorkingCapitalChanges.AccruedLiabilitiesChange,
+				"other_working_capital_change": ssotData.OperatingActivities.WorkingCapitalChanges.OtherWorkingCapitalChange,
+				"total_working_capital_changes": ssotData.OperatingActivities.WorkingCapitalChanges.TotalWorkingCapitalChanges,
+				"items":                        c.transformCFItemsToFrontendFormat(ssotData.OperatingActivities.WorkingCapitalChanges.Items),
+			},
+			"total_operating_cash_flow": ssotData.OperatingActivities.TotalOperatingCashFlow,
+		},
+		"investing_activities": gin.H{
+			"purchase_of_fixed_assets":     ssotData.InvestingActivities.PurchaseOfFixedAssets,
+			"sale_of_fixed_assets":         ssotData.InvestingActivities.SaleOfFixedAssets,
+			"purchase_of_investments":      ssotData.InvestingActivities.PurchaseOfInvestments,
+			"sale_of_investments":          ssotData.InvestingActivities.SaleOfInvestments,
+			"intangible_asset_purchases":   ssotData.InvestingActivities.IntangibleAssetPurchases,
+			"other_investing_activities":   ssotData.InvestingActivities.OtherInvestingActivities,
+			"total_investing_cash_flow":    ssotData.InvestingActivities.TotalInvestingCashFlow,
+			"items":                        c.transformCFItemsToFrontendFormat(ssotData.InvestingActivities.Items),
+		},
+		"financing_activities": gin.H{
+			"share_capital_increase":      ssotData.FinancingActivities.ShareCapitalIncrease,
+			"share_capital_decrease":      ssotData.FinancingActivities.ShareCapitalDecrease,
+			"long_term_debt_increase":     ssotData.FinancingActivities.LongTermDebtIncrease,
+			"long_term_debt_decrease":     ssotData.FinancingActivities.LongTermDebtDecrease,
+			"short_term_debt_increase":    ssotData.FinancingActivities.ShortTermDebtIncrease,
+			"short_term_debt_decrease":    ssotData.FinancingActivities.ShortTermDebtDecrease,
+			"dividends_paid":              ssotData.FinancingActivities.DividendsPaid,
+			"other_financing_activities":  ssotData.FinancingActivities.OtherFinancingActivities,
+			"total_financing_cash_flow":   ssotData.FinancingActivities.TotalFinancingCashFlow,
+			"items":                       c.transformCFItemsToFrontendFormat(ssotData.FinancingActivities.Items),
+		},
+		"cash_flow_ratios": gin.H{
+			"operating_cash_flow_ratio": ssotData.CashFlowRatios.OperatingCashFlowRatio,
+			"cash_flow_to_debt_ratio":   ssotData.CashFlowRatios.CashFlowToDebtRatio,
+			"free_cash_flow":            ssotData.CashFlowRatios.FreeCashFlow,
+			"cash_flow_per_share":       ssotData.CashFlowRatios.CashFlowPerShare,
+		},
+		"account_details": c.transformAccountDetailsToFrontendFormat(ssotData.AccountDetails),
 		"summary": gin.H{
 			"operating_cash_flow":  ssotData.OperatingActivities.TotalOperatingCashFlow,
 			"investing_cash_flow":  ssotData.InvestingActivities.TotalInvestingCashFlow,
@@ -300,12 +358,7 @@ func (c *SSOTCashFlowController) TransformToFrontendFormat(ssotData *services.SS
 			"free_cash_flow":            ssotData.CashFlowRatios.FreeCashFlow,
 			"cash_flow_per_share":       ssotData.CashFlowRatios.CashFlowPerShare,
 		},
-		"start_date":      ssotData.StartDate.Format("2006-01-02"),
-		"end_date":        ssotData.EndDate.Format("2006-01-02"),
-		"generated_at":    ssotData.GeneratedAt.Format(time.RFC3339),
-		"account_details": ssotData.AccountDetails,
-		"data_source":     "SSOT Journal System",
-		"message":         c.generateAnalysisMessage(ssotData),
+		"message": c.generateAnalysisMessage(ssotData),
 	}
 }
 
@@ -314,10 +367,27 @@ func (c *SSOTCashFlowController) transformCFItemsToFrontendFormat(items []servic
 	var transformed []gin.H
 	for _, item := range items {
 		transformed = append(transformed, gin.H{
-			"code":   item.AccountCode,
-			"name":   item.AccountName,
-			"amount": item.Amount,
-			"type":   item.Type,
+			"account_code": item.AccountCode,
+			"account_name": item.AccountName,
+			"amount":       item.Amount,
+			"type":         item.Type,
+		})
+	}
+	return transformed
+}
+
+// transformAccountDetailsToFrontendFormat transforms account balance details to frontend format
+func (c *SSOTCashFlowController) transformAccountDetailsToFrontendFormat(accountDetails []services.SSOTAccountBalance) []gin.H {
+	var transformed []gin.H
+	for _, account := range accountDetails {
+		transformed = append(transformed, gin.H{
+			"account_id":     account.AccountID,
+			"account_code":   account.AccountCode,
+			"account_name":   account.AccountName,
+			"account_type":   account.AccountType,
+			"debit_total":    account.DebitTotal,
+			"credit_total":   account.CreditTotal,
+			"net_balance":    account.NetBalance,
 		})
 	}
 	return transformed

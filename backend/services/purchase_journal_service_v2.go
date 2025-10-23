@@ -203,8 +203,8 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 			})
 			log.Printf("🏦 BANK Payment: Credit to %s (%s) = %.2f", acc.Name, acc.Code, purchase.TotalAmount)
 		}
-	default:
-		// CREDIT or unknown → Credit Hutang Usaha (2101)
+	case "KREDIT", "CREDIT", "HUTANG":
+		// CREDIT Purchase → Credit Hutang Usaha (2101)
 		if acc, err := resolveByCode("2101"); err == nil {
 			journalItems = append(journalItems, models.SimpleSSOTJournalItem{
 				JournalID:   ssotEntry.ID,
@@ -219,6 +219,12 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 		} else {
 			log.Printf("⚠️ Missing payable account 2101: %v", err)
 		}
+	default:
+		// ❌ FIX: NO DEFAULT! Force explicit payment method
+		log.Printf("❌ CRITICAL ERROR: Invalid payment method '%s' for Purchase #%s. Journal NOT created!", 
+			purchase.PaymentMethod, purchase.Code)
+		return fmt.Errorf("invalid payment method '%s' for Purchase #%s. Valid: TUNAI/CASH, TRANSFER/BANK, KREDIT/CREDIT", 
+			purchase.PaymentMethod, purchase.Code)
 	}
 
 	// Handle tax withholdings if any

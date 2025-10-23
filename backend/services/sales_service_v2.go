@@ -12,13 +12,15 @@ import (
 
 // SalesServiceV2 handles all sales operations with clean business logic
 type SalesServiceV2 struct {
-	db                   *gorm.DB
-	salesRepo            *repositories.SalesRepository
-	salesJournalService  *SalesJournalServiceV2
-	stockService         *StockService
-	notificationService  *NotificationService
-	settingsService      *SettingsService
-	invoiceNumberService *InvoiceNumberService
+	db                     *gorm.DB
+	salesRepo              *repositories.SalesRepository
+	salesJournalService    *SalesJournalServiceV2      // Legacy simple_ssot_journals (deprecated)
+	salesJournalServiceSSOT *SalesJournalServiceSSOT   // NEW: unified_journal_ledger (for Balance Sheet)
+	cogsService            *InventoryCOGSService       // NEW: COGS recording service
+	stockService           *StockService
+	notificationService    *NotificationService
+	settingsService        *SettingsService
+	invoiceNumberService   *InvoiceNumberService
 }
 
 // NewSalesServiceV2 creates a new instance of SalesServiceV2
@@ -26,19 +28,26 @@ func NewSalesServiceV2(
 	db *gorm.DB,
 	salesRepo *repositories.SalesRepository,
 	salesJournalService *SalesJournalServiceV2,
+	salesJournalServiceSSOT *SalesJournalServiceSSOT,
 	stockService *StockService,
 	notificationService *NotificationService,
 	settingsService *SettingsService,
 	invoiceNumberService *InvoiceNumberService,
 ) *SalesServiceV2 {
-return &SalesServiceV2{
-		db:                   db,
-		salesRepo:            salesRepo,
-		salesJournalService:  salesJournalService,
-		stockService:         stockService,
-		notificationService:  notificationService,
-		settingsService:      settingsService,
-		invoiceNumberService: invoiceNumberService,
+	// Initialize COGS service for automatic COGS recording
+	coaService := NewCOAService(db)
+	cogsService := NewInventoryCOGSService(db, coaService)
+	
+	return &SalesServiceV2{
+		db:                     db,
+		salesRepo:              salesRepo,
+		salesJournalService:    salesJournalService,
+		salesJournalServiceSSOT: salesJournalServiceSSOT,
+		cogsService:            cogsService,
+		stockService:           stockService,
+		notificationService:    notificationService,
+		settingsService:        settingsService,
+		invoiceNumberService:   invoiceNumberService,
 	}
 }
 
@@ -52,6 +61,64 @@ func (s *SalesServiceV2) CreateSale(request models.SaleCreateRequest, userID uin
 		}
 	}()
 
+	// ✅ VALIDATE STOCK BEFORE CREATING SALE
+	// Build stock validation request from sale items
+	stockValidationReq := models.StockValidationRequest{
+		Items: make([]models.SaleItemRequest, 0, len(request.Items)),
+	}
+	for _, item := range request.Items {
+		stockValidationReq.Items = append(stockValidationReq.Items, models.SaleItemRequest{
+			ProductID: item.ProductID,
+			Quantity:  item.Quantity,
+		})
+	}
+	
+	// Validate stock availability
+	stockValidation, err := s.ValidateStockForCreate(stockValidationReq)
+	if err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to validate stock: %v", err)
+	}
+	
+	// Check if there are any stock issues
+	if stockValidation.HasInsufficient {
+		// Build detailed error message
+		var insufficientItems []string
+		for _, item := range stockValidation.Items {
+			if !item.IsSufficient && !item.IsService {
+				insufficientItems = append(insufficientItems, 
+					fmt.Sprintf("❌ %s: Tersedia %d, Diminta %d", 
+						item.ProductName, item.AvailableQty, item.RequestedQty))
+			}
+		}
+		tx.Rollback()
+		return nil, fmt.Errorf("stock tidak mencukupi:\n%s", strings.Join(insufficientItems, "\n"))
+	}
+	
+	if stockValidation.HasZeroStock {
+		// Find zero stock items
+		var zeroStockItems []string
+		for _, item := range stockValidation.Items {
+			if item.AvailableQty == 0 && !item.IsService {
+				zeroStockItems = append(zeroStockItems, 
+					fmt.Sprintf("❌ %s: Stock habis (0)", item.ProductName))
+			}
+		}
+		tx.Rollback()
+		return nil, fmt.Errorf("beberapa produk stock-nya habis:\n%s", strings.Join(zeroStockItems, "\n"))
+	}
+	
+	// Log warnings for low stock (but allow creation)
+	if stockValidation.HasMinStockAlerts || stockValidation.HasReorderAlerts {
+		for _, item := range stockValidation.Items {
+			if item.Warning != "" && item.IsSufficient {
+				log.Printf("⚠️ Stock warning for %s: %s", item.ProductName, item.Warning)
+			}
+		}
+	}
+	
+	log.Printf("✅ Stock validation passed for all items")
+	
 	// Generate sale code using settings service
 	saleCode, err := s.settingsService.GetNextSalesNumber()
 	if err != nil {
@@ -388,7 +455,11 @@ func (s *SalesServiceV2) ConfirmSale(saleID uint, userID uint) (*models.Sale, er
 		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
-	s.db.Preload("Customer").Preload("SaleItems").First(&sale, sale.ID)
+	// Reload sale with relationships after commit for proper JSON marshalling
+	if err := s.db.Preload("Customer").Preload("SaleItems.Product").First(&sale, sale.ID).Error; err != nil {
+		return nil, fmt.Errorf("failed to reload sale after commit: %v", err)
+	}
+	
 	return &sale, nil
 }
 
@@ -411,6 +482,40 @@ func (s *SalesServiceV2) CreateInvoice(saleID uint, userID uint) (*models.Sale, 
 		tx.Rollback()
 		return nil, fmt.Errorf("only DRAFT or CONFIRMED sales can be invoiced")
 	}
+
+	// ✅ VALIDATE STOCK BEFORE INVOICE (Early Check)
+	// Prevent transaction rollback in the middle of journal creation
+	log.Printf("🔍 Validating stock availability before invoice for Sale #%d", sale.ID)
+	for _, item := range sale.SaleItems {
+		var product models.Product
+		if err := tx.First(&product, item.ProductID).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to load product %d: %v", item.ProductID, err)
+		}
+		
+		// Skip stock check for service products
+		if product.IsService {
+			log.Printf("ℹ️ Product %d (%s) is a service, skipping stock validation", product.ID, product.Name)
+			continue
+		}
+		
+		// Check stock availability BEFORE starting any journal/COGS process
+		if product.Stock == 0 {
+			tx.Rollback()
+			return nil, fmt.Errorf("stock tidak cukup untuk product '%s'. Tersedia: %d, Diminta: %d (Stock habis, tidak bisa membuat invoice)", 
+				product.Name, product.Stock, item.Quantity)
+		}
+		
+		if product.Stock < item.Quantity {
+			tx.Rollback()
+			return nil, fmt.Errorf("stock tidak cukup untuk product '%s'. Tersedia: %d, Diminta: %d", 
+				product.Name, product.Stock, item.Quantity)
+		}
+		
+		log.Printf("✅ Stock check passed: %s (Available: %d, Required: %d)", 
+			product.Name, product.Stock, item.Quantity)
+	}
+	log.Printf("✅ All stock validations passed for Sale #%d", sale.ID)
 
 	oldStatus := sale.Status
 	sale.Status = "INVOICED"
@@ -441,10 +546,36 @@ func (s *SalesServiceV2) CreateInvoice(saleID uint, userID uint) (*models.Sale, 
 		return nil, fmt.Errorf("failed to create invoice: %v", err)
 	}
 
-	// CREATE JOURNAL ENTRIES for INVOICED status
-	if err := s.salesJournalService.CreateSalesJournal(&sale, tx); err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("failed to create journal entries: %v", err)
+	// CREATE JOURNAL ENTRIES for INVOICED status using SSOT service
+	// This writes to unified_journal_ledger which is read by Balance Sheet
+	// ✅ IMPORTANT: SSOT service ALREADY INCLUDES COGS posting, so we don't need separate COGS service call
+	if s.salesJournalServiceSSOT != nil {
+		if err := s.salesJournalServiceSSOT.CreateSalesJournal(&sale, tx); err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to create SSOT journal entries: %v", err)
+		}
+		log.Printf("✅ [SSOT] Journal entries created (including COGS) for Sale #%d", sale.ID)
+	} else {
+		// Fallback to legacy service if SSOT service not available
+		log.Printf("⚠️ SSOT journal service not available, using legacy service")
+		if err := s.salesJournalService.CreateSalesJournal(&sale, tx); err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to create journal entries: %v", err)
+		}
+		
+		// 💰 ONLY CREATE COGS IF USING LEGACY SERVICE
+		// Legacy service doesn't include COGS, so we need to create it separately
+		// SSOT service already includes COGS, so we skip this to prevent DOUBLE POSTING
+		if s.cogsService != nil {
+			log.Printf("💰 [Auto-COGS] Recording COGS for Sale #%d (legacy mode)", sale.ID)
+			if err := s.cogsService.RecordCOGSForSale(&sale, tx); err != nil {
+				// Log warning but don't fail the transaction - COGS can be backfilled later
+				log.Printf("⚠️ Warning: Failed to auto-record COGS for sale #%d: %v", sale.ID, err)
+				log.Printf("   COGS can be backfilled later using: go run cmd/scripts/backfill_cogs_entries.go")
+			} else {
+				log.Printf("✅ [Auto-COGS] Successfully recorded COGS for Sale #%d", sale.ID)
+			}
+		}
 	}
 
 	// Auto-mark as PAID for immediate payment methods (CASH/BANK)
@@ -459,24 +590,82 @@ func (s *SalesServiceV2) CreateInvoice(saleID uint, userID uint) (*models.Sale, 
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to auto-set sale as PAID: %v", err)
 		}
+
+		// ✅ REMOVED MANUAL CASH/BANK UPDATE - Now handled by auto-sync in journal service
+		// The SalesJournalServiceSSOT.syncCashBankBalance() automatically syncs cash_banks.balance
+		// with accounts.balance after each journal line is posted, ensuring consistency.
+		
+		// Create cash/bank transaction record for audit trail
+		if sale.CashBankID != nil && *sale.CashBankID > 0 {
+			cashBankTransaction := &models.CashBankTransaction{
+				CashBankID:      *sale.CashBankID,
+				ReferenceType:   "SALE",
+				ReferenceID:     sale.ID,
+				Amount:          sale.TotalAmount,
+				BalanceAfter:    0, // Will be updated by sync
+				TransactionDate: sale.Date,
+				Notes:           fmt.Sprintf("Immediate payment - Invoice #%s", sale.InvoiceNumber),
+			}
+
+			if err := tx.Create(cashBankTransaction).Error; err != nil {
+				log.Printf("⚠️ Warning: Failed to create cash/bank transaction record: %v", err)
+				// Don't fail transaction, this is just for audit trail
+			}
+		}
+
 		log.Printf("💡 Auto-PAID applied: Sale #%d marked as PAID for payment method %s", sale.ID, sale.PaymentMethodType)
-		log.Printf("✅ Sale #%d invoiced (status: %s → PAID) - Journal posted", sale.ID, oldStatus)
+		log.Printf("✅ Sale #%d invoiced (status: %s → PAID) - Journal posted, cash/bank auto-synced", sale.ID, oldStatus)
 	} else {
 		log.Printf("✅ Sale #%d invoiced (status: %s → INVOICED) - Journal posted", sale.ID, oldStatus)
 	}
 
-	// Update stock if needed
+	// Update stock - CRITICAL: Block transaction if stock insufficient
 	if s.stockService != nil {
 		for _, item := range sale.SaleItems {
-			if err := s.stockService.ReduceStock(item.ProductID, item.Quantity, tx); err != nil {
-				log.Printf("⚠️ Warning: Failed to reduce stock for product %d: %v", item.ProductID, err)
-				// Continue processing, don't fail the entire transaction
+			// Load product to check if it's a service
+			var product models.Product
+			if err := tx.First(&product, item.ProductID).Error; err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to load product %d: %v", item.ProductID, err)
 			}
+			
+			// Skip stock check for service products
+			if product.IsService {
+				log.Printf("ℹ️ Product %d (%s) is a service, skipping stock reduction", product.ID, product.Name)
+				continue
+			}
+			
+			// Check stock availability BEFORE reducing
+			if product.Stock < item.Quantity {
+				tx.Rollback()
+				return nil, fmt.Errorf("stock tidak cukup untuk product '%s'. Tersedia: %d, Diminta: %d", 
+					product.Name, product.Stock, item.Quantity)
+			}
+			
+			// Check if stock is zero
+			if product.Stock == 0 {
+				tx.Rollback()
+				return nil, fmt.Errorf("product '%s' habis (stock = 0), tidak bisa dijual", product.Name)
+			}
+			
+			// Reduce stock
+			if err := s.stockService.ReduceStock(item.ProductID, item.Quantity, tx); err != nil {
+				tx.Rollback()
+				return nil, fmt.Errorf("gagal mengurangi stock untuk product '%s': %v", product.Name, err)
+			}
+			
+			log.Printf("✅ Stock reduced for product %d (%s): %d → %d", 
+				product.ID, product.Name, product.Stock, product.Stock-item.Quantity)
 		}
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	// Reload sale with all relationships after commit for proper JSON marshalling
+	if err := s.db.Preload("Customer").Preload("SaleItems.Product").First(&sale, sale.ID).Error; err != nil {
+		return nil, fmt.Errorf("failed to reload sale after commit: %v", err)
 	}
 
 	return &sale, nil
@@ -539,6 +728,44 @@ func (s *SalesServiceV2) ProcessPayment(saleID uint, paymentRequest models.SaleP
 	if err := s.salesJournalService.CreateSalesPaymentJournal(payment, &sale, tx); err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to create payment journal: %v", err)
+	}
+
+	// ✅ CRITICAL FIX: Update cash_banks.balance for Cash & Bank Management view
+	// This is SEPARATE from accounts.balance (COA tree view) which is updated by journal entries
+	if payment.CashBankID != nil && *payment.CashBankID > 0 {
+		var cashBank models.CashBank
+		if err := tx.First(&cashBank, *payment.CashBankID).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("cash/bank account not found: %v", err)
+		}
+
+		// Increase cash/bank balance for payment IN (customer paying us)
+		cashBank.Balance += payment.Amount
+		if err := tx.Save(&cashBank).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to update cash/bank balance: %v", err)
+		}
+
+		// Create cash/bank transaction record for audit trail
+		cashBankTransaction := &models.CashBankTransaction{
+			CashBankID:      *payment.CashBankID,
+			ReferenceType:   "SALES_PAYMENT",
+			ReferenceID:     payment.ID,
+			Amount:          payment.Amount, // Positive for incoming payment
+			BalanceAfter:    cashBank.Balance,
+			TransactionDate: payment.PaymentDate,
+			Notes:           fmt.Sprintf("Customer payment - Invoice #%s", sale.InvoiceNumber),
+		}
+
+		if err := tx.Create(cashBankTransaction).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to create cash/bank transaction: %v", err)
+		}
+
+		log.Printf("💰 Updated Cash/Bank #%d balance: +%.2f (new balance: %.2f)", 
+			*payment.CashBankID, payment.Amount, cashBank.Balance)
+	} else {
+		log.Printf("⚠️ Warning: No CashBankID provided for payment #%d, cash_banks balance not updated", payment.ID)
 	}
 
 	log.Printf("✅ Payment #%d created for Sale #%d (Amount: %.2f)", payment.ID, sale.ID, payment.Amount)

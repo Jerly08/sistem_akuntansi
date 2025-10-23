@@ -171,6 +171,12 @@ func (s *SalesJournalServiceV2) CreateSalesJournal(sale *models.Sale, tx *gorm.D
 		}
 	}
 
+	// ✅ SAFETY CHECK: Ensure we have at least one debit line
+	if len(journalItems) == 0 {
+		log.Printf("❌ ERROR: No journal items created for Sale #%d, cannot proceed", sale.ID)
+		return fmt.Errorf("no journal items created for sale #%d - check payment method configuration", sale.ID)
+	}
+
 	// CREDIT SIDE - Revenue dan PPN
 	// Revenue (4101) - Credit
 	if sale.Subtotal > 0 {

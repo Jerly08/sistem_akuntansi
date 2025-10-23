@@ -76,24 +76,65 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 			tx.Rollback()
 			return nil, errors.New("GL account not found")
 		}
+		
+		// ✅ FIX ROOT CAUSE: Prevent multiple cash/bank accounts sharing same GL
+		// Check if this GL is already linked to another cash/bank account
+		var existingCashBank models.CashBank
+		err = tx.Where("account_id = ? AND deleted_at IS NULL", request.AccountID).First(&existingCashBank).Error
+		if err == nil {
+			// GL already linked to another cash/bank account
+			tx.Rollback()
+			return nil, fmt.Errorf("GL account '%s - %s' is already linked to cash/bank account '%s'. Each cash/bank account must have its own unique GL account for proper balance tracking", 
+				account.Code, account.Name, existingCashBank.Name)
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			// Unexpected error
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to check GL account linkage: %v", err)
+		}
+		// GL is available, proceed
 		glAccount = account
+		log.Printf("✅ Using provided GL account %s - %s (verified unique)", account.Code, account.Name)
 	} else {
-		// Create default GL account
-		accountCode := s.generateAccountCode(request.Type)
-		newAccount := &models.Account{
-			Code:        accountCode,
-			Name:        request.Name,
-			Type:        "ASSET",
-			Category:    s.getAccountCategory(request.Type),
-			IsActive:    true,
-			Description: fmt.Sprintf("Auto-created %s account", request.Type),
+		// ✅ FIX ROOT CAUSE: Always create UNIQUE GL account for each cash/bank
+		// Never reuse existing GL to prevent balance confusion
+		ctx := context.Background()
+		
+		// Generate UNIQUE account code with timestamp to ensure uniqueness
+		baseCode := s.generateAccountCode(request.Type)
+		accountCode := s.generateUniqueAccountCode(baseCode, request.Name)
+		
+		log.Printf("Creating unique GL account for cash/bank: %s", accountCode)
+		// Create unique GL account
+		isHeader := false
+		accountRequest := &models.AccountCreateRequest{
+			Code:           accountCode,
+			Name:           request.Name,
+			Type:           models.AccountTypeAsset,
+			Category:       s.getAccountCategory(request.Type),
+			Description:    fmt.Sprintf("GL for %s: %s", request.Type, request.Name),
+			IsHeader:       &isHeader,
+			OpeningBalance: 0,
 		}
 		
-		if err := tx.Create(newAccount).Error; err != nil {
-			tx.Rollback()
-			return nil, err
+		createdAccount, err := s.accountRepo.Create(ctx, accountRequest)
+		if err != nil {
+			// If duplicate, retry with even more unique code
+			if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
+				// Retry with nano timestamp
+				accountCode = fmt.Sprintf("%s-%d", baseCode, time.Now().UnixNano()%100000)
+				accountRequest.Code = accountCode
+				createdAccount, err = s.accountRepo.Create(ctx, accountRequest)
+				if err != nil {
+					tx.Rollback()
+					return nil, fmt.Errorf("failed to create unique GL account after retry: %v", err)
+				}
+			} else {
+				tx.Rollback()
+				return nil, fmt.Errorf("failed to create GL account: %v", err)
+			}
 		}
-		glAccount = newAccount
+		glAccount = createdAccount
+		log.Printf("✅ Created unique GL account: %s - %s for cash/bank: %s", glAccount.Code, glAccount.Name, request.Name)
 	}
 	
 	// Generate code and create account with retry to avoid unique constraint conflicts
@@ -810,6 +851,22 @@ func (s *CashBankService) generateAccountCode(accountType string) string {
 	// Find the highest existing child account code for this parent
 	childCode := s.generateSequentialChildCode(parentCode)
 	return childCode
+}
+
+// generateUniqueAccountCode generates truly unique account code with name-based suffix
+// ✅ FIX ROOT CAUSE: Ensures each cash/bank gets its own unique GL
+func (s *CashBankService) generateUniqueAccountCode(baseCode, accountName string) string {
+	// Try sequential first
+	sequentialCode := s.generateSequentialChildCode(baseCode)
+	
+	// Verify it's actually unique by checking database
+	if existingAcc, err := s.accountRepo.GetAccountByCode(sequentialCode); err == nil && existingAcc != nil {
+		// Code already exists, add timestamp suffix for uniqueness
+		timestamp := time.Now().Unix() % 10000
+		return fmt.Sprintf("%s-%04d", baseCode, timestamp)
+	}
+	
+	return sequentialCode
 }
 
 // generateSequentialChildCode generates the next sequential child code for a parent account

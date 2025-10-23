@@ -492,7 +492,9 @@ class ReportService {
       'purchase-summary': 'purchase-summary',
       'vendor-analysis': 'vendor-analysis',
       'inventory-report': 'inventory-report',
-      'financial-ratios': 'financial-ratios'
+      'financial-ratios': 'financial-ratios',
+      'customer-history': 'customer-history',
+      'vendor-history': 'vendor-history'
     };
 
     const endpoint = endpointMap[reportId];
