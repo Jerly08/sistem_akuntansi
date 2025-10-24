@@ -11,7 +11,8 @@ import (
 
 // SeedAccounts creates initial chart of accounts
 func SeedAccounts(db *gorm.DB) error {
-	log.Println("🔒 PRODUCTION MODE: Seeding accounts while preserving existing balances...")
+	log.Println("🌱 Starting account seeding (idempotent mode)...")
+	log.Println("   Note: Accounts from migrations will be preserved, not recreated")
 		accounts := []models.Account{
 		// ASSETS (1xxx)
 		{Code: "1000", Name: "ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 1, IsHeader: true, IsActive: true},
@@ -100,14 +101,13 @@ func SeedAccounts(db *gorm.DB) error {
 			   strings.Contains(errMsg, "unique") ||
 			   strings.Contains(errMsg, "already exists") ||
 			   strings.Contains(errMsg, "23505") {
-				// Constraint violation - account already exists
-				// This is EXPECTED when migrations already created the account
-				log.Printf("🔄 Account %s already exists (from migration), fetching...", account.Code)
+				// Account already exists - this is EXPECTED and NORMAL
+				// Migrations often create accounts before seeding runs
 				if err := db.Where("code = ? AND deleted_at IS NULL", account.Code).First(&existingAccount).Error; err != nil {
 					return fmt.Errorf("failed to fetch existing account %s: %v", account.Code, err)
 				}
 				accountMap[account.Code] = existingAccount.ID
-				log.Printf("🔒 Preserving balance for account %s (%s): %.2f", existingAccount.Code, existingAccount.Name, existingAccount.Balance)
+				// Silent skip - no log needed for normal condition
 				continue
 			}
 			return fmt.Errorf("failed to seed account %s: %v", account.Code, result.Error)
@@ -115,11 +115,9 @@ func SeedAccounts(db *gorm.DB) error {
 
 		// Check if account was created or already existed
 		if result.RowsAffected > 0 {
-			log.Printf("✅ Created new account: %s - %s", account.Code, account.Name)
-		} else {
-			// Account already existed - preserve its existing balance
-			log.Printf("🔒 Preserving balance for account %s (%s): %.2f", existingAccount.Code, existingAccount.Name, existingAccount.Balance)
+			log.Printf("✅ Created account: %s - %s", account.Code, account.Name)
 		}
+		// Silent if already existed - reduces noise in logs
 		
 		accountMap[account.Code] = existingAccount.ID
 	}
@@ -168,7 +166,11 @@ func SeedAccounts(db *gorm.DB) error {
 		}
 	}
 
-	log.Println("✅ Account seeding completed - all existing balances preserved")
+	// Count how many accounts exist vs created
+	var totalAccounts int64
+	db.Model(&models.Account{}).Where("deleted_at IS NULL").Count(&totalAccounts)
+	
+	log.Printf("✅ Account seeding completed: %d accounts ready", totalAccounts)
 	return nil
 }
 
