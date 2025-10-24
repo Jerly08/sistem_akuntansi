@@ -145,6 +145,17 @@ func RunAutoMigrations(db *gorm.DB) error {
 	}
 	log.Println("============================================")
 
+	// Cash Bank-COA auto-sync system
+	log.Println("============================================")
+	log.Println("💰 INSTALLING CASH BANK-COA AUTO-SYNC SYSTEM")
+	log.Println("============================================")
+	if err := RunCashBankCOASyncMigration(db); err != nil {
+		log.Printf("⚠️  CASH BANK-COA SYNC MIGRATION FAILED: %v", err)
+	} else {
+		log.Println("✅ CASH BANK-COA SYNC SYSTEM INSTALLED SUCCESSFULLY")
+	}
+	log.Println("============================================")
+
 	// Fix revenue duplication issue (account name variations + parent accounts)
 	log.Println("============================================")
 	log.Println("💰 FIXING REVENUE DUPLICATION ISSUE")

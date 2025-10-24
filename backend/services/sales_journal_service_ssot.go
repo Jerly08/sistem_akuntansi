@@ -200,7 +200,9 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		}
 	}
 
-	// 4. PPh if exists (reduce the total amount)
+	// 4. PPh if exists (liability - reduces receivable/cash on debit side)
+	// ✅ FIX: PPh is a LIABILITY (utang pajak) so it should be CREDITED
+	// The receivable/cash on debit side will be NET of PPh (Total - PPh)
 	if sale.PPh > 0 {
 		pphAccount, err := resolveByCode("2104")
 		if err != nil {
@@ -208,10 +210,11 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		} else {
 			lines = append(lines, SalesJournalLineRequest{
 				AccountID:    uint64(pphAccount.ID),
-				DebitAmount:  decimal.NewFromFloat(sale.PPh),
-				CreditAmount: decimal.Zero,
+				DebitAmount:  decimal.Zero,
+				CreditAmount: decimal.NewFromFloat(sale.PPh),
 				Description:  fmt.Sprintf("PPh Dipotong - %s", sale.InvoiceNumber),
 			})
+			log.Printf("💰 [PPh] Recorded PPh liability: Rp %.2f", sale.PPh)
 		}
 	}
 
