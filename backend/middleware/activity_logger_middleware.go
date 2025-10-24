@@ -116,6 +116,7 @@ func shouldSkipLogging(path string) bool {
 		"/uploads/",
 		"/templates/",
 		"/swagger/",
+		"/api/v1/notifications", // Skip automatic notification polling
 	}
 	
 	for _, skipPath := range skipPaths {

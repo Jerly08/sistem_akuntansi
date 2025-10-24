@@ -102,6 +102,12 @@ func (al *AuditLogger) AuditMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		
+		// Only audit financial transactions (sales, purchases, payments, cash_bank)
+		if !isFinancialTransaction(c.Request.URL.Path) {
+			c.Next()
+			return
+		}
 
 		// Capture request body
 		var requestBody []byte
@@ -329,6 +335,27 @@ func shouldSkipAudit(path string) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// isFinancialTransaction checks if the path is a financial transaction that should be audited
+func isFinancialTransaction(path string) bool {
+	// Only audit these financial transaction endpoints
+	financialResources := []string{
+		"/api/v1/sales",
+		"/api/v1/purchases",
+		"/api/v1/payments",
+		"/api/v1/payment",
+		"/api/v1/cashbank",
+		"/api/v1/cash-bank",
+	}
+	
+	for _, resource := range financialResources {
+		if strings.HasPrefix(path, resource) {
+			return true
+		}
+	}
+	
 	return false
 }
 
