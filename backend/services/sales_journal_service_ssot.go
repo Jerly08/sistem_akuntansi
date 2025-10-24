@@ -185,20 +185,29 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 	}
 
 	// Add DEBIT line
-	// ✅ CRITICAL FIX: When PPh exists, TotalAmount is NET (after PPh deduction)
-	// For journal balance: DEBIT must be GROSS (before PPh) = TotalAmount + PPh
-	// This is because PPh will be credited separately as a liability
-	debitAmount := decimal.NewFromFloat(sale.TotalAmount)
-	if sale.PPh > 0 {
-		// Add back PPh to get gross amount
-		debitAmount = debitAmount.Add(decimal.NewFromFloat(sale.PPh))
-		log.Printf("💰 [PPh Adjustment] TotalAmount=%.2f + PPh=%.2f = GrossDebit=%.2f", 
-			sale.TotalAmount, sale.PPh, debitAmount.InexactFloat64())
+	// ✅ CRITICAL FIX: Calculate correct debit amount
+	// The debit should equal all credits (Revenue + PPN + other tax additions - tax deductions)
+	// Formula: Debit = Subtotal + PPN + TotalTaxAdditions (before any deductions)
+	// 
+	// TotalAmount in DB = Net amount received = Subtotal + PPN - PPh - OtherTaxDeductions
+	// But for journal: Debit = Gross before deductions
+	
+	// Calculate gross amount (before tax deductions)
+	grossAmount := decimal.NewFromFloat(sale.Subtotal).Add(decimal.NewFromFloat(sale.PPN))
+	
+	// Add any other tax additions if they exist
+	if sale.OtherTaxAdditions > 0 {
+		grossAmount = grossAmount.Add(decimal.NewFromFloat(sale.OtherTaxAdditions))
 	}
+	
+	log.Printf("📊 [DEBIT CALC] Subtotal=%.2f + PPN=%.2f + OtherTaxAdd=%.2f = GrossAmount=%.2f", 
+		sale.Subtotal, sale.PPN, sale.OtherTaxAdditions, grossAmount.InexactFloat64())
+	log.Printf("📊 [DEBIT CALC] TotalAmount from DB=%.2f (should be Gross - Deductions)", sale.TotalAmount)
+	log.Printf("📊 [DEBIT CALC] PPh=%.2f, TotalTaxDeductions=%.2f", sale.PPh, sale.TotalTaxDeductions)
 	
 	lines = append(lines, SalesJournalLineRequest{
 		AccountID:    uint64(debitAccount.ID),
-		DebitAmount:  debitAmount,
+		DebitAmount:  grossAmount,
 		CreditAmount: decimal.Zero,
 		Description:  fmt.Sprintf("Penjualan - %s", sale.InvoiceNumber),
 	})
@@ -231,9 +240,11 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		}
 	}
 
-	// 4. PPh if exists (liability - reduces receivable/cash on debit side)
-	// ✅ FIX: PPh is a LIABILITY (utang pajak) so it should be CREDITED
-	// The receivable/cash on debit side will be NET of PPh (Total - PPh)
+	// 4. Tax Deductions - PPh (liability)
+	// ✅ FIX: Support all PPh fields (legacy PPh, PPh21, PPh23, TotalTaxDeductions)
+	// PPh is a LIABILITY (utang pajak) that must be CREDITED
+	
+	// Legacy PPh field
 	if sale.PPh > 0 {
 		pphAccount, err := resolveByCode("2104")
 		if err != nil {
@@ -245,7 +256,61 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 				CreditAmount: decimal.NewFromFloat(sale.PPh),
 				Description:  fmt.Sprintf("PPh Dipotong - %s", sale.InvoiceNumber),
 			})
-			log.Printf("💰 [PPh] Recorded PPh liability: Rp %.2f", sale.PPh)
+			log.Printf("💰 [PPh] Recorded legacy PPh: Rp %.2f", sale.PPh)
+		}
+	}
+	
+	// PPh 21
+	if sale.PPh21Amount > 0 {
+		pph21Account, err := resolveByCode("2105") // PPh 21 account
+		if err != nil {
+			log.Printf("⚠️ PPh21 account not found, using generic PPh account (2104)")
+			pph21Account, err = resolveByCode("2104")
+		}
+		if err == nil {
+			lines = append(lines, SalesJournalLineRequest{
+				AccountID:    uint64(pph21Account.ID),
+				DebitAmount:  decimal.Zero,
+				CreditAmount: decimal.NewFromFloat(sale.PPh21Amount),
+				Description:  fmt.Sprintf("PPh 21 Dipotong - %s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 [PPh21] Recorded: Rp %.2f", sale.PPh21Amount)
+		}
+	}
+	
+	// PPh 23
+	if sale.PPh23Amount > 0 {
+		pph23Account, err := resolveByCode("2106") // PPh 23 account
+		if err != nil {
+			log.Printf("⚠️ PPh23 account not found, using generic PPh account (2104)")
+			pph23Account, err = resolveByCode("2104")
+		}
+		if err == nil {
+			lines = append(lines, SalesJournalLineRequest{
+				AccountID:    uint64(pph23Account.ID),
+				DebitAmount:  decimal.Zero,
+				CreditAmount: decimal.NewFromFloat(sale.PPh23Amount),
+				Description:  fmt.Sprintf("PPh 23 Dipotong - %s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 [PPh23] Recorded: Rp %.2f", sale.PPh23Amount)
+		}
+	}
+	
+	// Other tax deductions
+	if sale.OtherTaxDeductions > 0 {
+		otherTaxAccount, err := resolveByCode("2107") // Other tax deductions account
+		if err != nil {
+			log.Printf("⚠️ Other tax deductions account not found, using generic PPh account (2104)")
+			otherTaxAccount, err = resolveByCode("2104")
+		}
+		if err == nil {
+			lines = append(lines, SalesJournalLineRequest{
+				AccountID:    uint64(otherTaxAccount.ID),
+				DebitAmount:  decimal.Zero,
+				CreditAmount: decimal.NewFromFloat(sale.OtherTaxDeductions),
+				Description:  fmt.Sprintf("Pemotongan Pajak Lainnya - %s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 [OtherTaxDeductions] Recorded: Rp %.2f", sale.OtherTaxDeductions)
 		}
 	}
 
