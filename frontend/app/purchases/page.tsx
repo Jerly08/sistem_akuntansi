@@ -5568,6 +5568,7 @@ const handleCreate = async () => {
                             <Th>Received By</Th>
                             <Th>Status</Th>
                             <Th>Items</Th>
+                            <Th>Actions</Th>
                           </Tr>
                         </Thead>
                         <Tbody>
@@ -5582,6 +5583,17 @@ const handleCreate = async () => {
                                 </Badge>
                               </Td>
                               <Td>{(receipt.receipt_items || []).reduce((sum: number, it: any) => sum + (it.quantity_received || 0), 0)}</Td>
+                              <Td>
+                                <IconButton
+                                  aria-label="Download Receipt PDF"
+                                  icon={<FiDownload />}
+                                  size="sm"
+                                  colorScheme="blue"
+                                  variant="ghost"
+                                  onClick={() => handleDownloadReceiptPDF(receipt.id, receipt.receipt_number)}
+                                  title="Download this receipt as PDF"
+                                />
+                              </Td>
                             </Tr>
                           ))}
                         </Tbody>

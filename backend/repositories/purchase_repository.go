@@ -207,7 +207,8 @@ func (r *PurchaseRepository) CreateReceipt(receipt *models.PurchaseReceipt) (*mo
 
 func (r *PurchaseRepository) FindReceiptByID(id uint) (*models.PurchaseReceipt, error) {
 	var receipt models.PurchaseReceipt
-	err := r.db.Preload("Purchase").
+	err := r.db.Preload("Purchase.Vendor").
+		Preload("Purchase").
 		Preload("Receiver").
 		Preload("ReceiptItems.PurchaseItem.Product").
 		First(&receipt, id).Error
@@ -220,8 +221,10 @@ func (r *PurchaseRepository) FindReceiptByID(id uint) (*models.PurchaseReceipt, 
 
 func (r *PurchaseRepository) FindReceiptsByPurchaseID(purchaseID uint) ([]models.PurchaseReceipt, error) {
 	var receipts []models.PurchaseReceipt
-	err := r.db.Preload("Receiver").
-		Preload("ReceiptItems").
+	err := r.db.Preload("Purchase.Vendor").
+		Preload("Purchase").
+		Preload("Receiver").
+		Preload("ReceiptItems.PurchaseItem.Product").
 		Where("purchase_id = ?", purchaseID).
 		Order("created_at ASC").
 		Find(&receipts).Error
@@ -263,8 +266,10 @@ func (r *PurchaseRepository) AreAllItemsFullyReceived(purchaseID uint) (bool, er
 // FindCompletedReceiptsByPurchaseID gets only completed receipts for a purchase
 func (r *PurchaseRepository) FindCompletedReceiptsByPurchaseID(purchaseID uint) ([]models.PurchaseReceipt, error) {
 	var receipts []models.PurchaseReceipt
-	err := r.db.Preload("Receiver").
-		Preload("ReceiptItems").
+	err := r.db.Preload("Purchase.Vendor").
+		Preload("Purchase").
+		Preload("Receiver").
+		Preload("ReceiptItems.PurchaseItem.Product").
 		Where("purchase_id = ? AND status = ?", purchaseID, models.ReceiptStatusComplete).
 		Find(&receipts).Error
 
