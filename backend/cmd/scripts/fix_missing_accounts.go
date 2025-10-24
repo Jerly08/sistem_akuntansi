@@ -3,21 +3,23 @@ package main
 import (
 	"log"
 
-	"app-sistem-akuntansi/database"
+	"app-sistem-akuntansi/config"
 	"app-sistem-akuntansi/models"
 
-	"github.com/joho/godotenv"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func main() {
-	// Load .env file
-	if err := godotenv.Load("../.env"); err != nil {
-		log.Printf("Warning: .env file not found, using environment variables")
-	}
+	// Load config from environment
+	cfg := config.LoadConfig()
 
-	// Connect to database
-	db := database.InitDB()
+	// Connect to database using config
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	log.Printf("Connected to database successfully")
 
 	log.Println("=== Checking and Creating Missing Tax Accounts ===\n")
 

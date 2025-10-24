@@ -2,32 +2,24 @@ package main
 
 import (
 	"log"
-	"os"
 
+	"app-sistem-akuntansi/config"
 	"app-sistem-akuntansi/models"
 
-	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func main() {
-	// Load .env file
-	if err := godotenv.Load(".env"); err != nil {
-		log.Printf("Warning: .env file not found, using environment variables")
-	}
+	// Load config from environment
+	cfg := config.LoadConfig()
 
-	// Connect to database
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "postgres://postgres:postgres@localhost/sistem_akuntansi?sslmode=disable"
-		log.Printf("Using default database connection")
-	}
-	
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	// Connect to database using config
+	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
+	log.Printf("Connected to database successfully")
 
 	log.Println("=== Debugging Sale #3 Calculation Issue ===\n")
 
