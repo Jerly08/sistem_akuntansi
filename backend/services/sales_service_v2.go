@@ -243,14 +243,57 @@ func (s *SalesServiceV2) CreateSale(request models.SaleCreateRequest, userID uin
 	// Calculate sale totals
 	sale.Subtotal = subtotal
 	sale.SubTotal = subtotal // Compatibility field
+	
+	// ✅ FIX: Apply sale-level discount
 	sale.DiscountAmount = subtotal * (sale.DiscountPercent / 100)
 	sale.TaxableAmount = subtotal - sale.DiscountAmount
-	sale.PPN = totalPPN
+	sale.NetBeforeTax = sale.TaxableAmount // Net amount before any taxes
+	
+	// ✅ FIX: Recalculate PPN from TaxableAmount (after sale-level discount)
+	// Item-level PPN was calculated before sale discount, so recalculate
+	if sale.PPNPercent > 0 || sale.PPNRate > 0 {
+		ppnRate := sale.PPNPercent
+		if ppnRate == 0 {
+			ppnRate = sale.PPNRate
+		}
+		sale.PPN = sale.TaxableAmount * (ppnRate / 100)
+		sale.PPNAmount = sale.PPN // Enhanced field
+	} else {
+		sale.PPN = totalPPN // Use item-level PPN if no rate specified
+		sale.PPNAmount = totalPPN
+	}
+	
+	// ✅ FIX: Calculate enhanced tax fields
+	// PPh21 and PPh23 are calculated from TaxableAmount if rates are provided
+	if sale.PPh21Rate > 0 {
+		sale.PPh21Amount = sale.TaxableAmount * (sale.PPh21Rate / 100)
+	}
+	if sale.PPh23Rate > 0 {
+		sale.PPh23Amount = sale.TaxableAmount * (sale.PPh23Rate / 100)
+	}
+	
+	// Legacy PPh field
 	sale.PPh = totalPPH
-	sale.TotalTax = totalPPN - totalPPH
+	
+	// Total tax additions (added to invoice total)
+	sale.TotalTaxAdditions = sale.OtherTaxAdditions
+	
+	// Total tax deductions (subtracted from invoice total)
+	sale.TotalTaxDeductions = sale.PPh + sale.PPh21Amount + sale.PPh23Amount + sale.OtherTaxDeductions
+	
+	// Total tax for display
+	sale.TotalTax = sale.PPN + sale.TotalTaxAdditions - sale.TotalTaxDeductions
 	sale.Tax = sale.TotalTax // Compatibility field
-	sale.TotalAmount = sale.TaxableAmount + totalPPN - totalPPH + sale.ShippingCost
+	
+	// ✅ FIX: Calculate final TotalAmount correctly
+	// Formula: TaxableAmount + PPN + OtherTaxAdditions + ShippingCost - TotalTaxDeductions
+	sale.TotalAmount = sale.TaxableAmount + sale.PPN + sale.OtherTaxAdditions + sale.ShippingCost - sale.TotalTaxDeductions
 	sale.OutstandingAmount = sale.TotalAmount // Initially all outstanding
+	
+	log.Printf("📊 [CALC] Subtotal=%.2f, Discount=%.2f, TaxableAmt=%.2f", sale.Subtotal, sale.DiscountAmount, sale.TaxableAmount)
+	log.Printf("📊 [CALC] PPN=%.2f, Additions=%.2f, Deductions=%.2f, Shipping=%.2f", 
+		sale.PPN, sale.OtherTaxAdditions, sale.TotalTaxDeductions, sale.ShippingCost)
+	log.Printf("📊 [CALC] TotalAmount=%.2f", sale.TotalAmount)
 
 	// Save sale
 	if err := tx.Create(&sale).Error; err != nil {
@@ -387,13 +430,47 @@ func (s *SalesServiceV2) UpdateSale(saleID uint, request models.SaleUpdateReques
 			sale.SaleItems = append(sale.SaleItems, item)
 		}
 
+		// Apply same calculation logic as CreateSale
 		sale.Subtotal = subtotal
 		sale.SubTotal = subtotal
-		sale.PPN = totalPPN
+		
+		// Apply sale-level discount
+		sale.DiscountAmount = subtotal * (sale.DiscountPercent / 100)
+		sale.TaxableAmount = subtotal - sale.DiscountAmount
+		sale.NetBeforeTax = sale.TaxableAmount
+		
+		// Recalculate PPN from TaxableAmount
+		if sale.PPNPercent > 0 || sale.PPNRate > 0 {
+			ppnRate := sale.PPNPercent
+			if ppnRate == 0 {
+				ppnRate = sale.PPNRate
+			}
+			sale.PPN = sale.TaxableAmount * (ppnRate / 100)
+			sale.PPNAmount = sale.PPN
+		} else {
+			sale.PPN = totalPPN
+			sale.PPNAmount = totalPPN
+		}
+		
+		// Calculate enhanced tax fields
+		if sale.PPh21Rate > 0 {
+			sale.PPh21Amount = sale.TaxableAmount * (sale.PPh21Rate / 100)
+		}
+		if sale.PPh23Rate > 0 {
+			sale.PPh23Amount = sale.TaxableAmount * (sale.PPh23Rate / 100)
+		}
+		
 		sale.PPh = totalPPH
-		sale.TotalTax = totalPPN - totalPPH
+		sale.TotalTaxAdditions = sale.OtherTaxAdditions
+		sale.TotalTaxDeductions = sale.PPh + sale.PPh21Amount + sale.PPh23Amount + sale.OtherTaxDeductions
+		sale.TotalTax = sale.PPN + sale.TotalTaxAdditions - sale.TotalTaxDeductions
 		sale.Tax = sale.TotalTax
-		sale.TotalAmount = sale.TaxableAmount + totalPPN - totalPPH + sale.ShippingCost
+		
+		// Calculate final TotalAmount
+		sale.TotalAmount = sale.TaxableAmount + sale.PPN + sale.OtherTaxAdditions + sale.ShippingCost - sale.TotalTaxDeductions
+		sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
+		
+		log.Printf("📊 [UPDATE] TotalAmount=%.2f, Outstanding=%.2f", sale.TotalAmount, sale.OutstandingAmount)
 	}
 
 	// Save updated sale
