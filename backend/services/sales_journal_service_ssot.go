@@ -225,32 +225,39 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		}
 	}
 	
-	log.Printf("📊 [DEBIT CALC] Subtotal=%.2f + PPN=%.2f + OtherTaxAdd=%.2f + Shipping=%.2f = GrossAmount=%.2f", 
-		sale.Subtotal, sale.PPN, sale.OtherTaxAdditions, sale.ShippingCost, grossAmount.InexactFloat64())
-	
-	// ⚠️ DEBUG: Check if there's data inconsistency
-	if sale.OtherTaxAdditions > 0 {
-		log.Printf("⚠️ [WARNING] OtherTaxAdditions = %.2f (will be added to debit and credited to liability)", sale.OtherTaxAdditions)
+	// ✅ CRITICAL FIX: Deduct tax withholdings from debit (amount actually received)
+	// Tax deductions (PPh, etc) reduce the cash/receivable we get
+	// They are withheld by customer and will be paid to tax office
+	netDebitAmount := grossAmount
+	if sale.PPh > 0 {
+		netDebitAmount = netDebitAmount.Sub(decimal.NewFromFloat(sale.PPh))
+	}
+	if sale.PPh21Amount > 0 {
+		netDebitAmount = netDebitAmount.Sub(decimal.NewFromFloat(sale.PPh21Amount))
+	}
+	if sale.PPh23Amount > 0 {
+		netDebitAmount = netDebitAmount.Sub(decimal.NewFromFloat(sale.PPh23Amount))
 	}
 	if sale.OtherTaxDeductions > 0 {
-		log.Printf("⚠️ [WARNING] OtherTaxDeductions = %.2f (will be credited to liability, reducing net amount)", sale.OtherTaxDeductions)
+		netDebitAmount = netDebitAmount.Sub(decimal.NewFromFloat(sale.OtherTaxDeductions))
 	}
-	log.Printf("📊 [DEBIT CALC] TotalAmount from DB=%.2f (should be Gross - Deductions)", sale.TotalAmount)
-	log.Printf("📊 [DEBIT CALC] Tax Deductions: PPh=%.2f, PPh21=%.2f, PPh23=%.2f, Other=%.2f, Total=%.2f", 
-		sale.PPh, sale.PPh21Amount, sale.PPh23Amount, sale.OtherTaxDeductions, sale.TotalTaxDeductions)
+	
+	log.Printf("📊 [DEBIT CALC] GrossAmount=%.2f - TaxDeductions=%.2f = NetDebitAmount=%.2f", 
+		grossAmount.InexactFloat64(), 
+		sale.PPh+sale.PPh21Amount+sale.PPh23Amount+sale.OtherTaxDeductions,
+		netDebitAmount.InexactFloat64())
+	log.Printf("📊 [DEBIT CALC] TotalAmount from DB=%.2f (should match NetDebitAmount)", sale.TotalAmount)
 	
 	// Validate data consistency
-	// ✅ FIX: Don't add shipping twice - it's already in grossAmount
-	expectedTotal := grossAmount.InexactFloat64() - sale.PPh - sale.PPh21Amount - sale.PPh23Amount - sale.OtherTaxDeductions
-	if math.Abs(expectedTotal-sale.TotalAmount) > 0.01 {
+	if math.Abs(netDebitAmount.InexactFloat64()-sale.TotalAmount) > 0.01 {
 		log.Printf("⚠️ [DATA WARNING] TotalAmount mismatch! Expected=%.2f, Actual=%.2f, Diff=%.2f", 
-			expectedTotal, sale.TotalAmount, expectedTotal-sale.TotalAmount)
+			netDebitAmount.InexactFloat64(), sale.TotalAmount, netDebitAmount.InexactFloat64()-sale.TotalAmount)
 		log.Printf("⚠️ This may indicate corrupted data or calculation error during sale creation")
 	}
 	
 	lines = append(lines, SalesJournalLineRequest{
 		AccountID:    uint64(debitAccount.ID),
-		DebitAmount:  grossAmount,
+		DebitAmount:  netDebitAmount,
 		CreditAmount: decimal.Zero,
 		Description:  fmt.Sprintf("Penjualan - %s", sale.InvoiceNumber),
 	})
