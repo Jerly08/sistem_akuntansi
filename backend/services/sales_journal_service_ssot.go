@@ -215,7 +215,8 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		sale.PPh, sale.PPh21Amount, sale.PPh23Amount, sale.OtherTaxDeductions, sale.TotalTaxDeductions)
 	
 	// Validate data consistency
-	expectedTotal := grossAmount.InexactFloat64() - sale.PPh - sale.PPh21Amount - sale.PPh23Amount - sale.OtherTaxDeductions + sale.ShippingCost
+	// ✅ FIX: Don't add shipping twice - it's already in grossAmount
+	expectedTotal := grossAmount.InexactFloat64() - sale.PPh - sale.PPh21Amount - sale.PPh23Amount - sale.OtherTaxDeductions
 	if math.Abs(expectedTotal-sale.TotalAmount) > 0.01 {
 		log.Printf("⚠️ [DATA WARNING] TotalAmount mismatch! Expected=%.2f, Actual=%.2f, Diff=%.2f", 
 			expectedTotal, sale.TotalAmount, expectedTotal-sale.TotalAmount)
@@ -254,6 +255,48 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 				CreditAmount: decimal.NewFromFloat(sale.PPN),
 				Description:  fmt.Sprintf("PPN Keluaran - %s", sale.InvoiceNumber),
 			})
+		}
+	}
+	
+	// 3b. Other Tax Additions (if exists) - must be credited to match the debit
+	// These are additional taxes charged to customer, so they're credited as tax liabilities
+	if sale.OtherTaxAdditions > 0 {
+		otherTaxAddAccount, err := resolveByCode("2108") // Other tax additions account
+		if err != nil {
+			log.Printf("⚠️ Other tax additions account (2108) not found, using generic tax account (2103)")
+			otherTaxAddAccount, err = resolveByCode("2103")
+		}
+		if err == nil {
+			lines = append(lines, SalesJournalLineRequest{
+				AccountID:    uint64(otherTaxAddAccount.ID),
+				DebitAmount:  decimal.Zero,
+				CreditAmount: decimal.NewFromFloat(sale.OtherTaxAdditions),
+				Description:  fmt.Sprintf("Penambahan Pajak Lainnya - %s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 [OtherTaxAdditions] Recorded: Rp %.2f", sale.OtherTaxAdditions)
+		} else {
+			log.Printf("⚠️ Failed to record OtherTaxAdditions: no account found")
+		}
+	}
+	
+	// 3c. Shipping Cost (if exists and taxable/non-taxable)
+	// Shipping is revenue/income, so it's credited
+	if sale.ShippingCost > 0 {
+		shippingAccount, err := resolveByCode("4102") // Shipping revenue account
+		if err != nil {
+			log.Printf("⚠️ Shipping revenue account (4102) not found, using main revenue account (4101)")
+			shippingAccount, err = resolveByCode("4101")
+		}
+		if err == nil {
+			lines = append(lines, SalesJournalLineRequest{
+				AccountID:    uint64(shippingAccount.ID),
+				DebitAmount:  decimal.Zero,
+				CreditAmount: decimal.NewFromFloat(sale.ShippingCost),
+				Description:  fmt.Sprintf("Pendapatan Ongkir - %s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 [ShippingCost] Recorded: Rp %.2f", sale.ShippingCost)
+		} else {
+			log.Printf("⚠️ Failed to record ShippingCost: no account found")
 		}
 	}
 

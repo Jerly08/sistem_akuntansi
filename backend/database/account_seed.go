@@ -42,6 +42,8 @@ func SeedAccounts(db *gorm.DB) error {
 		{Code: "2101", Name: "UTANG USAHA", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "2103", Name: "PPN KELUARAN", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "2104", Name: "PPh YANG DIPOTONG", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "2107", Name: "PEMOTONGAN PAJAK LAINNYA", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "2108", Name: "PENAMBAHAN PAJAK LAINNYA", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 		// EQUITY (3xxx)
 		{Code: "3000", Name: "EQUITY", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 1, IsHeader: true, IsActive: true},
@@ -51,6 +53,7 @@ func SeedAccounts(db *gorm.DB) error {
 		// REVENUE (4xxx)
 		{Code: "4000", Name: "REVENUE", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 1, IsHeader: true, IsActive: true},
 		{Code: "4101", Name: "PENDAPATAN PENJUALAN", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "4102", Name: "PENDAPATAN JASA/ONGKIR", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "4201", Name: "PENDAPATAN LAIN-LAIN", Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 		{Code: "4900", Name: "OTHER INCOME", Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 
@@ -142,9 +145,12 @@ func SeedAccounts(db *gorm.DB) error {
 		"2101": "2100", // Utang Usaha -> CURRENT LIABILITIES
 		"2103": "2100", // PPN Keluaran -> CURRENT LIABILITIES
 		"2104": "2100", // PPh Yang Dipotong -> CURRENT LIABILITIES
+		"2107": "2100", // Pemotongan Pajak Lainnya -> CURRENT LIABILITIES
+		"2108": "2100", // Penambahan Pajak Lainnya -> CURRENT LIABILITIES
 		"3101": "3000", // Modal Pemilik -> EQUITY
 		"3201": "3000", // Laba Ditahan -> EQUITY
 		"4101": "4000", // Pendapatan Penjualan -> REVENUE
+		"4102": "4000", // Pendapatan Jasa/Ongkir -> REVENUE
 		"4201": "4000", // Pendapatan Lain-lain -> REVENUE
 		"4900": "4000", // Other Income -> REVENUE
 		"5101": "5000", // Harga Pokok Penjualan -> EXPENSES
