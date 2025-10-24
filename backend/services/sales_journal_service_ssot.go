@@ -225,39 +225,22 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		}
 	}
 	
-	// ✅ CRITICAL FIX: Deduct tax withholdings from debit (amount actually received)
-	// Tax deductions (PPh, etc) reduce the cash/receivable we get
-	// They are withheld by customer and will be paid to tax office
-	netDebitAmount := grossAmount
-	if sale.PPh > 0 {
-		netDebitAmount = netDebitAmount.Sub(decimal.NewFromFloat(sale.PPh))
-	}
-	if sale.PPh21Amount > 0 {
-		netDebitAmount = netDebitAmount.Sub(decimal.NewFromFloat(sale.PPh21Amount))
-	}
-	if sale.PPh23Amount > 0 {
-		netDebitAmount = netDebitAmount.Sub(decimal.NewFromFloat(sale.PPh23Amount))
-	}
-	if sale.OtherTaxDeductions > 0 {
-		netDebitAmount = netDebitAmount.Sub(decimal.NewFromFloat(sale.OtherTaxDeductions))
-	}
-	
-	log.Printf("📊 [DEBIT CALC] GrossAmount=%.2f - TaxDeductions=%.2f = NetDebitAmount=%.2f", 
-		grossAmount.InexactFloat64(), 
-		sale.PPh+sale.PPh21Amount+sale.PPh23Amount+sale.OtherTaxDeductions,
-		netDebitAmount.InexactFloat64())
-	log.Printf("📊 [DEBIT CALC] TotalAmount from DB=%.2f (should match NetDebitAmount)", sale.TotalAmount)
+	log.Printf("📊 [DEBIT CALC] Subtotal=%.2f + PPN=%.2f + OtherTaxAdd=%.2f + Shipping=%.2f = GrossAmount=%.2f", 
+		sale.Subtotal, sale.PPN, sale.OtherTaxAdditions, sale.ShippingCost, grossAmount.InexactFloat64())
+	log.Printf("📊 [DEBIT CALC] TotalAmount from DB=%.2f", sale.TotalAmount)
 	
 	// Validate data consistency
-	if math.Abs(netDebitAmount.InexactFloat64()-sale.TotalAmount) > 0.01 {
+	expectedTotalWithDeductions := grossAmount.InexactFloat64() - sale.PPh - sale.PPh21Amount - sale.PPh23Amount - sale.OtherTaxDeductions
+	if math.Abs(expectedTotalWithDeductions-sale.TotalAmount) > 0.01 {
 		log.Printf("⚠️ [DATA WARNING] TotalAmount mismatch! Expected=%.2f, Actual=%.2f, Diff=%.2f", 
-			netDebitAmount.InexactFloat64(), sale.TotalAmount, netDebitAmount.InexactFloat64()-sale.TotalAmount)
+			expectedTotalWithDeductions, sale.TotalAmount, expectedTotalWithDeductions-sale.TotalAmount)
 		log.Printf("⚠️ This may indicate corrupted data or calculation error during sale creation")
 	}
 	
+	// Main debit entry - full gross amount (customer owes us this much)
 	lines = append(lines, SalesJournalLineRequest{
 		AccountID:    uint64(debitAccount.ID),
-		DebitAmount:  netDebitAmount,
+		DebitAmount:  grossAmount,
 		CreditAmount: decimal.Zero,
 		Description:  fmt.Sprintf("Penjualan - %s", sale.InvoiceNumber),
 	})
@@ -338,82 +321,48 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		log.Printf("⚠️ [ShippingCost] Skipped small amount: Rp %.2f (< 1.00)", sale.ShippingCost)
 	}
 
-	// 4. Tax Deductions - PPh (liability)
-	// ✅ FIX: Support all PPh fields (legacy PPh, PPh21, PPh23, TotalTaxDeductions)
-	// PPh is a LIABILITY (utang pajak) that must be CREDITED
+	// 4. Tax Deductions - PPh (ASSET - Prepaid Tax)
+	// ✅ FIX: Tax withheld by customer is our ASSET (claim against tax office)
+	// When customer withholds tax, we DEBIT prepaid tax account
+	// Later we can use this to offset our tax obligations
 	
 	// Legacy PPh field
 	if sale.PPh > 0 {
-		pphAccount, err := resolveByCode("2104")
+		pphAccount, err := resolveByCode("1114") // PPh 21 Dibayar Dimuka (Asset)
 		if err != nil {
-			log.Printf("⚠️ PPh account not found, skipping PPh entry: %v", err)
-		} else {
+			log.Printf("⚠️ PPh prepaid account (1114) not found, trying 1115")
+			pphAccount, err = resolveByCode("1115") // PPh 23 Dibayar Dimuka
+		}
+		if err == nil {
 			lines = append(lines, SalesJournalLineRequest{
 				AccountID:    uint64(pphAccount.ID),
-				DebitAmount:  decimal.Zero,
-				CreditAmount: decimal.NewFromFloat(sale.PPh),
-				Description:  fmt.Sprintf("PPh Dipotong - %s", sale.InvoiceNumber),
+				DebitAmount:  decimal.NewFromFloat(sale.PPh),
+				CreditAmount: decimal.Zero,
+				Description:  fmt.Sprintf("PPh Dibayar Dimuka - %s", sale.InvoiceNumber),
 			})
-			log.Printf("💰 [PPh] Recorded legacy PPh: Rp %.2f", sale.PPh)
+			log.Printf("💰 [PPh] Recorded as prepaid tax (Asset): Rp %.2f", sale.PPh)
+		} else {
+			log.Printf("⚠️ PPh prepaid account not found, skipping PPh entry: %v", err)
 		}
 	}
 	
 	// PPh 21
 	if sale.PPh21Amount > 0 {
-		pph21Account, err := resolveByCode("2105") // PPh 21 account
+		pph21Account, err := resolveByCode("1114") // PPh 21 Dibayar Dimuka (Asset)
 		if err != nil {
-			log.Printf("⚠️ PPh21 account not found, using generic PPh account (2104)")
-			pph21Account, err = resolveByCode("2104")
-		}
-		if err == nil {
+			log.Printf("⚠️ PPh21 prepaid account (1114) not found, skipping")
+		} else {
 			lines = append(lines, SalesJournalLineRequest{
 				AccountID:    uint64(pph21Account.ID),
-				DebitAmount:  decimal.Zero,
-				CreditAmount: decimal.NewFromFloat(sale.PPh21Amount),
-				Description:  fmt.Sprintf("PPh 21 Dipotong - %s", sale.InvoiceNumber),
+				DebitAmount:  decimal.NewFromFloat(sale.PPh21Amount),
+				CreditAmount: decimal.Zero,
+				Description:  fmt.Sprintf("PPh 21 Dibayar Dimuka - %s", sale.InvoiceNumber),
 			})
-			log.Printf("💰 [PPh21] Recorded: Rp %.2f", sale.PPh21Amount)
+			log.Printf("💰 [PPh21] Recorded as prepaid tax (Asset): Rp %.2f", sale.PPh21Amount)
 		}
 	}
 	
-	// PPh 23
-	if sale.PPh23Amount > 0 {
-		pph23Account, err := resolveByCode("2106") // PPh 23 account
-		if err != nil {
-			log.Printf("⚠️ PPh23 account not found, using generic PPh account (2104)")
-			pph23Account, err = resolveByCode("2104")
-		}
-		if err == nil {
-			lines = append(lines, SalesJournalLineRequest{
-				AccountID:    uint64(pph23Account.ID),
-				DebitAmount:  decimal.Zero,
-				CreditAmount: decimal.NewFromFloat(sale.PPh23Amount),
-				Description:  fmt.Sprintf("PPh 23 Dipotong - %s", sale.InvoiceNumber),
-			})
-			log.Printf("💰 [PPh23] Recorded: Rp %.2f", sale.PPh23Amount)
-		}
-	}
 	
-	// Other tax deductions
-	// ✅ FIX: Only create entry if amount is significant (>= 1.00)
-	if sale.OtherTaxDeductions >= 1.0 {
-		otherTaxAccount, err := resolveByCode("2107") // Other tax deductions account
-		if err != nil {
-			log.Printf("⚠️ Other tax deductions account (2107) not found, using generic PPh account (2104)")
-			otherTaxAccount, err = resolveByCode("2104")
-		}
-		if err == nil {
-			lines = append(lines, SalesJournalLineRequest{
-				AccountID:    uint64(otherTaxAccount.ID),
-				DebitAmount:  decimal.Zero,
-				CreditAmount: decimal.NewFromFloat(sale.OtherTaxDeductions),
-				Description:  fmt.Sprintf("Pemotongan Pajak Lainnya - %s", sale.InvoiceNumber),
-			})
-			log.Printf("💰 [OtherTaxDeductions] Recorded: Rp %.2f", sale.OtherTaxDeductions)
-		}
-	} else if sale.OtherTaxDeductions > 0 {
-		log.Printf("⚠️ [OtherTaxDeductions] Skipped small amount: Rp %.2f (< 1.00)", sale.OtherTaxDeductions)
-	}
 
 	// ========================================
 	// 🔥 FIX CRITICAL: ADD COGS JOURNAL ENTRY
