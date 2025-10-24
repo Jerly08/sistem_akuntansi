@@ -1,7 +1,6 @@
 -- Migration 011: Purchase Payment Integration
 -- Add payment tracking and create purchase_payments table for cross-reference
 
-BEGIN;
 
 -- Ensure purchase payment fields exist (redundant but safe)
 ALTER TABLE purchases 
@@ -62,5 +61,3 @@ COMMENT ON COLUMN purchases.paid_amount IS 'Total amount paid for this purchase'
 COMMENT ON COLUMN purchases.outstanding_amount IS 'Remaining amount to be paid (total_amount - paid_amount)';
 COMMENT ON TABLE purchase_payments IS 'Cross-reference table linking purchases to payment management records';
 COMMENT ON COLUMN payment_allocations.bill_id IS 'Reference to purchase (bill) for payable payments';
-
-COMMIT;

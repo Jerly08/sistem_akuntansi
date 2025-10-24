@@ -5,6 +5,9 @@
 -- Date: 2025-10-17
 -- Priority: HIGH - Data Integrity
 
+-- Ensure required extension for similarity checks
+CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;
+
 -- Step 1: Identify and report existing duplicates
 DO $$
 DECLARE

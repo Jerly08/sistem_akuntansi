@@ -87,9 +87,34 @@ func (cc *CategoryController) CreateCategory(c *gin.Context) {
 	
 	log.Printf("[DEBUG] Parsed category: Code=%s, Name=%s, ParentID=%v", category.Code, category.Name, category.ParentID)
 
-	// Check if category code already exists
+	// Check if category code already exists (including soft deleted)
 	var existingCategory models.ProductCategory
-	if err := cc.DB.Where("code = ?", category.Code).First(&existingCategory).Error; err == nil {
+	if err := cc.DB.Unscoped().Where("code = ?", category.Code).First(&existingCategory).Error; err == nil {
+		// If found and soft deleted, undelete and update it
+		if existingCategory.DeletedAt.Valid {
+			log.Printf("[DEBUG] Found soft-deleted category with code %s, restoring it...", category.Code)
+			existingCategory.DeletedAt = gorm.DeletedAt{}
+			existingCategory.Name = category.Name
+			existingCategory.Description = category.Description
+			existingCategory.ParentID = category.ParentID
+			existingCategory.IsActive = true
+			existingCategory.DefaultExpenseAccountID = category.DefaultExpenseAccountID
+			
+			if err := cc.DB.Unscoped().Save(&existingCategory).Error; err != nil {
+				log.Printf("[ERROR] Failed to restore category: %v", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to restore category"})
+				return
+			}
+			
+			log.Printf("[SUCCESS] Category restored successfully with ID: %d", existingCategory.ID)
+			c.JSON(http.StatusCreated, gin.H{
+				"message": "Category restored successfully",
+				"data":    existingCategory,
+			})
+			return
+		}
+		
+		// If found and not deleted, it's a conflict
 		c.JSON(http.StatusConflict, gin.H{"error": "Category code already exists"})
 		return
 	}
@@ -141,7 +166,8 @@ func (cc *CategoryController) UpdateCategory(c *gin.Context) {
 	// Check if new code conflicts with existing categories
 	if updateData.Code != category.Code {
 		var existingCategory models.ProductCategory
-		if err := cc.DB.Where("code = ? AND id != ?", updateData.Code, id).First(&existingCategory).Error; err == nil {
+		// Check both active and soft deleted records
+		if err := cc.DB.Unscoped().Where("code = ? AND id != ? AND deleted_at IS NULL", updateData.Code, id).First(&existingCategory).Error; err == nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Category code already exists"})
 			return
 		}

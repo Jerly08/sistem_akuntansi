@@ -50,9 +50,14 @@ CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id);
 CREATE INDEX IF NOT EXISTS idx_sales_status ON sales(status);
 CREATE INDEX IF NOT EXISTS idx_sales_outstanding_amount ON sales(outstanding_amount) WHERE outstanding_amount > 0;
 
--- Purchase payments table indexes (if exists)
-CREATE INDEX IF NOT EXISTS idx_purchase_payments_purchase_id ON purchase_payments(purchase_id) WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'purchase_payments');
-CREATE INDEX IF NOT EXISTS idx_purchase_payments_payment_id ON purchase_payments(payment_id) WHERE payment_id IS NOT NULL AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'purchase_payments');
+-- Purchase payments table indexes (if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'purchase_payments') THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_purchase_payments_purchase_id ON purchase_payments(purchase_id)';
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_purchase_payments_payment_id ON purchase_payments(payment_id) WHERE payment_id IS NOT NULL';
+    END IF;
+END $$;
 
 -- Sale payments table indexes (if exists)
 CREATE INDEX IF NOT EXISTS idx_sale_payments_sale_id ON sale_payments(sale_id) WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'sale_payments');

@@ -199,20 +199,48 @@ func createMigrationLogsTable(db *gorm.DB) error {
 
 // getMigrationFiles gets all SQL migration files sorted by name
 func getMigrationFiles() ([]string, error) {
-	migrationDir, err := findMigrationDir()
+	primaryDir, err := findMigrationDir()
 	if err != nil {
 		return nil, err
 	}
 
-	files, err := ioutil.ReadDir(migrationDir)
+	// Collect files from the primary migrations directory
+	files, err := ioutil.ReadDir(primaryDir)
 	if err != nil {
 		return nil, err
 	}
 
 	var migrationFiles []string
+	seen := map[string]struct{}{}
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".sql") {
 			migrationFiles = append(migrationFiles, file.Name())
+			seen[file.Name()] = struct{}{}
+		}
+	}
+
+	// Also try to include fix files from backend/database/migrations if present
+	// This allows pre-fix scripts like 000000000_comprehensive_migration_fix.sql to run first
+	var additionalDir string
+	if strings.HasSuffix(primaryDir, string(filepath.Separator)+"backend"+string(filepath.Separator)+"migrations") {
+		additionalDir = filepath.Join(filepath.Dir(primaryDir), "database", "migrations")
+	} else if strings.HasSuffix(primaryDir, string(filepath.Separator)+"migrations") {
+		// Heuristic: check sibling backend/database/migrations relative to working directory
+		cwd, _ := os.Getwd()
+		additionalDir = filepath.Join(cwd, "backend", "database", "migrations")
+	}
+	if additionalDir != "" {
+		if info, err := os.Stat(additionalDir); err == nil && info.IsDir() {
+			addFiles, _ := ioutil.ReadDir(additionalDir)
+			for _, f := range addFiles {
+				if !f.IsDir() && strings.HasSuffix(f.Name(), ".sql") {
+					if _, ok := seen[f.Name()]; !ok {
+						migrationFiles = append(migrationFiles, f.Name())
+						seen[f.Name()] = struct{}{}
+					}
+				}
+			}
+			log.Printf("Including additional migration dir: %s", additionalDir)
 		}
 	}
 
@@ -220,8 +248,8 @@ func getMigrationFiles() ([]string, error) {
 	sort.Strings(migrationFiles)
 
 	// Log found migration files for debugging
-	log.Printf("Using migration dir: %s", migrationDir)
-	log.Printf("Found %d migration files: %v", len(migrationFiles), migrationFiles)
+	log.Printf("Using migration dir: %s", primaryDir)
+	log.Printf("Found %d migration files (combined): %v", len(migrationFiles), migrationFiles)
 
 	return migrationFiles, nil
 }
@@ -313,9 +341,29 @@ func runMigration(db *gorm.DB, filename string) error {
 	migrationPath := filepath.Join(migrationDir, filename)
 	contentBytes, err := ioutil.ReadFile(migrationPath)
 	if err != nil {
+		// Try reading from additional fix dir (backend/database/migrations)
+		var tryAlt []byte
+		var altErr error
+		// Compute additional dir similarly to getMigrationFiles
+		var additionalDir string
+		if strings.HasSuffix(migrationDir, string(filepath.Separator)+"backend"+string(filepath.Separator)+"migrations") {
+			additionalDir = filepath.Join(filepath.Dir(migrationDir), "database", "migrations")
+		} else if strings.HasSuffix(migrationDir, string(filepath.Separator)+"migrations") {
+			cwd, _ := os.Getwd()
+			additionalDir = filepath.Join(cwd, "backend", "database", "migrations")
+		}
+		if additionalDir != "" {
+			altPath := filepath.Join(additionalDir, filename)
+			tryAlt, altErr = ioutil.ReadFile(altPath)
+			if altErr == nil {
+				contentBytes = tryAlt
+				goto GOT_CONTENT
+			}
+		}
 		logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to read file: %v", err), 0)
 		return err
 	}
+GOT_CONTENT:
 	content := string(contentBytes)
 
 	// Use complex parser for any file that defines PL/pgSQL functions or dollar-quoted blocks
@@ -400,24 +448,44 @@ func runComplexMigration(db *gorm.DB, filename, content string, startTime time.T
 			transactionOpen = false
 		}
 
-		// Execute statement in its own transaction unless migration manages transactions explicitly
+		// Decide if this statement must run outside a transaction (e.g., CONCURRENTLY)
+		runOutsideTx := strings.Contains(upper, "CREATE INDEX") && strings.Contains(upper, "CONCURRENTLY") ||
+			strings.Contains(upper, "REFRESH MATERIALIZED VIEW CONCURRENTLY")
+
 		var err error
 		if transactionOpen {
-			// Migration file manages its own transactions (BEGIN/COMMIT)
-			err = db.Exec(stmt).Error
-		} else {
-			// Wrap in separate transaction to prevent transaction abort cascade
-			tx := db.Begin()
-			if tx.Error != nil {
-				executionTime := int(time.Since(startTime).Milliseconds())
-				logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to begin transaction at statement %d: %v", i+1, tx.Error), executionTime)
-				return fmt.Errorf("failed to begin transaction at statement %d: %v", i+1, tx.Error)
-			}
-			err = tx.Exec(stmt).Error
-			if err != nil {
-				tx.Rollback()
+			if runOutsideTx {
+				// Temporarily end the user-managed transaction to allow CONCURRENT operations
+				_ = db.Exec("COMMIT").Error
+				transactionOpen = false
+				err = db.Exec(stmt).Error
+				// Re-open a transaction to preserve file semantics
+				if err == nil {
+					_ = db.Exec("BEGIN").Error
+					transactionOpen = true
+				}
 			} else {
-				err = tx.Commit().Error
+				// Migration file manages its own transactions (BEGIN/COMMIT)
+				err = db.Exec(stmt).Error
+			}
+		} else {
+			if runOutsideTx {
+				// Execute directly without wrapping in an implicit transaction
+				err = db.Exec(stmt).Error
+			} else {
+				// Wrap in separate transaction to prevent transaction abort cascade
+				tx := db.Begin()
+				if tx.Error != nil {
+					executionTime := int(time.Since(startTime).Milliseconds())
+					logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to begin transaction at statement %d: %v", i+1, tx.Error), executionTime)
+					return fmt.Errorf("failed to begin transaction at statement %d: %v", i+1, tx.Error)
+				}
+				err = tx.Exec(stmt).Error
+				if err != nil {
+					tx.Rollback()
+				} else {
+					err = tx.Commit().Error
+				}
 			}
 		}
 
@@ -425,7 +493,7 @@ func runComplexMigration(db *gorm.DB, filename, content string, startTime time.T
 			// Allow idempotent reruns: skip 'already exists' type errors
 			if isAlreadyExistsError(err) {
 				atomic.AddInt64(&idempotentSkipCount, 1)
-				log.Printf("✅ [%s] Object already exists (statement %d) - this is normal for idempotent migrations: %s", 
+				log.Printf("✅ [%s] Object already exists (statement %d) - this is normal for idempotent migrations: %s",
 					filename, i+1, getObjectNameFromError(err))
 				continue
 			}
@@ -1731,6 +1799,21 @@ func ensureInvoiceNumberFunctions(db *gorm.DB) error {
 	return nil
 }
 
+// helper: checks if a column exists on a table
+func columnExists(db *gorm.DB, table, column string) bool {
+	var exists bool
+	err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = $1 AND column_name = $2
+		)
+	`, table, column).Scan(&exists).Error
+	if err != nil {
+		return false
+	}
+	return exists
+}
+
 // fixRevenueDuplication fixes the revenue duplication issue caused by:
 // 1. Account name variations in journal entries (case sensitivity)
 // 2. Parent accounts not marked as headers
@@ -1756,8 +1839,9 @@ func fixRevenueDuplication(db *gorm.DB) error {
 		log.Printf("[AUTO-FIX] ✓ Marked %d parent accounts as headers", result.RowsAffected)
 	}
 
-	// Step 2: Standardize account names in journal_entries for revenue (4xxx)
-	log.Println("[AUTO-FIX] Step 2/5: Standardizing revenue account names in journal_entries...")
+// Step 2: Standardize account names in journal_entries for revenue (4xxx)
+log.Println("[AUTO-FIX] Step 2/5: Standardizing revenue account names in journal_entries...")
+if columnExists(db, "journal_entries", "account_code") && columnExists(db, "journal_entries", "account_name") {
 	result = db.Exec(`
 		UPDATE journal_entries je
 		SET account_name = a.name,
@@ -1767,6 +1851,14 @@ func fixRevenueDuplication(db *gorm.DB) error {
 		  AND je.account_name != a.name
 		  AND je.account_code LIKE '4%'
 	`)
+	if result.Error != nil {
+		log.Printf("[AUTO-FIX] ⚠ Warning: Could not standardize journal_entries (4xxx): %v", result.Error)
+	} else if result.RowsAffected > 0 {
+		log.Printf("[AUTO-FIX] ✓ Standardized %d revenue journal entries", result.RowsAffected)
+	}
+} else {
+	log.Println("[AUTO-FIX] ℹ️  Skipping journal_entries (4xxx) standardization: columns not present")
+}
 	
 	if result.Error != nil {
 		log.Printf("[AUTO-FIX] ⚠ Warning: Could not standardize journal_entries (4xxx): %v", result.Error)
@@ -1774,8 +1866,9 @@ func fixRevenueDuplication(db *gorm.DB) error {
 		log.Printf("[AUTO-FIX] ✓ Standardized %d revenue journal entries", result.RowsAffected)
 	}
 
-	// Step 3: Standardize account names in journal_entries for expenses (5xxx)
-	log.Println("[AUTO-FIX] Step 3/5: Standardizing expense account names in journal_entries...")
+// Step 3: Standardize account names in journal_entries for expenses (5xxx)
+log.Println("[AUTO-FIX] Step 3/5: Standardizing expense account names in journal_entries...")
+if columnExists(db, "journal_entries", "account_code") && columnExists(db, "journal_entries", "account_name") {
 	result = db.Exec(`
 		UPDATE journal_entries je
 		SET account_name = a.name,
@@ -1785,15 +1878,18 @@ func fixRevenueDuplication(db *gorm.DB) error {
 		  AND je.account_name != a.name
 		  AND je.account_code LIKE '5%'
 	`)
-	
 	if result.Error != nil {
 		log.Printf("[AUTO-FIX] ⚠ Warning: Could not standardize journal_entries (5xxx): %v", result.Error)
 	} else if result.RowsAffected > 0 {
 		log.Printf("[AUTO-FIX] ✓ Standardized %d expense journal entries", result.RowsAffected)
 	}
+} else {
+	log.Println("[AUTO-FIX] ℹ️  Skipping journal_entries (5xxx) standardization: columns not present")
+}
 
-	// Step 4: Standardize unified_journal_lines for revenue (4xxx)
-	log.Println("[AUTO-FIX] Step 4/5: Standardizing unified journal lines (4xxx)...")
+// Step 4: Standardize unified_journal_lines for revenue (4xxx)
+log.Println("[AUTO-FIX] Step 4/5: Standardizing unified journal lines (4xxx)...")
+if columnExists(db, "unified_journal_lines", "account_name") && columnExists(db, "unified_journal_lines", "account_code") {
 	result = db.Exec(`
 		UPDATE unified_journal_lines ujl
 		SET account_name = a.name,
@@ -1803,15 +1899,18 @@ func fixRevenueDuplication(db *gorm.DB) error {
 		  AND ujl.account_name != a.name
 		  AND ujl.account_code LIKE '4%'
 	`)
-	
 	if result.Error != nil {
 		log.Printf("[AUTO-FIX] ⚠ Warning: unified_journal_lines not updated (4xxx): %v", result.Error)
 	} else if result.RowsAffected > 0 {
 		log.Printf("[AUTO-FIX] ✓ Standardized %d unified revenue lines", result.RowsAffected)
 	}
+} else {
+	log.Println("[AUTO-FIX] ℹ️  Skipping unified_journal_lines (4xxx): columns not present")
+}
 
-	// Step 5: Standardize unified_journal_lines for expenses (5xxx)
-	log.Println("[AUTO-FIX] Step 5/5: Standardizing unified journal lines (5xxx)...")
+// Step 5: Standardize unified_journal_lines for expenses (5xxx)
+log.Println("[AUTO-FIX] Step 5/5: Standardizing unified journal lines (5xxx)...")
+if columnExists(db, "unified_journal_lines", "account_name") && columnExists(db, "unified_journal_lines", "account_code") {
 	result = db.Exec(`
 		UPDATE unified_journal_lines ujl
 		SET account_name = a.name,
@@ -1821,12 +1920,14 @@ func fixRevenueDuplication(db *gorm.DB) error {
 		  AND ujl.account_name != a.name
 		  AND ujl.account_code LIKE '5%'
 	`)
-	
 	if result.Error != nil {
 		log.Printf("[AUTO-FIX] ⚠ Warning: unified_journal_lines not updated (5xxx): %v", result.Error)
 	} else if result.RowsAffected > 0 {
 		log.Printf("[AUTO-FIX] ✓ Standardized %d unified expense lines", result.RowsAffected)
 	}
+} else {
+	log.Println("[AUTO-FIX] ℹ️  Skipping unified_journal_lines (5xxx): columns not present")
+}
 
 	// Verification
 	log.Println("[AUTO-FIX] Verifying fix...")
@@ -1838,6 +1939,7 @@ func fixRevenueDuplication(db *gorm.DB) error {
 	}
 	
 	var dupes []VerifyResult
+if columnExists(db, "journal_entries", "account_code") && columnExists(db, "journal_entries", "account_name") {
 	db.Raw(`
 		SELECT 
 			je.account_code,
@@ -1848,6 +1950,7 @@ func fixRevenueDuplication(db *gorm.DB) error {
 		GROUP BY je.account_code
 		HAVING COUNT(DISTINCT je.account_name) > 1
 	`).Scan(&dupes)
+}
 	
 	if len(dupes) > 0 {
 		log.Printf("[AUTO-FIX] ⚠ WARNING: Still found %d accounts with name variations:", len(dupes))

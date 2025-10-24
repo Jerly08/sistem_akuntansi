@@ -88,7 +88,7 @@ type ProductBundle struct {
 
 type ProductCategory struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	Code        string         `json:"code" gorm:"unique;not null;size:20"`
+	Code        string         `json:"code" gorm:"uniqueIndex:idx_category_code_deleted;not null;size:20"`
 	Name        string         `json:"name" gorm:"not null;size:100"`
 	Description string         `json:"description" gorm:"type:text"`
 	ParentID    *uint          `json:"parent_id" gorm:"index"`
@@ -98,7 +98,7 @@ type ProductCategory struct {
 	DefaultExpenseAccountID *uint `json:"default_expense_account_id" gorm:"index"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
+	DeletedAt   gorm.DeletedAt `json:"-" gorm:"uniqueIndex:idx_category_code_deleted"`
 
 	// Relations
 	Parent   *ProductCategory   `json:"parent,omitempty" gorm:"foreignKey:ParentID"`

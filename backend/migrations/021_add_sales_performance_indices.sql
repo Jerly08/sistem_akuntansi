@@ -175,11 +175,10 @@ WHERE status IN ('INVOICED', 'OVERDUE')
 AND outstanding_amount > 0 
 AND deleted_at IS NULL;
 
--- 3. Recent sales (last 3 months)
+-- 3. Recent sales index (no volatile predicate; planner will filter by date)
 CREATE INDEX IF NOT EXISTS idx_sales_recent_activity 
 ON sales(date DESC, status, customer_id, total_amount DESC) 
-WHERE date >= CURRENT_DATE - INTERVAL '3 months' 
-AND deleted_at IS NULL;
+WHERE deleted_at IS NULL;
 
 -- 4. Large amounts only (> 1M IDR)
 CREATE INDEX IF NOT EXISTS idx_sales_large_amounts 

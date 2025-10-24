@@ -34,8 +34,8 @@ DROP INDEX IF EXISTS idx_accounts_code_unique;
 DROP INDEX IF EXISTS accounts_code_unique;
 
 -- Step 3: Create partial unique index (allows soft-deleted duplicates)
--- Using CONCURRENTLY for zero-downtime deployment
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS accounts_code_active_unique 
+-- Note: Cannot use CONCURRENTLY inside this migration runner; using regular CREATE INDEX
+CREATE UNIQUE INDEX IF NOT EXISTS accounts_code_active_unique 
 ON accounts (code) 
 WHERE deleted_at IS NULL;
 
