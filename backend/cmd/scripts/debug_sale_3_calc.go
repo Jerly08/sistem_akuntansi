@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"os"
+	"strconv"
 
 	"app-sistem-akuntansi/config"
 	"app-sistem-akuntansi/models"
@@ -11,6 +13,16 @@ import (
 )
 
 func main() {
+	// Get sale ID from command line argument or use default
+	saleID := 7 // Default to Sale #7
+	if len(os.Args) > 1 {
+		if id, err := strconv.Atoi(os.Args[1]); err == nil && id > 0 {
+			saleID = id
+		} else {
+			log.Printf("Invalid sale ID, using default: %d", saleID)
+		}
+	}
+
 	// Load config from environment
 	cfg := config.LoadConfig()
 
@@ -21,15 +33,15 @@ func main() {
 	}
 	log.Printf("Connected to database successfully")
 
-	log.Println("=== Debugging Sale #3 Calculation Issue ===\n")
+	log.Printf("=== Debugging Sale #%d Calculation ===\n", saleID)
 
-	// 1. Get Sale #3 with all relations
+	// 1. Get Sale with all relations
 	var sale models.Sale
-	if err := db.Preload("SaleItems.Product").Preload("Customer").First(&sale, 3).Error; err != nil {
-		log.Fatalf("Failed to load Sale #3: %v", err)
+	if err := db.Preload("SaleItems.Product").Preload("Customer").First(&sale, saleID).Error; err != nil {
+		log.Fatalf("Failed to load Sale #%d: %v", saleID, err)
 	}
 
-	log.Println("📊 SALE #3 DATA:")
+	log.Printf("📊 SALE #%d DATA:", sale.ID)
 	log.Printf("  ID: %d", sale.ID)
 	log.Printf("  Code: %s", sale.Code)
 	log.Printf("  InvoiceNumber: %s", sale.InvoiceNumber)
@@ -201,7 +213,13 @@ func main() {
 	}
 	log.Println()
 
-	log.Println("=== Analysis Complete ===")
+	log.Printf("\n=== Analysis Complete for Sale #%d ===", sale.ID)
+	
+	// Print usage hint
+	if saleID == 7 {
+		log.Println("\n💡 TIP: To debug another sale, run: go run cmd/scripts/debug_sale_3_calc.go <sale_id>")
+		log.Println("   Example: go run cmd/scripts/debug_sale_3_calc.go 5")
+	}
 }
 
 func checkAccount(db *gorm.DB, code string, description string) {
