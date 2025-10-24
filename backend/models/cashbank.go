@@ -10,10 +10,12 @@ type CashBank struct {
 	Code          string         `json:"code" gorm:"unique;not null;size:20"`
 	Name          string         `json:"name" gorm:"not null;size:100"`
 	Type          string         `json:"type" gorm:"not null;size:20;check:type IN ('CASH','BANK')"` // CASH, BANK
-	AccountID     uint           `json:"account_id" gorm:"index"`
-	BankName      string         `json:"bank_name" gorm:"size:100"`
-	AccountNo     string         `json:"account_no" gorm:"size:50"`
-	Currency      string         `json:"currency" gorm:"size:5;default:'IDR';not null"`
+	AccountID          uint           `json:"account_id" gorm:"index"`
+	BankName           string         `json:"bank_name" gorm:"size:100"`
+	AccountNo          string         `json:"account_no" gorm:"size:50"`
+	AccountHolderName  string         `json:"account_holder_name" gorm:"size:100"`
+	Branch             string         `json:"branch" gorm:"size:100"`
+	Currency           string         `json:"currency" gorm:"size:5;default:'IDR';not null"`
 	Balance       float64        `json:"balance" gorm:"type:decimal(15,2);default:0;not null"`
 	MinBalance    float64        `json:"min_balance" gorm:"type:decimal(15,2);default:0"`
 	MaxBalance    float64        `json:"max_balance" gorm:"type:decimal(15,2);default:0"`

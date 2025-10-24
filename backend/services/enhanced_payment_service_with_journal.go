@@ -182,9 +182,8 @@ func (eps *EnhancedPaymentServiceWithJournal) CreatePaymentWithJournal(req *Paym
 				if err := tx.Save(payment).Error; err != nil {
 					return fmt.Errorf("failed to update payment with journal reference: %w", err)
 				}
+				log.Printf("✅ Journal entry created: %s", journalResult.JournalEntry.EntryNumber)
 			}
-
-			log.Printf("✅ Journal entry created: %s", journalResult.JournalEntry.EntryNumber)
 		}
 
 		// Step 6: Create allocations if specified

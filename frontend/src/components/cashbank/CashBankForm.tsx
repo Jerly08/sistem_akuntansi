@@ -69,6 +69,8 @@ interface CashBankFormData {
   type: 'CASH' | 'BANK';
   bank_name?: string;
   account_no?: string;
+  account_holder_name?: string;
+  branch?: string;
   currency: string;
   opening_balance?: number;
   opening_date?: string;
@@ -123,6 +125,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
       type: 'CASH',
       bank_name: '',
       account_no: '',
+      account_holder_name: '',
+      branch: '',
       currency: 'IDR',
       opening_balance: 0,
       opening_date: new Date().toISOString().split('T')[0],
@@ -165,6 +169,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           type: account.type,
           bank_name: account.bank_name || '',
           account_no: account.account_no || '',
+          account_holder_name: account.account_holder_name || '',
+          branch: account.branch || '',
           currency: account.currency,
           description: account.description || '',
           account_id: account.account_id
@@ -176,6 +182,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           type: 'CASH',
           bank_name: '',
           account_no: '',
+          account_holder_name: '',
+          branch: '',
           currency: 'IDR',
           opening_balance: 0,
           opening_date: new Date().toISOString().split('T')[0],
@@ -223,6 +231,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           name: data.name,
           bank_name: data.bank_name,
           account_no: data.account_no,
+          account_holder_name: data.account_holder_name,
+          branch: data.branch,
           description: data.description
         };
         await cashbankService.updateCashBankAccount(account.id, updateData);
@@ -469,6 +479,28 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                               />
                               <Text fontSize="xs" color={mutedTextColor} mt={1}>
                                 Optional: Bank account number for reference
+                              </Text>
+                            </FormControl>
+
+                            <FormControl>
+                              <FormLabel>Atas Nama</FormLabel>
+                              <Input
+                                {...register('account_holder_name')}
+                                placeholder="e.g., PT ABC Indonesia"
+                              />
+                              <Text fontSize="xs" color={mutedTextColor} mt={1}>
+                                Optional: Account holder name
+                              </Text>
+                            </FormControl>
+
+                            <FormControl>
+                              <FormLabel>Cabang</FormLabel>
+                              <Input
+                                {...register('branch')}
+                                placeholder="e.g., Jakarta Pusat"
+                              />
+                              <Text fontSize="xs" color={mutedTextColor} mt={1}>
+                                Optional: Bank branch location
                               </Text>
                             </FormControl>
                           </SimpleGrid>

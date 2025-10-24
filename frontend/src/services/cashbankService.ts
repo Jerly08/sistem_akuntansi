@@ -10,6 +10,8 @@ export interface CashBank {
   account_id: number;
   bank_name?: string;
   account_no?: string;
+  account_holder_name?: string;
+  branch?: string;
   currency: string;
   balance: number;
   min_balance: number;
@@ -64,6 +66,8 @@ export interface CashBankCreateRequest {
   account_id?: number;    // GL Account ID from Chart of Accounts
   bank_name?: string;
   account_no?: string;
+  account_holder_name?: string;
+  branch?: string;
   currency?: string;
   opening_balance?: number;
   opening_date?: string;
@@ -74,6 +78,8 @@ export interface CashBankUpdateRequest {
   name?: string;
   bank_name?: string;
   account_no?: string;
+  account_holder_name?: string;
+  branch?: string;
   description?: string;
   is_active?: boolean;
 }
