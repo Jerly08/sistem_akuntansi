@@ -45,6 +45,7 @@ modules := []string{"accounts", "products", "contacts", "assets", "sales", "purc
 						CanDelete:  perm.CanDelete,
 						CanApprove: perm.CanApprove,
 						CanExport:  perm.CanExport,
+						CanMenu:    perm.CanMenu,
 					}
 					
 					if err := db.Create(&permission).Error; err != nil {

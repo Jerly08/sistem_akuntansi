@@ -3,7 +3,6 @@ package database
 import (
 	"fmt"
 	"log"
-	"os"
 	
 	"gorm.io/gorm"
 )
@@ -12,22 +11,10 @@ import (
 func RunPreventDuplicateAccountsMigration(db *gorm.DB) error {
 	log.Println("🔒 Starting duplicate accounts prevention migration...")
 	
-	// Read the SQL migration file
-	sqlContent, err := os.ReadFile("migrations/prevent_duplicate_accounts.sql")
-	if err != nil {
-		log.Printf("⚠️  Could not read migration file: %v", err)
-		log.Println("Attempting to apply migration inline...")
-		return applyInlineMigration(db)
-	}
-	
-	// Execute the SQL migration
-	if err := db.Exec(string(sqlContent)).Error; err != nil {
-		log.Printf("❌ Migration failed: %v", err)
-		return err
-	}
-	
-	log.Println("✅ Duplicate accounts prevention migration completed successfully!")
-	return nil
+	// Don't execute the full SQL file - use inline migration instead
+	// The SQL file contains multiple commands that can't be executed in prepared statement
+	log.Println("Using inline migration for better control...")
+	return applyInlineMigration(db)
 }
 
 // applyInlineMigration applies the migration without reading from file

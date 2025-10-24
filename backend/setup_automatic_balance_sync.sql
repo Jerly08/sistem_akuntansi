@@ -150,16 +150,17 @@ BEGIN
     PERFORM refresh_account_balances_view();
     
     -- Log the refresh
-    INSERT INTO migration_logs (migration_name, status, executed_at, notes) 
+    INSERT INTO migration_logs (migration_name, status, executed_at, message, description) 
     VALUES (
         'account_balances_refresh', 
         'SUCCESS', 
         NOW(), 
-        'Automatic refresh of account balances materialized view'
+        'Automatic refresh of account balances materialized view',
+        'Balance view refresh completed'
     ) ON CONFLICT (migration_name) DO UPDATE SET
         status = 'SUCCESS',
         executed_at = NOW(),
-        notes = 'Automatic refresh of account balances materialized view';
+        message = 'Automatic refresh of account balances materialized view';
 END;
 $$ LANGUAGE plpgsql;
 
@@ -189,24 +190,22 @@ END;
 $$;
 
 -- 9. Create index for better performance
+-- Note: Partial index with subquery not supported, using simple index instead
 CREATE INDEX IF NOT EXISTS idx_unified_journal_lines_account_id_posted 
-ON unified_journal_lines (account_id) 
-WHERE EXISTS (
-    SELECT 1 FROM unified_journal_ledger 
-    WHERE id = unified_journal_lines.journal_id AND status = 'POSTED'
-);
+ON unified_journal_lines (account_id, journal_id);
 
 -- 10. Log the setup
-INSERT INTO migration_logs (migration_name, status, executed_at, notes) 
+INSERT INTO migration_logs (migration_name, status, executed_at, message, description) 
 VALUES (
     'setup_automatic_balance_sync', 
     'SUCCESS', 
     NOW(), 
-    'Created automatic balance synchronization system with triggers and functions'
+    'Created automatic balance synchronization system with triggers and functions',
+    'Balance sync system installed'
 ) ON CONFLICT (migration_name) DO UPDATE SET
     status = 'SUCCESS',
     executed_at = NOW(),
-    notes = 'Updated automatic balance synchronization system with triggers and functions';
+    message = 'Updated automatic balance synchronization system with triggers and functions';
 
 COMMENT ON FUNCTION sync_account_balance_from_ssot(INTEGER) IS 
 'Synchronizes account.balance with SSOT journal entries for a specific account';

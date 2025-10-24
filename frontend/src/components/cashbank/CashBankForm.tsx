@@ -86,7 +86,6 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [autoCreateGL, setAutoCreateGL] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
   const [openingBalanceDisplay, setOpeningBalanceDisplay] = useState<string>('');
   const toast = useToast();
@@ -170,7 +169,6 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           description: account.description || '',
           account_id: account.account_id
         });
-        setAutoCreateGL(false); // Disable auto-create when editing
         setOpeningBalanceDisplay(''); // Clear display for edit mode
       } else if (mode === 'create') {
         reset({
@@ -184,7 +182,6 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           description: '',
           account_id: undefined
         });
-        setAutoCreateGL(true); // Enable auto-create for new accounts
         setOpeningBalanceDisplay(''); // Clear display for create mode
       }
       setActiveTab(0); // Reset to first tab
@@ -205,17 +202,12 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
       }
 
       // COA Integration Validation (only for create mode)
-      if (mode === 'create' && !autoCreateGL && !data.account_id) {
-        throw new Error('Please select a GL account from Chart of Accounts or enable auto-create option');
+      if (mode === 'create' && !data.account_id) {
+        throw new Error('Please select a GL account from Chart of Accounts. You must create the COA account manually first.');
       }
 
       // Prepare data for submission
       const submitData = { ...data };
-      
-      // If auto-create is enabled, don't send account_id (backend will create)
-      if (autoCreateGL) {
-        delete submitData.account_id;
-      }
 
       if (mode === 'create') {
         await cashbankService.createCashBankAccount(submitData as CashBankCreateRequest);
@@ -619,70 +611,50 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                         </Box>
                       </Alert>
 
-                      {/* Auto-create Option */}
+                      {/* Manual COA Selection Required */}
+                      <Alert status="warning" borderRadius="md">
+                        <AlertIcon />
+                        <Box>
+                          <AlertTitle fontSize="sm" fontWeight="bold">
+                            ⚠️ Manual COA Account Creation Required
+                          </AlertTitle>
+                          <AlertDescription fontSize="xs">
+                            You must create a GL Account in the Chart of Accounts first before integrating it here. 
+                            Visit the <strong>Chart of Accounts</strong> page to create a new Asset account (Current Asset category, 1100-series code recommended).
+                            <br />
+                            <br />
+                            <strong>Example:</strong> If you want to create a new bank account "Bank BCA", first create a GL account with code <strong>"1102-001"</strong> and name <strong>"Bank BCA"</strong> in the Chart of Accounts page, then select it here.
+                          </AlertDescription>
+                        </Box>
+                      </Alert>
+
+                      {/* GL Account Selection */}
                       <Card>
                         <CardBody>
                           <VStack align="stretch" spacing={4}>
-                            <Checkbox 
-                              isChecked={autoCreateGL}
-                              onChange={(e) => setAutoCreateGL(e.target.checked)}
-                              colorScheme="blue"
-                              size="lg"
-                            >
-                              <VStack align="start" spacing={1} ml={3}>
-                                <Text fontWeight="bold" color={cardInfoTextColor}>
-                                  🔄 Auto-create GL Account (Recommended)
-                                </Text>
-                                <Text fontSize="sm" color={textColor}>
-                                  Let the system automatically create and link a GL account
-                                </Text>
-                              </VStack>
-                            </Checkbox>
-                            
-                            {autoCreateGL ? (
-                              <Alert status="success" borderRadius="md">
-                                <AlertIcon />
-                                <VStack align="start" spacing={2}>
-                                  <Text fontSize="sm" fontWeight="medium">
-                                    System will automatically create:
-                                  </Text>
-                                  <VStack align="start" spacing={1} pl={4}>
-                                    <Text fontSize="xs" color="green.700">
-                                      • GL Code: {watchedType === 'CASH' ? '1100-series' : '1110-series'} (Current Asset)
-                                    </Text>
-                                    <Text fontSize="xs" color="green.700">
-                                      • GL Name: Same as cash/bank account name
-                                    </Text>
-                                    <Text fontSize="xs" color="green.700">
-                                      • Category: CURRENT_ASSET for proper balance sheet reporting
-                                    </Text>
-                                  </VStack>
-                                </VStack>
-                              </Alert>
-                            ) : (
-                              <FormControl isRequired>
-                                <FormLabel fontSize="sm">
-                                  🎯 Select Existing GL Account (Asset Type Only)
-                                </FormLabel>
-                                <Select
-                                  placeholder="Choose GL account from Chart of Accounts..."
-                                  {...register('account_id', {
-                                    setValueAs: value => value ? parseInt(value) : undefined
-                                  })}
-                                  size="sm"
-                                >
-                                  {accounts.map((acc) => (
-                                    <option key={acc.id} value={acc.id}>
-                                      [{acc.code}] {acc.name} - Balance: {accountService.formatBalance(acc.balance)}
-                                    </option>
-                                  ))}
-                                </Select>
-                                <Text fontSize="xs" color={mutedTextColor} mt={1}>
-                                  Only active Asset accounts (Current Asset category) are shown. 
-                                  Need more accounts? Visit <strong>Chart of Accounts</strong> page to create them.
-                                </Text>
-                              </FormControl>
-                            )}
+                            <FormControl isRequired>
+                              <FormLabel fontSize="sm">
+                                🎯 Select Existing GL Account (Asset Type Only)
+                              </FormLabel>
+                              <Select
+                                placeholder="Choose GL account from Chart of Accounts..."
+                                {...register('account_id', {
+                                  setValueAs: value => value ? parseInt(value) : undefined,
+                                  required: 'GL Account selection is required'
+                                })}
+                                size="sm"
+                              >
+                                {accounts.map((acc) => (
+                                  <option key={acc.id} value={acc.id}>
+                                    [{acc.code}] {acc.name} - Balance: {accountService.formatBalance(acc.balance)}
+                                  </option>
+                                ))}
+                              </Select>
+                              <Text fontSize="xs" color={mutedTextColor} mt={1}>
+                                Only active Asset accounts (Current Asset category) are shown. 
+                                If no accounts are available, please create one in the <strong>Chart of Accounts</strong> page first.
+                              </Text>
+                            </FormControl>
                           </VStack>
                         </CardBody>
                       </Card>

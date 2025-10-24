@@ -1635,10 +1635,11 @@ func fixRevenueDuplication(db *gorm.DB) error {
 	log.Println("[AUTO-FIX] Step 2/5: Standardizing revenue account names in journal_entries...")
 	result = db.Exec(`
 		UPDATE journal_entries je
-		INNER JOIN accounts a ON a.code = je.account_code
-		SET je.account_name = a.name,
-		    je.updated_at = NOW()
-		WHERE je.account_name != a.name
+		SET account_name = a.name,
+		    updated_at = NOW()
+		FROM accounts a
+		WHERE a.code = je.account_code
+		  AND je.account_name != a.name
 		  AND je.account_code LIKE '4%'
 	`)
 	
@@ -1652,10 +1653,11 @@ func fixRevenueDuplication(db *gorm.DB) error {
 	log.Println("[AUTO-FIX] Step 3/5: Standardizing expense account names in journal_entries...")
 	result = db.Exec(`
 		UPDATE journal_entries je
-		INNER JOIN accounts a ON a.code = je.account_code
-		SET je.account_name = a.name,
-		    je.updated_at = NOW()
-		WHERE je.account_name != a.name
+		SET account_name = a.name,
+		    updated_at = NOW()
+		FROM accounts a
+		WHERE a.code = je.account_code
+		  AND je.account_name != a.name
 		  AND je.account_code LIKE '5%'
 	`)
 	
@@ -1669,10 +1671,11 @@ func fixRevenueDuplication(db *gorm.DB) error {
 	log.Println("[AUTO-FIX] Step 4/5: Standardizing unified journal lines (4xxx)...")
 	result = db.Exec(`
 		UPDATE unified_journal_lines ujl
-		INNER JOIN accounts a ON a.id = ujl.account_id
-		SET ujl.account_name = a.name,
-		    ujl.updated_at = NOW()
-		WHERE ujl.account_name != a.name
+		SET account_name = a.name,
+		    updated_at = NOW()
+		FROM accounts a
+		WHERE a.id = ujl.account_id
+		  AND ujl.account_name != a.name
 		  AND ujl.account_code LIKE '4%'
 	`)
 	
@@ -1686,10 +1689,11 @@ func fixRevenueDuplication(db *gorm.DB) error {
 	log.Println("[AUTO-FIX] Step 5/5: Standardizing unified journal lines (5xxx)...")
 	result = db.Exec(`
 		UPDATE unified_journal_lines ujl
-		INNER JOIN accounts a ON a.id = ujl.account_id
-		SET ujl.account_name = a.name,
-		    ujl.updated_at = NOW()
-		WHERE ujl.account_name != a.name
+		SET account_name = a.name,
+		    updated_at = NOW()
+		FROM accounts a
+		WHERE a.id = ujl.account_id
+		  AND ujl.account_name != a.name
 		  AND ujl.account_code LIKE '5%'
 	`)
 	
@@ -1713,7 +1717,7 @@ func fixRevenueDuplication(db *gorm.DB) error {
 		SELECT 
 			je.account_code,
 			COUNT(DISTINCT je.account_name) as name_count,
-			GROUP_CONCAT(DISTINCT je.account_name SEPARATOR ' | ') as all_names
+			STRING_AGG(DISTINCT je.account_name, ' | ') as all_names
 		FROM journal_entries je
 		WHERE je.account_code LIKE '4%'
 		GROUP BY je.account_code

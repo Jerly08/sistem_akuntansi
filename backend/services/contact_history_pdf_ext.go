@@ -79,15 +79,15 @@ func (p *PDFService) GenerateCustomerHistoryPDF(historyData interface{}) ([]byte
 	// Divider line
 	pdf.SetDrawColor(238,238,238)
 	pdf.SetLineWidth(0.2)
-	pdf.Line(lm, tm+45, pageW-rm, tm+45)
+	pdf.Line(lm, tm+40, pageW-rm, tm+40)
 
 	// Title
-	pdf.SetY(tm + 55)
-	pdf.SetFont("Arial","B",22)
+	pdf.SetY(tm + 45)
+	pdf.SetFont("Arial","B",18)
 	pdf.SetTextColor(51,51,51)
-	pdf.Cell(contentW,10,"CUSTOMER TRANSACTION HISTORY")
+	pdf.Cell(contentW,8,"CUSTOMER TRANSACTION HISTORY")
 	pdf.SetTextColor(0,0,0)
-	pdf.Ln(12)
+	pdf.Ln(10)
 
 	// Customer info and period
 	customerMap, _ := dataMap["customer"].(map[string]interface{})
@@ -261,15 +261,15 @@ func (p *PDFService) GenerateVendorHistoryPDF(historyData interface{}) ([]byte, 
 	// Divider line
 	pdf.SetDrawColor(238,238,238)
 	pdf.SetLineWidth(0.2)
-	pdf.Line(lm, tm+45, pageW-rm, tm+45)
+	pdf.Line(lm, tm+40, pageW-rm, tm+40)
 
 	// Title
-	pdf.SetY(tm + 55)
-	pdf.SetFont("Arial","B",22)
+	pdf.SetY(tm + 45)
+	pdf.SetFont("Arial","B",18)
 	pdf.SetTextColor(51,51,51)
-	pdf.Cell(contentW,10,"VENDOR TRANSACTION HISTORY")
+	pdf.Cell(contentW,8,"VENDOR TRANSACTION HISTORY")
 	pdf.SetTextColor(0,0,0)
-	pdf.Ln(12)
+	pdf.Ln(10)
 
 	// Vendor info and period
 	vendorMap, _ := dataMap["vendor"].(map[string]interface{})

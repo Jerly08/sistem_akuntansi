@@ -135,7 +135,10 @@ CREATE TRIGGER check_critical_account_update
     FOR EACH ROW
     EXECUTE FUNCTION prevent_critical_account_update();
 
-RAISE NOTICE '✅ Created trigger to protect critical accounts';
+DO $$
+BEGIN
+    RAISE NOTICE '✅ Created trigger to protect critical accounts';
+END $$;
 
 -- ============================================================================
 -- STEP 4: Verification

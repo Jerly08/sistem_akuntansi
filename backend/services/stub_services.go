@@ -299,6 +299,8 @@ type PDFServiceInterface interface {
 	GenerateSalesSummaryPDF(summary interface{}) ([]byte, error)
 	GenerateCustomerHistoryPDF(historyData interface{}) ([]byte, error)
 	GenerateVendorHistoryPDF(historyData interface{}) ([]byte, error)
+	GenerateCustomerHistoryCSV(historyData interface{}) ([]byte, error)
+	GenerateVendorHistoryCSV(historyData interface{}) ([]byte, error)
 	// Language returns current language based on settings
 	Language() string
 }

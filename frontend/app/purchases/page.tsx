@@ -1380,8 +1380,11 @@ const PurchasesPage: React.FC = () => {
 
       const vendorsData = await response.json();
       
+      // Handle both array and object responses (e.g., { data: [...] })
+      const vendorsArray = Array.isArray(vendorsData) ? vendorsData : (vendorsData.data || []);
+      
       // Transform the data to match our Vendor interface
-      const formattedVendors = vendorsData.map((vendor: any) => ({
+      const formattedVendors = vendorsArray.map((vendor: any) => ({
         id: vendor.id,
         name: vendor.name,
         code: vendor.code || `V${vendor.id}`,

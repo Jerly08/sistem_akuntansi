@@ -207,11 +207,19 @@ func (c *ContactHistoryController) GetCustomerHistory(ctx *gin.Context) {
 		ctx.Header("Content-Length", strconv.Itoa(len(pdfBytes)))
 		ctx.Data(http.StatusOK, "application/pdf", pdfBytes)
 	case "csv":
-		ctx.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   historyData,
-			"format": "csv",
-		})
+		csvBytes, err := c.pdfService.GenerateCustomerHistoryCSV(historyData)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to generate CSV",
+				"error":   err.Error(),
+			})
+			return
+		}
+		ctx.Header("Content-Type", "text/csv")
+		ctx.Header("Content-Disposition", "attachment; filename=Customer_History_"+customer.Name+".csv")
+		ctx.Header("Content-Length", strconv.Itoa(len(csvBytes)))
+		ctx.Data(http.StatusOK, "text/csv", csvBytes)
 	default:
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -338,11 +346,19 @@ func (c *ContactHistoryController) GetVendorHistory(ctx *gin.Context) {
 		ctx.Header("Content-Length", strconv.Itoa(len(pdfBytes)))
 		ctx.Data(http.StatusOK, "application/pdf", pdfBytes)
 	case "csv":
-		ctx.JSON(http.StatusOK, gin.H{
-			"status": "success",
-			"data":   historyData,
-			"format": "csv",
-		})
+		csvBytes, err := c.pdfService.GenerateVendorHistoryCSV(historyData)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"status":  "error",
+				"message": "Failed to generate CSV",
+				"error":   err.Error(),
+			})
+			return
+		}
+		ctx.Header("Content-Type", "text/csv")
+		ctx.Header("Content-Disposition", "attachment; filename=Vendor_History_"+vendor.Name+".csv")
+		ctx.Header("Content-Length", strconv.Itoa(len(csvBytes)))
+		ctx.Data(http.StatusOK, "text/csv", csvBytes)
 	default:
 		ctx.JSON(http.StatusBadRequest, gin.H{
 			"status":  "error",
@@ -368,19 +384,25 @@ func (c *ContactHistoryController) generateCustomerHistoryData(customerID uint, 
 		Email:   settings.CompanyEmail,
 	}
 
-	// Get sales transactions
+	// Get sales transactions with InvoiceType preloaded
 	var sales []models.Sale
-	if err := c.db.Where("customer_id = ? AND date BETWEEN ? AND ?", customerID, startDate, endDate).
+	if err := c.db.Preload("InvoiceType").Where("customer_id = ? AND date BETWEEN ? AND ?", customerID, startDate, endDate).
 		Order("date DESC").Find(&sales).Error; err != nil {
 		return nil, err
 	}
 
 	for _, sale := range sales {
+		// Build description with invoice type if available
+		description := "Sales Transaction"
+		if sale.InvoiceType != nil && sale.InvoiceType.Name != "" {
+			description = "Sales Transaction for " + sale.InvoiceType.Name
+		}
+		
 		transaction := TransactionHistory{
 			Date:            sale.Date,
 			TransactionType: "SALE",
 			TransactionCode: sale.Code,
-			Description:     "Sales Transaction",
+			Description:     description,
 			Reference:       sale.Reference,
 			Amount:          sale.TotalAmount,
 			PaidAmount:      sale.PaidAmount,

@@ -34,14 +34,25 @@ import {
   useDisclosure,
   Text,
   Grid,
-  HStack
+  HStack,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  Icon
 } from '@chakra-ui/react';
-import { FiSearch, FiEdit, FiTrash2, FiUpload, FiEye, FiPlus, FiGrid, FiPackage, FiMapPin } from 'react-icons/fi';
+import { FiSearch, FiEdit, FiTrash2, FiUpload, FiEye, FiPlus, FiGrid, FiPackage, FiMapPin, FiSettings, FiChevronDown } from 'react-icons/fi';
 import ProductService, { Product, Category, WarehouseLocation } from '@/services/productService';
 import ProductForm from './ProductForm';
-import CategoryForm from './CategoryForm';
-import UnitForm, { ProductUnit } from './UnitForm';
-import WarehouseLocationForm from './WarehouseLocationForm';
+import CategoryManagement from './CategoryManagement';
+import UnitManagement from './UnitManagement';
+import WarehouseLocationManagement from './WarehouseLocationManagement';
+import { ProductUnit } from './UnitForm';
 import { formatIDR, formatCurrencyDetailed } from '@/utils/currency';
 import { getProductImageUrl, debugImageUrl } from '@/utils/imageUrl';
 
@@ -58,9 +69,6 @@ const ProductCatalog: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [warehouseLocations, setWarehouseLocations] = useState<WarehouseLocation[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [selectedUnit, setSelectedUnit] = useState<ProductUnit | null>(null);
-  const [selectedWarehouseLocation, setSelectedWarehouseLocation] = useState<WarehouseLocation | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
@@ -72,9 +80,7 @@ const ProductCatalog: React.FC = () => {
   const [pendingUpload, setPendingUpload] = useState<{productId: number, file: File} | null>(null);
   const { isOpen: isAlertOpen, onOpen: onAlertOpen, onClose: onAlertClose } = useDisclosure();
   const { isOpen: isDetailOpen, onOpen: onDetailOpen, onClose: onDetailClose } = useDisclosure();
-  const { isOpen: isCategoryModalOpen, onOpen: onCategoryModalOpen, onClose: onCategoryModalClose } = useDisclosure();
-  const { isOpen: isUnitModalOpen, onOpen: onUnitModalOpen, onClose: onUnitModalClose } = useDisclosure();
-  const { isOpen: isWarehouseLocationModalOpen, onOpen: onWarehouseLocationModalOpen, onClose: onWarehouseLocationModalClose } = useDisclosure();
+  const { isOpen: isManagementModalOpen, onOpen: onManagementModalOpen, onClose: onManagementModalClose } = useDisclosure();
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const toast = useToast();
 
@@ -256,59 +262,10 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     }
   };
 
-  // Category handlers
-  const handleAddCategoryClick = () => {
-    if (!canCreate) return; // Admin privilege for category management
-    setSelectedCategory(null);
-    onCategoryModalOpen();
-  };
-
-  const handleSaveCategory = (category: Category) => {
-    fetchCategories(); // Refresh categories list
-    onCategoryModalClose();
-    setSelectedCategory(null);
-  };
-
-  const handleCancelCategory = () => {
-    onCategoryModalClose();
-    setSelectedCategory(null);
-  };
-
-  // Unit handlers
-  const handleAddUnitClick = () => {
-    if (!canCreate) return; // Admin privilege for unit management
-    setSelectedUnit(null);
-    onUnitModalOpen();
-  };
-
-  const handleSaveUnit = (unit: ProductUnit) => {
-    // Since we don't have a units state to update, we just close the modal
-    // The ProductForm will refresh its units when it needs them
-    onUnitModalClose();
-    setSelectedUnit(null);
-  };
-
-  const handleCancelUnit = () => {
-    onUnitModalClose();
-    setSelectedUnit(null);
-  };
-
-  // Warehouse Location handlers
-  const handleAddWarehouseLocationClick = () => {
+  // Management handlers
+  const handleOpenManagement = () => {
     if (!canCreate) return;
-    setSelectedWarehouseLocation(null);
-    onWarehouseLocationModalOpen();
-  };
-
-  const handleSaveWarehouseLocation = (location: WarehouseLocation) => {
-    fetchWarehouseLocations(); // Refresh locations list
-    onWarehouseLocationModalClose();
-    setSelectedWarehouseLocation(null);
-  };
-
-  const handleCancelWarehouseLocation = () => {
-    onWarehouseLocationModalClose();
-    setSelectedWarehouseLocation(null);
+    onManagementModalOpen();
   };
 
   // Filtered and sorted products using useMemo for performance
@@ -355,31 +312,14 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             {canCreate && (
               <>
                 <Button 
-                  leftIcon={<FiGrid />} 
-                  colorScheme="green" 
+                  leftIcon={<FiSettings />} 
+                  rightIcon={<FiChevronDown />}
+                  colorScheme="teal" 
                   size="lg" 
-                  onClick={handleAddCategoryClick}
+                  onClick={handleOpenManagement}
                   variant="outline"
                 >
-                  Add Category
-                </Button>
-                <Button 
-                  leftIcon={<FiMapPin />} 
-                  colorScheme="orange" 
-                  size="lg" 
-                  onClick={handleAddWarehouseLocationClick}
-                  variant="outline"
-                >
-                  Add Warehouse Location
-                </Button>
-                <Button 
-                  leftIcon={<FiPackage />} 
-                  colorScheme="purple" 
-                  size="lg" 
-                  onClick={handleAddUnitClick}
-                  variant="outline"
-                >
-                  Add Unit
+                  Manage Categories, Units & Locations
                 </Button>
                 <Button 
                   leftIcon={<FiPlus />} 
@@ -783,61 +723,44 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
           </ModalContent>
         </Modal>
 
-        {/* Add/Edit Category Modal */}
+        {/* Management Modal with Tabs */}
         {canCreate && (
-          <Modal isOpen={isCategoryModalOpen} onClose={onCategoryModalClose} size="4xl">
+          <Modal isOpen={isManagementModalOpen} onClose={onManagementModalClose} size="6xl">
             <ModalOverlay />
-            <ModalContent>
+            <ModalContent maxH="90vh">
               <ModalHeader>
-                {selectedCategory ? "Edit Category" : "Add Category"}
+                Manage Categories, Units & Warehouse Locations
               </ModalHeader>
               <ModalCloseButton />
-              <ModalBody pb={6}>
-                <CategoryForm 
-                  category={selectedCategory || undefined} 
-                  onSave={handleSaveCategory} 
-                  onCancel={handleCancelCategory} 
-                />
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        )}
+              <ModalBody pb={6} overflowY="auto">
+                <Tabs colorScheme="teal" variant="enclosed">
+                  <TabList>
+                    <Tab>
+                      <Icon as={FiGrid} mr={2} />
+                      Categories
+                    </Tab>
+                    <Tab>
+                      <Icon as={FiPackage} mr={2} />
+                      Units
+                    </Tab>
+                    <Tab>
+                      <Icon as={FiMapPin} mr={2} />
+                      Warehouse Locations
+                    </Tab>
+                  </TabList>
 
-        {/* Add/Edit Unit Modal */}
-        {canCreate && (
-          <Modal isOpen={isUnitModalOpen} onClose={onUnitModalClose} size="3xl">
-            <ModalOverlay />
-            <ModalContent>
-              <ModalHeader>
-                {selectedUnit ? "Edit Unit" : "Add Unit"}
-              </ModalHeader>
-              <ModalCloseButton />
-              <ModalBody pb={6}>
-                <UnitForm 
-                  unit={selectedUnit || undefined} 
-                  onSave={handleSaveUnit} 
-                  onCancel={handleCancelUnit} 
-                />
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        )}
-
-        {/* Add/Edit Warehouse Location Modal */}
-        {canCreate && (
-          <Modal isOpen={isWarehouseLocationModalOpen} onClose={onWarehouseLocationModalClose} size="4xl">
-            <ModalOverlay />
-            <ModalContent>
-              <ModalHeader>
-                {selectedWarehouseLocation ? "Edit Warehouse Location" : "Add Warehouse Location"}
-              </ModalHeader>
-              <ModalCloseButton />
-              <ModalBody pb={6}>
-                <WarehouseLocationForm 
-                  location={selectedWarehouseLocation || undefined} 
-                  onSave={handleSaveWarehouseLocation} 
-                  onCancel={handleCancelWarehouseLocation} 
-                />
+                  <TabPanels>
+                    <TabPanel>
+                      <CategoryManagement />
+                    </TabPanel>
+                    <TabPanel>
+                      <UnitManagement />
+                    </TabPanel>
+                    <TabPanel>
+                      <WarehouseLocationManagement />
+                    </TabPanel>
+                  </TabPanels>
+                </Tabs>
               </ModalBody>
             </ModalContent>
           </Modal>

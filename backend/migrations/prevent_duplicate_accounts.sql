@@ -123,13 +123,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_code_exact_active
 ON accounts (code)
 WHERE deleted_at IS NULL;
 
--- Step 6: Add check constraint for code format
-ALTER TABLE accounts
-DROP CONSTRAINT IF EXISTS chk_account_code_format;
+-- Step 6: Add check constraint for code format (flexible - allow alphanumeric)
+-- Note: Commenting out strict constraint since there may be existing non-conforming codes
+-- ALTER TABLE accounts
+-- DROP CONSTRAINT IF EXISTS chk_account_code_format;
+-- 
+-- ALTER TABLE accounts
+-- ADD CONSTRAINT chk_account_code_format
+-- CHECK (code ~ '^[0-9]{4}$' OR code ~ '^[0-9]{4}\.[0-9]+$');
 
-ALTER TABLE accounts
-ADD CONSTRAINT chk_account_code_format
-CHECK (code ~ '^[0-9]{4}$' OR code ~ '^[0-9]{4}\.[0-9]+$');
+DO $$
+BEGIN
+    -- Drop old constraint if exists
+    ALTER TABLE accounts DROP CONSTRAINT IF EXISTS chk_account_code_format;
+    RAISE NOTICE '✅ Skipped strict code format constraint to allow existing data';
+END $$;
 
 -- Step 7: Add trigger to prevent manual duplicate insertion
 CREATE OR REPLACE FUNCTION prevent_duplicate_account_code()

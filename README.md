@@ -1,7 +1,5 @@
 # 📋 Aplikasi Sistem Akuntansi Modern
 
-> **⚠️ PENTING UNTUK DEVELOPER:** Setelah `git pull`, WAJIB jalankan Balance Protection setup! Lihat [Balance Protection Notice](BALANCE_PROTECTION_NOTICE.md)
-
 Sebuah aplikasi sistem akuntansi komprehensif yang menggabungkan backend API (Go) dan frontend web (Next.js) untuk mengelola seluruh aspek keuangan dan operasional bisnis modern. **Dilengkapi dengan Dark/Light Mode yang User-Friendly dan Multi-Language Support (Bahasa Indonesia & English)**.
 
 ## ✨ Key Features Terbaru

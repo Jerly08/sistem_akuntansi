@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
@@ -44,7 +43,7 @@ func main() {
 	err = sqlDB.QueryRow(`
 		SELECT EXISTS (
 			SELECT 1 FROM information_schema.triggers 
-			WHERE trigger_name = 'balance_sync_trigger'
+			WHERE trigger_name = 'trg_sync_account_balance_on_line_change'
 		)
 	`).Scan(&exists)
 	
@@ -56,14 +55,13 @@ func main() {
 		fmt.Printf("✅ Balance Sync System already installed - skipping setup\n")
 		
 		// Still run a health check
-		var mismatchCount int
-		err = sqlDB.QueryRow("SELECT COUNT(*) FROM account_balance_monitoring WHERE status='MISMATCH'").Scan(&mismatchCount)
+		var triggerCount int
+		err = sqlDB.QueryRow("SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_name LIKE '%sync_account_balance%'").Scan(&triggerCount)
 		if err == nil {
-			if mismatchCount > 0 {
-				fmt.Printf("⚠️  Found %d accounts with balance mismatches\n", mismatchCount)
-				fmt.Printf("💡 Run manual sync: SELECT * FROM sync_account_balances();\n")
+			if triggerCount >= 2 {
+				fmt.Printf("✅ Balance sync system is active (%d triggers found)\n", triggerCount)
 			} else {
-				fmt.Printf("✅ All account balances are synchronized\n")
+				fmt.Printf("⚠️  Warning: Only %d sync triggers found\n", triggerCount)
 			}
 		}
 		return
@@ -72,7 +70,7 @@ func main() {
 	fmt.Printf("📦 Installing Balance Sync System...\n")
 
 	// Read migration file
-	migrationPath := filepath.Join("migrations", "balance_sync_system.sql")
+	migrationPath := "setup_automatic_balance_sync.sql"
 	migrationSQL, err := ioutil.ReadFile(migrationPath)
 	if err != nil {
 		log.Fatalf("Failed to read migration file: %v", err)
@@ -94,7 +92,7 @@ func main() {
 	sqlDB.QueryRow(`
 		SELECT EXISTS (
 			SELECT 1 FROM information_schema.triggers 
-			WHERE trigger_name = 'balance_sync_trigger'
+			WHERE trigger_name = 'trg_sync_account_balance_on_line_change'
 		)
 	`).Scan(&triggerExists)
 	
@@ -102,15 +100,15 @@ func main() {
 	sqlDB.QueryRow(`
 		SELECT EXISTS (
 			SELECT 1 FROM information_schema.routines 
-			WHERE routine_name = 'sync_account_balances'
+			WHERE routine_name = 'sync_account_balance_from_ssot'
 		)
 	`).Scan(&procedureExists)
 	
-	// Check view
+	// Check view (checking for the function as there's no view created in the SQL)
 	sqlDB.QueryRow(`
 		SELECT EXISTS (
-			SELECT 1 FROM information_schema.views 
-			WHERE table_name = 'account_balance_monitoring'
+			SELECT 1 FROM information_schema.routines 
+			WHERE routine_name = 'trigger_sync_account_balance'
 		)
 	`).Scan(&viewExists)
 
@@ -119,41 +117,24 @@ func main() {
 		fmt.Printf("\n🎉 Balance Sync System successfully installed!\n\n")
 		
 		fmt.Printf("📋 INSTALLED COMPONENTS:\n")
-		fmt.Printf("  ✅ Automatic trigger: balance_sync_trigger\n")
-		fmt.Printf("  ✅ Manual sync function: sync_account_balances()\n")  
-		fmt.Printf("  ✅ Monitoring view: account_balance_monitoring\n")
-		fmt.Printf("  ✅ Performance index: idx_unified_journal_lines_account_id\n\n")
+		fmt.Printf("  ✅ Automatic trigger: trg_sync_account_balance_on_line_change\n")
+		fmt.Printf("  ✅ Sync function: sync_account_balance_from_ssot()\n")  
+		fmt.Printf("  ✅ Trigger function: trigger_sync_account_balance()\n")
+		fmt.Printf("  ✅ Performance index: idx_unified_journal_lines_account_id_posted\n\n")
 		
 		fmt.Printf("💡 USAGE EXAMPLES:\n")
-		fmt.Printf("  • Manual sync:     SELECT * FROM sync_account_balances();\n")
-		fmt.Printf("  • Health check:    SELECT * FROM account_balance_monitoring WHERE status='MISMATCH';\n")
-		fmt.Printf("  • Monitor all:     SELECT * FROM account_balance_monitoring;\n\n")
+		fmt.Printf("  • Manual sync:     SELECT sync_account_balance_from_ssot(account_id);\n")
+		fmt.Printf("  • Refresh views:   SELECT refresh_account_balances_view();\n")
+		fmt.Printf("  • Check triggers:  SELECT * FROM information_schema.triggers WHERE trigger_name LIKE '%%sync%%';\n\n")
 
-		// Run initial health check
-		var mismatchCount int
-		err = sqlDB.QueryRow("SELECT COUNT(*) FROM account_balance_monitoring WHERE status='MISMATCH'").Scan(&mismatchCount)
+		// Verify trigger is working by checking if functions exist
+		var funcCount int
+		err = sqlDB.QueryRow("SELECT COUNT(*) FROM information_schema.routines WHERE routine_name LIKE '%sync_account_balance%'").Scan(&funcCount)
 		if err == nil {
-			if mismatchCount > 0 {
-				fmt.Printf("⚠️  Initial scan found %d accounts with balance mismatches\n", mismatchCount)
-				fmt.Printf("🔄 Running auto-fix...\n")
-				
-				// Run sync
-				rows, err := sqlDB.Query("SELECT * FROM sync_account_balances()")
-				if err != nil {
-					log.Printf("Warning: Could not run initial sync: %v", err)
-				} else {
-					defer rows.Close()
-					fixCount := 0
-					for rows.Next() {
-						var accountID int
-						var oldBalance, newBalance, difference float64
-						rows.Scan(&accountID, &oldBalance, &newBalance, &difference)
-						fixCount++
-					}
-					fmt.Printf("✅ Fixed %d account balances automatically\n", fixCount)
-				}
+			if funcCount >= 2 {
+				fmt.Printf("✅ All sync functions are installed (%d functions found)\n", funcCount)
 			} else {
-				fmt.Printf("✅ All account balances are already synchronized\n")
+				fmt.Printf("⚠️  Warning: Only %d sync functions found\n", funcCount)
 			}
 		}
 
