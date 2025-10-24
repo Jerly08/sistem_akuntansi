@@ -37,6 +37,7 @@ type AuditLog struct {
 	Duration    int64     `json:"duration"` // Response time in milliseconds
 	Success     bool      `json:"success"`
 	ErrorMessage string   `json:"error_message" gorm:"type:text"`
+	Notes       string    `json:"notes" gorm:"type:text"` // For SQL trigger compatibility
 	Timestamp   time.Time `json:"timestamp"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

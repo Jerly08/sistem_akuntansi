@@ -156,6 +156,17 @@ func RunAutoMigrations(db *gorm.DB) error {
 	}
 	log.Println("============================================")
 
+	// Fix audit_logs schema (notes column + action size)
+	log.Println("============================================")
+	log.Println("📋 CHECKING AUDIT_LOGS SCHEMA")
+	log.Println("============================================")
+	if err := AutoFixAuditLogsSchema(db); err != nil {
+		log.Printf("⚠️  AUDIT_LOGS SCHEMA FIX FAILED: %v", err)
+	} else {
+		log.Println("✅ AUDIT_LOGS SCHEMA FIX COMPLETED SUCCESSFULLY")
+	}
+	log.Println("============================================")
+
 	log.Println("✅ Auto-migrations completed")
 	return nil
 }
