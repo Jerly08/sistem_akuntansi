@@ -9,10 +9,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"gorm.io/gorm"
 )
+
+// Global counter for idempotent skips (thread-safe)
+var idempotentSkipCount int64
 
 // RunAutoMigrations runs all pending SQL migrations automatically
 func RunAutoMigrations(db *gorm.DB) error {
@@ -57,13 +61,49 @@ func RunAutoMigrations(db *gorm.DB) error {
 		return fmt.Errorf("failed to get migration files: %v", err)
 	}
 	
+	// Reset idempotent skip counter
+	atomic.StoreInt64(&idempotentSkipCount, 0)
+	
 	// Run each migration
+	successCount := 0
+	failedCount := 0
 	for _, file := range migrationFiles {
 		if err := runMigration(db, file); err != nil {
 			log.Printf("❌ Migration failed: %s - %v", file, err)
+			failedCount++
 			continue
 		}
+		successCount++
 	}
+	
+	// Print migration summary
+	log.Println("")
+	log.Println("============================================")
+	log.Println("📊 MIGRATION EXECUTION SUMMARY")
+	log.Println("============================================")
+	log.Printf("Total migrations: %d", len(migrationFiles))
+	log.Printf("✅ Successful: %d", successCount)
+	log.Printf("❌ Failed: %d", failedCount)
+	
+	idempotentSkips := atomic.LoadInt64(&idempotentSkipCount)
+	if idempotentSkips > 0 {
+		log.Printf("🔄 Idempotent skips: %d objects", idempotentSkips)
+		log.Println("")
+		log.Println("ℹ️  NOTE: Idempotent skips are NORMAL, not errors!")
+		log.Println("   These indicate database objects already exist from")
+		log.Println("   previous migration runs. This is the expected behavior")
+		log.Println("   that allows migrations to be safely re-run.")
+	}
+	
+	if failedCount > 0 {
+		log.Printf("")
+		log.Printf("⚠️  %d migration(s) failed. Check logs for details.", failedCount)
+	} else {
+		log.Println("")
+		log.Println("🎉 All migrations completed successfully!")
+	}
+	log.Println("============================================")
+	log.Println("")
 	
 	// Check and create Standard Purchase Approval workflow
 	log.Println("============================================")
@@ -291,7 +331,7 @@ func runMigration(db *gorm.DB, filename string) error {
 	// Split SQL statements by semicolon (simple approach)
 	sqlStatements := strings.Split(content, ";")
 
-	// Execute statements one-by-one without wrapping in a single transaction.
+	// Execute statements one-by-one in separate transactions.
 	// This allows us to skip harmless 'already exists' errors and continue.
 	for _, raw := range sqlStatements {
 		stmt := strings.TrimSpace(raw)
@@ -299,14 +339,30 @@ func runMigration(db *gorm.DB, filename string) error {
 			continue
 		}
 
-		if err := db.Exec(stmt).Error; err != nil {
+		// Execute each statement in its own transaction to avoid transaction abort cascade
+		tx := db.Begin()
+		if tx.Error != nil {
+			executionTime := int(time.Since(startTime).Milliseconds())
+			logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to begin transaction: %v", tx.Error), executionTime)
+			return tx.Error
+		}
+
+		if err := tx.Exec(stmt).Error; err != nil {
+			tx.Rollback() // Clean up the aborted transaction
 			// Gracefully handle idempotent scenarios
 			if isAlreadyExistsError(err) {
-				log.Printf("ℹ️  Skipping statement due to already-exists: %v", err)
+				atomic.AddInt64(&idempotentSkipCount, 1)
+				log.Printf("✅ Object already exists (idempotent) - skipping: %s", getObjectNameFromError(err))
 				continue
 			}
 			executionTime := int(time.Since(startTime).Milliseconds())
 			logMigrationResult(db, filename, "FAILED", fmt.Sprintf("SQL error: %v", err), executionTime)
+			return err
+		}
+
+		if err := tx.Commit().Error; err != nil {
+			executionTime := int(time.Since(startTime).Milliseconds())
+			logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to commit transaction: %v", err), executionTime)
 			return err
 		}
 	}
@@ -344,11 +400,33 @@ func runComplexMigration(db *gorm.DB, filename, content string, startTime time.T
 			transactionOpen = false
 		}
 
-		// Execute statement (not in transaction at app layer; file may manage its own)
-		if err := db.Exec(stmt).Error; err != nil {
+		// Execute statement in its own transaction unless migration manages transactions explicitly
+		var err error
+		if transactionOpen {
+			// Migration file manages its own transactions (BEGIN/COMMIT)
+			err = db.Exec(stmt).Error
+		} else {
+			// Wrap in separate transaction to prevent transaction abort cascade
+			tx := db.Begin()
+			if tx.Error != nil {
+				executionTime := int(time.Since(startTime).Milliseconds())
+				logMigrationResult(db, filename, "FAILED", fmt.Sprintf("Failed to begin transaction at statement %d: %v", i+1, tx.Error), executionTime)
+				return fmt.Errorf("failed to begin transaction at statement %d: %v", i+1, tx.Error)
+			}
+			err = tx.Exec(stmt).Error
+			if err != nil {
+				tx.Rollback()
+			} else {
+				err = tx.Commit().Error
+			}
+		}
+
+		if err != nil {
 			// Allow idempotent reruns: skip 'already exists' type errors
 			if isAlreadyExistsError(err) {
-				log.Printf("ℹ️  [%s] Skipped statement %d due to already-exists: %v", filename, i+1, err)
+				atomic.AddInt64(&idempotentSkipCount, 1)
+				log.Printf("✅ [%s] Object already exists (statement %d) - this is normal for idempotent migrations: %s", 
+					filename, i+1, getObjectNameFromError(err))
 				continue
 			}
 			// If the file opened a transaction, try to rollback to clear aborted state before logging
@@ -591,6 +669,53 @@ func isAlreadyExistsError(err error) bool {
 	return strings.Contains(s, "already exists") ||
 		strings.Contains(s, "duplicate key value") ||
 		strings.Contains(s, "already defined")
+}
+
+// getObjectNameFromError extracts the object name from PostgreSQL error message
+func getObjectNameFromError(err error) string {
+	if err == nil {
+		return "unknown object"
+	}
+	errMsg := err.Error()
+	
+	// Try to extract table/index/constraint name from error message
+	// Format: ERROR: relation "table_name" already exists
+	if idx := strings.Index(errMsg, "relation \""); idx != -1 {
+		start := idx + len("relation \"")
+		if end := strings.Index(errMsg[start:], "\""); end != -1 {
+			return errMsg[start : start+end]
+		}
+	}
+	
+	// Format: ERROR: constraint "constraint_name" already exists
+	if idx := strings.Index(errMsg, "constraint \""); idx != -1 {
+		start := idx + len("constraint \"")
+		if end := strings.Index(errMsg[start:], "\""); end != -1 {
+			return errMsg[start : start+end]
+		}
+	}
+	
+	// Format: ERROR: index "index_name" already exists
+	if idx := strings.Index(errMsg, "index \""); idx != -1 {
+		start := idx + len("index \"")
+		if end := strings.Index(errMsg[start:], "\""); end != -1 {
+			return errMsg[start : start+end]
+		}
+	}
+	
+	// Format: ERROR: function "function_name" already exists
+	if idx := strings.Index(errMsg, "function "); idx != -1 {
+		start := idx + len("function ")
+		if end := strings.Index(errMsg[start:], " already"); end != -1 {
+			return errMsg[start : start+end]
+		}
+	}
+	
+	// Return shortened error if we can't extract the name
+	if len(errMsg) > 100 {
+		return errMsg[:100] + "..."
+	}
+	return errMsg
 }
 
 func logMigrationResult(db *gorm.DB, migrationName, status, message string, executionTimeMs int) {
