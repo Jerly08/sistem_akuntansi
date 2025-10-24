@@ -68,9 +68,10 @@ func applyInlineMigration(db *gorm.DB) error {
 		log.Println("✅ Unique index created successfully")
 	}
 	
-	// Step 3: Add validation trigger
+	// Step 3: Add validation trigger (execute statements separately)
 	log.Println("🔧 Installing validation trigger...")
 	
+	// Create function
 	if err := db.Exec(`
 		CREATE OR REPLACE FUNCTION prevent_duplicate_account_code()
 		RETURNS TRIGGER AS $$
@@ -84,25 +85,36 @@ func applyInlineMigration(db *gorm.DB) error {
 			  AND id != COALESCE(NEW.id, 0);
 			
 			IF existing_count > 0 THEN
-				RAISE EXCEPTION 'Account code % already exists (case-insensitive)', NEW.code
-					USING HINT = 'Use unique account codes only';
+				RAISE EXCEPTION 'Account code % already exists (case-insensitive check)', NEW.code
+					USING HINT = 'Use unique account codes only',
+						 ERRCODE = '23505';  -- unique_violation error code
 			END IF;
 			
 			RETURN NEW;
 		END;
-		$$ LANGUAGE plpgsql;
-		
-		DROP TRIGGER IF EXISTS trg_prevent_duplicate_account_code ON accounts;
-		
+		$$ LANGUAGE plpgsql
+	`).Error; err != nil {
+		log.Printf("⚠️  Warning: Could not create function: %v", err)
+		return fmt.Errorf("failed to create function: %w", err)
+	}
+	
+	// Drop existing trigger
+	if err := db.Exec(`DROP TRIGGER IF EXISTS trg_prevent_duplicate_account_code ON accounts`).Error; err != nil {
+		log.Printf("⚠️  Warning: Could not drop old trigger: %v", err)
+	}
+	
+	// Create trigger
+	if err := db.Exec(`
 		CREATE TRIGGER trg_prevent_duplicate_account_code
 			BEFORE INSERT OR UPDATE OF code ON accounts
 			FOR EACH ROW
-			EXECUTE FUNCTION prevent_duplicate_account_code();
+			EXECUTE FUNCTION prevent_duplicate_account_code()
 	`).Error; err != nil {
 		log.Printf("⚠️  Warning: Could not create trigger: %v", err)
-	} else {
-		log.Println("✅ Validation trigger installed successfully")
+		return fmt.Errorf("failed to create trigger: %w", err)
 	}
+	
+	log.Println("✅ Validation trigger installed successfully")
 	
 	// Step 4: Create monitoring view
 	log.Println("📊 Creating monitoring view...")

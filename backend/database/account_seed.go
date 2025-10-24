@@ -94,17 +94,20 @@ func SeedAccounts(db *gorm.DB) error {
 			})
 
 		if result.Error != nil {
-			// Check if it's a duplicate/unique constraint error
-			if strings.Contains(result.Error.Error(), "duplicate") || 
-			   strings.Contains(result.Error.Error(), "unique") {
-				// Constraint violation - account was created by another process
-				// Try to fetch it
-				log.Printf("⚠️  Account %s already exists (concurrent creation), fetching...", account.Code)
+			errMsg := strings.ToLower(result.Error.Error())
+			// Check if it's a duplicate/unique constraint error (SQLSTATE 23505)
+			if strings.Contains(errMsg, "duplicate") || 
+			   strings.Contains(errMsg, "unique") ||
+			   strings.Contains(errMsg, "already exists") ||
+			   strings.Contains(errMsg, "23505") {
+				// Constraint violation - account already exists
+				// This is EXPECTED when migrations already created the account
+				log.Printf("🔄 Account %s already exists (from migration), fetching...", account.Code)
 				if err := db.Where("code = ? AND deleted_at IS NULL", account.Code).First(&existingAccount).Error; err != nil {
 					return fmt.Errorf("failed to fetch existing account %s: %v", account.Code, err)
 				}
 				accountMap[account.Code] = existingAccount.ID
-				log.Printf("ℹ️  Using existing account: %s - %s (ID: %d)", account.Code, existingAccount.Name, existingAccount.ID)
+				log.Printf("🔒 Preserving balance for account %s (%s): %.2f", existingAccount.Code, existingAccount.Name, existingAccount.Balance)
 				continue
 			}
 			return fmt.Errorf("failed to seed account %s: %v", account.Code, result.Error)
