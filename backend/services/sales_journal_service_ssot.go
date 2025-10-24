@@ -132,13 +132,33 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 			return fmt.Errorf("cash account not found: %v", err)
 		}
 	case "TRANSFER", "BANK":
-		// Try to get from cash/bank account if set
+		// ✅ FIX: Get Account via CashBank relationship, not direct lookup
+		// sale.CashBankID is ID from cash_banks table, need to get AccountID from it
 		if sale.CashBankID != nil && *sale.CashBankID > 0 {
-			if err := dbToUse.First(&debitAccount, *sale.CashBankID).Error; err != nil {
-				log.Printf("⚠️ Cash/Bank account ID %d not found, using default BANK account", *sale.CashBankID)
+			var cashBank models.CashBank
+			if err := dbToUse.First(&cashBank, *sale.CashBankID).Error; err != nil {
+				log.Printf("⚠️ CashBank ID %d not found, using default BANK account: %v", *sale.CashBankID, err)
 				debitAccount, err = resolveByCode("1102")
 				if err != nil {
 					return fmt.Errorf("bank account not found: %v", err)
+				}
+			} else if cashBank.AccountID == 0 {
+				log.Printf("⚠️ CashBank #%d has no AccountID linked, using default BANK account", cashBank.ID)
+				debitAccount, err = resolveByCode("1102")
+				if err != nil {
+					return fmt.Errorf("bank account not found: %v", err)
+				}
+			} else {
+				// Use the linked account from CashBank
+				if err := dbToUse.First(&debitAccount, cashBank.AccountID).Error; err != nil {
+					log.Printf("⚠️ Account ID %d from CashBank #%d not found, using default: %v", cashBank.AccountID, cashBank.ID, err)
+					debitAccount, err = resolveByCode("1102")
+					if err != nil {
+						return fmt.Errorf("bank account not found: %v", err)
+					}
+				} else {
+					log.Printf("✅ Using CashBank '%s' (ID: %d) → Account '%s' (ID: %d)", 
+						cashBank.Name, cashBank.ID, debitAccount.Name, debitAccount.ID)
 				}
 			}
 		} else {
@@ -165,9 +185,20 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 	}
 
 	// Add DEBIT line
+	// ✅ CRITICAL FIX: When PPh exists, TotalAmount is NET (after PPh deduction)
+	// For journal balance: DEBIT must be GROSS (before PPh) = TotalAmount + PPh
+	// This is because PPh will be credited separately as a liability
+	debitAmount := decimal.NewFromFloat(sale.TotalAmount)
+	if sale.PPh > 0 {
+		// Add back PPh to get gross amount
+		debitAmount = debitAmount.Add(decimal.NewFromFloat(sale.PPh))
+		log.Printf("💰 [PPh Adjustment] TotalAmount=%.2f + PPh=%.2f = GrossDebit=%.2f", 
+			sale.TotalAmount, sale.PPh, debitAmount.InexactFloat64())
+	}
+	
 	lines = append(lines, SalesJournalLineRequest{
 		AccountID:    uint64(debitAccount.ID),
-		DebitAmount:  decimal.NewFromFloat(sale.TotalAmount),
+		DebitAmount:  debitAmount,
 		CreditAmount: decimal.Zero,
 		Description:  fmt.Sprintf("Penjualan - %s", sale.InvoiceNumber),
 	})
@@ -293,10 +324,19 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 
 	// Calculate totals
 	var totalDebit, totalCredit decimal.Decimal
-	for _, line := range lines {
+	log.Printf("\n📊 [BALANCE DEBUG] Sale #%d Journal Entry Lines:", sale.ID)
+	for i, line := range lines {
 		totalDebit = totalDebit.Add(line.DebitAmount)
 		totalCredit = totalCredit.Add(line.CreditAmount)
+		log.Printf("  Line %d: AccountID=%d | Debit=%.2f | Credit=%.2f | Desc=%s", 
+			i+1, line.AccountID, line.DebitAmount.InexactFloat64(), 
+			line.CreditAmount.InexactFloat64(), line.Description)
 	}
+	log.Printf("📊 [BALANCE DEBUG] Sale Data: Subtotal=%.2f, PPN=%.2f, PPh=%.2f, TotalAmount=%.2f",
+		sale.Subtotal, sale.PPN, sale.PPh, sale.TotalAmount)
+	log.Printf("📊 [BALANCE DEBUG] Totals: Debit=%.2f | Credit=%.2f | Difference=%.2f", 
+		totalDebit.InexactFloat64(), totalCredit.InexactFloat64(), 
+		totalDebit.Sub(totalCredit).InexactFloat64())
 
 	// Verify balanced
 	if !totalDebit.Equal(totalCredit) {
