@@ -188,13 +188,13 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 	// Add DEBIT line
 	// ✅ CRITICAL FIX: Calculate correct debit amount
 	// The debit should equal all credits (Revenue + PPN + other tax additions - tax deductions)
-	// Formula: Debit = Subtotal + PPN + TotalTaxAdditions (before any deductions)
 	// 
-	// TotalAmount in DB = Net amount received = Subtotal + PPN - PPh - OtherTaxDeductions
-	// But for journal: Debit = Gross before deductions
+	// IMPORTANT: Subtotal already has discount applied (it's sum of LineTotal which is after discount)
+	// Formula: Debit = Subtotal (after discount) + PPN + OtherTaxAdditions + ShippingCost
+	// Then TotalAmount = Debit - Tax Deductions (PPh, etc)
 	
-	// Calculate gross amount (before tax deductions)
-	// Formula: Gross = Subtotal + PPN + OtherTaxAdditions + ShippingCost
+	// Calculate gross amount (before tax deductions, but after item-level discount)
+	// Subtotal already includes item discounts, so we start from there
 	grossAmount := decimal.NewFromFloat(sale.Subtotal).Add(decimal.NewFromFloat(sale.PPN))
 	
 	// Add any other tax additions if they exist
@@ -206,6 +206,23 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 	// Shipping is part of the total amount that customer pays
 	if sale.ShippingCost > 0 {
 		grossAmount = grossAmount.Add(decimal.NewFromFloat(sale.ShippingCost))
+	}
+	
+	// ✅ FIX: Subtract sale-level discount if exists and not already applied
+	// Note: Item-level discounts are already in Subtotal via LineTotal
+	// Sale-level discount (DiscountAmount) should be subtracted from gross
+	if sale.DiscountAmount > 0 && sale.DiscountPercent > 0 {
+		// Check if discount is already applied to subtotal
+		// If TaxableAmount exists and is less than Subtotal, discount is already applied
+		if sale.TaxableAmount > 0 && sale.TaxableAmount < sale.Subtotal {
+			log.Printf("⚠️ [DISCOUNT] Sale-level discount already applied in Subtotal (TaxableAmount=%.2f < Subtotal=%.2f)",
+				sale.TaxableAmount, sale.Subtotal)
+			// Don't subtract again
+		} else {
+			log.Printf("⚠️ [DISCOUNT] Applying sale-level discount: %.2f (%.2f%%)",
+				sale.DiscountAmount, sale.DiscountPercent)
+			grossAmount = grossAmount.Sub(decimal.NewFromFloat(sale.DiscountAmount))
+		}
 	}
 	
 	log.Printf("📊 [DEBIT CALC] Subtotal=%.2f + PPN=%.2f + OtherTaxAdd=%.2f + Shipping=%.2f = GrossAmount=%.2f", 
