@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"time"
 	"app-sistem-akuntansi/models"
@@ -203,7 +204,16 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 	log.Printf("📊 [DEBIT CALC] Subtotal=%.2f + PPN=%.2f + OtherTaxAdd=%.2f = GrossAmount=%.2f", 
 		sale.Subtotal, sale.PPN, sale.OtherTaxAdditions, grossAmount.InexactFloat64())
 	log.Printf("📊 [DEBIT CALC] TotalAmount from DB=%.2f (should be Gross - Deductions)", sale.TotalAmount)
-	log.Printf("📊 [DEBIT CALC] PPh=%.2f, TotalTaxDeductions=%.2f", sale.PPh, sale.TotalTaxDeductions)
+	log.Printf("📊 [DEBIT CALC] Tax Deductions: PPh=%.2f, PPh21=%.2f, PPh23=%.2f, Other=%.2f, Total=%.2f", 
+		sale.PPh, sale.PPh21Amount, sale.PPh23Amount, sale.OtherTaxDeductions, sale.TotalTaxDeductions)
+	
+	// Validate data consistency
+	expectedTotal := grossAmount.InexactFloat64() - sale.PPh - sale.PPh21Amount - sale.PPh23Amount - sale.OtherTaxDeductions + sale.ShippingCost
+	if math.Abs(expectedTotal-sale.TotalAmount) > 0.01 {
+		log.Printf("⚠️ [DATA WARNING] TotalAmount mismatch! Expected=%.2f, Actual=%.2f, Diff=%.2f", 
+			expectedTotal, sale.TotalAmount, expectedTotal-sale.TotalAmount)
+		log.Printf("⚠️ This may indicate corrupted data or calculation error during sale creation")
+	}
 	
 	lines = append(lines, SalesJournalLineRequest{
 		AccountID:    uint64(debitAccount.ID),
