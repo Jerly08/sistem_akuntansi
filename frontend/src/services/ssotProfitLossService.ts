@@ -99,7 +99,9 @@ class SSOTProfitLossService {
     }
 
     const queryString = this.buildQueryString(params);
-    const url = `${API_BASE_URL}${API_V1_BASE}/reports/ssot-profit-loss${queryString ? '?' + queryString : ''}`;
+    // Remove any trailing slash from API_BASE_URL to prevent double slashes
+    const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+    const url = `${baseUrl}${API_V1_BASE}/reports/ssot-profit-loss${queryString ? '?' + queryString : ''}`;
     
     console.log('API_BASE_URL:', API_BASE_URL);
     console.log('API_V1_BASE:', API_V1_BASE);
