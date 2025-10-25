@@ -73,8 +73,7 @@ BEGIN
     EXCEPTION
         WHEN unique_violation THEN
             RAISE NOTICE '✅ CONSTRAINT WORKING: Duplicate insert was correctly rejected';
-            -- Rollback test inserts
-            ROLLBACK;
+            -- Test inserts will be automatically rolled back due to the exception
     END;
 END $$;
 

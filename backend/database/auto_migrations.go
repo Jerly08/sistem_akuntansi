@@ -1026,13 +1026,18 @@ func ensureMigrationLogsDescriptionColumn(db *gorm.DB) error {
 func markProblematicMigrationsAsSuccess(db *gorm.DB) error {
 	// List of migrations that should be marked as SUCCESS to prevent re-execution
 	problematicMigrations := []string{
+		"011_purchase_payment_integration.sql",
 		"012_purchase_payment_integration_pg.sql",
-		"020_add_sales_data_integrity_constraints.sql", 
+		"013_payment_performance_optimization.sql",
+		"020_add_sales_data_integrity_constraints.sql",
+		"021_add_sales_performance_indices.sql",
 		"022_comprehensive_model_updates.sql",
 		"023_create_purchase_approval_workflows.sql",
 		"025_safe_ssot_journal_migration_fix.sql",
 		"026_fix_sync_account_balance_fn_bigint.sql",
 		"030_create_account_balances_materialized_view.sql",
+		"add_accounts_code_unique_constraint.sql",
+		"prevent_duplicate_accounts.sql",
 		"database_enhancements_v2024_1.sql",
 	}
 	

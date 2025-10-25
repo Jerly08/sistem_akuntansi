@@ -385,10 +385,10 @@ VALUES (
     '021_add_sales_performance_indices',
     NOW(),
     'Added comprehensive performance indices for sales, sale_items, and sale_payments tables',
-    'COMPLETED'
+    'SUCCESS'
 ) ON CONFLICT (migration_name) DO UPDATE SET 
     executed_at = NOW(),
-    status = 'COMPLETED';
+    status = 'SUCCESS';
 
 -- Performance analysis
 SELECT 'Sales performance indices created successfully. Run SELECT * FROM test_sales_query_performance(); to validate.' as result;

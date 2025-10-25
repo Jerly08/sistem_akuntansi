@@ -35,7 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_accounts_code ON accounts(code);
 CREATE INDEX IF NOT EXISTS idx_accounts_name_lower ON accounts(LOWER(name));
 
 -- Cash bank table indexes
-CREATE INDEX IF NOT EXISTS idx_cash_bank_account_id ON cash_bank(account_id);
+CREATE INDEX IF NOT EXISTS idx_cash_bank_account_id ON cash_banks(account_id);
 
 -- Contacts table indexes for payment operations
 CREATE INDEX IF NOT EXISTS idx_contacts_type ON contacts(type);
@@ -85,7 +85,7 @@ ANALYZE cash_bank_transactions;
 ANALYZE journal_entries;
 ANALYZE journal_lines;
 ANALYZE accounts;
-ANALYZE cash_bank;
+DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cash_banks') THEN EXECUTE 'ANALYZE cash_banks'; END IF; END $$;
 ANALYZE purchases;
 ANALYZE sales;
 

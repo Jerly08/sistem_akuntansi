@@ -176,7 +176,8 @@ CREATE TRIGGER trg_prevent_duplicate_account_code
     EXECUTE FUNCTION prevent_duplicate_account_code();
 
 -- Step 8: Create monitoring view for duplicate detection
-CREATE OR REPLACE VIEW v_potential_duplicate_accounts AS
+DROP VIEW IF EXISTS v_potential_duplicate_accounts;
+CREATE VIEW v_potential_duplicate_accounts AS
 SELECT 
     a1.code,
     a1.id as id1,
