@@ -555,9 +555,17 @@ func (s *SalesServiceV2) CreateInvoice(saleID uint, userID uint) (*models.Sale, 
 		return nil, fmt.Errorf("sale not found")
 	}
 
+	// ✅ CRITICAL FIX: Prevent duplicate invoice creation
+	// Check if invoice already created (has invoice number or status is INVOICED/PAID)
+	if sale.InvoiceNumber != "" || sale.Status == "INVOICED" || sale.Status == "PAID" {
+		tx.Rollback()
+		return nil, fmt.Errorf("invoice already created for this sale (Invoice #%s, Status: %s)", 
+			sale.InvoiceNumber, sale.Status)
+	}
+
 	if sale.Status != "CONFIRMED" && sale.Status != "DRAFT" {
 		tx.Rollback()
-		return nil, fmt.Errorf("only DRAFT or CONFIRMED sales can be invoiced")
+		return nil, fmt.Errorf("only DRAFT or CONFIRMED sales can be invoiced (current status: %s)", sale.Status)
 	}
 
 	// ✅ VALIDATE STOCK BEFORE INVOICE (Early Check)

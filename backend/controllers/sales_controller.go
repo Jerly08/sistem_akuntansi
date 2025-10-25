@@ -397,6 +397,15 @@ func (sc *SalesController) InvoiceSale(c *gin.Context) {
 		// Handle specific error types with appropriate status codes and messages
 		errorMsg := err.Error()
 		switch {
+		case strings.Contains(errorMsg, "invoice already created"):
+			// Duplicate invoice attempt - return 400 with clear message
+			c.JSON(http.StatusBadRequest, gin.H{
+				"success": false,
+				"error":   "Invoice Sudah Dibuat",
+				"message": errorMsg,
+				"code":    "DUPLICATE_INVOICE",
+				"details": "Invoice untuk penjualan ini sudah dibuat sebelumnya. Silakan refresh halaman.",
+			})
 		case strings.Contains(errorMsg, "stock tidak cukup") || 
 		     strings.Contains(errorMsg, "stock habis") ||
 		     strings.Contains(errorMsg, "gagal mengurangi stock"):
