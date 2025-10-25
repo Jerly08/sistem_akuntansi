@@ -42,8 +42,21 @@ import {
   MenuDivider,
   useColorMode,
   useColorModeValue,
+  Tooltip,
+  IconButton,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+  PopoverHeader,
+  PopoverBody,
+  PopoverArrow,
+  PopoverCloseButton,
+  UnorderedList,
+  ListItem,
+  Code,
+  Divider,
 } from '@chakra-ui/react';
-import { FiPlus, FiEdit, FiTrash2, FiDownload, FiSearch, FiSettings } from 'react-icons/fi';
+import { FiPlus, FiEdit, FiTrash2, FiDownload, FiSearch, FiSettings, FiInfo, FiHelpCircle } from 'react-icons/fi';
 import AccountForm from '@/components/accounts/AccountForm';
 import AccountTreeView from '@/components/accounts/AccountTreeView';
 import AdminDeleteDialog from '@/components/accounts/AdminDeleteDialog';
@@ -482,45 +495,166 @@ const AccountsPage = () => {
     <SimpleLayout>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
-          <Heading size="xl" color={headingColor} fontWeight="600">Chart of Accounts</Heading>
+          <HStack spacing={3}>
+            <Heading size="xl" color={headingColor} fontWeight="600">Chart of Accounts</Heading>
+            <Popover placement="bottom-start">
+              <PopoverTrigger>
+                <IconButton
+                  aria-label="COA Information"
+                  icon={<FiHelpCircle />}
+                  size="sm"
+                  variant="ghost"
+                  colorScheme="blue"
+                  _hover={{ bg: 'blue.50' }}
+                />
+              </PopoverTrigger>
+              <PopoverContent maxW="500px" boxShadow="xl">
+                <PopoverArrow />
+                <PopoverCloseButton />
+                <PopoverHeader fontWeight="bold" fontSize="lg">
+                  📚 Panduan Chart of Accounts (COA)
+                </PopoverHeader>
+                <PopoverBody>
+                  <VStack align="stretch" spacing={3}>
+                    <Box>
+                      <Text fontWeight="semibold" color="blue.600" mb={2}>🏷️ Struktur Kode Akun:</Text>
+                      <UnorderedList spacing={1} fontSize="sm">
+                        <ListItem><Code>1xxx</Code> - ASSETS (Aset)</ListItem>
+                        <ListItem><Code>2xxx</Code> - LIABILITIES (Kewajiban)</ListItem>
+                        <ListItem><Code>3xxx</Code> - EQUITY (Ekuitas/Modal)</ListItem>
+                        <ListItem><Code>4xxx</Code> - REVENUE (Pendapatan)</ListItem>
+                        <ListItem><Code>5xxx</Code> - EXPENSES (Beban)</ListItem>
+                      </UnorderedList>
+                    </Box>
+                    
+                    <Divider />
+                    
+                    <Box>
+                      <Text fontWeight="semibold" color="green.600" mb={2}>✅ Contoh Akun yang Harus Ada:</Text>
+                      <UnorderedList spacing={1} fontSize="sm">
+                        <ListItem><Code>1101</Code> - KAS</ListItem>
+                        <ListItem><Code>1102</Code> - BANK</ListItem>
+                        <ListItem><Code>1201</Code> - PIUTANG USAHA</ListItem>
+                        <ListItem><Code>2101</Code> - UTANG USAHA</ListItem>
+                        <ListItem><Code>2103</Code> - PPN KELUARAN</ListItem>
+                        <ListItem><Code>1240</Code> - PPN MASUKAN</ListItem>
+                        <ListItem><Code>4101</Code> - PENDAPATAN PENJUALAN</ListItem>
+                        <ListItem><Code>5101</Code> - HARGA POKOK PENJUALAN</ListItem>
+                      </UnorderedList>
+                    </Box>
+                    
+                    <Divider />
+                    
+                    <Box>
+                      <Text fontWeight="semibold" color="orange.600" mb={2}>⚠️ Tips Penting:</Text>
+                      <UnorderedList spacing={1} fontSize="sm">
+                        <ListItem>Jangan hapus akun yang sudah punya transaksi</ListItem>
+                        <ListItem>Header Account (parent) tidak bisa dihapus jika punya child</ListItem>
+                        <ListItem>Gunakan nama UPPERCASE untuk konsistensi</ListItem>
+                        <ListItem>Backup data sebelum hapus akun penting</ListItem>
+                      </UnorderedList>
+                    </Box>
+                    
+                    <Divider />
+                    
+                    <Box>
+                      <Text fontWeight="semibold" color="purple.600" mb={2}>🔧 Jika Akun Terhapus Tidak Sengaja:</Text>
+                      <Text fontSize="sm" mb={2} color="red.600">
+                        ⚠️ <strong>PENTING:</strong> Beberapa akun di-hardcode di backend dan wajib ada untuk sistem berjalan!
+                      </Text>
+                      <Text fontSize="sm" fontWeight="semibold" mb={1}>Akun yang Hardcoded (WAJIB):</Text>
+                      <UnorderedList spacing={1} fontSize="sm" mb={2}>
+                        <ListItem><Code>1101 - KAS</Code> (Asset, type: Asset)</ListItem>
+                        <ListItem><Code>1102 - BANK</Code> (Asset, type: Asset)</ListItem>
+                        <ListItem><Code>1240 - PPN MASUKAN</Code> (Asset, type: Asset)</ListItem>
+                        <ListItem><Code>2103 - PPN KELUARAN</Code> (Liability, type: Liability)</ListItem>
+                        <ListItem><Code>4101 - PENDAPATAN PENJUALAN</Code> (Revenue, type: Revenue)</ListItem>
+                        <ListItem><Code>5101 - HARGA POKOK PENJUALAN</Code> (Expense, type: Expense)</ListItem>
+                      </UnorderedList>
+                      <Text fontSize="sm" fontWeight="semibold" mb={1}>Cara Membuat Ulang:</Text>
+                      <UnorderedList spacing={1} fontSize="sm" mt={1}>
+                        <ListItem>Gunakan kode PERSIS sama (misal: <Code>1101</Code>)</ListItem>
+                        <ListItem>Nama harus UPPERCASE (misal: <Code>KAS</Code>)</ListItem>
+                        <ListItem>Type harus sesuai kategori (Asset/Liability/Revenue/Expense)</ListItem>
+                        <ListItem>Pastikan parent account sudah ada (misal: <Code>1100 - CURRENT ASSETS</Code>)</ListItem>
+                        <ListItem>Jangan centang "Is Header" (kecuali untuk kategori besar)</ListItem>
+                      </UnorderedList>
+                    </Box>
+                    
+                    <Box bg="blue.50" p={3} borderRadius="md">
+                      <Text fontSize="xs" color="blue.800">
+                        💡 <strong>Pro Tip:</strong> Gunakan tombol "Add Header Account" untuk membuat kategori besar,
+                        lalu "Add Account" untuk detail akun di dalamnya.
+                      </Text>
+                    </Box>
+                  </VStack>
+                </PopoverBody>
+              </PopoverContent>
+            </Popover>
+          </HStack>
           {canCreate && (
             <HStack spacing={3}>
-              <Button
-                variant="outline"
-                colorScheme="blue"
-                leftIcon={<FiPlus />}
-                onClick={handleCreateHeader}
-                size="md"
-                px={6}
-                py={2}
-                borderRadius="md"
-                fontWeight="medium"
-                _hover={{ 
-                  transform: 'translateY(-1px)',
-                  boxShadow: 'md'
-                }}
+              <Tooltip 
+                label="Buat kategori besar (Header) seperti ASSETS, CURRENT ASSETS, LIABILITIES, dll. Header tidak bisa digunakan untuk transaksi langsung, hanya untuk mengelompokkan akun." 
+                placement="bottom"
+                hasArrow
               >
-                Add Header Account
-              </Button>
-              <Button
-                colorScheme="blue"
-                leftIcon={<FiPlus />}
-                onClick={handleCreate}
-                size="md"
-                px={6}
-                py={2}
-                borderRadius="md"
-                fontWeight="medium"
-                _hover={{ 
-                  transform: 'translateY(-1px)',
-                  boxShadow: 'lg'
-                }}
+                <Button
+                  variant="outline"
+                  colorScheme="blue"
+                  leftIcon={<FiPlus />}
+                  onClick={handleCreateHeader}
+                  size="md"
+                  px={6}
+                  py={2}
+                  borderRadius="md"
+                  fontWeight="medium"
+                  _hover={{ 
+                    transform: 'translateY(-1px)',
+                    boxShadow: 'md'
+                  }}
+                >
+                  Add Header Account
+                </Button>
+              </Tooltip>
+              <Tooltip 
+                label="Buat akun detail seperti KAS (1101), BANK (1102), PIUTANG USAHA (1201) yang bisa digunakan untuk mencatat transaksi. WAJIB: KAS, BANK, PPN MASUKAN (1240), PPN KELUARAN (2103) di-hardcode di backend!" 
+                placement="bottom"
+                hasArrow
               >
-                Add Account
-              </Button>
+                <Button
+                  colorScheme="blue"
+                  leftIcon={<FiPlus />}
+                  onClick={handleCreate}
+                  size="md"
+                  px={6}
+                  py={2}
+                  borderRadius="md"
+                  fontWeight="medium"
+                  _hover={{ 
+                    transform: 'translateY(-1px)',
+                    boxShadow: 'lg'
+                  }}
+                >
+                  Add Account
+                </Button>
+              </Tooltip>
             </HStack>
           )}
         </Flex>
+        
+        {/* Info Banner */}
+        <Alert status="warning" mb={4} borderRadius="md" variant="left-accent">
+          <AlertIcon />
+          <Box flex="1">
+            <AlertTitle fontSize="sm" mb={1}>⚠️ Akun-Akun Wajib (Hardcoded di Backend)</AlertTitle>
+            <AlertDescription fontSize="xs">
+              Akun berikut <strong>WAJIB ADA</strong> dan di-hardcode di backend: <strong>KAS (1101)</strong>, <strong>BANK (1102)</strong>, <strong>PPN MASUKAN (1240)</strong>, <strong>PPN KELUARAN (2103)</strong>, 
+              <strong>PENDAPATAN PENJUALAN (4101)</strong>, <strong>HARGA POKOK PENJUALAN (5101)</strong>. 
+              Jika terhapus, <strong>HARUS dibuat ulang dengan kode, nama UPPERCASE, dan type yang PERSIS sama!</strong> Klik ikon 📚 untuk panduan lengkap.
+            </AlertDescription>
+          </Box>
+        </Alert>
         
         {error && (
           <Alert status="error" mb={4}>
