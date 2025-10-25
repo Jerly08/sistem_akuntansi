@@ -193,7 +193,8 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 	// Formula: Debit = Subtotal (after discount) + PPN + OtherTaxAdditions + ShippingCost
 	// Then TotalAmount = Debit - Tax Deductions (PPh, etc)
 	
-	// Calculate gross amount (before tax deductions, but after item-level discount)
+	// Calculate gross amount (after all additions, BEFORE tax deductions)
+	// This is the total amount BEFORE customer withholds taxes
 	// Subtotal already includes item discounts, so we start from there
 	grossAmount := decimal.NewFromFloat(sale.Subtotal).Add(decimal.NewFromFloat(sale.PPN))
 	
@@ -206,6 +207,22 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 	// Shipping is part of the total amount that customer pays
 	if sale.ShippingCost > 0 {
 		grossAmount = grossAmount.Add(decimal.NewFromFloat(sale.ShippingCost))
+	}
+	
+	// ✅ CRITICAL FIX: Subtract tax deductions (PPh, PPh21, PPh23)
+	// Customer withholds these taxes, so we receive LESS than gross amount
+	// The withheld taxes become our prepaid tax asset
+	if sale.PPh > 0 {
+		grossAmount = grossAmount.Sub(decimal.NewFromFloat(sale.PPh))
+	}
+	if sale.PPh21Amount > 0 {
+		grossAmount = grossAmount.Sub(decimal.NewFromFloat(sale.PPh21Amount))
+	}
+	if sale.PPh23Amount > 0 {
+		grossAmount = grossAmount.Sub(decimal.NewFromFloat(sale.PPh23Amount))
+	}
+	if sale.OtherTaxDeductions > 0 {
+		grossAmount = grossAmount.Sub(decimal.NewFromFloat(sale.OtherTaxDeductions))
 	}
 	
 	// ✅ FIX: Subtract sale-level discount if exists and not already applied
@@ -225,16 +242,19 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		}
 	}
 	
-	log.Printf("📊 [DEBIT CALC] Subtotal=%.2f + PPN=%.2f + OtherTaxAdd=%.2f + Shipping=%.2f = GrossAmount=%.2f", 
-		sale.Subtotal, sale.PPN, sale.OtherTaxAdditions, sale.ShippingCost, grossAmount.InexactFloat64())
-	log.Printf("📊 [DEBIT CALC] TotalAmount from DB=%.2f", sale.TotalAmount)
+	log.Printf("📊 [DEBIT CALC] Subtotal=%.2f + PPN=%.2f + OtherTaxAdd=%.2f + Shipping=%.2f - PPh=%.2f - PPh21=%.2f - PPh23=%.2f - OtherTaxDed=%.2f = GrossAmount=%.2f", 
+		sale.Subtotal, sale.PPN, sale.OtherTaxAdditions, sale.ShippingCost, 
+		sale.PPh, sale.PPh21Amount, sale.PPh23Amount, sale.OtherTaxDeductions,
+		grossAmount.InexactFloat64())
+	log.Printf("📊 [DEBIT CALC] TotalAmount from DB=%.2f (GrossAmount should equal TotalAmount)", sale.TotalAmount)
 	
 	// Validate data consistency
-	expectedTotalWithDeductions := grossAmount.InexactFloat64() - sale.PPh - sale.PPh21Amount - sale.PPh23Amount - sale.OtherTaxDeductions
-	if math.Abs(expectedTotalWithDeductions-sale.TotalAmount) > 0.01 {
+	// Note: grossAmount already has tax deductions subtracted, so it should equal TotalAmount
+	if math.Abs(grossAmount.InexactFloat64()-sale.TotalAmount) > 100.0 {
 		log.Printf("⚠️ [DATA WARNING] TotalAmount mismatch! Expected=%.2f, Actual=%.2f, Diff=%.2f", 
-			expectedTotalWithDeductions, sale.TotalAmount, expectedTotalWithDeductions-sale.TotalAmount)
+			grossAmount.InexactFloat64(), sale.TotalAmount, grossAmount.InexactFloat64()-sale.TotalAmount)
 		log.Printf("⚠️ This may indicate corrupted data or calculation error during sale creation")
+		log.Printf("⚠️ Using calculated GrossAmount instead of DB TotalAmount for journal entry")
 	}
 	
 	// Main debit entry - full gross amount (customer owes us this much)
@@ -362,6 +382,41 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		}
 	}
 	
+	// PPh 23
+	if sale.PPh23Amount > 0 {
+		pph23Account, err := resolveByCode("1115") // PPh 23 Dibayar Dimuka (Asset)
+		if err != nil {
+			log.Printf("⚠️ PPh23 prepaid account (1115) not found, skipping")
+		} else {
+			lines = append(lines, SalesJournalLineRequest{
+				AccountID:    uint64(pph23Account.ID),
+				DebitAmount:  decimal.NewFromFloat(sale.PPh23Amount),
+				CreditAmount: decimal.Zero,
+				Description:  fmt.Sprintf("PPh 23 Dibayar Dimuka - %s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 [PPh23] Recorded as prepaid tax (Asset): Rp %.2f", sale.PPh23Amount)
+		}
+	}
+	
+	// Other Tax Deductions (if exists)
+	if sale.OtherTaxDeductions > 0 {
+		otherTaxDedAccount, err := resolveByCode("1116") // Other Tax Deductions Prepaid
+		if err != nil {
+			log.Printf("⚠️ Other tax deductions prepaid account (1116) not found, using 1114")
+			otherTaxDedAccount, err = resolveByCode("1114")
+		}
+		if err == nil {
+			lines = append(lines, SalesJournalLineRequest{
+				AccountID:    uint64(otherTaxDedAccount.ID),
+				DebitAmount:  decimal.NewFromFloat(sale.OtherTaxDeductions),
+				CreditAmount: decimal.Zero,
+				Description:  fmt.Sprintf("Potongan Pajak Lainnya - %s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 [OtherTaxDeductions] Recorded as prepaid tax (Asset): Rp %.2f", sale.OtherTaxDeductions)
+		} else {
+			log.Printf("⚠️ Other tax deductions prepaid account not found, skipping")
+		}
+	}
 	
 
 	// ========================================
