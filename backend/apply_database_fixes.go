@@ -14,10 +14,11 @@ import (
 
 func parsePostgresURL(dbURL string) (host, port, user, password, dbname string) {
 	// Parse postgres://user:password@host:port/dbname?params
-	re := regexp.MustCompile(`postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+)(?::(\\d+))?/([^?]+)`)
+	// Supports: postgres://user:pass@host/db or postgres://user:pass@host:port/db
+	re := regexp.MustCompile(`postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/([^?]+)`)
 	matches := re.FindStringSubmatch(dbURL)
 	
-	if len(matches) > 0 {
+	if len(matches) >= 6 {
 		user = matches[1]
 		password = matches[2]
 		host = matches[3]
@@ -27,6 +28,7 @@ func parsePostgresURL(dbURL string) (host, port, user, password, dbname string) 
 			port = "5432"
 		}
 		dbname = matches[5]
+		log.Printf("🔍 Parsed from URL: user=%s, host=%s, port=%s, dbname=%s", user, host, port, dbname)
 	}
 	return
 }
