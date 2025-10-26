@@ -278,33 +278,27 @@ CREATE UNIQUE INDEX idx_account_balances_account_id ON account_balances(account_
 -- =====================================================
 
 -- Function to refresh account balances materialized view
+-- NOTE: This trigger is DISABLED by default to prevent concurrent refresh conflicts
+-- Use manual refresh or scheduled jobs instead
+-- Balance sync is handled by setup_automatic_balance_sync.sql triggers
 CREATE OR REPLACE FUNCTION refresh_account_balances()
 RETURNS TRIGGER AS $$
-DECLARE
-    affected_accounts BIGINT[];
 BEGIN
-    -- Collect affected account IDs
-    IF TG_OP = 'INSERT' THEN
-        affected_accounts := ARRAY[NEW.account_id];
-    ELSIF TG_OP = 'UPDATE' THEN
-        affected_accounts := ARRAY[NEW.account_id, OLD.account_id];
-    ELSIF TG_OP = 'DELETE' THEN
-        affected_accounts := ARRAY[OLD.account_id];
-    END IF;
-    
-    -- For now, refresh the entire materialized view
-    -- In production, consider partial refresh for better performance
-    REFRESH MATERIALIZED VIEW CONCURRENTLY account_balances;
-    
+    -- DISABLED: Automatic refresh causes SQLSTATE 55000 concurrent refresh errors
+    -- Balance sync is already handled by trigger_sync_account_balance() in setup_automatic_balance_sync.sql
+    -- This function is kept for manual refresh calls only
+    RAISE NOTICE 'Automatic materialized view refresh is disabled. Use manual refresh or scheduled jobs.';
     RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to maintain balance consistency
-CREATE TRIGGER trg_refresh_account_balances
-    AFTER INSERT OR UPDATE OR DELETE ON unified_journal_lines
-    FOR EACH STATEMENT
-    EXECUTE FUNCTION refresh_account_balances();
+-- DISABLED: This trigger causes concurrent refresh conflicts in production
+-- Balance sync is handled by setup_automatic_balance_sync.sql
+-- CREATE TRIGGER trg_refresh_account_balances
+--     AFTER INSERT OR UPDATE OR DELETE ON unified_journal_lines
+--     FOR EACH STATEMENT
+--     EXECUTE FUNCTION refresh_account_balances();
 
 -- Function to validate journal entry balance
 CREATE OR REPLACE FUNCTION validate_journal_balance()
