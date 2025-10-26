@@ -32,6 +32,9 @@ func InitializeDatabase(db *gorm.DB) {
 	// Note: Balance sync migration is now handled in database.go after environment variable checks
 	// to prevent balance resets during development
 	
+	// Fix concurrent refresh error (CRITICAL)
+	FixConcurrentRefreshError(db)
+	
 	// Run auto-fix migration for common issues (after git pull)
 	AutoFixMigration(db)
 	
