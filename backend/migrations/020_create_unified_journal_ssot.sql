@@ -410,7 +410,11 @@ RETURNS TRIGGER AS $$
 DECLARE
     event_type_val VARCHAR(50);
     event_data_val JSONB;
+    new_event_uuid UUID;
 BEGIN
+    -- Generate new UUID for this event
+    new_event_uuid := uuid_generate_v4();
+    
     -- Determine event type
     IF TG_OP = 'INSERT' THEN
         event_type_val := 'CREATED';
@@ -452,14 +456,16 @@ BEGIN
         );
     END IF;
     
-    -- Insert event log
+    -- Insert event log with explicit event_uuid
     INSERT INTO journal_event_log (
+        event_uuid,
         journal_id,
         event_type,
         event_data,
         user_id,
         correlation_id
     ) VALUES (
+        new_event_uuid,
         COALESCE(NEW.id, OLD.id),
         event_type_val,
         event_data_val,
