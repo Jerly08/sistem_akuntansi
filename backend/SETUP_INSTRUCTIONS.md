@@ -1,5 +1,21 @@
 # 🚀 Setup Instructions for New Environment
 
+## TL;DR (Quick Start)
+
+After `git pull`, just run:
+
+```bash
+# 1. Configure your database in .env
+# 2. Run this single command:
+go run apply_database_fixes.go
+# 3. Start the app:
+go run main.go
+```
+
+Done! ✅ No hardcoded values, automatically reads your `.env` configuration.
+
+---
+
 ## Prerequisites
 - Go 1.19+ installed
 - PostgreSQL 12+ running
