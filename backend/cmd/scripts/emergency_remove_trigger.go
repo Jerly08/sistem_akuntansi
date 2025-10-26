@@ -238,35 +238,50 @@ func loadEnv() {
 }
 
 // parsePostgresURL parses postgres://user:password@host:port/dbname
+// Also handles: postgres://user@host/dbname (no password)
 func parsePostgresURL(url string) map[string]string {
 	// Remove postgres:// prefix
 	url = strings.TrimPrefix(url, "postgres://")
 	url = strings.TrimPrefix(url, "postgresql://")
 	
-	// Split by @
-	parts := strings.Split(url, "@")
-	if len(parts) != 2 {
+	// Remove query params first
+	if idx := strings.Index(url, "?"); idx != -1 {
+		url = url[:idx]
+	}
+	
+	// Check if @ exists
+	idxAt := strings.Index(url, "@")
+	if idxAt == -1 {
+		// No @ means format: user/database or just database
+		// Example: arkaan/sistem_akuntansi or just sistem_akuntansi
+		parts := strings.Split(url, "/")
+		if len(parts) >= 2 {
+			return map[string]string{
+				"host":     "localhost",
+				"port":     "5432",
+				"user":     parts[0],
+				"password": "",
+				"dbname":   parts[1],
+			}
+		}
 		return nil
 	}
 	
+	// Split by @ to get user part and host part
+	userPart := url[:idxAt]
+	hostPart := url[idxAt+1:]
+	
 	// Parse user:password
-	userPass := strings.Split(parts[0], ":")
-	user := userPass[0]
+	user := userPart
 	password := ""
-	if len(userPass) > 1 {
-		password = userPass[1]
+	if idx := strings.Index(userPart, ":"); idx != -1 {
+		user = userPart[:idx]
+		password = userPart[idx+1:]
 	}
 	
-	// Parse host:port/dbname?params
-	hostPart := parts[1]
-	// Remove query params
-	if idx := strings.Index(hostPart, "?"); idx != -1 {
-		hostPart = hostPart[:idx]
-	}
-	
-	// Split host:port and dbname
+	// Parse host:port/dbname
 	hostPortDb := strings.Split(hostPart, "/")
-	if len(hostPortDb) != 2 {
+	if len(hostPortDb) < 2 {
 		return nil
 	}
 	
