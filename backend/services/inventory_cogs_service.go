@@ -100,6 +100,7 @@ func (s *InventoryCOGSService) RecordCOGSForSale(sale *models.Sale, tx *gorm.DB)
 	saleIDUint64 := uint64(sale.ID)
 
 	// Create journal entry
+	// Insert as DRAFT first to avoid trigger validation before lines are created
 	journalEntry := models.SSOTJournalEntry{
 		EntryDate:   sale.Date, // Use Date instead of SaleDate
 		Reference:   fmt.Sprintf("COGS-%s", sale.InvoiceNumber),
@@ -108,7 +109,7 @@ func (s *InventoryCOGSService) RecordCOGSForSale(sale *models.Sale, tx *gorm.DB)
 		SourceID:    &saleIDUint64,
 		SourceCode:  sale.Code,
 		Notes:       "COGS", // Use Notes field to mark as COGS entry
-		Status:      "POSTED",
+		Status:      "DRAFT",
 		TotalDebit:  totalCOGS,
 		TotalCredit: totalCOGS,
 		CreatedBy:   uint64(sale.UserID), // Convert uint to uint64
@@ -146,6 +147,18 @@ func (s *InventoryCOGSService) RecordCOGSForSale(sale *models.Sale, tx *gorm.DB)
 		dbToUse.Delete(&journalEntry)
 		return fmt.Errorf("failed to create COGS journal lines: %v", err)
 	}
+
+	// Now update status to POSTED after lines are created
+	now := time.Now()
+	postedBy := uint64(sale.UserID)
+	if err := dbToUse.Model(&journalEntry).Updates(map[string]interface{}{
+		"status":    "POSTED",
+		"posted_at": &now,
+		"posted_by": &postedBy,
+	}).Error; err != nil {
+		return fmt.Errorf("failed to post COGS journal entry: %v", err)
+	}
+	journalEntry.Status = "POSTED" // Update in-memory object
 
 	// ✅ Update account balances for COA tree view
 	for _, line := range journalLines {

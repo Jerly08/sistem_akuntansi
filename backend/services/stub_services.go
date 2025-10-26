@@ -353,12 +353,13 @@ type PaymentJournalRequest struct {
 
 func (s *CashBankSSOTJournalAdapter) createActualDepositJournalEntry(tx *gorm.DB, account *models.CashBank, transaction *models.CashBankTransaction, request *CashBankJournalRequest) (*CashBankJournalResult, error) {
 	// Create SSOT journal entry for deposit and proper lines (Debit Cash/Bank, Credit Equity)
+	// Insert as DRAFT first to avoid trigger validation before lines are created
 	journal := &models.SSOTJournalEntry{
 		EntryNumber:   fmt.Sprintf("DEP-%d", time.Now().Unix()),
 		EntryDate:     request.Date,
 		Description:   fmt.Sprintf("Deposit to %s: %s", account.Name, request.Description),
 		Reference:     request.Reference,
-		Status:        "POSTED",
+		Status:        "DRAFT",
 		TotalDebit:    request.Amount,
 		TotalCredit:   request.Amount,
 		CreatedBy:     request.CreatedBy,
@@ -402,17 +403,23 @@ func (s *CashBankSSOTJournalAdapter) createActualDepositJournalEntry(tx *gorm.DB
 	if err := tx.Create(creditLine).Error; err != nil {
 		return nil, fmt.Errorf("failed to create deposit credit line: %v", err)
 	}
+	// Now update status to POSTED after lines are created
+	if err := tx.Model(journal).Update("status", "POSTED").Error; err != nil {
+		return nil, fmt.Errorf("failed to post deposit journal entry: %v", err)
+	}
+	journal.Status = "POSTED" // Update in-memory object
 	return &CashBankJournalResult{JournalEntry: journal, Success: true}, nil
 }
 
 func (s *CashBankSSOTJournalAdapter) createActualWithdrawalJournalEntry(tx *gorm.DB, account *models.CashBank, transaction *models.CashBankTransaction, request *CashBankJournalRequest) (*models.SSOTJournalEntry, error) {
 	// Create SSOT journal entry for withdrawal and proper lines (Debit expense/target, Credit Cash/Bank)
+	// Insert as DRAFT first to avoid trigger validation before lines are created
 	journal := &models.SSOTJournalEntry{
 		EntryNumber:   fmt.Sprintf("WIT-%d", time.Now().Unix()),
 		EntryDate:     request.Date,
 		Description:   fmt.Sprintf("Withdrawal from %s: %s", account.Name, request.Description),
 		Reference:     request.Reference,
-		Status:        "POSTED",
+		Status:        "DRAFT",
 		TotalDebit:    request.Amount,
 		TotalCredit:   request.Amount,
 		CreatedBy:     request.CreatedBy,
@@ -454,17 +461,23 @@ func (s *CashBankSSOTJournalAdapter) createActualWithdrawalJournalEntry(tx *gorm
 	if err := tx.Create(creditLine).Error; err != nil {
 		return nil, fmt.Errorf("failed to create withdrawal credit line: %v", err)
 	}
+	// Now update status to POSTED after lines are created
+	if err := tx.Model(journal).Update("status", "POSTED").Error; err != nil {
+		return nil, fmt.Errorf("failed to post withdrawal journal entry: %v", err)
+	}
+	journal.Status = "POSTED" // Update in-memory object
 	return journal, nil
 }
 
 func (s *CashBankSSOTJournalAdapter) createActualTransferJournalEntry(tx *gorm.DB, sourceAccount, destAccount *models.CashBank, sourceTx *models.CashBankTransaction, request *CashBankJournalRequest) (*models.SSOTJournalEntry, error) {
 	// Create SSOT journal entry for transfer and lines (Credit source cash/bank, Debit destination cash/bank)
+	// Insert as DRAFT first to avoid trigger validation before lines are created
 	journal := &models.SSOTJournalEntry{
 		EntryNumber:   fmt.Sprintf("TRF-%d", time.Now().Unix()),
 		EntryDate:     request.Date,
 		Description:   fmt.Sprintf("Transfer from %s to %s: %s", sourceAccount.Name, destAccount.Name, request.Description),
 		Reference:     request.Reference,
-		Status:        "POSTED",
+		Status:        "DRAFT",
 		TotalDebit:    request.Amount,
 		TotalCredit:   request.Amount,
 		CreatedBy:     request.CreatedBy,
@@ -495,17 +508,23 @@ func (s *CashBankSSOTJournalAdapter) createActualTransferJournalEntry(tx *gorm.D
 	if err := tx.Create(creditLine).Error; err != nil {
 		return nil, fmt.Errorf("failed to create transfer credit line: %v", err)
 	}
+	// Now update status to POSTED after lines are created
+	if err := tx.Model(journal).Update("status", "POSTED").Error; err != nil {
+		return nil, fmt.Errorf("failed to post transfer journal entry: %v", err)
+	}
+	journal.Status = "POSTED" // Update in-memory object
 	return journal, nil
 }
 
 func (s *CashBankSSOTJournalAdapter) createActualOpeningBalanceJournalEntry(tx *gorm.DB, cashBank *models.CashBank, transaction *models.CashBankTransaction, request *CashBankJournalRequest) (*models.SSOTJournalEntry, error) {
 	// Create SSOT journal entry for opening balance and lines (Debit Cash/Bank, Credit Equity)
+	// Insert as DRAFT first to avoid trigger validation before lines are created
 	journal := &models.SSOTJournalEntry{
 		EntryNumber:   fmt.Sprintf("OPB-%d", time.Now().Unix()),
 		EntryDate:     request.Date,
 		Description:   fmt.Sprintf("Opening balance for %s: %s", cashBank.Name, request.Description),
 		Reference:     request.Reference,
-		Status:        "POSTED",
+		Status:        "DRAFT",
 		TotalDebit:    request.Amount,
 		TotalCredit:   request.Amount,
 		CreatedBy:     request.CreatedBy,
@@ -547,6 +566,12 @@ func (s *CashBankSSOTJournalAdapter) createActualOpeningBalanceJournalEntry(tx *
 	if err := tx.Create(creditLine).Error; err != nil {
 		return nil, fmt.Errorf("failed to create opening balance credit line: %v", err)
 	}
+	
+	// Now update status to POSTED after lines are created
+	if err := tx.Model(journal).Update("status", "POSTED").Error; err != nil {
+		return nil, fmt.Errorf("failed to post opening balance journal entry: %v", err)
+	}
+	journal.Status = "POSTED" // Update in-memory object
 	
 	// ✅ FIX: Update accounts.balance since journal is POSTED
 	// Update Cash/Bank Account (Debit = increase for Asset)

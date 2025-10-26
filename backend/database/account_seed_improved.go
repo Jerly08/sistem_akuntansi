@@ -26,58 +26,59 @@ func SeedAccountsImproved(db *gorm.DB) error {
 			return fmt.Errorf("pre-seed duplicate check failed: %v", err)
 		}
 		
+		// Normalize all account names to UPPERCASE to ensure consistency
 		accounts := []models.Account{
 			// ASSETS (1xxx)
-			{Code: "1000", Name: "ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 1, IsHeader: true, IsActive: true},
-			{Code: "1100", Name: "CURRENT ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
-			{Code: "1101", Name: "KAS", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: true, IsActive: true, Balance: 0},
-			{Code: "1102", Name: "BANK", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: true, IsActive: true, Balance: 0},
-			{Code: "1200", Name: "ACCOUNTS RECEIVABLE", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
-			{Code: "1201", Name: "PIUTANG USAHA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1000", Name: strings.ToUpper("ASSETS"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 1, IsHeader: true, IsActive: true},
+			{Code: "1100", Name: strings.ToUpper("CURRENT ASSETS"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
+			{Code: "1101", Name: strings.ToUpper("KAS"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: true, IsActive: true, Balance: 0},
+			{Code: "1102", Name: strings.ToUpper("BANK"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: true, IsActive: true, Balance: 0},
+			{Code: "1200", Name: strings.ToUpper("ACCOUNTS RECEIVABLE"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 2, IsHeader: true, IsActive: true},
+			{Code: "1201", Name: strings.ToUpper("PIUTANG USAHA"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			
 			// Tax Prepaid Accounts (Prepaid taxes/Input VAT)
-			{Code: "1114", Name: "PPh 21 DIBAYAR DIMUKA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "1115", Name: "PPh 23 DIBAYAR DIMUKA", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "1240", Name: "PPN MASUKAN", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1114", Name: strings.ToUpper("PPh 21 DIBAYAR DIMUKA"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1115", Name: strings.ToUpper("PPh 23 DIBAYAR DIMUKA"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1240", Name: strings.ToUpper("PPN MASUKAN"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			
 			// Inventory
-			{Code: "1301", Name: "PERSEDIAAN BARANG DAGANGAN", Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1301", Name: strings.ToUpper("PERSEDIAAN BARANG DAGANGAN"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
-			{Code: "1500", Name: "FIXED ASSETS", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 2, IsHeader: true, IsActive: true},
-			{Code: "1501", Name: "PERALATAN KANTOR", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "1502", Name: "KENDARAAN", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "1503", Name: "BANGUNAN", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "1509", Name: "TRUK", Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1500", Name: strings.ToUpper("FIXED ASSETS"), Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 2, IsHeader: true, IsActive: true},
+			{Code: "1501", Name: strings.ToUpper("PERALATAN KANTOR"), Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1502", Name: strings.ToUpper("KENDARAAN"), Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1503", Name: strings.ToUpper("BANGUNAN"), Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1509", Name: strings.ToUpper("TRUK"), Type: models.AccountTypeAsset, Category: models.CategoryFixedAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 			// LIABILITIES (2xxx)
-			{Code: "2000", Name: "LIABILITIES", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 1, IsHeader: true, IsActive: true},
-			{Code: "2100", Name: "CURRENT LIABILITIES", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 2, IsHeader: true, IsActive: true},
-			{Code: "2101", Name: "UTANG USAHA", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "2103", Name: "PPN KELUARAN", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "2104", Name: "PPh YANG DIPOTONG", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "2107", Name: "PEMOTONGAN PAJAK LAINNYA", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "2108", Name: "PENAMBAHAN PAJAK LAINNYA", Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "2000", Name: strings.ToUpper("LIABILITIES"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 1, IsHeader: true, IsActive: true},
+			{Code: "2100", Name: strings.ToUpper("CURRENT LIABILITIES"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 2, IsHeader: true, IsActive: true},
+			{Code: "2101", Name: strings.ToUpper("UTANG USAHA"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "2103", Name: strings.ToUpper("PPN KELUARAN"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "2104", Name: strings.ToUpper("PPh YANG DIPOTONG"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "2107", Name: strings.ToUpper("PEMOTONGAN PAJAK LAINNYA"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "2108", Name: strings.ToUpper("PENAMBAHAN PAJAK LAINNYA"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 			// EQUITY (3xxx)
-			{Code: "3000", Name: "EQUITY", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 1, IsHeader: true, IsActive: true},
-			{Code: "3101", Name: "MODAL PEMILIK", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "3201", Name: "LABA DITAHAN", Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "3000", Name: strings.ToUpper("EQUITY"), Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 1, IsHeader: true, IsActive: true},
+			{Code: "3101", Name: strings.ToUpper("MODAL PEMILIK"), Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "3201", Name: strings.ToUpper("LABA DITAHAN"), Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 
 			// REVENUE (4xxx)
-			{Code: "4000", Name: "REVENUE", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 1, IsHeader: true, IsActive: true},
-			{Code: "4101", Name: "PENDAPATAN PENJUALAN", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "4102", Name: "PENDAPATAN JASA/ONGKIR", Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "4201", Name: "PENDAPATAN LAIN-LAIN", Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "4900", Name: "OTHER INCOME", Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "4000", Name: strings.ToUpper("REVENUE"), Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 1, IsHeader: true, IsActive: true},
+			{Code: "4101", Name: strings.ToUpper("PENDAPATAN PENJUALAN"), Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "4102", Name: strings.ToUpper("PENDAPATAN JASA/ONGKIR"), Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "4201", Name: strings.ToUpper("PENDAPATAN LAIN-LAIN"), Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "4900", Name: strings.ToUpper("OTHER INCOME"), Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 
 			// EXPENSES (5xxx)
-			{Code: "5000", Name: "EXPENSES", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 1, IsHeader: true, IsActive: true},
-			{Code: "5101", Name: "HARGA POKOK PENJUALAN", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "5201", Name: "BEBAN GAJI", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "5202", Name: "BEBAN LISTRIK", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "5203", Name: "BEBAN TELEPON", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "5204", Name: "BEBAN TRANSPORTASI", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "5900", Name: "GENERAL EXPENSE", Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "5000", Name: strings.ToUpper("EXPENSES"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 1, IsHeader: true, IsActive: true},
+			{Code: "5101", Name: strings.ToUpper("HARGA POKOK PENJUALAN"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "5201", Name: strings.ToUpper("BEBAN GAJI"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "5202", Name: strings.ToUpper("BEBAN LISTRIK"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "5203", Name: strings.ToUpper("BEBAN TELEPON"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "5204", Name: strings.ToUpper("BEBAN TRANSPORTASI"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "5900", Name: strings.ToUpper("GENERAL EXPENSE"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 		}
 
 		// Verify no duplicates in seed data itself
@@ -165,6 +166,9 @@ func verifyNoDuplicatesInSeed(accounts []models.Account) error {
 func upsertAccount(tx *gorm.DB, account models.Account) (uint, bool, error) {
 	var existingAccount models.Account
 	
+	// Always normalize name to UPPERCASE
+	normalizedName := strings.ToUpper(account.Name)
+	
 	// Use FOR UPDATE lock to prevent race conditions
 	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("code = ?", account.Code).
@@ -175,7 +179,7 @@ func upsertAccount(tx *gorm.DB, account models.Account) (uint, bool, error) {
 		// Account doesn't exist, create it
 		newAccount := models.Account{
 			Code:        account.Code,
-			Name:        account.Name,
+			Name:        normalizedName,
 			Type:        account.Type,
 			Category:    account.Category,
 			Level:       account.Level,
@@ -196,7 +200,7 @@ func upsertAccount(tx *gorm.DB, account models.Account) (uint, bool, error) {
 	
 	// Account exists, update metadata but preserve balance
 	updates := map[string]interface{}{
-		"name":        account.Name,
+		"name":        normalizedName,
 		"type":        account.Type,
 		"category":    account.Category,
 		"level":       account.Level,

@@ -1323,10 +1323,20 @@ func installBalanceSyncSystem(db *gorm.DB) error {
 		}
 		
 		if err := db.Exec(stmt).Error; err != nil {
+			errMsg := strings.ToLower(err.Error())
+			
+			// Skip if object already exists (idempotent)
 			if isAlreadyExistsError(err) {
-				log.Printf("   ℹ️  Skipped existing object in statement %d", i+1)
+				log.Printf("   ⏭️  Skipping statement %d - object already exists", i+1)
 				continue
 			}
+			
+			// Skip if function doesn't exist (might be called later in the migration)
+			if strings.Contains(errMsg, "does not exist") && strings.Contains(errMsg, "function") {
+				log.Printf("   ⏭️  Skipping statement %d - function will be created later", i+1)
+				continue
+			}
+			
 			return fmt.Errorf("failed to execute statement %d: %w\nSQL: %s", i+1, err, stmt)
 		}
 	}

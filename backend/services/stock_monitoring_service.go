@@ -151,7 +151,15 @@ func (s *StockMonitoringService) createMinimumStockNotification(product *models.
 		existingAlert.CurrentStock = product.Stock
 		existingAlert.LastAlertAt = time.Now()
 		s.db.Save(&existingAlert)
+		log.Printf("[STOCK-ALERT] Updated existing low stock alert for product '%s' (ID: %d) - Current: %d, Min: %d", 
+			product.Name, product.ID, product.Stock, product.MinStock)
 		return nil // Don't create duplicate notification
+	}
+	
+	// Only log if it's a real error (not "record not found")
+	if err != gorm.ErrRecordNotFound {
+		log.Printf("[STOCK-ALERT-ERROR] Error checking existing stock alert for product %d: %v", product.ID, err)
+		return err
 	}
 
 	// Create new stock alert record
@@ -164,8 +172,11 @@ func (s *StockMonitoringService) createMinimumStockNotification(product *models.
 		LastAlertAt:    time.Now(),
 	}
 	if err := s.db.Create(&stockAlert).Error; err != nil {
-		log.Printf("Failed to create stock alert record: %v", err)
+		log.Printf("[STOCK-ALERT-ERROR] Failed to create stock alert record for product %d: %v", product.ID, err)
+		return err
 	}
+	log.Printf("[STOCK-ALERT] Created new low stock alert for product '%s' (ID: %d) - Current: %d, Min: %d", 
+		product.Name, product.ID, product.Stock, product.MinStock)
 
 	// Get all inventory managers and admins
 	userIDs, err := s.getInventoryManagers()
@@ -196,6 +207,8 @@ func (s *StockMonitoringService) createMinimumStockNotification(product *models.
 	dataJSON, _ := json.Marshal(data)
 
 	// Send notification to all inventory managers
+	log.Printf("[STOCK-NOTIFICATION] Sending low stock notifications for product '%s' (ID: %d) to %d users", 
+		product.Name, product.ID, len(userIDs))
 	for _, userID := range userIDs {
 		// Check if notification already exists for this product and user
 		var existingNotif models.Notification
@@ -212,6 +225,13 @@ func (s *StockMonitoringService) createMinimumStockNotification(product *models.
 			s.db.Save(&existingNotif)
 			continue
 		}
+		
+		// Skip if it's not a "record not found" error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			log.Printf("[STOCK-NOTIFICATION-ERROR] Error checking existing notification for user %d, product %d: %v", 
+				userID, product.ID, err)
+			continue
+		}
 
 		// Create new notification
 		notification := models.Notification{
@@ -225,7 +245,8 @@ func (s *StockMonitoringService) createMinimumStockNotification(product *models.
 		}
 		
 		if err := s.db.Create(&notification).Error; err != nil {
-			log.Printf("Failed to create notification for user %d: %v", userID, err)
+			log.Printf("[STOCK-NOTIFICATION-ERROR] Failed to create notification for user %d, product %d: %v", 
+				userID, product.ID, err)
 		}
 	}
 
@@ -237,6 +258,9 @@ func (s *StockMonitoringService) createReorderNotification(product *models.Produ
 	if err != nil {
 		return err
 	}
+
+	log.Printf("[REORDER-ALERT] Product '%s' (ID: %d) needs reordering - Current: %d, Reorder Level: %d", 
+		product.Name, product.ID, product.Stock, product.ReorderLevel)
 
 	title := "📋 Reorder Alert"
 	message := fmt.Sprintf("Product '%s' needs reordering. Current: %d, Reorder Level: %d", 
@@ -277,6 +301,13 @@ func (s *StockMonitoringService) createReorderNotification(product *models.Produ
 			s.db.Save(&existingNotif)
 			continue
 		}
+		
+		// Skip if it's not a "record not found" error
+		if err != nil && err != gorm.ErrRecordNotFound {
+			log.Printf("[REORDER-NOTIFICATION-ERROR] Error checking existing notification for user %d, product %d: %v", 
+				userID, product.ID, err)
+			continue
+		}
 
 		// Create new notification
 		notification := models.Notification{
@@ -290,7 +321,8 @@ func (s *StockMonitoringService) createReorderNotification(product *models.Produ
 		}
 		
 		if err := s.db.Create(&notification).Error; err != nil {
-			log.Printf("Failed to create notification for user %d: %v", userID, err)
+			log.Printf("[REORDER-NOTIFICATION-ERROR] Failed to create notification for user %d, product %d: %v", 
+				userID, product.ID, err)
 		}
 	}
 
@@ -366,25 +398,25 @@ func (s *StockMonitoringService) GetActiveStockAlerts() ([]models.StockAlert, er
 
 // ScheduledStockCheck runs periodic stock monitoring (call this from a cron job)
 func (s *StockMonitoringService) ScheduledStockCheck() error {
-	log.Println("Starting scheduled stock monitoring check...")
+	log.Println("[STOCK-MONITOR] Starting scheduled stock monitoring check...")
 	
 	// Check minimum stock
 	if err := s.CheckMinimumStock(); err != nil {
-		log.Printf("Error checking minimum stock: %v", err)
+		log.Printf("[STOCK-MONITOR-ERROR] Error checking minimum stock: %v", err)
 		return err
 	}
 	
 	// Check reorder levels
 	if err := s.CheckReorderLevel(); err != nil {
-		log.Printf("Error checking reorder levels: %v", err)
+		log.Printf("[STOCK-MONITOR-ERROR] Error checking reorder levels: %v", err)
 		return err
 	}
-
+	
 	// Resolve alerts for products with restored stock
 	if err := s.ResolveStockAlerts(); err != nil {
-		log.Printf("Error resolving stock alerts: %v", err)
+		log.Printf("[STOCK-MONITOR-ERROR] Error resolving stock alerts: %v", err)
 	}
 	
-	log.Println("Scheduled stock monitoring check completed")
+	log.Println("[STOCK-MONITOR] Scheduled stock monitoring check completed")
 	return nil
 }
