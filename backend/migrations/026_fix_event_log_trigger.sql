@@ -1,8 +1,9 @@
--- Fix: Make event_uuid nullable or add DEFAULT in trigger
--- Option 1: Make event_uuid nullable (simpler)
-ALTER TABLE journal_event_log ALTER COLUMN event_uuid DROP NOT NULL;
+-- Fix event_uuid constraint issue in journal_event_log trigger
+-- This migration explicitly sets event_uuid in the trigger function
 
--- Option 2 (alternative): Update trigger to explicitly set event_uuid
+BEGIN;
+
+-- Drop and recreate the trigger function with explicit event_uuid generation
 CREATE OR REPLACE FUNCTION log_journal_event()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -75,5 +76,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Note: Choose either Option 1 (make nullable) OR Option 2 (update trigger)
--- Option 1 is simpler and recommended
+COMMIT;
