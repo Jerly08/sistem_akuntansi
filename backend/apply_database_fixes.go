@@ -81,8 +81,16 @@ func getDatabaseConnection() (*sql.DB, string) {
 			host, port, user, password, dbname := parsePostgresURL(dbURL)
 			
 			if host != "" {
-				connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-					host, port, user, password, dbname)
+				// Build connection string - omit password if empty
+				if password != "" {
+					connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+						host, port, user, password, dbname)
+				} else {
+					// No password - omit password field entirely
+					connStr = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable",
+						host, port, user, dbname)
+					log.Println("🔑 Using authentication without password (peer/trust authentication)")
+				}
 				dbInfo = fmt.Sprintf("%s@%s:%s/%s", user, host, port, dbname)
 			} else {
 				log.Println("⚠️ Warning: Failed to parse DATABASE_URL")

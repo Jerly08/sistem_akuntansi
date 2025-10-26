@@ -65,9 +65,14 @@ func main() {
 			// Parse the URL and rebuild connection string
 			host, port, user, password, dbname := parsePostgresURL(dbURL)
 			if host != "" {
-				connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-					host, port, user, password, dbname)
-				log.Printf("Connecting to database: %s@%s:%s/%s", user, host, port, dbname)
+				if password != "" {
+					connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+						host, port, user, password, dbname)
+				} else {
+					connStr = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable",
+						host, port, user, dbname)
+				}
+				dbInfo = fmt.Sprintf("%s@%s:%s/%s", user, host, port, dbname)
 			}
 		} else {
 			// Use as-is if not a URL format
