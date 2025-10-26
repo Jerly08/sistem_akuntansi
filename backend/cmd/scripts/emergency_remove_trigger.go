@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"bufio"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -13,12 +15,28 @@ func main() {
 	log.Println("🚨 EMERGENCY TRIGGER REMOVAL SCRIPT")
 	log.Println("===================================")
 	
-	// Get database connection from environment
+	// Try to load .env file
+	loadEnv()
+	
+	// Get database connection from environment or .env
 	dbHost := getEnv("DB_HOST", "localhost")
 	dbPort := getEnv("DB_PORT", "5432")
 	dbUser := getEnv("DB_USER", "postgres")
 	dbPassword := getEnv("DB_PASSWORD", "")
 	dbName := getEnv("DB_NAME", "accounting_db")
+	
+	// If DATABASE_URL exists, parse it (priority)
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		log.Println("📝 Using DATABASE_URL from .env")
+		parsed := parsePostgresURL(dbURL)
+		if parsed != nil {
+			dbHost = parsed["host"]
+			dbPort = parsed["port"]
+			dbUser = parsed["user"]
+			dbPassword = parsed["password"]
+			dbName = parsed["dbname"]
+		}
+	}
 	
 	// Build connection string
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -187,4 +205,85 @@ func getEnv(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// loadEnv loads .env file from current directory or parent
+func loadEnv() {
+	for _, envPath := range []string{".env", "../.env"} {
+		file, err := os.Open(envPath)
+		if err != nil {
+			continue
+		}
+		defer file.Close()
+		
+		log.Printf("📄 Loading environment from: %s", envPath)
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				if os.Getenv(key) == "" {
+					os.Setenv(key, value)
+				}
+			}
+		}
+		return
+	}
+	log.Println("⚠️  No .env file found, using defaults")
+}
+
+// parsePostgresURL parses postgres://user:password@host:port/dbname
+func parsePostgresURL(url string) map[string]string {
+	// Remove postgres:// prefix
+	url = strings.TrimPrefix(url, "postgres://")
+	url = strings.TrimPrefix(url, "postgresql://")
+	
+	// Split by @
+	parts := strings.Split(url, "@")
+	if len(parts) != 2 {
+		return nil
+	}
+	
+	// Parse user:password
+	userPass := strings.Split(parts[0], ":")
+	user := userPass[0]
+	password := ""
+	if len(userPass) > 1 {
+		password = userPass[1]
+	}
+	
+	// Parse host:port/dbname?params
+	hostPart := parts[1]
+	// Remove query params
+	if idx := strings.Index(hostPart, "?"); idx != -1 {
+		hostPart = hostPart[:idx]
+	}
+	
+	// Split host:port and dbname
+	hostPortDb := strings.Split(hostPart, "/")
+	if len(hostPortDb) != 2 {
+		return nil
+	}
+	
+	hostPort := strings.Split(hostPortDb[0], ":")
+	host := hostPort[0]
+	port := "5432"
+	if len(hostPort) > 1 {
+		port = hostPort[1]
+	}
+	
+	dbname := hostPortDb[1]
+	
+	return map[string]string{
+		"host":     host,
+		"port":     port,
+		"user":     user,
+		"password": password,
+		"dbname":   dbname,
+	}
 }
