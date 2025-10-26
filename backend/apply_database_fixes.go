@@ -14,13 +14,19 @@ import (
 
 func parsePostgresURL(dbURL string) (host, port, user, password, dbname string) {
 	// Parse postgres://user:password@host:port/dbname?params
-	// Supports: postgres://user:pass@host/db or postgres://user:pass@host:port/db
-	re := regexp.MustCompile(`postgres(?:ql)?://([^:]+):([^@]+)@([^:/]+)(?::(\d+))?/([^?]+)`)
+	// Supports:
+	// - postgres://user:pass@host/db
+	// - postgres://user:pass@host:port/db  
+	// - postgres://user:@host/db (empty password)
+	// - postgres://user@host/db (no password)
+	
+	// Try with password (including empty password between : and @)
+	re := regexp.MustCompile(`postgres(?:ql)?://([^:@]+):([^@]*)@([^:/]+)(?::(\d+))?/([^?]+)`)
 	matches := re.FindStringSubmatch(dbURL)
 	
 	if len(matches) >= 6 {
 		user = matches[1]
-		password = matches[2]
+		password = matches[2] // Can be empty string
 		host = matches[3]
 		if matches[4] != "" {
 			port = matches[4]
@@ -28,7 +34,29 @@ func parsePostgresURL(dbURL string) (host, port, user, password, dbname string) 
 			port = "5432"
 		}
 		dbname = matches[5]
-		log.Printf("🔍 Parsed from URL: user=%s, host=%s, port=%s, dbname=%s", user, host, port, dbname)
+		if password == "" {
+			log.Printf("🔍 Parsed from URL: user=%s, host=%s, port=%s, dbname=%s (no password)", user, host, port, dbname)
+		} else {
+			log.Printf("🔍 Parsed from URL: user=%s, host=%s, port=%s, dbname=%s", user, host, port, dbname)
+		}
+		return
+	}
+	
+	// Try without password at all (postgres://user@host/db)
+	re2 := regexp.MustCompile(`postgres(?:ql)?://([^:@]+)@([^:/]+)(?::(\d+))?/([^?]+)`)
+	matches2 := re2.FindStringSubmatch(dbURL)
+	
+	if len(matches2) >= 5 {
+		user = matches2[1]
+		password = "" // No password
+		host = matches2[2]
+		if matches2[3] != "" {
+			port = matches2[3]
+		} else {
+			port = "5432"
+		}
+		dbname = matches2[4]
+		log.Printf("🔍 Parsed from URL: user=%s, host=%s, port=%s, dbname=%s (no password)", user, host, port, dbname)
 	}
 	return
 }
