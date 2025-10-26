@@ -43,16 +43,21 @@ func getDatabaseConnection() (*sql.DB, string) {
 	var dbInfo string
 	
 	// First try DATABASE_URL (standard format)
-	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+	dbURL := os.Getenv("DATABASE_URL")
+	
+	if dbURL != "" {
 		log.Println("🔗 Using DATABASE_URL from environment")
 		
 		if strings.HasPrefix(dbURL, "postgres") {
 			// Parse the URL and rebuild connection string
 			host, port, user, password, dbname := parsePostgresURL(dbURL)
+			
 			if host != "" {
 				connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 					host, port, user, password, dbname)
 				dbInfo = fmt.Sprintf("%s@%s:%s/%s", user, host, port, dbname)
+			} else {
+				log.Println("⚠️ Warning: Failed to parse DATABASE_URL")
 			}
 		} else {
 			// Use as-is if not a URL format

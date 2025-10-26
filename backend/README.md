@@ -2,7 +2,25 @@
 
 Backend API untuk sistem akuntansi dengan fitur lengkap termasuk SSOT (Single Source of Truth) Journal System.
 
-## 🚀 Quick Start
+## ⚡ SUPER QUICK START (PC Baru)
+
+**Setelah `git pull`, hanya 3 langkah:**
+
+```bash
+# 1. Edit .env sesuai database Anda
+# 2. Jalankan fix (WAJIB!)
+go run apply_database_fixes.go
+# 3. Start backend
+go run main.go
+```
+
+✅ **Script otomatis baca .env Anda - no hardcode!**
+
+📖 Detail lengkap: [SETUP_INSTRUCTIONS.md](./SETUP_INSTRUCTIONS.md)
+
+---
+
+## 🚀 Quick Start (Full Setup)
 
 ### Prerequisites
 - Go 1.19+
