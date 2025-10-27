@@ -76,7 +76,7 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
   const [error, setError] = useState<string | null>(null);
   const [asOfDate, setAsOfDate] = useState(new Date().toISOString().split('T')[0]);
   const [includeAccountDetails, setIncludeAccountDetails] = useState(true);
-  const [companyName, setCompanyName] = useState('PT. Sistem Akuntansi');
+  const [companyName, setCompanyName] = useState('Company Name Not Set');
   
   // Export states
   const [exportingCSV, setExportingCSV] = useState(false);

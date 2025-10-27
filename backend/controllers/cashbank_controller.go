@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"app-sistem-akuntansi/services"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -141,6 +142,10 @@ func (c *CashBankController) UpdateAccount(ctx *gin.Context) {
 		})
 		return
 	}
+	
+	// Debug log
+	log.Printf("[CASHBANK UPDATE] ID: %d, Request: Name=%s, BankName=%s, AccountNo=%s, AccountHolderName=%s, Branch=%s", 
+		id, request.Name, request.BankName, request.AccountNo, request.AccountHolderName, request.Branch)
 	
 	account, err := c.cashBankService.UpdateCashBankAccount(uint(id), request)
 	if err != nil {

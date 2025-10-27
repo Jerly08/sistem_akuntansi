@@ -60,7 +60,7 @@ func (r *CashBankRepository) Update(account *models.CashBank) (*models.CashBank,
 	// Only update allowed columns explicitly
 	updateTx := r.db.Model(&models.CashBank{}).
 		Where("id = ?", account.ID).
-		Select("Code", "Name", "Type", "BankName", "AccountNo", "Currency", "Balance", "MinBalance", "MaxBalance", "DailyLimit", "MonthlyLimit", "IsActive", "IsRestricted", "Description")
+		Select("Code", "Name", "Type", "BankName", "AccountNo", "AccountHolderName", "Branch", "Currency", "Balance", "MinBalance", "MaxBalance", "DailyLimit", "MonthlyLimit", "IsActive", "IsRestricted", "Description")
 
 	if err := updateTx.Updates(account).Error; err != nil {
 		return nil, err

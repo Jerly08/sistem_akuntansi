@@ -167,9 +167,21 @@ const getAccountColumns = (
             <Text fontSize="xs" color={textColor} fontFamily="mono">
               Account: {row.account_no || 'N/A'}
             </Text>
-            <Text fontSize="xs" color={mutedTextColor}>
-              Electronic Banking
-            </Text>
+            {row.account_holder_name && (
+              <Text fontSize="xs" color={mutedTextColor}>
+                Atas Nama: {row.account_holder_name}
+              </Text>
+            )}
+            {row.branch && (
+              <Text fontSize="xs" color={mutedTextColor}>
+                Cabang: {row.branch}
+              </Text>
+            )}
+            {!row.account_holder_name && !row.branch && (
+              <Text fontSize="xs" color={mutedTextColor}>
+                Electronic Banking
+              </Text>
+            )}
           </Box>
         );
       }
@@ -1075,6 +1087,18 @@ const CashBankPage: React.FC = () => {
                             <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Account Number</Text>
                             <Text bg={readOnlyBg} px={3} py={2} borderRadius="md" fontFamily="mono" color={selectedAccount.account_no ? textColor : 'orange.600'}>
                               {selectedAccount.account_no || 'Account number not specified'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Atas Nama</Text>
+                            <Text bg={readOnlyBg} px={3} py={2} borderRadius="md" color={selectedAccount.account_holder_name ? textColor : 'orange.600'}>
+                              {selectedAccount.account_holder_name || 'Account holder name not specified'}
+                            </Text>
+                          </Box>
+                          <Box>
+                            <Text fontSize="xs" color={mutedTextColor} mb={1} textTransform="uppercase" letterSpacing="wide">Cabang</Text>
+                            <Text bg={readOnlyBg} px={3} py={2} borderRadius="md" color={selectedAccount.branch ? textColor : 'orange.600'}>
+                              {selectedAccount.branch || 'Branch not specified'}
                             </Text>
                           </Box>
                         </VStack>

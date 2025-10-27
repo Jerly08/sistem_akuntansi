@@ -17,14 +17,13 @@ func SeedData(db *gorm.DB) {
 		log.Printf("Error migrating/initializing module permissions: %v", err)
 	}
 
-	// Seed Accounts (COA)
-	if err := SeedAccounts(db); err != nil {
+	// Seed Accounts (COA) - Using improved version with duplicate protection
+	if err := SeedAccountsImproved(db); err != nil {
 		log.Printf("Error seeding accounts: %v", err)
+	} else {
+		log.Println("✅ Accounts seeded successfully with duplicate protection")
 	}
-	// Fix account hierarchies for existing databases
-	if err := FixAccountHierarchies(db); err != nil {
-		log.Printf("Warning: Could not fix account hierarchies: %v", err)
-	}
+	// Note: FixAccountHierarchies not needed - SeedAccountsImproved handles parent relationships
 	
 	// Seed Contacts
 	SeedContacts(db)

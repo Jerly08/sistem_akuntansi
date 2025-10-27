@@ -269,14 +269,31 @@ func (s *SSOTProfitLossService) getPLFromAccountsBalance() ([]SSOTAccountBalance
 
 // generateProfitLossFromBalances creates the P&L structure from account balances
 func (s *SSOTProfitLossService) generateProfitLossFromBalances(balances []SSOTAccountBalance, start, end time.Time) *SSOTProfitLossData {
+	// Get company information from settings
+	settingsSvc := NewSettingsService(s.db)
+	settings, err := settingsSvc.GetSettings()
+	
+	var companyInfo CompanyInfo
+	if err == nil && settings != nil {
+		// Use actual settings from database
+		companyInfo = CompanyInfo{
+			Name:    settings.CompanyName,
+			Address: settings.CompanyAddress,
+			Phone:   settings.CompanyPhone,
+			Email:   settings.CompanyEmail,
+		}
+	} else {
+		// Fallback to default values if settings cannot be retrieved
+		companyInfo = CompanyInfo{
+			Name:    "PT. Sistem Akuntansi Indonesia",
+			Address: "Jl. Sudirman Kav. 45-46, Jakarta Pusat 10210, Indonesia",
+			Phone:   "+62-21-5551234",
+			Email:   "info@sistemakuntansi.co.id",
+		}
+	}
+	
 	plData := &SSOTProfitLossData{
-		Company: CompanyInfo{
-			Name:    "PT. Sistem Akuntansi",
-			Address: "Jl. Teknologi No. 123",
-			City:    "Jakarta Selatan",
-			Phone:   "+62 21 1234 5678",
-			Email:   "info@sistemakuntansi.com",
-		},
+		Company:     companyInfo,
 		StartDate:   start,
 		EndDate:     end,
 		Currency:    "IDR",

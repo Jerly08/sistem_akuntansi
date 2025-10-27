@@ -469,6 +469,9 @@ func (c *ContactHistoryController) generateCustomerHistoryData(customerID uint, 
 			Status:          payment.Status,
 		}
 		transactions = append(transactions, transaction)
+		
+		// Add payment to summary totals
+		summary.TotalPaid += payment.Amount
 	}
 
 	summary.TotalTransactions = len(transactions)
@@ -558,6 +561,9 @@ func (c *ContactHistoryController) generateVendorHistoryData(vendorID uint, star
 			Status:          payment.Status,
 		}
 		transactions = append(transactions, transaction)
+		
+		// Add payment to summary totals
+		summary.TotalPaid += payment.Amount
 	}
 
 	summary.TotalTransactions = len(transactions)

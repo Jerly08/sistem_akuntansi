@@ -291,10 +291,31 @@ func (s *SSOTCashFlowService) getCashBalances(startDate, endDate string) (float6
 
 // generateCashFlowFromTransactions creates the Cash Flow structure from transactions
 func (s *SSOTCashFlowService) generateCashFlowFromTransactions(transactions []SSOTAccountBalance, netIncome, beginningCash, endingCash float64, start, end time.Time) *SSOTCashFlowData {
+	// Get company information from settings
+	settingsSvc := NewSettingsService(s.db)
+	settings, err := settingsSvc.GetSettings()
+	
+	var companyInfo CompanyInfo
+	if err == nil && settings != nil {
+		// Use actual settings from database
+		companyInfo = CompanyInfo{
+			Name:    settings.CompanyName,
+			Address: settings.CompanyAddress,
+			Phone:   settings.CompanyPhone,
+			Email:   settings.CompanyEmail,
+		}
+	} else {
+		// Fallback to default values if settings cannot be retrieved
+		companyInfo = CompanyInfo{
+			Name:    "PT. Sistem Akuntansi Indonesia",
+			Address: "Jl. Sudirman Kav. 45-46, Jakarta Pusat 10210, Indonesia",
+			Phone:   "+62-21-5551234",
+			Email:   "info@sistemakuntansi.co.id",
+		}
+	}
+	
 	cfData := &SSOTCashFlowData{
-		Company: CompanyInfo{
-			Name: "PT. Sistem Akuntansi",
-		},
+		Company:         companyInfo,
 		StartDate:       start,
 		EndDate:         end,
 		Currency:        "IDR",

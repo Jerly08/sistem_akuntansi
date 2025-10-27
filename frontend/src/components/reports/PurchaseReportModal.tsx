@@ -296,7 +296,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                   <HStack justify="space-between" align="start">
                     <VStack align="start" spacing={1}>
                       <Text fontSize="lg" fontWeight="bold" color="orange.800">
-                        {data.company.name || 'PT. Sistem Akuntansi'}
+                        {data.company.name || 'Company Name Not Set'}
                       </Text>
                       <Text fontSize="sm" color="orange.600">
                         {data.company.address ? (

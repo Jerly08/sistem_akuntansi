@@ -151,16 +151,18 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 		}
 		
 		cashBank = &models.CashBank{
-			Code:        code,
-			Name:        request.Name,
-			Type:        request.Type,
-			AccountID:   glAccount.ID,
-			BankName:    request.BankName,
-			AccountNo:   request.AccountNo,
-			Currency:    request.Currency,
-			Balance:     0, // Will be set via opening balance transaction
-			IsActive:    true,
-			Description: request.Description,
+			Code:              code,
+			Name:              request.Name,
+			Type:              request.Type,
+			AccountID:         glAccount.ID,
+			BankName:          request.BankName,
+			AccountNo:         request.AccountNo,
+			AccountHolderName: request.AccountHolderName,
+			Branch:            request.Branch,
+			Currency:          request.Currency,
+			Balance:           0, // Will be set via opening balance transaction
+			IsActive:          true,
+			Description:       request.Description,
 		}
 		
 		createErr = tx.Create(cashBank).Error;
@@ -207,10 +209,17 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 
 // UpdateCashBankAccount updates cash/bank account details
 func (s *CashBankService) UpdateCashBankAccount(id uint, request CashBankUpdateRequest) (*models.CashBank, error) {
+	// DEBUG LOG
+	log.Printf("[CASHBANK SERVICE UPDATE] ID=%d, Request received: Name='%s', BankName='%s', AccountNo='%s', AccountHolderName='%s', Branch='%s', Description='%s'",
+		id, request.Name, request.BankName, request.AccountNo, request.AccountHolderName, request.Branch, request.Description)
+	
 	cashBank, err := s.cashBankRepo.FindByID(id)
 	if err != nil {
 		return nil, err
 	}
+	
+	log.Printf("[CASHBANK SERVICE UPDATE] BEFORE: ID=%d, AccountHolderName='%s', Branch='%s'",
+		id, cashBank.AccountHolderName, cashBank.Branch)
 	
 	// Ensure account integrity using the database function
 	if err := database.EnsureCashBankAccountIntegrity(s.db, cashBank.ID); err != nil {
@@ -224,24 +233,36 @@ func (s *CashBankService) UpdateCashBankAccount(id uint, request CashBankUpdateR
 		return nil, err
 	}
 	
-	// Update fields
+	// Update fields - always update to allow clearing values
+	// Only update Name if not empty to prevent accidental clearing of required field
 	if request.Name != "" {
 		cashBank.Name = request.Name
 	}
-	if request.BankName != "" {
-		cashBank.BankName = request.BankName
-	}
-	if request.AccountNo != "" {
-		cashBank.AccountNo = request.AccountNo
-	}
-	if request.Description != "" {
-		cashBank.Description = request.Description
-	}
+	
+	// Allow empty values for optional fields (to support clearing)
+	cashBank.BankName = request.BankName
+	cashBank.AccountNo = request.AccountNo
+	cashBank.AccountHolderName = request.AccountHolderName
+	cashBank.Branch = request.Branch
+	cashBank.Description = request.Description
+	
+	log.Printf("[CASHBANK SERVICE UPDATE] AFTER ASSIGNMENT: ID=%d, AccountHolderName='%s', Branch='%s'",
+		id, cashBank.AccountHolderName, cashBank.Branch)
+	
 	if request.IsActive != nil {
 		cashBank.IsActive = *request.IsActive
 	}
 	
-	return s.cashBankRepo.Update(cashBank)
+	updatedAccount, err := s.cashBankRepo.Update(cashBank)
+	if err != nil {
+		log.Printf("[CASHBANK SERVICE UPDATE] ❌ Failed to update: %v", err)
+		return nil, err
+	}
+	
+	log.Printf("[CASHBANK SERVICE UPDATE] ✅ SUCCESS: ID=%d, Final AccountHolderName='%s', Branch='%s'",
+		id, updatedAccount.AccountHolderName, updatedAccount.Branch)
+	
+	return updatedAccount, nil
 }
 
 // DeleteCashBankAccount deletes (soft delete) cash/bank account
@@ -1166,23 +1187,27 @@ func (cd CustomDate) ToTimeWithCurrentTime() time.Time {
 }
 
 type CashBankCreateRequest struct {
-	Name           string     `json:"name" binding:"required"`
-	Type           string     `json:"type" binding:"required,oneof=CASH BANK"`
-	AccountID      uint       `json:"account_id"`
-	BankName       string     `json:"bank_name"`
-	AccountNo      string     `json:"account_no"`
-	Currency       string     `json:"currency"`
-	OpeningBalance float64    `json:"opening_balance"`
-	OpeningDate    CustomDate `json:"opening_date"`
-	Description    string     `json:"description"`
+	Name              string     `json:"name" binding:"required"`
+	Type              string     `json:"type" binding:"required,oneof=CASH BANK"`
+	AccountID         uint       `json:"account_id"`
+	BankName          string     `json:"bank_name"`
+	AccountNo         string     `json:"account_no"`
+	AccountHolderName string     `json:"account_holder_name"`
+	Branch            string     `json:"branch"`
+	Currency          string     `json:"currency"`
+	OpeningBalance    float64    `json:"opening_balance"`
+	OpeningDate       CustomDate `json:"opening_date"`
+	Description       string     `json:"description"`
 }
 
 type CashBankUpdateRequest struct {
-	Name        string `json:"name"`
-	BankName    string `json:"bank_name"`
-	AccountNo   string `json:"account_no"`
-	Description string `json:"description"`
-	IsActive    *bool  `json:"is_active"`
+	Name              string `json:"name"`
+	BankName          string `json:"bank_name"`
+	AccountNo         string `json:"account_no"`
+	AccountHolderName string `json:"account_holder_name"`
+	Branch            string `json:"branch"`
+	Description       string `json:"description"`
+	IsActive          *bool  `json:"is_active"`
 }
 
 type TransferRequest struct {

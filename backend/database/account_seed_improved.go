@@ -39,6 +39,7 @@ func SeedAccountsImproved(db *gorm.DB) error {
 			// Tax Prepaid Accounts (Prepaid taxes/Input VAT)
 			{Code: "1114", Name: strings.ToUpper("PPh 21 DIBAYAR DIMUKA"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "1115", Name: strings.ToUpper("PPh 23 DIBAYAR DIMUKA"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "1116", Name: strings.ToUpper("POTONGAN PAJAK LAINNYA DIBAYAR DIMUKA"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "1240", Name: strings.ToUpper("PPN MASUKAN"), Type: models.AccountTypeAsset, Category: models.CategoryCurrentAsset, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			
 			// Inventory
@@ -58,6 +59,9 @@ func SeedAccountsImproved(db *gorm.DB) error {
 			{Code: "2104", Name: strings.ToUpper("PPh YANG DIPOTONG"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "2107", Name: strings.ToUpper("PEMOTONGAN PAJAK LAINNYA"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "2108", Name: strings.ToUpper("PENAMBAHAN PAJAK LAINNYA"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			
+			// Specific tax accounts for sales journal entries
+			{Code: "292", Name: strings.ToUpper("PENAMBAHAN PAJAK LAINNYA (SALES)"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 			// EQUITY (3xxx)
 			{Code: "3000", Name: strings.ToUpper("EQUITY"), Type: models.AccountTypeEquity, Category: models.CategoryEquity, Level: 1, IsHeader: true, IsActive: true},
@@ -70,6 +74,9 @@ func SeedAccountsImproved(db *gorm.DB) error {
 			{Code: "4102", Name: strings.ToUpper("PENDAPATAN JASA/ONGKIR"), Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "4201", Name: strings.ToUpper("PENDAPATAN LAIN-LAIN"), Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "4900", Name: strings.ToUpper("OTHER INCOME"), Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
+			
+			// Specific revenue accounts for sales
+			{Code: "293", Name: strings.ToUpper("PENDAPATAN ONGKIR (SHIPPING)"), Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
 			// EXPENSES (5xxx)
 			{Code: "5000", Name: strings.ToUpper("EXPENSES"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 1, IsHeader: true, IsActive: true},
@@ -226,6 +233,7 @@ func setParentRelationships(tx *gorm.DB, accountMap map[string]uint) error {
 		"1201": "1200", // Piutang Usaha -> ACCOUNTS RECEIVABLE
 		"1114": "1200", // PPh 21 Dibayar Dimuka -> ACCOUNTS RECEIVABLE
 		"1115": "1200", // PPh 23 Dibayar Dimuka -> ACCOUNTS RECEIVABLE
+		"1116": "1200", // Potongan Pajak Lainnya Dibayar Dimuka -> ACCOUNTS RECEIVABLE
 		"1240": "1100", // PPN Masukan -> CURRENT ASSETS
 		"1301": "1100", // Persediaan Barang Dagangan -> CURRENT ASSETS
 		"1500": "1000", // FIXED ASSETS -> ASSETS
@@ -237,11 +245,16 @@ func setParentRelationships(tx *gorm.DB, accountMap map[string]uint) error {
 		"2101": "2100", // Utang Usaha -> CURRENT LIABILITIES
 		"2103": "2100", // PPN Keluaran -> CURRENT LIABILITIES
 		"2104": "2100", // PPh Yang Dipotong -> CURRENT LIABILITIES
+		"2107": "2100", // Pemotongan Pajak Lainnya -> CURRENT LIABILITIES
+		"2108": "2100", // Penambahan Pajak Lainnya -> CURRENT LIABILITIES
+		"292":  "2100", // Penambahan Pajak Lainnya (Sales) -> CURRENT LIABILITIES
 		"3101": "3000", // Modal Pemilik -> EQUITY
 		"3201": "3000", // Laba Ditahan -> EQUITY
 		"4101": "4000", // Pendapatan Penjualan -> REVENUE
+		"4102": "4000", // Pendapatan Jasa/Ongkir -> REVENUE
 		"4201": "4000", // Pendapatan Lain-lain -> REVENUE
 		"4900": "4000", // Other Income -> REVENUE
+		"293":  "4102", // Pendapatan Ongkir (Shipping) -> Pendapatan Jasa/Ongkir
 		"5101": "5000", // Harga Pokok Penjualan -> EXPENSES
 		"5201": "5000", // Beban Gaji -> EXPENSES
 		"5202": "5000", // Beban Listrik -> EXPENSES

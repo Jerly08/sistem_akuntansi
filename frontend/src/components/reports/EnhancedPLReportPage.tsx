@@ -291,7 +291,7 @@ const EnhancedPLReportPage: React.FC = () => {
       const formattedData: EnhancedPLData = {
         title: ssotData.title || 'Enhanced Profit and Loss Statement',
         period: ssotData.period || `${new Date(reportParams.start_date).toLocaleDateString()} - ${new Date(reportParams.end_date).toLocaleDateString()}`,
-        company: ssotData.company || { name: 'PT. Sistem Akuntansi' },
+        company: ssotData.company || { name: 'Company Name Not Set' },
         enhanced: ssotData.enhanced || true,
         sections: ssotData.sections || [],
         financialMetrics: ssotData.financialMetrics || {
@@ -880,7 +880,7 @@ const EnhancedPLReportPage: React.FC = () => {
                           const formattedData: EnhancedPLData = {
                             title: ssotData.title || 'Enhanced Profit and Loss Statement',
                             period: ssotData.period || `${new Date(reportParams.start_date).toLocaleDateString()} - ${new Date(reportParams.end_date).toLocaleDateString()}`,
-                            company: ssotData.company || { name: 'PT. Sistem Akuntansi' },
+                            company: ssotData.company || { name: 'Company Name Not Set' },
                             enhanced: ssotData.enhanced || true,
                             sections: ssotData.sections || [],
                             financialMetrics: ssotData.financialMetrics || {
