@@ -685,7 +685,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 		// Bank Name
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(51, 51, 51)
-		pdf.Cell(30, 5, "Bank Name:")
+		pdf.Cell(35, 5, "Bank Name:")
 		pdf.SetFont("Arial", "", 9)
 		pdf.SetTextColor(102, 102, 102)
 		pdf.Cell(120, 5, strings.TrimSpace(bankInfo.BankName))
@@ -693,11 +693,32 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 		// Account Number
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(51, 51, 51)
-		pdf.Cell(30, 5, "Account Number:")
+		pdf.Cell(35, 5, "Account Number:")
 		pdf.SetFont("Arial", "", 9)
 		pdf.SetTextColor(102, 102, 102)
 		pdf.Cell(120, 5, strings.TrimSpace(bankInfo.AccountNo))
-		pdf.Ln(8)
+		pdf.Ln(6)
+		// Atas Nama
+		if strings.TrimSpace(bankInfo.AccountHolderName) != "" {
+			pdf.SetFont("Arial", "B", 9)
+			pdf.SetTextColor(51, 51, 51)
+			pdf.Cell(35, 5, "Atas Nama:")
+			pdf.SetFont("Arial", "", 9)
+			pdf.SetTextColor(102, 102, 102)
+			pdf.Cell(120, 5, strings.TrimSpace(bankInfo.AccountHolderName))
+			pdf.Ln(6)
+		}
+		// Bank Branch
+		if strings.TrimSpace(bankInfo.Branch) != "" {
+			pdf.SetFont("Arial", "B", 9)
+			pdf.SetTextColor(51, 51, 51)
+			pdf.Cell(35, 5, "Bank Branch:")
+			pdf.SetFont("Arial", "", 9)
+			pdf.SetTextColor(102, 102, 102)
+			pdf.Cell(120, 5, strings.TrimSpace(bankInfo.Branch))
+			pdf.Ln(6)
+		}
+		pdf.Ln(2)
 	}
 
 	// Notes
@@ -967,9 +988,22 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 		pdf.Cell(190, 6, "Transfer to:")
 		pdf.Ln(6)
 		pdf.SetFont("Arial", "", 10)
-		pdf.Cell(95, 5, fmt.Sprintf("Bank Name: %s", strings.TrimSpace(bankInfo.BankName)))
-		pdf.Cell(95, 5, fmt.Sprintf("Account Number: %s", strings.TrimSpace(bankInfo.AccountNo)))
+		// Bank Name
+		pdf.Cell(190, 5, fmt.Sprintf("Bank Name: %s", strings.TrimSpace(bankInfo.BankName)))
 		pdf.Ln(6)
+		// Account Number
+		pdf.Cell(190, 5, fmt.Sprintf("Account Number: %s", strings.TrimSpace(bankInfo.AccountNo)))
+		pdf.Ln(6)
+		// Atas Nama
+		if strings.TrimSpace(bankInfo.AccountHolderName) != "" {
+			pdf.Cell(190, 5, fmt.Sprintf("Atas Nama: %s", strings.TrimSpace(bankInfo.AccountHolderName)))
+			pdf.Ln(6)
+		}
+		// Bank Branch
+		if strings.TrimSpace(bankInfo.Branch) != "" {
+			pdf.Cell(190, 5, fmt.Sprintf("Bank Branch: %s", strings.TrimSpace(bankInfo.Branch)))
+			pdf.Ln(6)
+		}
 	}
 
 	// Notes

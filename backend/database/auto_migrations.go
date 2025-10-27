@@ -105,78 +105,40 @@ func RunAutoMigrations(db *gorm.DB) error {
 	log.Println("============================================")
 	log.Println("")
 	
-	// Check and create Standard Purchase Approval workflow
-	log.Println("============================================")
-	log.Println("🔍 STARTING STANDARD PURCHASE APPROVAL WORKFLOW CHECK")
-	log.Println("============================================")
+	// Check and create Standard Purchase Approval workflow (smart skip)
 	if err := ensureStandardPurchaseApprovalWorkflow(db); err != nil {
 		log.Printf("⚠️  WORKFLOW AUTO-MIGRATION FAILED: %v", err)
-	} else {
-		log.Println("✅ WORKFLOW AUTO-MIGRATION COMPLETED SUCCESSFULLY")
 	}
-	log.Println("============================================")
 
-	// Ensure critical database functions exist (idempotent)
+	// Ensure critical database functions exist (smart skip)
 	if err := ensureSSOTSyncFunctions(db); err != nil {
 		log.Printf("⚠️  Post-migration function install failed: %v", err)
-	} else {
-		log.Println("✅ Verified SSOT sync functions are installed")
 	}
 
-	// Ensure comprehensive balance sync system is installed and configured
-	log.Println("============================================")
-	log.Println("🔧 STARTING COMPREHENSIVE BALANCE SYNC SYSTEM SETUP")
-	log.Println("============================================")
+	// Ensure comprehensive balance sync system is installed and configured (smart skip)
 	if err := ensureBalanceSyncSystem(db); err != nil {
 		log.Printf("⚠️  BALANCE SYNC SYSTEM SETUP FAILED: %v", err)
-	} else {
-		log.Println("✅ BALANCE SYNC SYSTEM SETUP COMPLETED SUCCESSFULLY")
 	}
-	log.Println("============================================")
 
-	// Prevent duplicate accounts system
-	log.Println("============================================")
-	log.Println("🔒 INSTALLING DUPLICATE ACCOUNT PREVENTION SYSTEM")
-	log.Println("============================================")
+	// Prevent duplicate accounts system (smart skip)
 	if err := RunPreventDuplicateAccountsMigration(db); err != nil {
 		log.Printf("⚠️  DUPLICATE PREVENTION MIGRATION FAILED: %v", err)
-	} else {
-		log.Println("✅ DUPLICATE PREVENTION SYSTEM INSTALLED SUCCESSFULLY")
 	}
-	log.Println("============================================")
 
-	// Cash Bank-COA auto-sync system
-	log.Println("============================================")
-	log.Println("💰 INSTALLING CASH BANK-COA AUTO-SYNC SYSTEM")
-	log.Println("============================================")
+	// Cash Bank-COA auto-sync system (smart skip)
 	if err := RunCashBankCOASyncMigration(db); err != nil {
 		log.Printf("⚠️  CASH BANK-COA SYNC MIGRATION FAILED: %v", err)
-	} else {
-		log.Println("✅ CASH BANK-COA SYNC SYSTEM INSTALLED SUCCESSFULLY")
 	}
-	log.Println("============================================")
 
-	// Fix revenue duplication issue (account name variations + parent accounts)
-	log.Println("============================================")
-	log.Println("💰 FIXING REVENUE DUPLICATION ISSUE")
-	log.Println("============================================")
+	// Fix revenue duplication issue (smart skip)
 	if err := fixRevenueDuplication(db); err != nil {
 		log.Printf("⚠️  REVENUE DUPLICATION FIX FAILED: %v", err)
-	} else {
-		log.Println("✅ REVENUE DUPLICATION FIX COMPLETED SUCCESSFULLY")
 	}
-	log.Println("============================================")
 
-	// Fix audit_logs schema (notes column + action size)
-	log.Println("============================================")
-	log.Println("📋 CHECKING AUDIT_LOGS SCHEMA")
-	log.Println("============================================")
+	// Fix audit_logs schema (smart skip)
 	if err := AutoFixAuditLogsSchema(db); err != nil {
 		log.Printf("⚠️  AUDIT_LOGS SCHEMA FIX FAILED: %v", err)
-	} else {
-		log.Println("✅ AUDIT_LOGS SCHEMA FIX COMPLETED SUCCESSFULLY")
 	}
-	log.Println("============================================")
 
 	log.Println("✅ Auto-migrations completed")
 	return nil
@@ -750,6 +712,60 @@ $$;`
 return nil
 }
 
+// functionExists checks if a PostgreSQL function with the given name exists (any signature)
+func functionExists(db *gorm.DB, name string) bool {
+	var exists bool
+	err := db.Raw(`
+		SELECT EXISTS (
+			SELECT 1 FROM pg_proc WHERE proname = $1
+		)
+	`, name).Scan(&exists).Error
+	if err != nil {
+		return false
+	}
+	return exists
+}
+
+// triggerExists checks if a trigger exists by name
+func triggerExists(db *gorm.DB, triggerName string) bool {
+	var cnt int64
+	err := db.Raw(`
+		SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_name = $1
+	`, triggerName).Scan(&cnt).Error
+	if err != nil {
+		return false
+	}
+	return cnt > 0
+}
+
+// extractTriggerName tries to parse trigger name from a CREATE TRIGGER statement
+func extractTriggerName(stmt string) string {
+	// Expect pattern: CREATE TRIGGER <name> ...
+	parts := strings.Fields(stmt)
+	if len(parts) >= 3 && strings.EqualFold(parts[0], "CREATE") && strings.EqualFold(parts[1], "TRIGGER") {
+		return strings.Trim(parts[2], "\"`")
+	}
+	return ""
+}
+
+// extractFunctionNameFromComment parses COMMENT ON FUNCTION <name>(...) from statement
+func extractFunctionNameFromComment(stmt string) string {
+	lower := strings.ToLower(stmt)
+	prefix := "comment on function "
+	idx := strings.Index(lower, prefix)
+	if idx == -1 {
+		return ""
+	}
+	rest := strings.TrimSpace(stmt[idx+len(prefix):])
+	// until first '(' or ' '
+	for i, r := range rest {
+		if r == '(' || r == ' ' || r == '\n' || r == '\t' {
+			return strings.Trim(rest[:i], "\"`")
+		}
+	}
+	return strings.Trim(rest, "\"`\t ")
+}
+
 // isAlreadyExistsError detects non-fatal, idempotent errors (object already exists or duplicate)
 func isAlreadyExistsError(err error) bool {
 	if err == nil {
@@ -1191,44 +1207,33 @@ func ensureAccountBalancesMaterializedView(db *gorm.DB) error {
 // ensureBalanceSyncSystem ensures the comprehensive balance sync system is installed and configured
 // This is idempotent and safe to run on every startup across environments
 func ensureBalanceSyncSystem(db *gorm.DB) error {
+	// Silent check: only proceed if system is incomplete
+	triggerStatus, _ := checkBalanceSyncTriggers(db)
+	functionStatus, _ := checkBalanceSyncFunctions(db)
+	
+	if triggerStatus && functionStatus {
+		// System is already complete, skip all noisy operations
+		log.Println("✅ Balance sync system verified (triggers + functions present)")
+		return nil
+	}
+	
+	// Incomplete: show details
 	log.Println("🔍 Checking balance sync system status...")
-	
-	// 1. Check if balance sync triggers exist
-	triggerStatus, err := checkBalanceSyncTriggers(db)
-	if err != nil {
-		log.Printf("⚠️  Failed to check trigger status: %v", err)
-		// Continue with installation
-	}
-	
-	// 2. Check if balance sync functions exist
-	functionStatus, err := checkBalanceSyncFunctions(db)
-	if err != nil {
-		log.Printf("⚠️  Failed to check function status: %v", err)
-		// Continue with installation
-	}
-	
 	log.Printf("📊 Current status -> Triggers: %v, Functions: %v", triggerStatus, functionStatus)
 	
-	// 3. If system is not complete, install/update it
-	if !triggerStatus || !functionStatus {
-		log.Println("🔧 Installing/updating balance sync system...")
-		if err := installBalanceSyncSystem(db); err != nil {
-			return fmt.Errorf("failed to install balance sync system: %w", err)
-		}
-	} else {
-		log.Println("✅ Balance sync system is already installed and up-to-date")
+	// Install/update
+	log.Println("🔧 Installing/updating balance sync system...")
+	if err := installBalanceSyncSystem(db); err != nil {
+		return fmt.Errorf("failed to install balance sync system: %w", err)
 	}
 	
-	// 4. Ensure cash bank accounts are properly configured
+	// Post-installation config (only if we just installed)
 	if err := ensureCashBankAccountConfiguration(db); err != nil {
 		log.Printf("⚠️  Warning: Cash bank account configuration failed: %v", err)
-		// Don't fail completely, just warn
 	}
 	
-	// 5. Perform initial balance synchronization if needed
 	if err := performInitialBalanceSync(db); err != nil {
 		log.Printf("⚠️  Warning: Initial balance sync failed: %v", err)
-		// Don't fail completely, just warn
 	}
 	
 	log.Println("✅ Balance sync system setup completed successfully")
@@ -1256,7 +1261,7 @@ func checkBalanceSyncTriggers(db *gorm.DB) (bool, error) {
 		}
 		
 		if count == 0 {
-			log.Printf("   ⚠️  Missing trigger: %s", triggerName)
+			// Don't log missing triggers during silent check
 			return false, nil
 		}
 	}
@@ -1287,7 +1292,7 @@ func checkBalanceSyncFunctions(db *gorm.DB) (bool, error) {
 		}
 		
 		if count == 0 {
-			log.Printf("   ⚠️  Missing function: %s", functionName)
+			// Don't log missing functions during silent check
 			return false, nil
 		}
 	}
@@ -1316,10 +1321,49 @@ func installBalanceSyncSystem(db *gorm.DB) error {
 	log.Printf("🔧 Executing balance sync migration: %s", migrationPath)
 	statements := parseComplexSQL(string(content))
 	
+	// Pre-check known functions and triggers to proactively skip problematic statements
+	knownFns := []string{
+		"recalculate_cashbank_balance",
+		"validate_account_balance_consistency",
+		"manual_sync_cashbank_coa",
+		"manual_sync_all_cashbank_coa",
+		"ensure_cashbank_not_header",
+		"update_parent_account_balances",
+	}
+	fnExists := map[string]bool{}
+	for _, fn := range knownFns {
+		fnExists[fn] = functionExists(db, fn)
+	}
+	
 	for i, stmt := range statements {
 		stmt = strings.TrimSpace(stmt)
 		if stmt == "" || strings.HasPrefix(stmt, "--") {
 			continue
+		}
+		upper := strings.ToUpper(stmt)
+		
+		// Proactively skip CREATE TRIGGER statements that reference missing functions
+		if strings.HasPrefix(upper, "CREATE TRIGGER ") {
+			// If the trigger references a known function that's missing, skip without executing
+			for fn, ok := range fnExists {
+				if strings.Contains(strings.ToLower(stmt), fn+"(") && !ok {
+					log.Printf("   ⏭️  Skipping statement %d - required function '%s' not available yet", i+1, fn)
+					goto NEXT_STMT
+				}
+			}
+			// Also skip if trigger already exists
+			if trName := extractTriggerName(stmt); trName != "" && triggerExists(db, trName) {
+				log.Printf("   ⏭️  Skipping statement %d - trigger '%s' already exists", i+1, trName)
+				goto NEXT_STMT
+			}
+		}
+		
+		// Proactively skip COMMENT ON FUNCTION for missing functions
+		if strings.HasPrefix(upper, "COMMENT ON FUNCTION ") {
+			if fn := extractFunctionNameFromComment(stmt); fn != "" && !functionExists(db, fn) {
+				log.Printf("   ⏭️  Skipping statement %d - function '%s' not found for COMMENT", i+1, fn)
+				goto NEXT_STMT
+			}
 		}
 		
 		if err := db.Exec(stmt).Error; err != nil {
@@ -1328,17 +1372,19 @@ func installBalanceSyncSystem(db *gorm.DB) error {
 			// Skip if object already exists (idempotent)
 			if isAlreadyExistsError(err) {
 				log.Printf("   ⏭️  Skipping statement %d - object already exists", i+1)
-				continue
+				goto NEXT_STMT
 			}
 			
-			// Skip if function doesn't exist (might be called later in the migration)
+			// Skip if function doesn't exist (might be created later in the migration)
 			if strings.Contains(errMsg, "does not exist") && strings.Contains(errMsg, "function") {
 				log.Printf("   ⏭️  Skipping statement %d - function will be created later", i+1)
-				continue
+				goto NEXT_STMT
 			}
 			
 			return fmt.Errorf("failed to execute statement %d: %w\nSQL: %s", i+1, err, stmt)
 		}
+	NEXT_STMT:
+		continue
 	}
 	
 	log.Println("✅ Balance sync system installed successfully")
@@ -1347,8 +1393,6 @@ func installBalanceSyncSystem(db *gorm.DB) error {
 
 // ensureCashBankAccountConfiguration ensures cash bank accounts are properly configured
 func ensureCashBankAccountConfiguration(db *gorm.DB) error {
-	log.Println("🏦 Ensuring cash bank account configuration...")
-	
 	// Check if we have cash banks to configure
 	var cashBankCount int64
 	if err := db.Raw("SELECT COUNT(*) FROM cash_banks WHERE deleted_at IS NULL").Scan(&cashBankCount).Error; err != nil {
@@ -1356,51 +1400,35 @@ func ensureCashBankAccountConfiguration(db *gorm.DB) error {
 	}
 	
 	if cashBankCount == 0 {
-		log.Println("   ℹ️  No cash banks found - skipping configuration")
-		return nil
+		return nil // silent skip
 	}
 	
-	log.Printf("   📊 Found %d cash banks to configure", cashBankCount)
-	
-	// Ensure cash bank accounts are not header accounts
-	if err := db.Exec("SELECT ensure_cashbank_not_header()").Error; err != nil {
-		return fmt.Errorf("failed to ensure non-header status: %w", err)
+	// Ensure cash bank accounts are not header accounts, but only if helper function exists
+	if functionExists(db, "ensure_cashbank_not_header") {
+		if err := db.Exec("SELECT ensure_cashbank_not_header()").Error; err != nil {
+			return fmt.Errorf("failed to ensure non-header status: %w", err)
+		}
+		log.Println("✅ Cash bank account configuration completed")
 	}
-	
-	log.Println("✅ Cash bank account configuration completed")
 	return nil
 }
 
 // performInitialBalanceSync performs initial balance synchronization
 func performInitialBalanceSync(db *gorm.DB) error {
-	log.Println("⚖️  Performing initial balance synchronization...")
-	
 	// Check if sync functions are available
-	var funcExists bool
-	err := db.Raw(`
-		SELECT EXISTS (
-			SELECT 1 FROM pg_proc 
-			WHERE proname = 'manual_sync_all_cashbank_coa'
-		)
-	`).Scan(&funcExists).Error
-	
-	if err != nil {
-		return fmt.Errorf("failed to check sync function: %w", err)
-	}
-	
-	if !funcExists {
-		log.Println("   ⚠️  Sync function not available - skipping initial sync")
-		return nil
+	if !functionExists(db, "manual_sync_all_cashbank_coa") ||
+	   !functionExists(db, "update_parent_account_balances") {
+		return nil // silent skip if dependencies not available
 	}
 	
 	// Perform the sync
 	var syncResult string
-	err = db.Raw("SELECT manual_sync_all_cashbank_coa()").Scan(&syncResult).Error
+	err := db.Raw("SELECT manual_sync_all_cashbank_coa()").Scan(&syncResult).Error
 	if err != nil {
 		return fmt.Errorf("failed to perform initial sync: %w", err)
 	}
 	
-	log.Printf("✅ Initial sync completed: %s", syncResult)
+	log.Printf("✅ Initial balance sync: %s", syncResult)
 	return nil
 }
 

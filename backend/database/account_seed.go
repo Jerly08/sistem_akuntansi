@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -71,61 +72,40 @@ func SeedAccounts(db *gorm.DB) error {
 	// Set parent relationships based on account hierarchy
 	accountMap := make(map[string]uint)
 
-	// First pass: create accounts to get IDs (using atomic FirstOrCreate)
+	// First pass: create accounts to get IDs (avoid DB errors in logs by pre-checking)
 	for _, account := range accounts {
 		var existingAccount models.Account
-		
-	// Use FirstOrCreate for atomic operation (prevents race conditions)
-		// Always normalize name to UPPERCASE
+		// Normalize name to UPPERCASE consistently
 		normalizedName := strings.ToUpper(account.Name)
-		result := db.Where("code = ? AND deleted_at IS NULL", account.Code).
-			Assign(models.Account{
-				Name:        normalizedName,
-				Type:        account.Type,
-				Category:    account.Category,
-				Level:       account.Level,
-				IsHeader:    account.IsHeader,
-				IsActive:    account.IsActive,
-				Description: account.Description,
-			}).
-			FirstOrCreate(&existingAccount, models.Account{
-				Code:        account.Code,
-				Name:        normalizedName,
-				Type:        account.Type,
-				Category:    account.Category,
-				Level:       account.Level,
-				IsHeader:    account.IsHeader,
-				IsActive:    account.IsActive,
-				Balance:     account.Balance,
-				Description: account.Description,
-			})
-
-		if result.Error != nil {
-			errMsg := strings.ToLower(result.Error.Error())
-			// Check if it's a duplicate/unique constraint error (SQLSTATE 23505)
-			if strings.Contains(errMsg, "duplicate") || 
-			   strings.Contains(errMsg, "unique") ||
-			   strings.Contains(errMsg, "already exists") ||
-			   strings.Contains(errMsg, "23505") {
-				// Account already exists - this is EXPECTED and NORMAL
-				// Migrations often create accounts before seeding runs
-				if err := db.Where("code = ? AND deleted_at IS NULL", account.Code).First(&existingAccount).Error; err != nil {
-					return fmt.Errorf("failed to fetch existing account %s: %v", account.Code, err)
-				}
-				log.Printf("   ⏭️  Skipping account %s - already exists", account.Code)
-				accountMap[account.Code] = existingAccount.ID
-				continue
-			}
-			return fmt.Errorf("failed to seed account %s: %v", account.Code, result.Error)
-		}
-
-		// Check if account was created or already existed
-		if result.RowsAffected > 0 {
-			log.Printf("✅ Created account: %s - %s", account.Code, account.Name)
-		}
-		// Silent if already existed - reduces noise in logs
 		
-		accountMap[account.Code] = existingAccount.ID
+		findErr := db.Where("code = ? AND deleted_at IS NULL", account.Code).First(&existingAccount).Error
+		if findErr == nil {
+			// Already exists -> skip without causing an INSERT error
+			log.Printf("   ⏭️  Skipping account %s - already exists", account.Code)
+			accountMap[account.Code] = existingAccount.ID
+			continue
+		}
+		if !errors.Is(findErr, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("failed to lookup account %s: %v", account.Code, findErr)
+		}
+		
+		// Not found -> create
+		toCreate := models.Account{
+			Code:        account.Code,
+			Name:        normalizedName,
+			Type:        account.Type,
+			Category:    account.Category,
+			Level:       account.Level,
+			IsHeader:    account.IsHeader,
+			IsActive:    account.IsActive,
+			Balance:     account.Balance,
+			Description: account.Description,
+		}
+		if err := db.Create(&toCreate).Error; err != nil {
+			return fmt.Errorf("failed to create account %s: %v", account.Code, err)
+		}
+		log.Printf("✅ Created account: %s - %s", toCreate.Code, toCreate.Name)
+		accountMap[account.Code] = toCreate.ID
 	}
 
 	// Define parent-child relationships

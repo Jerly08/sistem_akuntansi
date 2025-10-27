@@ -2,7 +2,6 @@ package database
 
 import (
 	"log"
-	"strings"
 	"app-sistem-akuntansi/models"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -469,26 +468,21 @@ func seedPermissions(db *gorm.DB) {
 		{Name: "budgets:delete", Resource: "budgets", Action: "delete", Description: "Delete budgets"},
 	}
 
-	// Create permissions one by one, checking for existing records first
+	// Use PostgreSQL native UPSERT to avoid all duplicate key errors
 	successCount := 0
 	for _, permission := range permissions {
-		// Check if permission already exists by name
-		var existingPermission models.Permission
-		if err := db.Where("name = ?", permission.Name).First(&existingPermission).Error; err == nil {
-			log.Printf("Permission %s already exists, skipping", permission.Name)
-			continue
-		}
+		// Use ON CONFLICT DO NOTHING to skip existing permissions silently
+		query := `
+			INSERT INTO permissions (name, resource, action, description, created_at, updated_at)
+			VALUES (?, ?, ?, ?, NOW(), NOW())
+			ON CONFLICT (name) DO NOTHING
+		`
 		
-		// Permission doesn't exist, create it
-		if err := db.Create(&permission).Error; err != nil {
-			if strings.Contains(err.Error(), "duplicate key") {
-				log.Printf("Permission %s already exists (duplicate key), skipping", permission.Name)
-			} else {
-				log.Printf("Error seeding permission %s: %v", permission.Name, err)
-			}
-		} else {
+		result := db.Exec(query, permission.Name, permission.Resource, permission.Action, permission.Description)
+		if result.Error != nil {
+			log.Printf("Error seeding permission %s: %v", permission.Name, result.Error)
+		} else if result.RowsAffected > 0 {
 			successCount++
-			log.Printf("Successfully created permission %s", permission.Name)
 		}
 	}
 	log.Printf("Successfully seeded %d out of %d permissions", successCount, len(permissions))

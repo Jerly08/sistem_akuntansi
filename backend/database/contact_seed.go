@@ -228,26 +228,32 @@ func SeedContacts(db *gorm.DB) {
 	db.Model(&models.Contact{}).Where("code IN ?", []string{"CUST-0001", "VEND-0001", "EMP-0001"}).Count(&seedContactExists)
 	
 	if seedContactExists == 0 {
-	// Create contacts one by one, checking for existing records first
+	// Use native PostgreSQL UPSERT to avoid all ERROR logs
 	successCount := 0
 	for _, contact := range contacts {
-	// Check if contact already exists by code
-		var existingContact models.Contact
-		if err := db.Where("code = ?", contact.Code).First(&existingContact).Error; err == nil {
-			log.Printf("Contact %s already exists, skipping", contact.Code)
-			continue
-		}
+		// Use ON CONFLICT DO NOTHING to skip existing contacts silently
+		query := `
+			INSERT INTO contacts (
+				code, name, type, category, email, phone, mobile, fax, website, 
+				tax_number, credit_limit, payment_terms, is_active, pic_name, 
+				external_id, address, notes, created_at, updated_at
+			)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+			ON CONFLICT (code) DO NOTHING
+		`
 		
-		// Contact doesn't exist, create it
-		if err := db.Create(&contact).Error; err != nil {
-			if strings.Contains(err.Error(), "duplicate key") {
-				log.Printf("Contact %s already exists (duplicate key), skipping", contact.Code)
-			} else {
-				log.Printf("Error seeding contact %s: %v", contact.Code, err)
-			}
-		} else {
+		result := db.Exec(query,
+			contact.Code, contact.Name, contact.Type, contact.Category,
+			contact.Email, contact.Phone, contact.Mobile, contact.Fax,
+			contact.Website, contact.TaxNumber, contact.CreditLimit,
+			contact.PaymentTerms, contact.IsActive, contact.PICName,
+			contact.ExternalID, contact.Address, contact.Notes,
+		)
+		
+		if result.Error != nil {
+			log.Printf("Error seeding contact %s: %v", contact.Code, result.Error)
+		} else if result.RowsAffected > 0 {
 			successCount++
-			log.Printf("Successfully created contact %s", contact.Code)
 		}
 	}
 		log.Printf("Successfully seeded %d out of %d contacts", successCount, len(contacts))
