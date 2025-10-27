@@ -3334,10 +3334,29 @@ func (p *PDFService) generateSaleReceiptPDFWithUser(sale *models.Sale, userID ui
 	amountInWordsLabel := loc("amount_in_words", "Amount in Words")
 	pdf.CellFormat(labelW, 7, amountInWordsLabel, "", 0, "L", false, 0, "")
 	pdf.CellFormat(colonW, 7, ":", "", 0, "L", false, 0, "")
-	pdf.SetFont("Times", "I", 12)
+	
+	// Handle long text with auto-resize and multi-line support
 	wordsLine := words + "----"
-	if len(wordsLine) > 120 { wordsLine = wordsLine[:117] + "..." }
-	pdf.CellFormat(valueW, 7, wordsLine, "", 1, "L", false, 0, "")
+	pdf.SetFont("Times", "I", 12)
+	
+	// Calculate text width to check if it fits
+	textWidth := pdf.GetStringWidth(wordsLine)
+	maxWidth := valueW - 2 // Leave small margin
+	
+	// If text is too long, try smaller font first
+	if textWidth > maxWidth {
+		pdf.SetFont("Times", "I", 10)
+		textWidth = pdf.GetStringWidth(wordsLine)
+	}
+	
+	// If still too long, use MultiCell to wrap to 2 lines
+	if textWidth > maxWidth {
+		// Use MultiCell for automatic line breaking
+		pdf.MultiCell(valueW, 5, wordsLine, "", "L", false)
+	} else {
+		// Single line fits, use regular cell
+		pdf.CellFormat(valueW, 7, wordsLine, "", 1, "L", false, 0, "")
+	}
 
 	// For Payment / Untuk Pembayaran
 	pdf.SetFont("Times", "", 12)
