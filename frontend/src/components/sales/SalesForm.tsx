@@ -154,6 +154,34 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const scrollThumbBg = useColorModeValue('#cbd5e0', '#4a5568');
   const scrollThumbHoverBg = useColorModeValue('#a0aec0', '#718096');
   
+  // Tooltip descriptions for sales form fields
+  const tooltips = {
+    customer: 'Pilih customer/pelanggan untuk transaksi ini',
+    salesPerson: 'Sales person yang menangani transaksi (opsional)',
+    invoiceType: 'Jenis invoice: Invoice (standar), Quotation (penawaran), atau Sales Order',
+    date: 'Tanggal transaksi penjualan',
+    dueDate: 'Tanggal jatuh tempo pembayaran (untuk invoice kredit)',
+    paymentMethod: 'Metode pembayaran: Cash (tunai), Bank (transfer bank), atau Credit (kredit/hutang)',
+    cashBank: 'Pilih akun kas/bank tujuan pembayaran',
+    currency: 'Mata uang transaksi (default: IDR)',
+    exchangeRate: 'Kurs konversi untuk mata uang asing',
+    discount: 'Diskon global untuk seluruh transaksi (dalam persen)',
+    ppnRate: 'Tarif PPN/Pajak Pertambahan Nilai (default: 11%)',
+    otherTaxAdditions: 'Pajak tambahan lainnya (dalam nominal)',
+    pph21Rate: 'Tarif PPh 21 untuk pemotongan pajak penghasilan',
+    pph23Rate: 'Tarif PPh 23 untuk pemotongan pajak jasa',
+    otherTaxDeductions: 'Potongan pajak lainnya (dalam nominal)',
+    shippingCost: 'Biaya pengiriman barang',
+    notes: 'Catatan atau keterangan tambahan untuk customer',
+    internalNotes: 'Catatan internal (tidak terlihat oleh customer)',
+    product: 'Pilih produk/jasa yang dijual',
+    quantity: 'Jumlah unit produk',
+    unitPrice: 'Harga per unit (sebelum diskon dan pajak)',
+    itemDiscount: 'Diskon untuk item ini (dalam persen)',
+    taxable: 'Centang jika item ini dikenakan pajak (PPN)',
+    revenueAccount: 'Akun pendapatan untuk item ini (opsional, default dari produk)',
+  };
+  
   // Check if user has permission to create/edit sales - using lowercase for consistency
   const userRole = user?.role?.toLowerCase();
   const canCreateSales = userRole === 'finance' || userRole === 'director' || userRole === 'admin';

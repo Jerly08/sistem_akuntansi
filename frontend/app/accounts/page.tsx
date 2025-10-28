@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModulePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from '@/hooks/useTranslation';
 import SimpleLayout from '@/components/layout/SimpleLayout';
 import AccountsTable from '@/components/accounts/AccountsTable';
 import {
@@ -66,6 +67,7 @@ import { API_ENDPOINTS } from '@/config/api';
 
 const AccountsPage = () => {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const {
     canView,
     canCreate,
@@ -496,7 +498,7 @@ const AccountsPage = () => {
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <HStack spacing={3}>
-            <Heading size="xl" color={headingColor} fontWeight="600">Chart of Accounts</Heading>
+            <Heading size="xl" color={headingColor} fontWeight="600">{t('accounts.chartOfAccounts')}</Heading>
             <Popover placement="bottom-start">
               <PopoverTrigger>
                 <IconButton
@@ -614,7 +616,7 @@ const AccountsPage = () => {
                     boxShadow: 'md'
                   }}
                 >
-                  Add Header Account
+                  {t('accounts.addHeaderAccount')}
                 </Button>
               </Tooltip>
               <Tooltip 
@@ -636,7 +638,7 @@ const AccountsPage = () => {
                     boxShadow: 'lg'
                   }}
                 >
-                  Add Account
+                  {t('accounts.addAccount')}
                 </Button>
               </Tooltip>
             </HStack>
@@ -691,7 +693,7 @@ const AccountsPage = () => {
                 fontWeight="medium"
                 fontSize="sm"
               >
-                Accounts
+                {t('accounts.listView')}
               </Tab>
               <Tab 
                 _selected={{ 
@@ -704,7 +706,7 @@ const AccountsPage = () => {
                 fontWeight="medium"
                 fontSize="sm"
               >
-                Tree View
+                {t('accounts.treeView')}
               </Tab>
             </TabList>
 
@@ -761,7 +763,7 @@ const AccountsPage = () => {
           <ModalOverlay />
           <ModalContent>
             <ModalHeader>
-              {selectedAccount ? 'Edit Account' : (isHeaderMode ? 'Create Header Account' : 'Create Account')}
+              {selectedAccount ? t('accounts.editAccount') : (isHeaderMode ? t('accounts.createHeaderAccount') : t('accounts.createAccount'))}
             </ModalHeader>
             <ModalCloseButton />
             <ModalBody pb={6}>

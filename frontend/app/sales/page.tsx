@@ -5,6 +5,7 @@ import SimpleLayout from '@/components/layout/SimpleLayout';
 import ProtectedModule from '@/components/common/ProtectedModule';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModulePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from '@/hooks/useTranslation';
 import EnhancedSalesTable from '@/components/sales/EnhancedSalesTable';
 import EnhancedStatsCards from '@/components/sales/EnhancedStatsCards';
 import SalesForm from '@/components/sales/SalesForm';
@@ -72,11 +73,21 @@ interface SalesPageState {
 const SalesPage: React.FC = () => {
   const { user } = useAuth();
   const toast = useToast();
+  const { t } = useTranslation();
   const { canCreate, canEdit, canDelete, canExport } = useModulePermissions('sales');
   
   const { isOpen: isFormOpen, onOpen: onFormOpen, onClose: onFormClose } = useDisclosure();
   const { isOpen: isPaymentOpen, onOpen: onPaymentOpen, onClose: onPaymentClose } = useDisclosure();
   const { isOpen: isInvoiceTypesOpen, onOpen: onInvoiceTypesOpen, onClose: onInvoiceTypesClose } = useDisclosure();
+
+  // Tooltip descriptions for sales page
+  const tooltips = {
+    search: 'Cari penjualan berdasarkan nomor invoice, nama customer, atau referensi',
+    status: 'Filter penjualan berdasarkan status: Draft (belum final), Pending (menunggu pembayaran), Paid (sudah lunas), Cancelled (dibatalkan)',
+    dateRange: 'Filter penjualan berdasarkan tanggal transaksi untuk periode tertentu',
+    export: 'Unduh data penjualan dalam format PDF atau Excel',
+    refresh: 'Muat ulang data penjualan terbaru dari server',
+  };
   
   // Theme-aware colors
   const headingColor = useColorModeValue('gray.800', 'var(--text-primary)');
@@ -325,15 +336,15 @@ const SalesPage: React.FC = () => {
         <Flex justify="space-between" align="center" mb={6} wrap="wrap" gap={4}>
           <VStack align="start" spacing={1}>
             <Heading size="xl" color={headingColor} fontWeight="600">
-              Sales Management
+              {t('sales.management')}
             </Heading>
             <Text color={subheadingColor} fontSize="md">
-              Manage your sales transactions and invoices
+              {t('sales.manageTransactions')}
             </Text>
           </VStack>
           
           <HStack spacing={3}>
-            <Tooltip label="Refresh Data">
+            <Tooltip label={t('sales.refreshData')}>
               <IconButton
                 aria-label="Refresh"
                 icon={<FiRefreshCw />}
@@ -351,7 +362,7 @@ const SalesPage: React.FC = () => {
               onClick={onInvoiceTypesOpen}
               title="Manage Invoice Types"
             >
-              Invoice Types
+              {t('sales.invoiceTypes')}
             </Button>
             
             {canExport && (
@@ -363,11 +374,11 @@ const SalesPage: React.FC = () => {
                   variant="outline"
                   size="md"
                 >
-                  Export Report
+                  {t('sales.exportReport')}
                 </MenuButton>
                 <MenuList>
-                  <MenuItem onClick={handleExportPDF}>Export PDF</MenuItem>
-                  <MenuItem onClick={handleExportCSV}>Export CSV</MenuItem>
+                  <MenuItem onClick={handleExportPDF}>{t('sales.exportPDF')}</MenuItem>
+                  <MenuItem onClick={handleExportCSV}>{t('sales.exportCSV')}</MenuItem>
                 </MenuList>
               </Menu>
             )}
@@ -385,7 +396,7 @@ const SalesPage: React.FC = () => {
                   boxShadow: 'lg'
                 }}
               >
-                Create Sale
+                {t('sales.createSale')}
               </Button>
             )}
           </HStack>
@@ -407,14 +418,14 @@ const SalesPage: React.FC = () => {
             <Flex gap={4} align="end" wrap="wrap">
               <Box flex="1" minW="300px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textColor}>
-                  Search Transactions
+                  {t('sales.searchTransactions')}
                 </Text>
                 <InputGroup>
                   <InputLeftElement pointerEvents="none">
                     <FiSearch color={textColor} />
                   </InputLeftElement>
                   <Input
-                    placeholder="Search by invoice, customer, or code..."
+                    placeholder={t('sales.searchPlaceholder')}
                     value={state.filter.search}
                     onChange={(e) => handleSearch(e.target.value)}
                     bg={tableBg}
@@ -424,25 +435,25 @@ const SalesPage: React.FC = () => {
               
               <Box minW="180px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textColor}>
-                  Filter by Status
+                  {t('sales.filterByStatus')}
                 </Text>
                 <Select 
-                  placeholder="All Status"
+                  placeholder={t('sales.allStatus')}
                   value={state.filter.status}
                   onChange={(e) => handleFilterChange('status', e.target.value)}
                   bg={tableBg}
                 >
-                  <option value="DRAFT">Draft</option>
-                  <option value="INVOICED">Invoiced</option>
-                  <option value="PAID">Paid</option>
-                  <option value="OVERDUE">Overdue</option>
-                  <option value="CANCELLED">Cancelled</option>
+                  <option value="DRAFT">{t('sales.draft')}</option>
+                  <option value="INVOICED">{t('sales.invoiced')}</option>
+                  <option value="PAID">{t('sales.paid')}</option>
+                  <option value="OVERDUE">{t('sales.overdue')}</option>
+                  <option value="CANCELLED">{t('sales.cancelled')}</option>
                 </Select>
               </Box>
               
               <Box minW="160px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textColor}>
-                  Start Date
+                  {t('sales.startDate')}
                 </Text>
                 <Input
                   type="date"
@@ -454,7 +465,7 @@ const SalesPage: React.FC = () => {
               
               <Box minW="160px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textColor}>
-                  End Date
+                  {t('sales.endDate')}
                 </Text>
                 <Input
                   type="date"
@@ -487,7 +498,7 @@ const SalesPage: React.FC = () => {
                   });
                 }}
               >
-                Clear Filters
+                {t('sales.clearFilters')}
               </Button>
             </Flex>
           </CardBody>

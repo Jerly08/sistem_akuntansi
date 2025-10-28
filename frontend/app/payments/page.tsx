@@ -123,6 +123,22 @@ const PaymentsPage: React.FC = () => {
     purple: useColorModeValue('purple.600', 'purple.400'),
     orange: useColorModeValue('orange.600', 'orange.400')
   };
+
+  // Tooltip descriptions for payment page
+  const tooltips = {
+    search: 'Cari pembayaran berdasarkan kode, nama contact, atau nomor referensi',
+    contact: 'Pilih customer atau vendor yang terkait dengan pembayaran',
+    paymentMethod: 'Metode pembayaran: Cash (tunai), Bank Transfer (transfer bank), Check (cek), Credit Card (kartu kredit), dll',
+    amount: 'Jumlah nominal pembayaran yang dilakukan',
+    date: 'Tanggal pembayaran dilakukan',
+    reference: 'Nomor referensi pembayaran (contoh: nomor transfer, nomor cek)',
+    status: 'Status pembayaran: Pending (menunggu), Completed (selesai), Failed (gagal)',
+    bankAccount: 'Akun kas/bank yang digunakan untuk pembayaran',
+    notes: 'Catatan atau keterangan tambahan untuk pembayaran ini',
+    allocations: 'Alokasi pembayaran ke invoice atau purchase yang terkait',
+    attachments: 'Lampiran bukti pembayaran (foto transfer, receipt, dll)',
+  };
+
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

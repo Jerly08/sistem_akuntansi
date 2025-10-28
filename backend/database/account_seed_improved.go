@@ -177,7 +177,9 @@ func upsertAccount(tx *gorm.DB, account models.Account) (uint, bool, error) {
 	normalizedName := strings.ToUpper(account.Name)
 	
 	// Use FOR UPDATE lock to prevent race conditions
-	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+	// Suppress logging for expected "record not found" by using Session
+	err := tx.Session(&gorm.Session{Logger: tx.Logger.LogMode(4)}). // 4 = Silent mode
+		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("code = ?", account.Code).
 		Where("deleted_at IS NULL").
 		First(&existingAccount).Error
@@ -205,15 +207,20 @@ func upsertAccount(tx *gorm.DB, account models.Account) (uint, bool, error) {
 		return 0, false, err
 	}
 	
-	// Account exists, update metadata but preserve balance
+	// Account exists - check if it's system critical before updating protected fields
 	updates := map[string]interface{}{
 		"name":        normalizedName,
-		"type":        account.Type,
-		"category":    account.Category,
 		"level":       account.Level,
 		"is_header":   account.IsHeader,
-		"is_active":   account.IsActive,
 		"description": account.Description,
+	}
+	
+	// Only update type, category, and is_active if account is NOT system critical
+	// to avoid triggering the database trigger that blocks critical account changes
+	if !existingAccount.IsSystemCritical {
+		updates["type"] = account.Type
+		updates["category"] = account.Category
+		updates["is_active"] = account.IsActive
 	}
 	
 	if err := tx.Model(&existingAccount).Updates(updates).Error; err != nil {

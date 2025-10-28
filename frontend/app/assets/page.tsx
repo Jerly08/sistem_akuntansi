@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import SimpleLayout from '@/components/layout/SimpleLayout';
 import Table from '@/components/common/Table';
 import {
@@ -70,6 +71,7 @@ type AssetFormData = FormData;
 
 const AssetsPage = () => {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const [assets, setAssets] = useState<BackendAsset[]>([]);
   const [summary, setSummary] = useState<AssetsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,6 +79,24 @@ const AssetsPage = () => {
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
   
+  // Tooltip descriptions for asset page
+  const tooltips = {
+    search: 'Cari aset berdasarkan nama, kode, serial number, atau lokasi',
+    category: 'Kategori aset: Office Equipment (peralatan kantor), Vehicle (kendaraan), Building (bangunan), dll',
+    status: 'Status aset: Active (digunakan), Disposed (dijual/dibuang), Under Maintenance (dalam perbaikan)',
+    purchaseDate: 'Tanggal pembelian atau perolehan aset',
+    purchasePrice: 'Harga perolehan aset (cost basis)',
+    salvageValue: 'Nilai sisa/residu aset setelah masa manfaat habis',
+    usefulLife: 'Masa manfaat aset dalam tahun (untuk perhitungan depresiasi)',
+    depreciationMethod: 'Metode penyusutan: Straight Line (garis lurus), Declining Balance (saldo menurun)',
+    condition: 'Kondisi fisik aset saat ini: Good (baik), Fair (cukup), Poor (buruk)',
+    location: 'Lokasi fisik aset berada',
+    serialNumber: 'Nomor seri atau identifikasi unik aset',
+    assetAccount: 'Akun aset tetap di chart of accounts (opsional)',
+    depreciationAccount: 'Akun beban penyusutan di chart of accounts (opsional)',
+    notes: 'Catatan tambahan tentang aset (riwayat, spesifikasi, dll)',
+  };
+
   // Filters & pagination
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -1007,7 +1027,7 @@ const AssetsPage = () => {
               leftIcon={<FiPlus />}
               onClick={handleCreate}
             >
-              Add Asset
+              {t('assets.addAsset')}
             </Button>
           </Flex>
         </Flex>
@@ -1029,7 +1049,7 @@ const AssetsPage = () => {
         <Box mb={4}>
           <HStack spacing={3} align="center" wrap="wrap">
             <Input
-              placeholder="Search code or name..."
+              placeholder={t('assets.searchAssets')}
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
               maxW="280px"
@@ -1117,7 +1137,7 @@ const AssetsPage = () => {
           <ModalContent>
             <form onSubmit={handleSubmit}>
               <ModalHeader>
-                {selectedAsset?.id ? 'Edit Asset' : 'Add Asset'}
+                {selectedAsset?.id ? t('assets.editAsset') : t('assets.addAsset')}
               </ModalHeader>
               <ModalCloseButton />
               

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import SimpleLayout from '@/components/layout/SimpleLayout';
 import { DataTable } from '@/components/common/DataTable';
 import EnhancedPurchaseTable from '@/components/purchase/EnhancedPurchaseTable';
@@ -334,6 +335,7 @@ const columns = [
 const PurchasesPage: React.FC = () => {
   const { token, user } = useAuth();
   const toast = useToast();
+  const { t } = useTranslation();
   const { isOpen: isFilterOpen, onOpen: onFilterOpen, onClose: onFilterClose } = useDisclosure();
   
   // Theme colors for enhanced styling - MUST be at top to follow Rules of Hooks
@@ -379,6 +381,31 @@ const PurchasesPage: React.FC = () => {
   const tableBg = useColorModeValue('white', 'gray.700');
   const tableHeaderBg = useColorModeValue('gray.50', 'gray.600');
   
+  // Tooltip descriptions for purchase page
+  const tooltips = {
+    search: 'Cari pembelian berdasarkan kode, nama vendor, atau nomor referensi',
+    vendor: 'Pilih vendor/supplier untuk transaksi pembelian',
+    status: 'Status pembelian: Draft (belum final), Pending (menunggu persetujuan), Approved (disetujui), Completed (selesai)',
+    approvalStatus: 'Status persetujuan: Not Required (tidak perlu), Pending (menunggu), Approved (disetujui), Rejected (ditolak)',
+    date: 'Tanggal transaksi pembelian',
+    dueDate: 'Tanggal jatuh tempo pembayaran',
+    paymentMethod: 'Metode pembayaran: Cash (tunai), Bank (transfer), Credit (kredit/hutang)',
+    bankAccount: 'Akun bank untuk pembayaran',
+    creditAccount: 'Akun utang/liability untuk pembelian kredit',
+    ppnRate: 'Tarif PPN/Pajak Pertambahan Nilai yang dikenakan (default: 11%)',
+    otherTaxAdditions: 'Pajak tambahan lainnya dalam nominal',
+    pph21Rate: 'Tarif PPh 21 untuk pemotongan pajak penghasilan',
+    pph23Rate: 'Tarif PPh 23 untuk pemotongan pajak jasa',
+    otherTaxDeductions: 'Potongan pajak lainnya dalam nominal',
+    discount: 'Diskon pembelian (dalam persen atau nominal)',
+    product: 'Pilih produk/barang yang dibeli',
+    quantity: 'Jumlah unit yang dibeli',
+    unitPrice: 'Harga per unit (sebelum pajak dan diskon)',
+    expenseAccount: 'Akun biaya/expense untuk item ini',
+    notes: 'Catatan atau keterangan tambahan untuk pembelian ini',
+    reference: 'Nomor referensi eksternal (contoh: PO number dari vendor)',
+  };
+
   // State management
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2578,7 +2605,7 @@ const handleCreate = async () => {
                       boxShadow: 'lg'
                     }}
                   >
-                    Create Purchase
+                    {t('purchases.createPurchase')}
                   </Button>
                 )}
               </HStack>
@@ -2610,7 +2637,7 @@ const handleCreate = async () => {
                     fontWeight="medium"
                     mb={2}
                   >
-                    Total Purchases
+                    {t('purchases.totalPurchases')}
                   </StatLabel>
                   <StatNumber 
                     color={headingColor}
@@ -2654,7 +2681,7 @@ const handleCreate = async () => {
                     fontWeight="medium"
                     mb={2}
                   >
-                    Pending Approval
+                    {t('purchases.pendingApproval')}
                   </StatLabel>
                   <StatNumber 
                     color={statColors.orange}
@@ -2698,7 +2725,7 @@ const handleCreate = async () => {
                     fontWeight="medium"
                     mb={2}
                   >
-                    Approved
+                    {t('purchases.approved')}
                   </StatLabel>
                   <StatNumber 
                     color={statColors.green}
@@ -2742,7 +2769,7 @@ const handleCreate = async () => {
                     fontWeight="medium"
                     mb={2}
                   >
-                    Rejected
+                    {t('purchases.rejected')}
                   </StatLabel>
                   <StatNumber 
                     color={statColors.red}
@@ -2918,7 +2945,7 @@ const handleCreate = async () => {
                     fontWeight="medium"
                     mb={2}
                   >
-                    Outstanding Amount
+                    {t('purchases.outstandingAmount')}
                   </StatLabel>
                   <StatNumber 
                     color={statColors.orange}
@@ -2955,14 +2982,14 @@ const handleCreate = async () => {
             <Flex gap={4} align="end" wrap="wrap">
               <Box flex="1" minW="300px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
-                  Search Transactions
+                  {t('purchases.searchTransactions')}
                 </Text>
                 <InputGroup>
                   <InputLeftElement pointerEvents="none">
                     <FiSearch color={textSecondary} />
                   </InputLeftElement>
                   <Input
-                    placeholder="Search by purchase number, vendor..."
+                    placeholder={t('purchases.searchPlaceholder')}
                     value={filters.search || ''}
                     onChange={(e) => handleFilterChange({ search: e.target.value })}
                     bg={cardBg}
@@ -2972,10 +2999,10 @@ const handleCreate = async () => {
               
               <Box minW="180px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
-                  Filter by Vendor
+                  {t('purchases.filterByVendor')}
                 </Text>
                 <Select 
-                  placeholder="All Vendors"
+                  placeholder={t('purchases.allVendors')}
                   value={filters.vendor_id || ''}
                   onChange={(e) => handleFilterChange({ vendor_id: e.target.value })}
                   bg={cardBg}
@@ -2990,43 +3017,43 @@ const handleCreate = async () => {
               
               <Box minW="160px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
-                  Filter by Status
+                  {t('purchases.filterByStatus')}
                 </Text>
                 <Select 
-                  placeholder="All Statuses"
+                  placeholder={t('purchases.allStatuses')}
                   value={filters.status || ''}
                   onChange={(e) => handleFilterChange({ status: e.target.value })}
                   bg={cardBg}
                 >
-                  <option value="">All Statuses</option>
-                  <option value="draft">Draft</option>
-                  <option value="pending_approval">Pending Approval</option>
-                  <option value="approved">Approved</option>
-                  <option value="cancelled">Cancelled</option>
+                  <option value="">{t('purchases.allStatuses')}</option>
+                  <option value="draft">{t('purchases.draft')}</option>
+                  <option value="pending_approval">{t('purchases.pendingApprovalStatus')}</option>
+                  <option value="approved">{t('purchases.approved')}</option>
+                  <option value="cancelled">{t('purchases.cancelled')}</option>
                 </Select>
               </Box>
               
               <Box minW="160px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
-                  Approval Status
+                  {t('purchases.approvalStatus')}
                 </Text>
                 <Select 
-                  placeholder="All Approval Statuses"
+                  placeholder={t('purchases.allApprovalStatuses')}
                   value={filters.approval_status || ''}
                   onChange={(e) => handleFilterChange({ approval_status: e.target.value })}
                   bg={cardBg}
                 >
-                  <option value="">All Approval Statuses</option>
-                  <option value="not_required">Not Required</option>
-                  <option value="pending">Pending</option>
-                  <option value="approved">Approved</option>
-                  <option value="rejected">Rejected</option>
+                  <option value="">{t('purchases.allApprovalStatuses')}</option>
+                  <option value="not_required">{t('purchases.notRequired')}</option>
+                  <option value="pending">{t('purchases.pending')}</option>
+                  <option value="approved">{t('purchases.approved')}</option>
+                  <option value="rejected">{t('purchases.rejected')}</option>
                 </Select>
               </Box>
               
               <Box minW="160px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
-                  Start Date
+                  {t('purchases.startDate')}
                 </Text>
                 <Input
                   type="date"
@@ -3038,7 +3065,7 @@ const handleCreate = async () => {
               
               <Box minW="160px">
                 <Text fontSize="sm" fontWeight="medium" mb={2} color={textSecondary}>
-                  End Date
+                  {t('purchases.endDate')}
                 </Text>
                 <Input
                   type="date"
@@ -3065,7 +3092,7 @@ const handleCreate = async () => {
                   fetchPurchases({ page: 1, limit: 10 });
                 }}
               >
-                Clear Filters
+                {t('purchases.clearFilters')}
               </Button>
             </Flex>
           </CardBody>
@@ -3080,7 +3107,7 @@ const handleCreate = async () => {
           onSubmitForApproval={handleSubmitForApproval}
           onDelete={canDelete ? handleDelete : undefined}
           renderActions={renderActions}
-          title="Purchase Transactions"
+          title={t('purchases.purchaseTransactions')}
           formatCurrency={formatCurrency}
           formatDate={formatDate}
           canEdit={canEdit}

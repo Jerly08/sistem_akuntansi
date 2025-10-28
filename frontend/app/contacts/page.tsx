@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/config/api';
 import Layout from '@/components/layout/Layout';
@@ -75,6 +76,7 @@ interface ContactAddress {
 
 const ContactsPage = () => {
   const { token, user } = useAuth();
+  const { t } = useTranslation();
   const canEdit = user?.role?.toLowerCase() === 'admin' || user?.role?.toLowerCase() === 'finance' || user?.role?.toLowerCase() === 'inventory_manager';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -366,7 +368,7 @@ const ContactsPage = () => {
               leftIcon={<FiPlus />}
               onClick={handleCreate}
             >
-              Add Contact
+              {t('contacts.addContact')}
             </Button>
           )}
         </Flex>
@@ -399,13 +401,13 @@ const ContactsPage = () => {
           <ModalContent>
             <form onSubmit={handleSubmit}>
               <ModalHeader>
-                {selectedContact?.id ? 'Edit Contact' : 'Create Contact'}
+                {selectedContact?.id ? t('contacts.editContact') : t('contacts.createContact')}
               </ModalHeader>
               <ModalCloseButton />
               <ModalBody>
                 <VStack spacing={4}>
                   <FormControl isRequired>
-                    <FormLabel>Name</FormLabel>
+                    <FormLabel>{t('common.name')}</FormLabel>
                     <Input
                       value={formData.name || ''}
                       onChange={(e) => handleInputChange('name', e.target.value)}
@@ -414,14 +416,14 @@ const ContactsPage = () => {
                   </FormControl>
                   
                   <FormControl isRequired>
-                    <FormLabel>Type</FormLabel>
+                    <FormLabel>{t('common.type')}</FormLabel>
                     <Select
                       value={formData.type || 'CUSTOMER'}
                       onChange={(e) => handleInputChange('type', e.target.value as 'CUSTOMER' | 'VENDOR' | 'EMPLOYEE')}
                     >
-                      <option value="CUSTOMER">Customer</option>
-                      <option value="VENDOR">Vendor</option>
-                      <option value="EMPLOYEE">Employee</option>
+                      <option value="CUSTOMER">{t('contacts.customer')}</option>
+                      <option value="VENDOR">{t('contacts.vendor')}</option>
+                      <option value="EMPLOYEE">{t('contacts.employee')}</option>
                     </Select>
                   </FormControl>
                   
@@ -441,7 +443,7 @@ const ContactsPage = () => {
                   {/* PIC Name - only show for Customer/Vendor */}
                   {(formData.type === 'CUSTOMER' || formData.type === 'VENDOR') && (
                     <FormControl>
-                      <FormLabel>PIC Name (Person In Charge)</FormLabel>
+                      <FormLabel>{t('contacts.picName')}</FormLabel>
                       <Input
                         value={formData.pic_name || ''}
                         onChange={(e) => handleInputChange('pic_name', e.target.value)}
@@ -451,7 +453,7 @@ const ContactsPage = () => {
                   )}
                   
                   <FormControl isRequired>
-                    <FormLabel>Email</FormLabel>
+                    <FormLabel>{t('contacts.email')}</FormLabel>
                     <Input
                       type="email"
                       value={formData.email || ''}
@@ -461,7 +463,7 @@ const ContactsPage = () => {
                   </FormControl>
                   
                   <FormControl isRequired>
-                    <FormLabel>Phone</FormLabel>
+                    <FormLabel>{t('contacts.phone')}</FormLabel>
                     <Input
                       value={formData.phone || ''}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
@@ -470,7 +472,7 @@ const ContactsPage = () => {
                   </FormControl>
                   
                   <FormControl>
-                    <FormLabel>Mobile</FormLabel>
+                    <FormLabel>{t('contacts.mobile')}</FormLabel>
                     <Input
                       value={formData.mobile || ''}
                       onChange={(e) => handleInputChange('mobile', e.target.value)}
@@ -479,7 +481,7 @@ const ContactsPage = () => {
                   </FormControl>
                   
                   <FormControl>
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel>{t('contacts.address')}</FormLabel>
                     <Textarea
                       value={formData.address || ''}
                       onChange={(e) => handleInputChange('address', e.target.value)}
@@ -489,7 +491,7 @@ const ContactsPage = () => {
                   </FormControl>
                   
                   <FormControl>
-                    <FormLabel>Notes</FormLabel>
+                    <FormLabel>{t('common.notes')}</FormLabel>
                     <Textarea
                       value={formData.notes || ''}
                       onChange={(e) => handleInputChange('notes', e.target.value)}
@@ -500,7 +502,7 @@ const ContactsPage = () => {
                   
                   <FormControl>
                     <HStack>
-                      <FormLabel mb={0}>Active</FormLabel>
+                      <FormLabel mb={0}>{t('common.active')}</FormLabel>
                       <Switch
                         isChecked={formData.is_active !== false}
                         onChange={(e) => handleInputChange('is_active', e.target.checked)}
@@ -511,15 +513,15 @@ const ContactsPage = () => {
               </ModalBody>
               <ModalFooter>
                 <Button variant="ghost" mr={3} onClick={() => setIsModalOpen(false)}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   colorScheme="brand"
                   type="submit"
                   isLoading={isSubmitting}
-                  loadingText={selectedContact?.id ? 'Updating...' : 'Creating...'}
+                  loadingText={selectedContact?.id ? t('common.updating') : t('common.creating')}
                 >
-                  {selectedContact?.id ? 'Update' : 'Create'}
+                  {selectedContact?.id ? t('common.update') : t('common.create')}
                 </Button>
               </ModalFooter>
             </form>
@@ -530,7 +532,7 @@ const ContactsPage = () => {
         <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} size="lg">
           <ModalOverlay />
           <ModalContent>
-            <ModalHeader>Contact Details</ModalHeader>
+            <ModalHeader>{t('contacts.contactDetails')}</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
               {viewContact && (

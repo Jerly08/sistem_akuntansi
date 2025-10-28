@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import SimpleLayout from '@/components/layout/SimpleLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useModulePermissions } from '@/hooks/usePermissions';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   Box,
   Button,
@@ -58,6 +59,7 @@ import { getProductImageUrl, debugImageUrl } from '@/utils/imageUrl';
 
 const ProductCatalog: React.FC = () => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const { 
     canView, 
     canCreate, 
@@ -83,6 +85,25 @@ const ProductCatalog: React.FC = () => {
   const { isOpen: isManagementModalOpen, onOpen: onManagementModalOpen, onClose: onManagementModalClose } = useDisclosure();
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const toast = useToast();
+
+  // Tooltip descriptions for product page
+  const tooltips = {
+    search: 'Cari produk berdasarkan nama, kode, atau deskripsi',
+    category: 'Kategori produk untuk pengelompokan dan pelaporan',
+    unit: 'Satuan unit produk (contoh: Pcs, Kg, Liter, Box)',
+    warehouse: 'Lokasi gudang/warehouse tempat produk disimpan',
+    stock: 'Jumlah stok tersedia saat ini',
+    minStock: 'Stok minimum sebagai peringatan untuk reorder',
+    costPrice: 'Harga pokok/cost produk (untuk perhitungan COGS)',
+    salePrice: 'Harga jual standar kepada customer',
+    productCode: 'Kode unik produk (SKU atau Product Code)',
+    barcode: 'Barcode produk untuk scanning',
+    description: 'Deskripsi detail produk',
+    isActive: 'Status produk: Active (dijual) atau Inactive (tidak dijual)',
+    trackInventory: 'Aktifkan tracking inventory untuk produk ini',
+    revenueAccount: 'Akun pendapatan di chart of accounts untuk produk ini',
+    expenseAccount: 'Akun biaya/expense untuk pembelian produk ini',
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -304,7 +325,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Box>
-            <Heading as="h1" size="xl" mb={2}>Product Catalog</Heading>
+            <Heading as="h1" size="xl" mb={2}>{t('products.productCatalog')}</Heading>
           </Box>
           
           {/* Management Buttons */}
@@ -327,7 +348,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                   size="lg" 
                   onClick={handleAddProductClick}
                 >
-                  Add Product
+                  {t('products.addProduct')}
                 </Button>
               </>
             )}
@@ -343,7 +364,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                 <FiSearch color="gray.300" />
               </InputLeftElement>
               <Input
-                placeholder="Search products by name or code..."
+                placeholder={t('products.searchProducts')}
                 value={searchTerm}
                 onChange={handleSearchChange}
               />
@@ -384,8 +405,8 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
               onChange={(e) => setStatusFilter(e.target.value)}
               maxW="150px"
             >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="active">{t('products.active')}</option>
+              <option value="inactive">{t('products.inactive')}</option>
             </Select>
             
             {/* Sort Options */}
