@@ -187,24 +187,27 @@ func (s *SSOTPurchaseReportService) getPurchaseSummary(ctx context.Context, star
 	query := `
 		SELECT 
 			COUNT(*) as total_count,
-			COUNT(CASE WHEN status = 'POSTED' THEN 1 END) as completed_count,
-			COALESCE(SUM(total_debit), 0) as total_amount,
+			COUNT(CASE WHEN ujl.status = 'POSTED' THEN 1 END) as completed_count,
+			COALESCE(SUM(ujl.total_debit), 0) as total_amount,
 			-- For cash purchases, total_paid = total_amount (fully paid)
 			-- Check both main description and if there are cash account debits
 			COALESCE(SUM(CASE 
-				WHEN description ILIKE '%cash%' OR description ILIKE '%kas%' OR
-				     EXISTS(SELECT 1 FROM unified_journal_lines ujl 
-				            JOIN accounts a ON ujl.account_id = a.id 
-				            WHERE ujl.journal_id = unified_journal_ledger.id 
+				WHEN ujl.description ILIKE '%cash%' OR ujl.description ILIKE '%kas%' OR
+				     EXISTS(SELECT 1 FROM unified_journal_lines ujl2
+				            JOIN accounts a ON ujl2.account_id = a.id 
+				            WHERE ujl2.journal_id = ujl.id 
 				              AND a.code IN ('1101', '1102', '1103', '1104', '1105') -- Cash/Bank accounts
-				              AND ujl.credit_amount > 0) -- Cash account credited (cash out)
-				THEN total_debit  -- Cash: use debit amount (full purchase amount)
+				              AND ujl2.credit_amount > 0) -- Cash account credited (cash out)
+				THEN ujl.total_debit  -- Cash: use debit amount (full purchase amount)
 				ELSE 0           -- Credit: not paid yet
 			END), 0) as total_paid
-		FROM unified_journal_ledger 
-		WHERE source_type = 'PURCHASE'
-		  AND entry_date BETWEEN ? AND ?
-		  AND deleted_at IS NULL
+		FROM unified_journal_ledger ujl
+		INNER JOIN purchases p ON p.id = ujl.source_id
+		WHERE ujl.source_type = 'PURCHASE'
+		  AND ujl.entry_date BETWEEN ? AND ?
+		  AND ujl.deleted_at IS NULL
+		  AND p.deleted_at IS NULL
+		  AND (p.status = 'APPROVED' OR p.status = 'COMPLETED' OR p.approval_status = 'APPROVED')
 	`
 
 	var summary purchaseBaseSummary
@@ -272,9 +275,12 @@ func (s *SSOTPurchaseReportService) getPurchasesByVendor(ctx context.Context, st
 			-- Get sample descriptions for debugging
 			string_agg(DISTINCT sje.description, ', ') as descriptions
 		FROM unified_journal_ledger sje
+		INNER JOIN purchases p ON p.id = sje.source_id
 		WHERE sje.source_type = 'PURCHASE'
 		  AND sje.entry_date BETWEEN ? AND ?
 		  AND sje.deleted_at IS NULL
+		  AND p.deleted_at IS NULL
+		  AND (p.status = 'APPROVED' OR p.status = 'COMPLETED' OR p.approval_status = 'APPROVED')
 		GROUP BY sje.source_id
 		ORDER BY total_amount DESC
 	`
@@ -402,11 +408,14 @@ func (s *SSOTPurchaseReportService) getPurchasesByMonth(ctx context.Context, sta
 				THEN total_credit 
 				ELSE 0 
 			END), 0) as total_paid
-		FROM unified_journal_ledger
-		WHERE source_type = 'PURCHASE'
-		  AND entry_date BETWEEN ? AND ?
-		  AND deleted_at IS NULL
-		GROUP BY EXTRACT(YEAR FROM entry_date), EXTRACT(MONTH FROM entry_date)
+		FROM unified_journal_ledger ujl
+		INNER JOIN purchases p ON p.id = ujl.source_id
+		WHERE ujl.source_type = 'PURCHASE'
+		  AND ujl.entry_date BETWEEN ? AND ?
+		  AND ujl.deleted_at IS NULL
+		  AND p.deleted_at IS NULL
+		  AND (p.status = 'APPROVED' OR p.status = 'COMPLETED' OR p.approval_status = 'APPROVED')
+		GROUP BY EXTRACT(YEAR FROM ujl.entry_date), EXTRACT(MONTH FROM ujl.entry_date)
 		ORDER BY year, month
 	`
 
@@ -468,10 +477,13 @@ func (s *SSOTPurchaseReportService) getPurchasesByCategory(ctx context.Context, 
 			COALESCE(SUM(sjl.debit_amount), 0) as total_amount
 		FROM unified_journal_lines sjl
 		JOIN unified_journal_ledger sje ON sje.id = sjl.journal_id
+		INNER JOIN purchases p ON p.id = sje.source_id
 		LEFT JOIN accounts a ON a.id = sjl.account_id
 		WHERE sje.source_type = 'PURCHASE'
 		  AND sje.entry_date BETWEEN ? AND ?
 		  AND sje.deleted_at IS NULL
+		  AND p.deleted_at IS NULL
+		  AND (p.status = 'APPROVED' OR p.status = 'COMPLETED' OR p.approval_status = 'APPROVED')
 		  AND sjl.debit_amount > 0
 		  AND a.code NOT LIKE '21%'  -- Exclude tax accounts
 		GROUP BY a.code, a.name
@@ -526,49 +538,52 @@ func (s *SSOTPurchaseReportService) getPaymentAnalysis(ctx context.Context, star
 		SELECT 
 			-- Count cash purchases (either by description or by cash account usage)
 			COUNT(CASE 
-				WHEN unified_journal_ledger.description ILIKE '%cash%' OR unified_journal_ledger.description ILIKE '%kas%' OR
-				     EXISTS(SELECT 1 FROM unified_journal_lines ujl 
-				            JOIN accounts a ON ujl.account_id = a.id 
-				            WHERE ujl.journal_id = unified_journal_ledger.id
+				WHEN ujl.description ILIKE '%cash%' OR ujl.description ILIKE '%kas%' OR
+				     EXISTS(SELECT 1 FROM unified_journal_lines ujl2 
+				            JOIN accounts a ON ujl2.account_id = a.id 
+				            WHERE ujl2.journal_id = ujl.id
 				              AND a.code IN ('1101', '1102', '1103', '1104', '1105') -- Cash/Bank accounts
-				              AND ujl.credit_amount > 0) -- Cash account credited (cash out)
+				              AND ujl2.credit_amount > 0) -- Cash account credited (cash out)
 				THEN 1 END) as cash_purchases,
 			-- Count credit purchases (not cash)
 			COUNT(CASE 
-				WHEN NOT (unified_journal_ledger.description ILIKE '%cash%' OR unified_journal_ledger.description ILIKE '%kas%' OR
-				          EXISTS(SELECT 1 FROM unified_journal_lines ujl 
-				                 JOIN accounts a ON ujl.account_id = a.id 
-				                 WHERE ujl.journal_id = unified_journal_ledger.id 
+				WHEN NOT (ujl.description ILIKE '%cash%' OR ujl.description ILIKE '%kas%' OR
+				          EXISTS(SELECT 1 FROM unified_journal_lines ujl2 
+				                 JOIN accounts a ON ujl2.account_id = a.id 
+				                 WHERE ujl2.journal_id = ujl.id 
 				                   AND a.code IN ('1101', '1102', '1103', '1104', '1105')
-				                   AND ujl.credit_amount > 0))
+				                   AND ujl2.credit_amount > 0))
 				THEN 1 END) as credit_purchases,
 			-- Cash amount: sum of cash purchases
 			COALESCE(SUM(CASE 
-				WHEN unified_journal_ledger.description ILIKE '%cash%' OR unified_journal_ledger.description ILIKE '%kas%' OR
-				     EXISTS(SELECT 1 FROM unified_journal_lines ujl 
-				            JOIN accounts a ON ujl.account_id = a.id 
-				            WHERE ujl.journal_id = unified_journal_ledger.id 
+				WHEN ujl.description ILIKE '%cash%' OR ujl.description ILIKE '%kas%' OR
+				     EXISTS(SELECT 1 FROM unified_journal_lines ujl2 
+				            JOIN accounts a ON ujl2.account_id = a.id 
+				            WHERE ujl2.journal_id = ujl.id 
 				              AND a.code IN ('1101', '1102', '1103', '1104', '1105')
-				              AND ujl.credit_amount > 0)
-				THEN unified_journal_ledger.total_debit 
+				              AND ujl2.credit_amount > 0)
+				THEN ujl.total_debit 
 				ELSE 0 
 			END), 0) as cash_amount,
 			-- Credit amount: sum of credit purchases
 			COALESCE(SUM(CASE 
-				WHEN NOT (unified_journal_ledger.description ILIKE '%cash%' OR unified_journal_ledger.description ILIKE '%kas%' OR
-				          EXISTS(SELECT 1 FROM unified_journal_lines ujl 
-				                 JOIN accounts a ON ujl.account_id = a.id 
-				                 WHERE ujl.journal_id = unified_journal_ledger.id 
+				WHEN NOT (ujl.description ILIKE '%cash%' OR ujl.description ILIKE '%kas%' OR
+				          EXISTS(SELECT 1 FROM unified_journal_lines ujl2 
+				                 JOIN accounts a ON ujl2.account_id = a.id 
+				                 WHERE ujl2.journal_id = ujl.id 
 				                   AND a.code IN ('1101', '1102', '1103', '1104', '1105')
-				                   AND ujl.credit_amount > 0))
-				THEN unified_journal_ledger.total_debit 
+				                   AND ujl2.credit_amount > 0))
+				THEN ujl.total_debit 
 				ELSE 0 
 			END), 0) as credit_amount,
-			COALESCE(AVG(unified_journal_ledger.total_debit), 0) as average_order_value
-		FROM unified_journal_ledger
-		WHERE source_type = 'PURCHASE'
-		  AND entry_date BETWEEN ? AND ?
-		  AND deleted_at IS NULL
+			COALESCE(AVG(ujl.total_debit), 0) as average_order_value
+		FROM unified_journal_ledger ujl
+		INNER JOIN purchases p ON p.id = ujl.source_id
+		WHERE ujl.source_type = 'PURCHASE'
+		  AND ujl.entry_date BETWEEN ? AND ?
+		  AND ujl.deleted_at IS NULL
+		  AND p.deleted_at IS NULL
+		  AND (p.status = 'APPROVED' OR p.status = 'COMPLETED' OR p.approval_status = 'APPROVED')
 	`
 
 	var analysis struct {
@@ -621,10 +636,13 @@ func (s *SSOTPurchaseReportService) getTaxAnalysis(ctx context.Context, startDat
 			END), 0) as total_tax_amount
 		FROM unified_journal_lines sjl
 		JOIN unified_journal_ledger sje ON sje.id = sjl.journal_id
+		INNER JOIN purchases p ON p.id = sje.source_id
 		LEFT JOIN accounts a ON a.id = sjl.account_id
 		WHERE sje.source_type = 'PURCHASE'
 		  AND sje.entry_date BETWEEN ? AND ?
 		  AND sje.deleted_at IS NULL
+		  AND p.deleted_at IS NULL
+		  AND (p.status = 'APPROVED' OR p.status = 'COMPLETED' OR p.approval_status = 'APPROVED')
 		  AND sjl.debit_amount > 0
 	`
 
@@ -651,10 +669,13 @@ func (s *SSOTPurchaseReportService) getTaxAnalysis(ctx context.Context, startDat
 			COALESCE(SUM(sjl.debit_amount), 0) as tax_amount
 		FROM unified_journal_lines sjl
 		JOIN unified_journal_ledger sje ON sje.id = sjl.journal_id
+		INNER JOIN purchases p ON p.id = sje.source_id
 		LEFT JOIN accounts a ON a.id = sjl.account_id
 		WHERE sje.source_type = 'PURCHASE'
 		  AND sje.entry_date BETWEEN ? AND ?
 		  AND sje.deleted_at IS NULL
+		  AND p.deleted_at IS NULL
+		  AND (p.status = 'APPROVED' OR p.status = 'COMPLETED' OR p.approval_status = 'APPROVED')
 		  AND sjl.debit_amount > 0
 		  AND a.code LIKE '21%' AND a.name ILIKE '%ppn%'
 		GROUP BY EXTRACT(YEAR FROM sje.entry_date), EXTRACT(MONTH FROM sje.entry_date)
