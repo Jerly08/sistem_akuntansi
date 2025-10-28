@@ -12,6 +12,7 @@ import (
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/repositories"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"github.com/xuri/excelize/v2"
 	"github.com/shopspring/decimal"
 )
@@ -1041,13 +1042,17 @@ func (s *PaymentService) getNextSequenceNumber(prefix string, year, month int) (
 		}
 		
 		// Try to find existing record with row lock
-		err := tx.Set("gorm:query_option", "FOR UPDATE").
+		// Suppress "record not found" log by using silent logger session
+		err := tx.Session(&gorm.Session{Logger: tx.Logger.LogMode(logger.Silent)}).
+			Omit("created_at", "updated_at").
+			Set("gorm:query_option", "FOR UPDATE").
 			Where("prefix = ? AND year = ? AND month = ?", prefix, year, month).
 			First(&sequenceRecord).Error
 		
 		if err != nil {
 			if err == gorm.ErrRecordNotFound {
-				// Create new sequence record
+				// Create new sequence record (this is normal for first payment of the month)
+				log.Printf("ℹ️  Creating new payment sequence for %s/%d/%02d", prefix, year, month)
 				sequenceRecord = models.PaymentCodeSequence{
 					Prefix:         prefix,
 					Year:           year,
