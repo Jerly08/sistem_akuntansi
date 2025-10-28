@@ -81,8 +81,8 @@ type PurchaseItem struct {
 	Quantity        int            `json:"quantity" gorm:"not null"`
 	UnitPrice       float64        `json:"unit_price" gorm:"type:decimal(15,2);default:0"`
 	TotalPrice      float64        `json:"total_price" gorm:"type:decimal(15,2);default:0"`
-	Discount        float64        `json:"discount" gorm:"type:decimal(8,2);default:0"`
-	Tax             float64        `json:"tax" gorm:"type:decimal(8,2);default:0"`
+	Discount        float64        `json:"discount" gorm:"type:decimal(15,2);default:0"`
+	Tax             float64        `json:"tax" gorm:"type:decimal(15,2);default:0"`
 	ExpenseAccountID uint          `json:"expense_account_id" gorm:"index"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`

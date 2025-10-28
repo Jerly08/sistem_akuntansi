@@ -785,6 +785,9 @@ func AutoMigrate(db *gorm.DB) {
 	// Update tax field sizes to prevent numeric overflow
 	UpdateTaxFieldSizes(db)
 	
+	// Fix purchase items field overflow
+	FixPurchaseItemsFieldOverflow(db)
+	
 	// Run sales data integrity fix
 	FixSalesDataIntegrity(db)
 	
