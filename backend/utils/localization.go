@@ -505,13 +505,8 @@ func GetCSVHeaders(reportType, language string) []string {
 
 // AddActivityTypeTranslation adds activity type translation for CSV
 func init() {
-	// Add activity type translations that might be missing
-	for lang, translations := range PDFTranslations {
-		translations["activity_type"] = T("activity_type_"+lang, lang)
-		translations["type"] = T("type", lang)
-	}
-
-	// Add specific activity type translations
+	// Add specific activity type translations directly
+	// No need to call T() function here as it's not initialized yet
 	PDFTranslations["id"]["activity_type"] = "Tipe Aktivitas"
 	PDFTranslations["en"]["activity_type"] = "Activity Type"
 	PDFTranslations["id"]["type"] = "Tipe"
