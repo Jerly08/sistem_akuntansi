@@ -42,9 +42,10 @@ func (s *SalesJournalServiceSSOT) ShouldPostToJournal(status string) bool {
 func (s *SalesJournalServiceSSOT) syncCashBankBalance(tx *gorm.DB, accountID uint64) error {
 	// Find if this account is linked to a cash_bank record
 	var cashBank models.CashBank
-	if err := tx.Where("account_id = ?", accountID).First(&cashBank).Error; err != nil {
+	// Use silent query to avoid logging "record not found" errors for non-cash/bank accounts
+	if err := tx.Session(&gorm.Session{Logger: tx.Logger.LogMode(1)}).Where("account_id = ?", accountID).First(&cashBank).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			// Not a cash/bank account, skip sync (normal for revenue, expense accounts)
+			// Not a cash/bank account, skip sync silently (normal for revenue, expense accounts)
 			return nil
 		}
 		return err
