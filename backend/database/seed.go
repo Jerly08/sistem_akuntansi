@@ -120,23 +120,25 @@ func seedUsers(db *gorm.DB) {
 		},
 	}
 
-	// Use PostgreSQL native UPSERT for robust user creation
+	// Use PostgreSQL native INSERT with ON CONFLICT DO NOTHING
+	// This ensures seed only runs once and doesn't reset edited data
 	successCount := 0
 	for _, user := range allUsers {
-		// Use raw SQL UPSERT to avoid GORM conflicts
+		// Check if user already exists
+		var existingUser models.User
+		if err := db.Where("username = ?", user.Username).First(&existingUser).Error; err == nil {
+			log.Printf("⏭️  User %s already exists, skipping", user.Username)
+			continue
+		}
+		
+		// User doesn't exist, create it
 		query := `
 			INSERT INTO users (
 				username, email, password, role, first_name, last_name,
 				phone, address, department, position, salary, is_active,
 				created_at, updated_at
 			) VALUES (?, ?, ?, ?, ?, ?, '', '', '', '', 0, ?, NOW(), NOW())
-			ON CONFLICT (username) DO UPDATE SET
-				email = EXCLUDED.email,
-				role = EXCLUDED.role,
-				first_name = EXCLUDED.first_name,
-				last_name = EXCLUDED.last_name,
-				is_active = EXCLUDED.is_active,
-				updated_at = NOW()
+			ON CONFLICT (username) DO NOTHING
 		`
 		
 		result := db.Exec(query, 
@@ -144,9 +146,9 @@ func seedUsers(db *gorm.DB) {
 			user.FirstName, user.LastName, user.IsActive)
 		
 		if result.Error != nil {
-			log.Printf("⚠️  Warning: Failed to upsert user %s: %v", user.Username, result.Error)
-		} else {
-			log.Printf("✅ User %s upserted successfully", user.Username)
+			log.Printf("⚠️  Warning: Failed to create user %s: %v", user.Username, result.Error)
+		} else if result.RowsAffected > 0 {
+			log.Printf("✅ User %s created successfully", user.Username)
 			successCount++
 		}
 	}
