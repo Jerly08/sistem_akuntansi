@@ -24,7 +24,10 @@ import {
   Box,
   useToast,
   Spinner,
+  Tooltip,
+  Icon,
 } from '@chakra-ui/react';
+import { FiInfo } from 'react-icons/fi';
 import { Purchase, PurchasePaymentRequest } from '@/services/purchaseService';
 import purchaseService from '@/services/purchaseService';
 
@@ -61,6 +64,16 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
     notes: '',
   });
   const [displayAmount, setDisplayAmount] = useState('0');
+
+  // Tooltip descriptions for payment form
+  const tooltips = {
+    amount: 'Jumlah pembayaran yang akan dibayarkan. Maksimal sesuai sisa outstanding purchase',
+    paymentDate: 'Tanggal pembayaran dilakukan',
+    paymentMethod: 'Metode pembayaran: Bank Transfer (transfer bank), Cash (tunai), Check (cek)',
+    cashBank: 'Pilih akun kas/bank yang akan digunakan untuk pembayaran',
+    reference: 'Nomor referensi pembayaran (contoh: nomor transfer, nomor cek, receipt number)',
+    notes: 'Catatan tambahan untuk pembayaran ini',
+  };
 
   // Format number to Rupiah display
   const formatRupiah = (value: number | string): string => {

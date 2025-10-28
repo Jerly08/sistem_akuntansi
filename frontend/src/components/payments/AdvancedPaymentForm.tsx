@@ -49,9 +49,11 @@ import {
   TabPanels,
   TabPanel,
   useColorModeValue,
+  Tooltip,
+  Icon,
 } from '@chakra-ui/react';
 import { useForm, Controller, useWatch } from 'react-hook-form';
-import { FiCreditCard, FiDollarSign, FiCalendar, FiUser, FiFileText } from 'react-icons/fi';
+import { FiCreditCard, FiDollarSign, FiCalendar, FiUser, FiFileText, FiInfo } from 'react-icons/fi';
 import paymentService, { 
   PaymentCreateRequest, 
   PaymentAllocation, 
@@ -100,6 +102,19 @@ const PAYMENT_METHODS = [
   { value: 'DEBIT_CARD', label: 'Debit Card', icon: FiCreditCard },
   { value: 'OTHER', label: 'Other', icon: FiFileText },
 ];
+
+// Tooltip descriptions for payment form
+const PAYMENT_TOOLTIPS = {
+  contact: 'Pilih customer (untuk pembayaran receivable) atau vendor (untuk pembayaran payable)',
+  cashBank: 'Akun kas/bank yang akan digunakan untuk transaksi pembayaran',
+  date: 'Tanggal transaksi pembayaran dilakukan',
+  amount: 'Total jumlah pembayaran yang diterima atau dibayarkan',
+  method: 'Metode pembayaran: Cash (tunai), Bank Transfer (transfer), Check (cek), Credit/Debit Card (kartu)',
+  reference: 'Nomor referensi eksternal seperti nomor transfer, nomor cek, atau receipt number',
+  notes: 'Catatan tambahan untuk pembayaran ini',
+  autoAllocate: 'Aktifkan untuk mengalokasikan pembayaran secara otomatis ke invoice/bill tertua',
+  allocation: 'Alokasi pembayaran ke invoice atau bill yang terkait. Pastikan total alokasi sesuai dengan jumlah pembayaran',
+};
 
 const PaymentAllocationTable: React.FC<{
   items: OutstandingItem[];

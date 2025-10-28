@@ -387,6 +387,26 @@ const CashBankPage: React.FC = () => {
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const readOnlyBg = useColorModeValue('gray.50', 'gray.700');
   
+  // Tooltip descriptions for cash bank page
+  const tooltips = {
+    accountType: 'Tipe akun: Cash (kas tunai) untuk uang fisik, Bank (rekening bank) untuk rekening elektronik',
+    accountCode: 'Kode unik akun sesuai standar Chart of Accounts (COA)',
+    accountName: 'Nama akun kas/bank untuk identifikasi',
+    glAccount: 'Akun General Ledger yang terintegrasi untuk pencatatan otomatis di pembukuan',
+    balance: 'Saldo terkini akun kas/bank',
+    currency: 'Mata uang akun (IDR, USD, dll)',
+    bankName: 'Nama bank untuk akun bank',
+    accountNo: 'Nomor rekening bank',
+    accountHolder: 'Nama pemegang rekening',
+    branch: 'Cabang bank tempat rekening dibuka',
+    description: 'Deskripsi atau catatan tambahan untuk akun ini',
+    isActive: 'Status akun: Active (dapat digunakan) atau Inactive (tidak aktif)',
+    deposit: 'Tambah saldo akun dengan transaksi penerimaan uang (deposit)',
+    withdrawal: 'Kurangi saldo akun dengan transaksi pengeluaran uang (withdrawal)',
+    transfer: 'Transfer dana antar akun kas/bank internal',
+    reconcile: 'Rekonsiliasi saldo dengan catatan bank untuk memastikan keakuratan',
+  };
+
   const [accounts, setAccounts] = useState<CashBank[]>([]);
   const [balanceSummary, setBalanceSummary] = useState<BalanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
