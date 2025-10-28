@@ -77,20 +77,21 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 			return nil, errors.New("GL account not found")
 		}
 		
-		// ✅ FIX ROOT CAUSE: Prevent multiple cash/bank accounts sharing same GL
-		// Check if this GL is already linked to another cash/bank account
-		var existingCashBank models.CashBank
-		err = tx.Where("account_id = ? AND deleted_at IS NULL", request.AccountID).First(&existingCashBank).Error
-		if err == nil {
-			// GL already linked to another cash/bank account
-			tx.Rollback()
-			return nil, fmt.Errorf("GL account '%s - %s' is already linked to cash/bank account '%s'. Each cash/bank account must have its own unique GL account for proper balance tracking", 
-				account.Code, account.Name, existingCashBank.Name)
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			// Unexpected error
-			tx.Rollback()
-			return nil, fmt.Errorf("failed to check GL account linkage: %v", err)
-		}
+	// ✅ FIX ROOT CAUSE: Prevent multiple cash/bank accounts sharing same GL
+	// Check if this GL is already linked to another cash/bank account
+	var existingCashBank models.CashBank
+	err = tx.Where("account_id = ? AND deleted_at IS NULL", request.AccountID).Limit(1).Find(&existingCashBank).Error
+	if err != nil {
+		// Unexpected database error
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to check GL account linkage: %v", err)
+	}
+	if existingCashBank.ID != 0 {
+		// GL already linked to another cash/bank account
+		tx.Rollback()
+		return nil, fmt.Errorf("GL account '%s - %s' is already linked to cash/bank account '%s'. Each cash/bank account must have its own unique GL account for proper balance tracking", 
+			account.Code, account.Name, existingCashBank.Name)
+	}
 		// GL is available, proceed
 		glAccount = account
 		log.Printf("✅ Using provided GL account %s - %s (verified unique)", account.Code, account.Name)
