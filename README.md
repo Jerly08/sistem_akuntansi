@@ -1,6 +1,13 @@
 # 📋 Aplikasi Sistem Akuntansi Modern
 
+**Version 2.0** | **Last Updated: October 2025** | **Production Ready**
+
 Sebuah aplikasi sistem akuntansi komprehensif yang menggabungkan backend API (Go) dan frontend web (Next.js) untuk mengelola seluruh aspek keuangan dan operasional bisnis modern. **Dilengkapi dengan Dark/Light Mode yang User-Friendly dan Multi-Language Support (Bahasa Indonesia & English)**.
+
+[![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go)](https://go.dev)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-12+-336791?logo=postgresql)](https://postgresql.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## ✨ Key Features Terbaru
 
@@ -16,6 +23,9 @@ Sebuah aplikasi sistem akuntansi komprehensif yang menggabungkan backend API (Go
 - **📊 Balance Monitoring System** - Automated balance sync dan anomaly detection
 - **🔍 Comprehensive Audit Trail** - Complete activity logging dengan forensic capabilities
 - **⚠️ Smart Notifications** - Intelligent alert system dengan customizable rules
+- **🔐 Session Management** - Auto-cleanup expired sessions dengan background worker
+- **🎯 RBAC System** - 7-level role-based access control dengan granular permissions
+- **🔄 Token Monitoring** - Advanced JWT token tracking dan auto-refresh
 
 ### 📈 **Enhanced Financial Reporting**
 - **📋 Professional Financial Reports** - PDF/Excel export dengan formatting profesional
@@ -69,14 +79,21 @@ app_sistem_akuntansi/
 ## 🚀 Stack Teknologi
 
 ### Backend (Go 1.23+)
-- **Framework**: Gin Web Framework untuk REST API
-- **Database**: PostgreSQL dengan GORM ORM
-- **Authentication**: JWT dengan refresh token mechanism
+- **Framework**: Gin Web Framework v1.10+ untuk REST API
+- **Database**: PostgreSQL 12+ dengan GORM v1.30 ORM
+- **Authentication**: JWT (golang-jwt/jwt v5.3) dengan refresh token mechanism
 - **Enhanced Security**: Advanced security monitoring, incident tracking, audit logging
-- **File Processing**: Excel/PDF export dengan professional formatting (excelize & gofpdf)
+- **File Processing**: 
+  - Excel export: excelize v2.9+
+  - PDF generation: gofpdf v1.16+
+  - Professional formatting templates
 - **Reporting Engine**: Multi-format report generation dengan standardized templates
-- **Middleware**: CORS, validation, security headers, rate limiting
+- **Decimal Handling**: shopspring/decimal v1.4 untuk presisi keuangan
+- **Migration**: Auto-migration system dengan rollback support
+- **Logging**: Structured logging dengan logrus v1.9
+- **Middleware**: CORS, validation, security headers, rate limiting, RBAC
 - **Architecture**: Clean Architecture dengan Repository Pattern
+- **API Documentation**: Swagger/OpenAPI dengan swaggo v1.16
 
 ### Frontend (Next.js 15)
 - **Framework**: Next.js 15 dengan App Router dan Turbopack
@@ -200,6 +217,9 @@ cd sistem_akuntansi
 ```
 
 ### 2. Setup Backend
+
+#### 2.1 Persiapan Environment
+
 ```bash
 cd backend
 
@@ -208,32 +228,94 @@ go mod tidy
 
 # Setup database PostgreSQL
 createdb sistem_akuntansi
-# atau untuk MySQL, buat database: CREATE DATABASE app_sistem_akuntansi;
+# atau untuk MySQL: CREATE DATABASE app_sistem_akuntansi;
 
 # Copy dan konfigurasi environment variables
 cp .env.example .env
-# Edit .env dengan konfigurasi database Anda:
-# DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME, JWT_SECRET
+```
 
-# 🛡️ CRITICAL: Setup Balance Protection System (WAJIB untuk PC baru!)
-# Windows:
-setup_balance_protection.bat
-# Linux/Mac:
-./setup_balance_protection.sh
-# Manual:
-go run cmd/scripts/setup_balance_sync_auto.go
+#### 2.2 Konfigurasi `.env`
 
+```env
+# Database Configuration (pilih salah satu)
+# Option 1: Full Connection String (Recommended)
+DATABASE_URL=postgres://username:password@localhost:5432/sistem_akuntansi?sslmode=disable
+
+# Option 2: Individual Parameters
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=your_password
+DB_NAME=sistem_akuntansi
+
+# Application Configuration
+SERVER_PORT=8080
+ENVIRONMENT=development  # development | production
+
+# Security
+JWT_SECRET=your-super-secret-jwt-key-min-32-chars
+JWT_EXPIRY=24h
+REFRESH_TOKEN_EXPIRY=168h  # 7 days
+
+# Optional: Swagger
+ENABLE_SWAGGER=true  # Set false di production
+```
+
+#### 2.3 Jalankan Aplikasi
+
+```bash
 # Jalankan backend server
 go run cmd/main.go
-# Server akan otomatis:
-# - Migrate database schema
-# - Seed initial data (users, accounts, categories)
-# - Initialize security monitoring
-# - Setup balance monitoring (jika belum di-setup manual)
-# - Start HTTP server
+
+# ✅ Server akan OTOMATIS menjalankan:
+# 1. ⚡ Connect ke database dan verify connection
+# 2. 🗄️  Auto-migrate database schema (GORM models)
+# 3. 🔄 Run SQL migrations (40+ migration files)
+# 4. 🛡️  Install balance sync system (triggers + functions)
+# 5. 📊 Install SSOT journal functions
+# 6. ✅ Verify invoice types system
+# 7. 📋 Setup approval workflows (Standard Purchase Approval)
+# 8. 🌱 Seed initial data:
+#    - Default users (admin, finance, director, employee, etc.)
+#    - Chart of accounts (Indonesian standard)
+#    - Product categories
+#    - Default invoice types
+# 9. 🔧 Fix account header status
+# 10. 🚀 Start HTTP server on port 8080
+# 11. 🧹 Start background session cleanup worker
+# 12. 📚 Generate Swagger documentation (if enabled)
+
+# 🎯 TIDAK perlu menjalankan script manual!
+# Semua setup otomatis pada first run.
 ```
+
 **Backend Server**: `http://localhost:8080`  
-**API Documentation**: `http://localhost:8080/api/v1/health`
+**Health Check**: `http://localhost:8080/api/v1/health`  
+**API Documentation**: `http://localhost:8080/swagger/index.html` (jika ENABLE_SWAGGER=true)
+
+#### 2.4 Troubleshooting
+
+**Problem: UUID Extension Error**
+```bash
+# Jalankan fix script
+go run apply_database_fixes.go
+go run cmd/main.go
+```
+
+**Problem: Migration Failed**
+```bash
+# Check migration logs
+psql -d sistem_akuntansi -c "SELECT * FROM migration_logs ORDER BY executed_at DESC LIMIT 10;"
+
+# Re-run aplikasi (migrations are idempotent)
+go run cmd/main.go
+```
+
+**Problem: Port Already in Use**
+```bash
+# Ubah port di .env
+SERVER_PORT=8081
+```
 
 ### 3. Setup Frontend
 ```bash
@@ -517,31 +599,56 @@ NEXT_PUBLIC_API_URL=https://your-api-domain.com/api/v1
 
 ## ✅ Implementation Status
 
-### ✅ Completed Features
-- [x] **Complete Authentication System** - JWT + Refresh tokens dengan auto-refresh
-- [x] **Enhanced Role-Based Access Control** - 7 user roles dengan granular permissions
-- [x] **Advanced Dark/Light Theme System** - Smart theme detection dengan smooth transitions
-- [x] **Multi-Language Support** - Complete Indonesian/English translation system
-- [x] **Sales Module** - End-to-end sales process dengan advanced calculations
+### ✅ Completed Features (Production Ready)
+
+#### 🔐 Authentication & Security
+- [x] **JWT Authentication** - JWT v5.3 + Refresh tokens dengan auto-refresh
+- [x] **RBAC System** - 7 user roles (Admin, Director, Finance, Inventory, Employee, Auditor, Operational)
+- [x] **Session Management** - Auto-cleanup dengan background worker
+- [x] **Token Monitoring** - Advanced JWT tracking dan security events
+- [x] **Security Incidents** - Real-time monitoring dan incident management
+- [x] **Audit Trail** - Forensic-level activity logging
+- [x] **Password Security** - bcrypt hashing dengan validation rules
+
+#### 📊 Core Business Modules
+- [x] **Sales Module** - End-to-end sales process (Quotation → Invoice → Payment)
 - [x] **Purchase Module** - Full procurement workflow dengan multi-level approvals
 - [x] **Inventory Management** - Real-time stock tracking dengan smart notifications
-- [x] **Enhanced Financial Management** - Advanced reporting dengan professional formatting
+- [x] **Financial Management** - Chart of accounts, journal entries, balance monitoring
 - [x] **Asset Management** - Fixed asset tracking dengan depreciation calculations
+- [x] **Cash & Bank** - Multi-account management, transfers, reconciliation
+
+#### 📈 Reporting & Analytics
+- [x] **Financial Reports** - P&L, Balance Sheet, Cash Flow dengan PDF/Excel export
 - [x] **Role-Specific Dashboards** - Personalized analytics untuk setiap user role
-- [x] **Smart Notification System** - Context-aware alerts dengan user preferences
-- [x] **Professional Export Features** - PDF/Excel reports dengan industry-standard formatting
-- [x] **Comprehensive Audit Trail** - Forensic-level activity logging
-- [x] **Enterprise Security Features** - Advanced security monitoring dan incident management
-- [x] **Balance Monitoring System** - Automated balance reconciliation
-- [x] **Financial Ratio Calculator** - Automated financial analysis tools
-- [x] **Unified Reporting Engine** - Standardized reporting framework
+- [x] **Financial Ratio Calculator** - Automated liquidity, profitability, efficiency analysis
+- [x] **Unified Reporting Engine** - Standardized framework dengan multiple formats
+- [x] **Invoice Types System** - Customizable invoice numbering dengan auto-counter
 
-### 🚧 In Progress
+#### 🎨 UI/UX Features
+- [x] **Dark/Light Theme** - Smart detection dengan smooth transitions
+- [x] **Multi-Language** - Complete ID/EN translation system
+- [x] **Responsive Design** - Mobile-first dengan Tailwind CSS + Chakra UI
+- [x] **Smart Notifications** - Context-aware alerts dengan user preferences
 
-- [ ] **API Documentation** - Swagger/OpenAPI specifications
-- [ ] **Comprehensive Unit Testing** - Backend dan frontend test coverage
-- [ ] **Performance Optimization** - Database query optimization dan caching
-- [ ] **Advanced User Permissions** - Field-level access control
+#### 🔧 Developer Features
+- [x] **Auto-Migration System** - Zero-manual-setup database initialization
+- [x] **Swagger Documentation** - Auto-generated API docs dengan swaggo
+- [x] **Debug Endpoints** - Development testing tools
+- [x] **Migration Logs** - Complete database change tracking
+- [x] **Balance Sync System** - Automated balance reconciliation dengan triggers
+- [x] **SSOT Journal** - Single Source of Truth accounting system
+
+### 🚧 Roadmap
+
+- [ ] **Comprehensive Unit Testing** - Backend dan frontend test coverage (Target: 80%+)
+- [ ] **Performance Optimization** - Database query optimization, Redis caching
+- [ ] **Advanced Permissions** - Field-level access control
+- [ ] **Export Templates** - Customizable report templates
+- [ ] **Budget Module** - Budget planning dan tracking
+- [ ] **Multi-Company** - Multi-entity support
+- [ ] **API Rate Limiting** - Per-user rate limiting
+- [ ] **Webhook Integration** - External system notifications
 
 ## 🎯 Key Highlights
 
@@ -590,25 +697,45 @@ NEXT_PUBLIC_API_URL=https://your-api-domain.com/api/v1
 - **Security Reports**: Use secure channels untuk reporting security vulnerabilities
 - **Feature Requests**: Submit detailed requirements dengan business justification
 
-## 🔥 What's New in Latest Version
+## 🔥 What's New in Version 2.0 (October 2025)
+
+### ⚡ **Performance & Stability**
+- 🚀 **Auto-Migration System** - Zero-manual-setup database initialization
+- 🔄 **Idempotent Migrations** - Safe to re-run, smart duplicate detection
+- 🏃 **Background Workers** - Session cleanup, balance sync automation
+- 📊 **40+ SQL Migrations** - Comprehensive database schema management
+- 🎯 **SSOT Journal System** - Single Source of Truth untuk accounting
+- 💾 **Decimal Precision** - shopspring/decimal untuk accurate financial calculations
 
 ### 🎨 **UI/UX Enhancements**
 - ✨ **Smart Dark/Light Theme** - Automatic theme detection dengan smooth transitions
 - 🌍 **Multi-Language Support** - Complete ID/EN translations dengan real-time switching
 - 📱 **Enhanced Mobile Experience** - Improved responsive design
 - 🎭 **Smooth Animations** - CSS-based transitions untuk professional feel
+- 🖼️ **Modern UI Components** - Chakra UI + Tailwind CSS + Radix UI
 
 ### 🔒 **Security Improvements**
 - 🛡️ **Security Monitoring Dashboard** - Real-time incident tracking
 - 📊 **Balance Monitoring System** - Automated reconciliation dengan anomaly detection
 - 🔍 **Enhanced Audit Trail** - Forensic-level logging capabilities
 - ⚠️ **Smart Alert System** - Context-aware notifications
+- 🔐 **Token Monitoring** - JWT session tracking dengan auto-refresh
+- 🧹 **Session Cleanup** - Auto-purge expired sessions
 
 ### 📈 **Advanced Reporting**
 - 📋 **Professional Report Templates** - Industry-standard formatting
 - 📊 **Real-time Financial Metrics** - Live dashboard updates
 - 🧮 **Financial Ratio Calculator** - Automated analysis tools
 - 📈 **Unified Reporting Engine** - Standardized framework
+- 📄 **Excel & PDF Export** - excelize v2.9 & gofpdf v1.16
+- 📊 **Invoice Types System** - Customizable invoice numbering
+
+### 🔧 **Developer Experience**
+- 📚 **Swagger Documentation** - Auto-generated API docs
+- 🧪 **Testing Tools** - Comprehensive test scripts
+- 🐛 **Debug Endpoints** - `/api/v1/debug/*` untuk development
+- 📝 **Migration Logs** - Track all database changes
+- 🔍 **Enhanced Error Messages** - Detailed error context
 
 ## 📄 License
 

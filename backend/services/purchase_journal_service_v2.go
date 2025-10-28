@@ -152,11 +152,13 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 	}
 
 	// CREDIT SIDE - Based on payment method
+	// Calculate net amount after withholdings (for cash/bank/AP credit)
+	netAmount := purchase.TotalAmount - purchase.PPh21Amount - purchase.PPh23Amount
 	
 	// Determine CREDIT side based on payment method
 	switch strings.ToUpper(strings.TrimSpace(purchase.PaymentMethod)) {
 	case "CASH":
-		// CASH → Credit Kas (1101)
+		// CASH → Credit Kas (1101) with net amount
 		if acc, err := resolveByCode("1101"); err == nil {
 			journalItems = append(journalItems, models.SimpleSSOTJournalItem{
 				JournalID:   ssotEntry.ID,
@@ -164,15 +166,15 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 				AccountCode: acc.Code,
 				AccountName: acc.Name,
 				Debit:       0,
-				Credit:      purchase.TotalAmount,
+				Credit:      netAmount,
 				Description: fmt.Sprintf("Cash payment for Purchase #%s", purchase.Code),
 			})
-			log.Printf("💵 CASH Payment: Credit to %s (%s) = %.2f", acc.Name, acc.Code, purchase.TotalAmount)
+			log.Printf("💵 CASH Payment: Credit to %s (%s) = %.2f", acc.Name, acc.Code, netAmount)
 		} else {
 			log.Printf("⚠️ Missing cash account 1101: %v", err)
 		}
 	case "BANK_TRANSFER", "BANK":
-		// BANK → Credit ke Bank (specific cash_bank account if available, otherwise 1102)
+		// BANK → Credit ke Bank (specific cash_bank account if available, otherwise 1102) with net amount
 		var acc *models.Account
 		if purchase.BankAccountID != nil && *purchase.BankAccountID > 0 {
 			var cashBank models.CashBank
@@ -198,13 +200,13 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 				AccountCode: acc.Code,
 				AccountName: acc.Name,
 				Debit:       0,
-				Credit:      purchase.TotalAmount,
+				Credit:      netAmount,
 				Description: fmt.Sprintf("Bank transfer for Purchase #%s", purchase.Code),
 			})
-			log.Printf("🏦 BANK Payment: Credit to %s (%s) = %.2f", acc.Name, acc.Code, purchase.TotalAmount)
+			log.Printf("🏦 BANK Payment: Credit to %s (%s) = %.2f", acc.Name, acc.Code, netAmount)
 		}
 	case "KREDIT", "CREDIT", "HUTANG":
-		// CREDIT Purchase → Credit Hutang Usaha (2101)
+		// CREDIT Purchase → Credit Hutang Usaha (2101) with net amount (after withholdings)
 		if acc, err := resolveByCode("2101"); err == nil {
 			journalItems = append(journalItems, models.SimpleSSOTJournalItem{
 				JournalID:   ssotEntry.ID,
@@ -212,10 +214,10 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 				AccountCode: acc.Code,
 				AccountName: acc.Name,
 				Debit:       0,
-				Credit:      purchase.TotalAmount,
+				Credit:      netAmount,
 				Description: fmt.Sprintf("Account payable for Purchase #%s", purchase.Code),
 			})
-			log.Printf("📋 CREDIT Purchase: Credit to %s (%s) = %.2f", acc.Name, acc.Code, purchase.TotalAmount)
+			log.Printf("📋 CREDIT Purchase: Credit to %s (%s) = %.2f (net after withholdings)", acc.Name, acc.Code, netAmount)
 		} else {
 			log.Printf("⚠️ Missing payable account 2101: %v", err)
 		}

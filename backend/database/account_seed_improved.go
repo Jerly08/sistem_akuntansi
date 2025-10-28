@@ -60,6 +60,10 @@ func SeedAccountsImproved(db *gorm.DB) error {
 			{Code: "2107", Name: strings.ToUpper("PEMOTONGAN PAJAK LAINNYA"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "2108", Name: strings.ToUpper("PENAMBAHAN PAJAK LAINNYA"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 			
+			// Specific withholding tax accounts for purchases
+			{Code: "2111", Name: strings.ToUpper("UTANG PPh 21"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			{Code: "2112", Name: strings.ToUpper("UTANG PPh 23"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+			
 			// Specific tax accounts for sales journal entries
 			{Code: "292", Name: strings.ToUpper("PENAMBAHAN PAJAK LAINNYA (SALES)"), Type: models.AccountTypeLiability, Category: models.CategoryCurrentLiability, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
 
@@ -254,6 +258,8 @@ func setParentRelationships(tx *gorm.DB, accountMap map[string]uint) error {
 		"2104": "2100", // PPh Yang Dipotong -> CURRENT LIABILITIES
 		"2107": "2100", // Pemotongan Pajak Lainnya -> CURRENT LIABILITIES
 		"2108": "2100", // Penambahan Pajak Lainnya -> CURRENT LIABILITIES
+		"2111": "2100", // Utang PPh 21 -> CURRENT LIABILITIES
+		"2112": "2100", // Utang PPh 23 -> CURRENT LIABILITIES
 		"292":  "2100", // Penambahan Pajak Lainnya (Sales) -> CURRENT LIABILITIES
 		"3101": "3000", // Modal Pemilik -> EQUITY
 		"3201": "3000", // Laba Ditahan -> EQUITY

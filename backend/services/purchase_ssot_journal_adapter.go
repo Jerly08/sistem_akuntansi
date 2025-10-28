@@ -235,6 +235,9 @@ func (adapter *PurchaseSSOTJournalAdapter) buildPurchaseJournalLines(
 		})
 	}
 
+	// Calculate net amount after withholdings
+	netAmount := purchase.TotalAmount - purchase.PPh21Amount - purchase.PPh23Amount
+
     // Credit side based on payment method
     if purchase.PaymentMethod == models.PurchasePaymentCash ||
         purchase.PaymentMethod == models.PurchasePaymentTransfer ||
@@ -257,15 +260,15 @@ func (adapter *PurchaseSSOTJournalAdapter) buildPurchaseJournalLines(
             AccountID:    creditAccountID,
             Description:  fmt.Sprintf("%s Payment - %s", purchase.PaymentMethod, purchase.Vendor.Name),
             DebitAmount:  decimal.Zero,
-            CreditAmount: decimal.NewFromFloat(purchase.TotalAmount),
+            CreditAmount: decimal.NewFromFloat(netAmount),
         })
     } else {
-        // Credit purchase: credit AP
+        // Credit purchase: credit AP (net of withholdings)
         lines = append(lines, JournalLineRequest{
             AccountID:    accountIDs.AccountsPayableID,
             Description:  fmt.Sprintf("Accounts Payable - %s", purchase.Vendor.Name),
             DebitAmount:  decimal.Zero,
-            CreditAmount: decimal.NewFromFloat(purchase.TotalAmount),
+            CreditAmount: decimal.NewFromFloat(netAmount),
         })
     }
 
