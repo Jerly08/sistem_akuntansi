@@ -236,7 +236,7 @@ func (adapter *PurchaseSSOTJournalAdapter) buildPurchaseJournalLines(
 	}
 
 	// Calculate net amount after withholdings
-	netAmount := purchase.TotalAmount - purchase.PPh21Amount - purchase.PPh23Amount
+	netAmount := purchase.TotalAmount - purchase.PPh21Amount - purchase.PPh23Amount - purchase.OtherTaxDeductions
 
     // Credit side based on payment method
     if purchase.PaymentMethod == models.PurchasePaymentCash ||

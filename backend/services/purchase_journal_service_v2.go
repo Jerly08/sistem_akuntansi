@@ -153,7 +153,7 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 
 	// CREDIT SIDE - Based on payment method
 	// Calculate net amount after withholdings (for cash/bank/AP credit)
-	netAmount := purchase.TotalAmount - purchase.PPh21Amount - purchase.PPh23Amount
+	netAmount := purchase.TotalAmount - purchase.PPh21Amount - purchase.PPh23Amount - purchase.OtherTaxDeductions
 	
 	// Determine CREDIT side based on payment method
 	switch strings.ToUpper(strings.TrimSpace(purchase.PaymentMethod)) {
