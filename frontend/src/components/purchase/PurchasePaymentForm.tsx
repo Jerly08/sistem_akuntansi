@@ -111,8 +111,12 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
     e.preventDefault();
     if (!purchase) return;
 
+    // Round amount to ensure it's an integer (no decimals for IDR)
+    const roundedAmount = Math.round(formData.amount);
+    const dataToSubmit = { ...formData, amount: roundedAmount };
+
     // Enhanced Validation
-    if (!formData.amount || formData.amount <= 0) {
+    if (!roundedAmount || roundedAmount <= 0) {
       toast({
         title: 'Validation Error',
         description: 'Payment amount must be greater than zero',
@@ -124,11 +128,11 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
     }
 
     // Strict validation: prevent exceeding outstanding amount
-    if (formData.amount > (purchase.outstanding_amount || 0)) {
+    if (roundedAmount > (purchase.outstanding_amount || 0)) {
       const maxAmount = purchase.outstanding_amount || 0;
       toast({
         title: 'Payment Amount Too High ⚠️',
-        description: `Payment amount ${formatCurrency(formData.amount)} exceeds outstanding balance ${formatCurrency(maxAmount)}. Maximum allowed: ${formatCurrency(maxAmount)}`,
+        description: `Payment amount ${formatCurrency(roundedAmount)} exceeds outstanding balance ${formatCurrency(maxAmount)}. Maximum allowed: ${formatCurrency(maxAmount)}`,
         status: 'error',
         duration: 6000,
         isClosable: true,
@@ -138,7 +142,7 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
 
     // Additional validation for minimum payment amount (optional: can be removed if not needed)
     const minPayment = 1000; // Rp 1,000 minimum
-    if (formData.amount < minPayment) {
+    if (roundedAmount < minPayment) {
       toast({
         title: 'Minimum Payment Required',
         description: `Payment amount must be at least ${formatCurrency(minPayment)}`,
@@ -149,7 +153,7 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
       return;
     }
 
-    if (!formData.cash_bank_id) {
+    if (!dataToSubmit.cash_bank_id) {
       toast({
         title: 'Validation Error',
         description: 'Please select a cash/bank account',
@@ -161,7 +165,7 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
     }
 
     // Balance validation - prevent payments when insufficient balance
-    const selectedAccount = cashBanks.find(account => account.id === formData.cash_bank_id);
+    const selectedAccount = cashBanks.find(account => account.id === dataToSubmit.cash_bank_id);
     if (selectedAccount) {
       if (selectedAccount.balance <= 0) {
         toast({
@@ -174,11 +178,11 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
         return;
       }
       
-      if (formData.amount > selectedAccount.balance) {
+      if (roundedAmount > selectedAccount.balance) {
         toast({
           title: 'Insufficient Balance ⚠️',
           description: (
-            `Payment amount ${formatCurrency(formData.amount)} exceeds available balance ${formatCurrency(selectedAccount.balance)} ` +
+            `Payment amount ${formatCurrency(roundedAmount)} exceeds available balance ${formatCurrency(selectedAccount.balance)} ` +
             `in account "${selectedAccount.name}". ` +
             `Please reduce the payment amount or select a different account.`
           ),
@@ -193,7 +197,7 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
     setLoading(true);
     try {
       // Use the new Payment Management integration endpoint
-      const result = await purchaseService.createPurchasePayment(purchase.id, formData);
+      const result = await purchaseService.createPurchasePayment(purchase.id, dataToSubmit);
       
       // Avoid duplicate success toasts.
       // If a parent onSuccess handler is provided, let the parent show the toast.
@@ -428,7 +432,8 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
                     variant="outline"
                     colorScheme="blue"
                     onClick={() => {
-                      const amount = Math.round((purchase.outstanding_amount || 0) * 0.25);
+                      // Use floor to ensure consistent integer amounts
+                      const amount = Math.floor((purchase.outstanding_amount || 0) * 0.25);
                       setFormData(prev => ({ ...prev, amount }));
                       setDisplayAmount(formatRupiah(amount));
                     }}
@@ -441,7 +446,8 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
                     variant="outline"
                     colorScheme="blue"
                     onClick={() => {
-                      const amount = Math.round((purchase.outstanding_amount || 0) * 0.5);
+                      // Use floor to ensure total doesn't exceed outstanding when split 50/50
+                      const amount = Math.floor((purchase.outstanding_amount || 0) * 0.5);
                       setFormData(prev => ({ ...prev, amount }));
                       setDisplayAmount(formatRupiah(amount));
                     }}
@@ -454,7 +460,8 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
                     variant="outline"
                     colorScheme="orange"
                     onClick={() => {
-                      const amount = Math.round((purchase.outstanding_amount || 0) * 0.8);
+                      // Use floor to ensure consistent integer amounts
+                      const amount = Math.floor((purchase.outstanding_amount || 0) * 0.8);
                       setFormData(prev => ({ ...prev, amount }));
                       setDisplayAmount(formatRupiah(amount));
                     }}

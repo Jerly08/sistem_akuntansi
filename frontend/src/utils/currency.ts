@@ -26,12 +26,15 @@ export const formatIDR = (
     return showSymbol ? 'Rp 0' : '0';
   }
 
+  // Round value to remove any floating point precision errors
+  const roundedValue = Math.round(value);
+
   const formatted = new Intl.NumberFormat('id-ID', {
     style: showSymbol ? 'currency' : 'decimal',
     currency: 'IDR',
     minimumFractionDigits,
     maximumFractionDigits,
-  }).format(value);
+  }).format(roundedValue);
 
   return formatted;
 };

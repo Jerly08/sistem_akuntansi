@@ -196,7 +196,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
                       color={account.balance < 0 ? 'red.500' : 'green.600'}
                       fontFamily="mono"
                     >
-                      {account.currency} {Math.abs(account.balance).toLocaleString('id-ID')}
+                      {account.currency} {Math.abs(account.balance).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
                       {account.balance < 0 && ' (Dr)'}
                     </StatNumber>
                   </Stat>
@@ -352,7 +352,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
                                 fontWeight="medium"
                                 color={isPositive ? 'green.600' : 'red.600'}
                               >
-                                {isPositive ? '+' : ''}{account.currency} {Math.abs(transaction.amount).toLocaleString('id-ID')}
+                                {isPositive ? '+' : ''}{account.currency} {Math.abs(transaction.amount).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
                               </Text>
                             </Td>
                             <Td isNumeric>
@@ -361,7 +361,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({
                                 fontFamily="mono"
                                 color={transaction.balance_after < 0 ? 'red.500' : 'gray.700'}
                               >
-                                {account.currency} {Math.abs(transaction.balance_after).toLocaleString('id-ID')}
+                                {account.currency} {Math.abs(transaction.balance_after).toLocaleString('id-ID', { maximumFractionDigits: 0 })}
                                 {transaction.balance_after < 0 && ' (Dr)'}
                               </Text>
                             </Td>

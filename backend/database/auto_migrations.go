@@ -140,6 +140,11 @@ func RunAutoMigrations(db *gorm.DB) error {
 		log.Printf("⚠️  AUDIT_LOGS SCHEMA FIX FAILED: %v", err)
 	}
 
+	// Fix activity_logs user_id constraint for anonymous users (smart skip)
+	if err := FixActivityLogsUserIDMigration(db); err != nil {
+		log.Printf("⚠️  ACTIVITY_LOGS USER_ID FIX FAILED: %v", err)
+	}
+
 	log.Println("✅ Auto-migrations completed")
 	return nil
 }

@@ -965,10 +965,12 @@ const CashBankPage: React.FC = () => {
       <Modal isOpen={isDetailModalOpen} onClose={onDetailModalClose} size="4xl" scrollBehavior="inside">
         <ModalOverlay bg="blackAlpha.600" backdropFilter="blur(10px)" />
         <ModalContent 
-          maxH="95vh" 
+          maxH="90vh" 
           maxW={{ base: '95vw', md: '90vw', lg: '70vw' }}
           mx={4}
           bg={modalContentBg}
+          display="flex"
+          flexDirection="column"
         >
           {/* Payment Modal Style Header */}
           <ModalHeader 
@@ -1022,7 +1024,7 @@ const CashBankPage: React.FC = () => {
           </ModalHeader>
           <ModalCloseButton color="white" />
           
-          <ModalBody p={6}>
+          <ModalBody p={6} overflowY="auto" flex="1">
             {selectedAccount && (
               <VStack spacing={6} align="stretch">
                 {/* Balance Hero Section */}
