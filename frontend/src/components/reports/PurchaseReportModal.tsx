@@ -207,7 +207,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="6xl" scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent bg={modalBg}>
+      <ModalContent bg={modalBg} maxW="90vw">
         <ModalHeader>
           <HStack>
             <Icon as={FiShoppingCart} color="orange.500" />
@@ -223,7 +223,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
         </ModalHeader>
         <ModalCloseButton />
         
-        <ModalBody pb={6}>
+        <ModalBody pb={6} px={8}>
           {/* Date Range Controls - Moved to top like other modals */}
           <Box mb={4}>
             <HStack spacing={4} mb={4} flexWrap="wrap">

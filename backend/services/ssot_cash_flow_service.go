@@ -431,7 +431,7 @@ func (s *SSOTCashFlowService) categorizeCashFlowTransaction(cfData *SSOTCashFlow
 		cfData.OperatingActivities.WorkingCapitalChanges.Items = append(cfData.OperatingActivities.WorkingCapitalChanges.Items, item)
 		
 	// Investing Activities
-	case strings.HasPrefix(code, "12") || strings.HasPrefix(code, "16") || strings.HasPrefix(code, "17"): // Fixed Assets
+	case strings.HasPrefix(code, "16") || strings.HasPrefix(code, "17"): // Fixed Assets (Activa Tetap)
 		if amount > 0 {
 			cfData.InvestingActivities.PurchaseOfFixedAssets += amount * -1 // Purchase is cash outflow
 			item.Type = "outflow"
