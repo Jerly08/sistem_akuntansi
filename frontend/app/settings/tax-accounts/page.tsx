@@ -108,6 +108,41 @@ interface TaxAccountSettings {
   updated_at: string;
 }
 
+interface TaxConfig {
+  id?: number;
+  config_name: string;
+  description: string;
+  
+  // Sales tax rates
+  sales_ppn_rate: number;
+  sales_pph21_rate: number;
+  sales_pph23_rate: number;
+  sales_other_tax_rate: number;
+  
+  // Purchase tax rates
+  purchase_ppn_rate: number;
+  purchase_pph21_rate: number;
+  purchase_pph23_rate: number;
+  purchase_pph25_rate: number;
+  purchase_other_tax_rate: number;
+  
+  // Additional settings
+  shipping_taxable: boolean;
+  discount_before_tax: boolean;
+  rounding_method: string;
+  
+  is_active: boolean;
+  is_default: boolean;
+  notes: string;
+  updated_by_user?: {
+    id: number;
+    name: string;
+    username: string;
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface AccountSuggestions {
   sales: {
     [key: string]: {
@@ -585,9 +620,9 @@ const TaxAccountSettingsPage: React.FC = () => {
           {/* Header */}
           <HStack justify="space-between" width="full">
             <VStack alignItems="start" spacing={2}>
-              <Heading as="h1" size="xl">Tax Account Settings</Heading>
+              <Heading as="h1" size="xl">Withholding Tax Account Settings</Heading>
               <Text color="gray.600" fontSize="sm">
-                Configure account mappings for sales and purchase transactions
+                Configure withholding tax accounts for PPh 21, PPh 23, PPh 25, and other tax obligations
               </Text>
             </VStack>
             
@@ -655,274 +690,58 @@ const TaxAccountSettingsPage: React.FC = () => {
             </Alert>
           )}
 
-          {/* Main Content */}
-          <Tabs width="full" variant="enclosed" colorScheme="blue">
-            <TabList>
-              <Tab>
-                <HStack spacing={2}>
-                  <Icon as={FiShoppingCart} />
-                  <Text>Sales Accounts</Text>
+          {/* Main Content - Withholding Tax Accounts Only */}
+          <Box width="full">
+                <Box width="full">
+            <Card>
+              <CardHeader>
+                <HStack spacing={3}>
+                  <Icon as={FiDollarSign} boxSize={5} color={greenColor} />
+                  <Heading size="md">Withholding Tax Accounts</Heading>
+                  <Badge colorScheme="gray" size="sm">Optional</Badge>
                 </HStack>
-              </Tab>
-              <Tab>
-                <HStack spacing={2}>
-                  <Icon as={FiCreditCard} />
-                  <Text>Purchase Accounts</Text>
-                </HStack>
-              </Tab>
-              <Tab>
-                <HStack spacing={2}>
-                  <Icon as={FiDollarSign} />
-                  <Text>Tax & Other Accounts</Text>
-                </HStack>
-              </Tab>
-            </TabList>
-
-            <TabPanels>
-              {/* Sales Accounts Tab */}
-              <TabPanel>
+              </CardHeader>
+              <CardBody>
                 <SimpleGrid columns={[1, 1, 2]} spacing={6}>
-                  <Card>
-                    <CardHeader>
-                      <HStack spacing={3}>
-                        <Icon as={FiShoppingCart} boxSize={5} color={blueColor} />
-                        <Heading size="md">Sales Transaction Accounts</Heading>
-                      </HStack>
-                    </CardHeader>
-                    <CardBody>
-                      <VStack spacing={4} alignItems="start">
-                        {renderAccountSelect(
-                          'sales_receivable',
-                          'Receivable Account',
-                          true,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'Used for credit sales (Piutang Usaha)'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'sales_cash',
-                          'Cash Account',
-                          true,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'Used for cash sales'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'sales_bank',
-                          'Bank Account',
-                          true,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'Used for bank transfer sales'
-                        )}
-                      </VStack>
-                    </CardBody>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <HStack spacing={3}>
-                        <Icon as={FiActivity} boxSize={5} color={greenColor} />
-                        <Heading size="md">Revenue & Tax Accounts</Heading>
-                      </HStack>
-                    </CardHeader>
-                    <CardBody>
-                      <VStack spacing={4} alignItems="start">
-                        {renderAccountSelect(
-                          'sales_revenue',
-                          'Revenue Account',
-                          true,
-                          ['REVENUE'],
-                          ['SALES_REVENUE', 'OPERATING_REVENUE'],
-                          'Main revenue account for sales'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'sales_output_vat',
-                          'Output VAT Account',
-                          true,
-                          ['LIABILITY'],
-                          ['CURRENT_LIABILITY'],
-                          'PPN Keluaran - for sales tax obligation'
-                        )}
-                      </VStack>
-                    </CardBody>
-                  </Card>
+                  {renderAccountSelect(
+                    'withholding_tax21',
+                    'PPh 21 Account',
+                    false,
+                    ['ASSET'],
+                    ['CURRENT_ASSET'],
+                    'For employee income tax withholding'
+                  )}
+                  
+                  {renderAccountSelect(
+                    'withholding_tax23',
+                    'PPh 23 Account',
+                    false,
+                    ['ASSET'],
+                    ['CURRENT_ASSET'],
+                    'For vendor service tax withholding'
+                  )}
+                  
+                  {renderAccountSelect(
+                    'withholding_tax25',
+                    'PPh 25 Account',
+                    false,
+                    ['ASSET'],
+                    ['CURRENT_ASSET'],
+                    'For installment tax payments'
+                  )}
+                  
+                  {renderAccountSelect(
+                    'tax_payable',
+                    'Tax Payable Account',
+                    false,
+                    ['LIABILITY'],
+                    ['CURRENT_LIABILITY'],
+                    'For other tax obligations'
+                  )}
                 </SimpleGrid>
-              </TabPanel>
-
-              {/* Purchase Accounts Tab */}
-              <TabPanel>
-                <SimpleGrid columns={[1, 1, 2]} spacing={6}>
-                  <Card>
-                    <CardHeader>
-                      <HStack spacing={3}>
-                        <Icon as={FiCreditCard} boxSize={5} color={purpleColor} />
-                        <Heading size="md">Purchase Transaction Accounts</Heading>
-                      </HStack>
-                    </CardHeader>
-                    <CardBody>
-                      <VStack spacing={4} alignItems="start">
-                        {renderAccountSelect(
-                          'purchase_payable',
-                          'Payable Account',
-                          true,
-                          ['LIABILITY'],
-                          ['CURRENT_LIABILITY'],
-                          'Used for credit purchases (Hutang Usaha)'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'purchase_cash',
-                          'Cash Account',
-                          true,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'Used for cash purchases'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'purchase_bank',
-                          'Bank Account',
-                          true,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'Used for bank transfer purchases'
-                        )}
-                      </VStack>
-                    </CardBody>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <HStack spacing={3}>
-                        <Icon as={FiActivity} boxSize={5} color={orangeColor} />
-                        <Heading size="md">Expense & Tax Accounts</Heading>
-                      </HStack>
-                    </CardHeader>
-                    <CardBody>
-                      <VStack spacing={4} alignItems="start">
-                        {renderAccountSelect(
-                          'purchase_input_vat',
-                          'Input VAT Account',
-                          true,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'PPN Masukan - for claimable purchase tax'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'purchase_expense',
-                          'Default Expense Account',
-                          true,
-                          ['EXPENSE'],
-                          ['OPERATING_EXPENSE', 'ADMINISTRATIVE_EXPENSE'],
-                          'Default account for purchase expenses'
-                        )}
-                      </VStack>
-                    </CardBody>
-                  </Card>
-                </SimpleGrid>
-              </TabPanel>
-
-              {/* Tax & Other Accounts Tab */}
-              <TabPanel>
-                <SimpleGrid columns={[1, 1, 2]} spacing={6}>
-                  <Card>
-                    <CardHeader>
-                      <HStack spacing={3}>
-                        <Icon as={FiDollarSign} boxSize={5} color={greenColor} />
-                        <Heading size="md">Withholding Tax Accounts</Heading>
-                        <Badge colorScheme="gray" size="sm">Optional</Badge>
-                      </HStack>
-                    </CardHeader>
-                    <CardBody>
-                      <VStack spacing={4} alignItems="start">
-                        {renderAccountSelect(
-                          'withholding_tax21',
-                          'PPh 21 Account',
-                          false,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'For employee income tax withholding'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'withholding_tax23',
-                          'PPh 23 Account',
-                          false,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'For vendor service tax withholding'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'withholding_tax25',
-                          'PPh 25 Account',
-                          false,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'For installment tax payments'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'tax_payable',
-                          'Tax Payable Account',
-                          false,
-                          ['LIABILITY'],
-                          ['CURRENT_LIABILITY'],
-                          'For other tax obligations'
-                        )}
-                      </VStack>
-                    </CardBody>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <HStack spacing={3}>
-                        <Icon as={FiSettings} boxSize={5} color={purpleColor} />
-                        <Heading size="md">Inventory Accounts</Heading>
-                        <Badge colorScheme="gray" size="sm">Optional</Badge>
-                      </HStack>
-                    </CardHeader>
-                    <CardBody>
-                      <VStack spacing={4} alignItems="start">
-                        {renderAccountSelect(
-                          'inventory',
-                          'Inventory Account',
-                          false,
-                          ['ASSET'],
-                          ['CURRENT_ASSET'],
-                          'For inventory/stock management'
-                        )}
-                        <Divider />
-                        
-                        {renderAccountSelect(
-                          'cogs',
-                          'Cost of Goods Sold',
-                          false,
-                          ['EXPENSE'],
-                          ['COST_OF_GOODS_SOLD'],
-                          'For recording cost of sold items'
-                        )}
-                      </VStack>
-                    </CardBody>
-                  </Card>
-                </SimpleGrid>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
+              </CardBody>
+            </Card>
+          </Box>
 
           {/* Current Status */}
           {settings && (
@@ -930,118 +749,193 @@ const TaxAccountSettingsPage: React.FC = () => {
               <CardHeader>
                 <HStack spacing={2}>
                   <Icon as={FiCheck} color="green.500" />
-                  <Heading size="sm">Current Configuration Status</Heading>
+                  <Heading size="sm">Current Withholding Tax Configuration</Heading>
                 </HStack>
               </CardHeader>
               <CardBody>
-                <SimpleGrid columns={[1, 2, 4]} spacing={4}>
-                  <VStack spacing={1} alignItems="start">
-                    <Text fontSize="xs" color="gray.500">SALES ACCOUNTS</Text>
-                    <Text fontSize="sm" fontWeight="bold">
-                      {settings.sales_receivable_account?.code} - {settings.sales_receivable_account?.name}
-                    </Text>
-                    <Text fontSize="sm">
-                      {settings.sales_revenue_account?.code} - {settings.sales_revenue_account?.name}
-                    </Text>
+                <SimpleGrid columns={[1, 2, 3]} spacing={6}>
+                  <VStack spacing={2} alignItems="start">
+                    <Text fontSize="xs" color="gray.500" fontWeight="bold">PPh 21 (Employee Tax)</Text>
+                    {settings.withholding_tax21_account ? (
+                      <HStack spacing={2}>
+                        <Badge colorScheme="green">Configured</Badge>
+                        <Text fontSize="sm">
+                          {settings.withholding_tax21_account?.code} - {settings.withholding_tax21_account?.name}
+                        </Text>
+                      </HStack>
+                    ) : (
+                      <HStack spacing={2}>
+                        <Badge colorScheme="gray">Not Set</Badge>
+                        <Text fontSize="xs" color="gray.500">Optional</Text>
+                      </HStack>
+                    )}
                   </VStack>
-                  <VStack spacing={1} alignItems="start">
-                    <Text fontSize="xs" color="gray.500">PURCHASE ACCOUNTS</Text>
-                    <Text fontSize="sm" fontWeight="bold">
-                      {settings.purchase_payable_account?.code} - {settings.purchase_payable_account?.name}
-                    </Text>
-                    <Text fontSize="sm">
-                      {settings.purchase_input_vat_account?.code} - {settings.purchase_input_vat_account?.name}
-                    </Text>
+
+                  <VStack spacing={2} alignItems="start">
+                    <Text fontSize="xs" color="gray.500" fontWeight="bold">PPh 23 (Vendor Tax)</Text>
+                    {settings.withholding_tax23_account ? (
+                      <HStack spacing={2}>
+                        <Badge colorScheme="green">Configured</Badge>
+                        <Text fontSize="sm">
+                          {settings.withholding_tax23_account?.code} - {settings.withholding_tax23_account?.name}
+                        </Text>
+                      </HStack>
+                    ) : (
+                      <HStack spacing={2}>
+                        <Badge colorScheme="gray">Not Set</Badge>
+                        <Text fontSize="xs" color="gray.500">Optional</Text>
+                      </HStack>
+                    )}
                   </VStack>
-                  <VStack spacing={1} alignItems="start">
-                    <Text fontSize="xs" color="gray.500">TAX ACCOUNTS</Text>
-                    <Text fontSize="sm">
-                      Output VAT: {settings.sales_output_vat_account?.code}
-                    </Text>
-                    <Text fontSize="sm">
-                      Input VAT: {settings.purchase_input_vat_account?.code}
-                    </Text>
+
+                  <VStack spacing={2} alignItems="start">
+                    <Text fontSize="xs" color="gray.500" fontWeight="bold">PPh 25 (Installment Tax)</Text>
+                    {settings.withholding_tax25_account ? (
+                      <HStack spacing={2}>
+                        <Badge colorScheme="green">Configured</Badge>
+                        <Text fontSize="sm">
+                          {settings.withholding_tax25_account?.code} - {settings.withholding_tax25_account?.name}
+                        </Text>
+                      </HStack>
+                    ) : (
+                      <HStack spacing={2}>
+                        <Badge colorScheme="gray">Not Set</Badge>
+                        <Text fontSize="xs" color="gray.500">Optional</Text>
+                      </HStack>
+                    )}
                   </VStack>
-                  <VStack spacing={1} alignItems="start">
-                    <Text fontSize="xs" color="gray.500">STATUS</Text>
-                    <Badge colorScheme={settings.is_active ? 'green' : 'gray'}>
+
+                  <VStack spacing={2} alignItems="start">
+                    <Text fontSize="xs" color="gray.500" fontWeight="bold">Tax Payable</Text>
+                    {settings.tax_payable_account ? (
+                      <HStack spacing={2}>
+                        <Badge colorScheme="green">Configured</Badge>
+                        <Text fontSize="sm">
+                          {settings.tax_payable_account?.code} - {settings.tax_payable_account?.name}
+                        </Text>
+                      </HStack>
+                    ) : (
+                      <HStack spacing={2}>
+                        <Badge colorScheme="gray">Not Set</Badge>
+                        <Text fontSize="xs" color="gray.500">Optional</Text>
+                      </HStack>
+                    )}
+                  </VStack>
+
+                  <VStack spacing={2} alignItems="start">
+                    <Text fontSize="xs" color="gray.500" fontWeight="bold">Configuration Status</Text>
+                    <Badge colorScheme={settings.is_active ? 'green' : 'gray'} fontSize="sm">
                       {settings.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                     <Text fontSize="xs" color="gray.500">
-                      Updated: {new Date(settings.updated_at).toLocaleDateString()}
+                      Last updated: {new Date(settings.updated_at).toLocaleDateString()}
+                    </Text>
+                  </VStack>
+
+                  <VStack spacing={2} alignItems="start">
+                    <Text fontSize="xs" color="gray.500" fontWeight="bold">Updated By</Text>
+                    <Text fontSize="sm">{settings.updated_by_user?.name || 'System'}</Text>
+                    <Text fontSize="xs" color="gray.500">
+                      {new Date(settings.updated_at).toLocaleTimeString()}
                     </Text>
                   </VStack>
                 </SimpleGrid>
               </CardBody>
             </Card>
           )}
+          </Box>
         </VStack>
 
         {/* Suggestions Modal */}
-        <Modal isOpen={isSuggestionsOpen} onClose={onSuggestionsClose} size="6xl">
+        <Modal isOpen={isSuggestionsOpen} onClose={onSuggestionsClose} size="4xl">
           <ModalOverlay />
           <ModalContent>
-            <ModalHeader>Account Configuration Suggestions</ModalHeader>
+            <ModalHeader>
+              <HStack spacing={3}>
+                <Icon as={FiInfo} color="blue.500" />
+                <Text>Withholding Tax Account Suggestions</Text>
+              </HStack>
+            </ModalHeader>
             <ModalCloseButton />
             <ModalBody>
-              {suggestions && (
-                <VStack spacing={6} alignItems="start">
-                  <Text color="gray.600">
-                    Use these recommendations to help configure your tax accounts properly.
-                  </Text>
+              {suggestions && suggestions.tax && (
+                <VStack spacing={6} alignItems="start" width="full">
+                  <Alert status="info" variant="left-accent">
+                    <AlertIcon />
+                    <Box>
+                      <AlertTitle fontSize="sm">Account Configuration Guide</AlertTitle>
+                      <AlertDescription fontSize="xs">
+                        Use these recommendations to help configure your withholding tax accounts. All accounts are optional.
+                      </AlertDescription>
+                    </Box>
+                  </Alert>
                   
-                  <Tabs variant="enclosed" width="full">
-                    <TabList>
-                      <Tab>Sales</Tab>
-                      <Tab>Purchase</Tab>
-                      <Tab>Tax</Tab>
-                      <Tab>Inventory</Tab>
-                    </TabList>
-                    
-                    <TabPanels>
-                      {['sales', 'purchase', 'tax', 'inventory'].map((category) => (
-                        <TabPanel key={category}>
-                          <SimpleGrid columns={[1, 2]} spacing={4}>
-                            {Object.entries(suggestions[category as keyof AccountSuggestions] || {}).map(([key, suggestion]) => (
-                              <Card key={key} size="sm" variant="outline">
-                                <CardBody>
-                                  <VStack spacing={2} alignItems="start">
-                                    <Text fontWeight="bold" fontSize="sm">
-                                      {key.replace(/_/g, ' ').toUpperCase()}
-                                    </Text>
-                                    <Text fontSize="xs" color="gray.600">
-                                      {suggestion.description}
-                                    </Text>
-                                    <HStack spacing={2} wrap="wrap">
-                                      <Text fontSize="xs">Suggested codes:</Text>
-                                      {suggestion.suggested_codes.map((code) => (
-                                        <Badge key={code} colorScheme="blue" size="sm">
-                                          {code}
-                                        </Badge>
-                                      ))}
-                                    </HStack>
-                                    <HStack spacing={2} wrap="wrap">
-                                      <Text fontSize="xs">Types:</Text>
-                                      {suggestion.recommended_types.map((type) => (
-                                        <Badge key={type} colorScheme="gray" size="sm">
-                                          {type}
-                                        </Badge>
-                                      ))}
-                                    </HStack>
-                                  </VStack>
-                                </CardBody>
-                              </Card>
-                            ))}
-                          </SimpleGrid>
-                        </TabPanel>
-                      ))}
-                    </TabPanels>
-                  </Tabs>
+                  <SimpleGrid columns={[1, 1, 2]} spacing={4} width="full">
+                    {Object.entries(suggestions.tax || {}).map(([key, suggestion]) => (
+                      <Card key={key} size="sm" variant="outline" borderWidth="2px">
+                        <CardHeader pb={2}>
+                          <HStack spacing={2}>
+                            <Icon as={FiDollarSign} color="green.500" />
+                            <Text fontWeight="bold" fontSize="md">
+                              {key.replace(/_/g, ' ').toUpperCase()}
+                            </Text>
+                          </HStack>
+                        </CardHeader>
+                        <CardBody pt={0}>
+                          <VStack spacing={3} alignItems="start">
+                            <Text fontSize="sm" color="gray.600">
+                              {suggestion.description}
+                            </Text>
+                            <Divider />
+                            <Box width="full">
+                              <Text fontSize="xs" fontWeight="semibold" mb={1}>Suggested Account Codes:</Text>
+                              <HStack spacing={2} wrap="wrap">
+                                {suggestion.suggested_codes.map((code) => (
+                                  <Badge key={code} colorScheme="blue" fontSize="xs" px={2} py={1}>
+                                    {code}
+                                  </Badge>
+                                ))}
+                              </HStack>
+                            </Box>
+                            <Box width="full">
+                              <Text fontSize="xs" fontWeight="semibold" mb={1}>Account Types:</Text>
+                              <HStack spacing={2} wrap="wrap">
+                                {suggestion.recommended_types.map((type) => (
+                                  <Badge key={type} colorScheme="purple" fontSize="xs" px={2} py={1}>
+                                    {type}
+                                  </Badge>
+                                ))}
+                              </HStack>
+                            </Box>
+                            <Box width="full">
+                              <Text fontSize="xs" fontWeight="semibold" mb={1}>Categories:</Text>
+                              <HStack spacing={2} wrap="wrap">
+                                {suggestion.recommended_categories.map((cat) => (
+                                  <Badge key={cat} colorScheme="gray" fontSize="xs" px={2} py={1}>
+                                    {cat}
+                                  </Badge>
+                                ))}
+                              </HStack>
+                            </Box>
+                          </VStack>
+                        </CardBody>
+                      </Card>
+                    ))}
+                  </SimpleGrid>
+                  
+                  <Alert status="warning" variant="left-accent">
+                    <AlertIcon />
+                    <Box>
+                      <AlertDescription fontSize="xs">
+                        💡 <strong>Note:</strong> These are optional configurations. Only configure the tax accounts that are relevant to your business operations.
+                      </AlertDescription>
+                    </Box>
+                  </Alert>
                 </VStack>
               )}
             </ModalBody>
             <ModalFooter>
-              <Button onClick={onSuggestionsClose}>Close</Button>
+              <Button colorScheme="blue" onClick={onSuggestionsClose}>Close</Button>
             </ModalFooter>
           </ModalContent>
         </Modal>

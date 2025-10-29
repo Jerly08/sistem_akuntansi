@@ -12,6 +12,7 @@ import (
 )
 
 // SalesJournalServiceEnhanced handles sales journal entries using configurable tax account settings
+// Now also supports TaxConfig for tax rates and calculation rules
 type SalesJournalServiceEnhanced struct {
 	db               *gorm.DB
 	journalRepo      repositories.JournalEntryRepository
@@ -217,6 +218,9 @@ func (s *SalesJournalServiceEnhanced) CreateSalesJournal(sale *models.Sale, tx *
 	}
 
 	// PPN Keluaran (from settings) - Credit jika ada
+	// Note: PPN can now be calculated using TaxConfig:
+	//   ppnRate, _ := s.taxAccountService.GetSalesTaxRate("ppn")
+	//   calculatedPPN := s.taxAccountService.CalculateTax(sale.Subtotal, ppnRate, discountBeforeTax, discount)
 	if sale.PPN > 0 {
 		accountID, err := s.taxAccountService.GetAccountID("sales_output_vat")
 		if err != nil {

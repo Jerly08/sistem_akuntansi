@@ -11,6 +11,7 @@ import (
 )
 
 // PurchaseJournalServiceEnhanced handles purchase journal entries using configurable tax account settings
+// Now also supports TaxConfig for tax rates and calculation rules
 type PurchaseJournalServiceEnhanced struct {
 	db                *gorm.DB
 	taxAccountService *TaxAccountService
@@ -115,6 +116,9 @@ func (s *PurchaseJournalServiceEnhanced) CreatePurchaseJournal(purchase *models.
 	}
 
 	// DEBIT: PPN Masukan (if applicable) using tax account settings
+	// Note: PPN can now be calculated using TaxConfig:
+	//   ppnRate, _ := s.taxAccountService.GetPurchaseTaxRate("ppn")
+	//   calculatedPPN := s.taxAccountService.CalculateTax(purchase.Subtotal, ppnRate, discountBeforeTax, discount)
 	if purchase.PPNAmount > 0 {
 		accountID, err := s.taxAccountService.GetAccountID("purchase_input_vat")
 		if err != nil {

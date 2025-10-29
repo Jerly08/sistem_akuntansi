@@ -470,9 +470,21 @@ func (c *ContactHistoryController) generateCustomerHistoryData(customerID uint, 
 		}
 		transactions = append(transactions, transaction)
 		
-		// NOTE: Don't add payment.Amount to TotalPaid here
-		// It's already included in sale.PaidAmount above (lines 415-416)
-		// Adding it again would cause double-counting
+		// Check if payment is unallocated (advance payment)
+		var allocatedAmount float64
+		c.db.Model(&models.PaymentAllocation{}).
+			Where("payment_id = ?", payment.ID).
+			Select("COALESCE(SUM(allocated_amount), 0)").
+			Scan(&allocatedAmount)
+		
+		unallocatedAmount := payment.Amount - allocatedAmount
+		
+		// Only add unallocated payments to TotalPaid
+		// Allocated payments are already counted in sale.PaidAmount
+		if unallocatedAmount > 0 {
+			summary.TotalPaid += unallocatedAmount
+			// Unallocated payments don't affect outstanding since they're not assigned to any sale
+		}
 	}
 
 	summary.TotalTransactions = len(transactions)
@@ -563,9 +575,21 @@ func (c *ContactHistoryController) generateVendorHistoryData(vendorID uint, star
 		}
 		transactions = append(transactions, transaction)
 		
-		// NOTE: Don't add payment.Amount to TotalPaid here
-		// It's already included in purchase.PaidAmount above (lines 536-537)
-		// Adding it again would cause double-counting
+		// Check if payment is unallocated (advance payment)
+		var allocatedAmount float64
+		c.db.Model(&models.PaymentAllocation{}).
+			Where("payment_id = ?", payment.ID).
+			Select("COALESCE(SUM(allocated_amount), 0)").
+			Scan(&allocatedAmount)
+		
+		unallocatedAmount := payment.Amount - allocatedAmount
+		
+		// Only add unallocated payments to TotalPaid
+		// Allocated payments are already counted in purchase.PaidAmount
+		if unallocatedAmount > 0 {
+			summary.TotalPaid += unallocatedAmount
+			// Unallocated payments don't affect outstanding since they're not assigned to any purchase
+		}
 	}
 
 	summary.TotalTransactions = len(transactions)

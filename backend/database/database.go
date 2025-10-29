@@ -646,6 +646,10 @@ func AutoMigrate(db *gorm.DB) {
 		&models.SaleReturn{},
 		&models.SaleReturnItem{},
 		
+		// Invoices
+		&models.Invoice{},
+		&models.InvoiceItem{},
+		
 		// Purchases
 		&models.Purchase{},
 		&models.PurchaseItem{},
