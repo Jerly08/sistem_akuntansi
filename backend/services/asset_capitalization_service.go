@@ -1,7 +1,6 @@
 package services
 
 import (
-    "context"
     "fmt"
     "time"
 
@@ -9,6 +8,7 @@ import (
     "app-sistem-akuntansi/repositories"
     "github.com/shopspring/decimal"
     "gorm.io/gorm"
+    "gorm.io/gorm/logger"
 )
 
 // AssetCapitalizationService handles creating capitalization journals for fixed assets
@@ -112,10 +112,48 @@ func (s *AssetCapitalizationService) Capitalize(input CapitalizationInput) error
         tx.Rollback()
         return fmt.Errorf("failed to create legacy capitalization journal: %v", err)
     }
-    // Post legacy journal to update COA balances
-    if err := s.journalRepo.PostJournalEntry(context.Background(), je.ID, input.UserID); err != nil {
+    
+    // Reload journal entry to get the generated ID and ensure it's in the transaction context
+    if err := tx.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).
+        Preload("JournalLines").First(je, je.ID).Error; err != nil {
         tx.Rollback()
-        return fmt.Errorf("failed to post capitalization journal: %v", err)
+        return fmt.Errorf("failed to reload capitalization journal: %v", err)
+    }
+    
+    // Post legacy journal to update COA balances within the same transaction
+    // Manual posting logic since PostJournalEntry uses a separate DB context
+    if je.Status == models.JournalStatusDraft {
+        je.Status = models.JournalStatusPosted
+        je.PostedBy = &input.UserID
+        now := time.Now()
+        je.PostingDate = &now
+        
+        if err := tx.Save(je).Error; err != nil {
+            tx.Rollback()
+            return fmt.Errorf("failed to update journal status: %v", err)
+        }
+        
+        // Update account balances for each line
+        for _, line := range je.JournalLines {
+            var account models.Account
+            if err := tx.First(&account, line.AccountID).Error; err != nil {
+                tx.Rollback()
+                return fmt.Errorf("failed to find account %d: %v", line.AccountID, err)
+            }
+            
+            // Update balance based on normal balance
+            normalBalance := account.GetNormalBalance()
+            if normalBalance == models.NormalBalanceDebit {
+                account.Balance += line.DebitAmount - line.CreditAmount
+            } else {
+                account.Balance += line.CreditAmount - line.DebitAmount
+            }
+            
+            if err := tx.Save(&account).Error; err != nil {
+                tx.Rollback()
+                return fmt.Errorf("failed to update account balance: %v", err)
+            }
+        }
     }
 
     // 2) Create SSOT journal entry

@@ -449,7 +449,7 @@ func getCategoryStaticPrefix(category string) string {
 		return "FA"
 	case "Real Estate":
 		return "RE"
-	case "Computer Equipment":
+	case "Computer", "Computer Equipment": // Support both variations
 		return "CE"
 	case "Vehicle":
 		return "VH"
@@ -473,7 +473,11 @@ func (s *AssetService) getDynamicCategoryPrefix(category string) string {
 	}
 	var cat models.AssetCategory
 	// Case-insensitive name match; prefer active categories
-	s.db.Where("LOWER(name) = LOWER(?) AND is_active = ?", category, true).First(&cat)
+	err := s.db.Where("LOWER(name) = LOWER(?) AND is_active = ?", category, true).First(&cat).Error
+	if err != nil {
+		// Category not found in database, return empty string to fallback to static prefix
+		return ""
+	}
 	code := strings.TrimSpace(cat.Code)
 	if code == "" {
 		return ""

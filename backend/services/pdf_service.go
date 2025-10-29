@@ -4598,7 +4598,7 @@ func (p *PDFService) renderSSOTFinancialSections(pdf *gofpdf.Fpdf, data map[stri
 	om := get([]string{"operating_margin"}, []string{"OperatingMargin"})
 	if om > 0 {
 		pdf.SetFont("Arial", "", 9)
-		pdf.Cell(190, 5, fmt.Sprintf("Operating Margin: %.2f%%", om))
+		pdf.Cell(190, 5, fmt.Sprintf("Operating Margin: %.3f%%", om))
 		pdf.Ln(8)
 	}
 	
@@ -4643,7 +4643,7 @@ pdf.CellFormat(50, 10, p.formatRupiah(ni), "1", 0, "R", true, 0, "")
 pdf.Ln(10)
 if nim := get([]string{"net_income_margin"}, []string{"NetIncomeMargin"}); nim > 0 {
 	pdf.SetFont("Arial", "B", 10)
-	pdf.Cell(190, 6, fmt.Sprintf("Net Income Margin: %.2f%%", nim))
+	pdf.Cell(190, 6, fmt.Sprintf("Net Income Margin: %.3f%%", nim))
 	pdf.Ln(8)
 	// also ensure map carries this value for summary
 	data["NetIncomeMargin"] = nim
@@ -4791,7 +4791,7 @@ func (p *PDFService) addFinancialRatiosSummary(pdf *gofpdf.Fpdf, data map[string
 	// First row of ratios
 	if grossMargin, exists := data["GrossProfitMargin"]; exists {
 		if gm, ok := grossMargin.(float64); ok && gm > 0 {
-			pdf.Cell(95, 5, fmt.Sprintf("Gross Profit Margin: %.2f%%", gm))
+			pdf.Cell(95, 5, fmt.Sprintf("Gross Profit Margin: %.3f%%", gm))
 		} else {
 			pdf.Cell(95, 5, "Gross Profit Margin: N/A")
 		}
@@ -4801,7 +4801,7 @@ func (p *PDFService) addFinancialRatiosSummary(pdf *gofpdf.Fpdf, data map[string
 	
 	if operatingMargin, exists := data["OperatingMargin"]; exists {
 		if om, ok := operatingMargin.(float64); ok && om > 0 {
-			pdf.Cell(95, 5, fmt.Sprintf("Operating Margin: %.2f%%", om))
+			pdf.Cell(95, 5, fmt.Sprintf("Operating Margin: %.3f%%", om))
 		} else {
 			pdf.Cell(95, 5, "Operating Margin: N/A")
 		}
@@ -5111,7 +5111,7 @@ func (p *PDFService) addPLSectionItems(pdf *gofpdf.Fpdf, items interface{}) {
 				
 				pdf.Cell(145, 5, fmt.Sprintf("  %s", name))
 				if isPercentage {
-					pdf.Cell(45, 5, fmt.Sprintf("%.2f%%", amount))
+					pdf.Cell(45, 5, fmt.Sprintf("%.3f%%", amount))
 				} else {
 					pdf.Cell(45, 5, p.formatRupiah(amount))
 				}
@@ -5211,7 +5211,7 @@ func (p *PDFService) addFinancialMetrics(pdf *gofpdf.Fpdf, metrics interface{}) 
 				if valueFloat, ok := value.(float64); ok {
 					pdf.Cell(95, 5, label+":")
 					if strings.Contains(metricKey, "Margin") {
-						pdf.Cell(95, 5, fmt.Sprintf("%.2f%%", valueFloat))
+						pdf.Cell(95, 5, fmt.Sprintf("%.3f%%", valueFloat))
 					} else {
 						pdf.Cell(95, 5, p.formatRupiah(valueFloat))
 					}

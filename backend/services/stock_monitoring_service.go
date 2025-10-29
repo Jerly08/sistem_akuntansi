@@ -7,6 +7,7 @@ import (
 	"time"
 	"app-sistem-akuntansi/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type StockMonitoringService struct {
@@ -212,7 +213,7 @@ func (s *StockMonitoringService) createMinimumStockNotification(product *models.
 	for _, userID := range userIDs {
 		// Check if notification already exists for this product and user
 		var existingNotif models.Notification
-		err := s.db.Where("user_id = ? AND type = ? AND data::text LIKE ? AND is_read = ?",
+		err := s.db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("user_id = ? AND type = ? AND data::text LIKE ? AND is_read = ?",
 			userID, models.NotificationTypeLowStock, 
 			fmt.Sprintf(`%%"product_id":%d%%`, product.ID), false).
 			First(&existingNotif).Error
@@ -288,7 +289,7 @@ func (s *StockMonitoringService) createReorderNotification(product *models.Produ
 	for _, userID := range userIDs {
 		// Check if notification already exists for this product and user
 		var existingNotif models.Notification
-		err := s.db.Where("user_id = ? AND type = ? AND data::text LIKE ? AND is_read = ?",
+		err := s.db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("user_id = ? AND type = ? AND data::text LIKE ? AND is_read = ?",
 			userID, models.NotificationTypeReorderAlert,
 			fmt.Sprintf(`%%"product_id":%d%%`, product.ID), false).
 			First(&existingNotif).Error

@@ -470,8 +470,9 @@ func (c *ContactHistoryController) generateCustomerHistoryData(customerID uint, 
 		}
 		transactions = append(transactions, transaction)
 		
-		// Add payment to summary totals
-		summary.TotalPaid += payment.Amount
+		// NOTE: Don't add payment.Amount to TotalPaid here
+		// It's already included in sale.PaidAmount above (lines 415-416)
+		// Adding it again would cause double-counting
 	}
 
 	summary.TotalTransactions = len(transactions)
@@ -562,8 +563,9 @@ func (c *ContactHistoryController) generateVendorHistoryData(vendorID uint, star
 		}
 		transactions = append(transactions, transaction)
 		
-		// Add payment to summary totals
-		summary.TotalPaid += payment.Amount
+		// NOTE: Don't add payment.Amount to TotalPaid here
+		// It's already included in purchase.PaidAmount above (lines 536-537)
+		// Adding it again would cause double-counting
 	}
 
 	summary.TotalTransactions = len(transactions)

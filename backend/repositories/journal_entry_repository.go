@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type JournalEntryRepository interface {
@@ -79,6 +80,7 @@ func (r *JournalEntryRepo) FindByID(ctx context.Context, id uint) (*models.Journ
 	var entry models.JournalEntry
 
 	err := r.DB.WithContext(ctx).
+		Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).
 		Preload("Creator").
 		Preload("Poster").
 		Preload("Journal").

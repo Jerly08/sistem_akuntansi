@@ -328,7 +328,7 @@ yarn install
 
 # Setup environment variables (optional)
 # Buat .env.local dan set NEXT_PUBLIC_API_URL jika berbeda dari default
-echo "NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1" > .env.local
+echo "NEXT_PUBLIC_API_URL=http://localhost:8080/" > .env.local
 
 # Jalankan development server dengan Turbopack
 npm run dev
@@ -583,7 +583,7 @@ npm install -g pm2
 pm2 start npm --name "sistem-akuntansi" -- start
 
 # Environment variables untuk production
-NEXT_PUBLIC_API_URL=https://your-api-domain.com/api/v1
+NEXT_PUBLIC_API_URL=https://your-api-domain.com/
 ```
 
 ### Enhanced Security Checklist

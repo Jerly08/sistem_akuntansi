@@ -606,36 +606,20 @@ const SalesForm: React.FC<SalesFormProps> = ({
     
     const afterDiscount = subtotal - globalDiscount;
     
-    // Calculate proportional discount for taxable and non-taxable items
-    const taxableSubtotal = calculateTaxableSubtotal();
-    const nonTaxableSubtotal = calculateNonTaxableSubtotal();
+    // Tax calculations using enhanced fields (same as Tax Summary)
+    const ppnRate = watchPPNRate || watchPPNPercent || 11;
+    const ppnAmount = afterDiscount * (ppnRate / 100);
+    const otherAdditions = watchOtherTaxAdditions || 0;
+    const totalAdditions = ppnAmount + otherAdditions;
     
-    // Apply global discount proportionally
-    let taxableAfterDiscount, nonTaxableAfterDiscount;
+    const pph21Amount = afterDiscount * (watchPPh21Rate / 100);
+    const pph23Amount = afterDiscount * (watchPPh23Rate / 100);
+    const otherDeductions = watchOtherTaxDeductions || 0;
+    const totalDeductions = pph21Amount + pph23Amount + otherDeductions;
     
-    if (discountType === 'percentage') {
-      taxableAfterDiscount = taxableSubtotal - (taxableSubtotal * (watchDiscountPercent / 100));
-      nonTaxableAfterDiscount = nonTaxableSubtotal - (nonTaxableSubtotal * (watchDiscountPercent / 100));
-    } else {
-      // For amount discount, apply proportionally based on subtotal ratio
-      const taxableRatio = subtotal > 0 ? taxableSubtotal / subtotal : 0;
-      const nonTaxableRatio = subtotal > 0 ? nonTaxableSubtotal / subtotal : 0;
-      
-      const taxableDiscountAmount = globalDiscount * taxableRatio;
-      const nonTaxableDiscountAmount = globalDiscount * nonTaxableRatio;
-      
-      taxableAfterDiscount = taxableSubtotal - taxableDiscountAmount;
-      nonTaxableAfterDiscount = nonTaxableSubtotal - nonTaxableDiscountAmount;
-    }
+    const finalTotal = afterDiscount + totalAdditions - totalDeductions + watchShippingCost;
     
-    // Add shipping to total (shipping is typically taxable)
-    const taxableWithShipping = taxableAfterDiscount + watchShippingCost;
-    
-    // Calculate PPN only on taxable amount + shipping
-    const ppn = taxableWithShipping * (watchPPNPercent / 100);
-    
-    // Total = taxable items + PPN + non-taxable items
-    return taxableWithShipping + ppn + nonTaxableAfterDiscount;
+    return finalTotal;
   };
 
   // Helper function to get global discount amount for display

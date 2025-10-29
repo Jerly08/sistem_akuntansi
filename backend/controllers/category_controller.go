@@ -7,6 +7,7 @@ import (
 	"app-sistem-akuntansi/models"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type CategoryController struct {
@@ -89,7 +90,7 @@ func (cc *CategoryController) CreateCategory(c *gin.Context) {
 
 	// Check if category code already exists (including soft deleted)
 	var existingCategory models.ProductCategory
-	if err := cc.DB.Unscoped().Where("code = ?", category.Code).First(&existingCategory).Error; err == nil {
+	if err := cc.DB.Unscoped().Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("code = ?", category.Code).First(&existingCategory).Error; err == nil {
 		// If found and soft deleted, undelete and update it
 		if existingCategory.DeletedAt.Valid {
 			log.Printf("[DEBUG] Found soft-deleted category with code %s, restoring it...", category.Code)
@@ -167,7 +168,7 @@ func (cc *CategoryController) UpdateCategory(c *gin.Context) {
 	if updateData.Code != category.Code {
 		var existingCategory models.ProductCategory
 		// Check both active and soft deleted records
-		if err := cc.DB.Unscoped().Where("code = ? AND id != ? AND deleted_at IS NULL", updateData.Code, id).First(&existingCategory).Error; err == nil {
+		if err := cc.DB.Unscoped().Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("code = ? AND id != ? AND deleted_at IS NULL", updateData.Code, id).First(&existingCategory).Error; err == nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Category code already exists"})
 			return
 		}

@@ -9,6 +9,7 @@ import (
 	"app-sistem-akuntansi/models"
 	"app-sistem-akuntansi/utils"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 // AccountRepository defines account-related database operations
@@ -59,7 +60,7 @@ func (r *AccountRepo) Create(ctx context.Context, req *models.AccountCreateReque
 
 	// Check if code already exists (only check non-deleted accounts)
 	var existingAccount models.Account
-	if err := r.DB.WithContext(ctx).Where("code = ? AND deleted_at IS NULL", req.Code).First(&existingAccount).Error; err == nil {
+	if err := r.DB.WithContext(ctx).Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("code = ? AND deleted_at IS NULL", req.Code).First(&existingAccount).Error; err == nil {
 		errorMsg := fmt.Sprintf("Account code '%s' already exists (used by: %s)", req.Code, existingAccount.Name)
 		return nil, utils.NewConflictError(errorMsg)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -141,7 +142,7 @@ func (r *AccountRepo) Update(ctx context.Context, code string, req *models.Accou
 	if req.Code != "" && req.Code != code {
 		log.Printf("Code change detected: %s -> %s", code, req.Code)
 		var existingAccount models.Account
-		if err := r.DB.WithContext(ctx).Where("code = ? AND id != ?", req.Code, account.ID).First(&existingAccount).Error; err == nil {
+		if err := r.DB.WithContext(ctx).Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("code = ? AND id != ?", req.Code, account.ID).First(&existingAccount).Error; err == nil {
 			errorMsg := fmt.Sprintf("Account code '%s' already exists (used by: %s)", req.Code, existingAccount.Name)
 			return nil, utils.NewConflictError(errorMsg)
 		} else if !errors.Is(err, gorm.ErrRecordNotFound) {

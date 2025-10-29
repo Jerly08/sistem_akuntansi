@@ -7,6 +7,7 @@ import (
 	"app-sistem-akuntansi/models"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type WarehouseLocationController struct {
@@ -68,7 +69,7 @@ func (wc *WarehouseLocationController) CreateWarehouseLocation(c *gin.Context) {
 
 	// Check if location code already exists
 	var existingLocation models.WarehouseLocation
-	if err := wc.DB.Where("code = ?", location.Code).First(&existingLocation).Error; err == nil {
+	if err := wc.DB.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("code = ?", location.Code).First(&existingLocation).Error; err == nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Warehouse location code already exists"})
 		return
 	}
@@ -106,7 +107,7 @@ func (wc *WarehouseLocationController) UpdateWarehouseLocation(c *gin.Context) {
 	// Check if new code conflicts with existing locations
 	if updateData.Code != location.Code {
 		var existingLocation models.WarehouseLocation
-		if err := wc.DB.Where("code = ? AND id != ?", updateData.Code, id).First(&existingLocation).Error; err == nil {
+		if err := wc.DB.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("code = ? AND id != ?", updateData.Code, id).First(&existingLocation).Error; err == nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Warehouse location code already exists"})
 			return
 		}

@@ -7,6 +7,7 @@ import (
 	"app-sistem-akuntansi/models"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 type ProductUnitController struct {
@@ -91,7 +92,7 @@ func (puc *ProductUnitController) CreateProductUnit(c *gin.Context) {
 
 	// Check if unit code already exists (including soft deleted records)
 	var existingUnit models.ProductUnit
-	findResult := puc.DB.Unscoped().Where("code = ?", unit.Code).First(&existingUnit)
+	findResult := puc.DB.Unscoped().Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("code = ?", unit.Code).First(&existingUnit)
 	
 	// Handle the three possible outcomes:
 	switch {
@@ -177,7 +178,7 @@ func (puc *ProductUnitController) UpdateProductUnit(c *gin.Context) {
 	// Check if new code conflicts with existing units
 	if updateData.Code != unit.Code {
 		var existingUnit models.ProductUnit
-		if err := puc.DB.Where("code = ? AND id != ?", updateData.Code, id).First(&existingUnit).Error; err == nil {
+		if err := puc.DB.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)}).Where("code = ? AND id != ?", updateData.Code, id).First(&existingUnit).Error; err == nil {
 			c.JSON(http.StatusConflict, gin.H{"error": "Unit code already exists"})
 			return
 		}

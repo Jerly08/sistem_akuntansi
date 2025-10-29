@@ -386,6 +386,7 @@ func (s *SSOTCashFlowService) categorizeCashFlowTransaction(cfData *SSOTCashFlow
 	case strings.HasPrefix(code, "12"): // Accounts Receivable (12xx)
 		// Per COA: 12xx = Piutang. Kenaikan piutang = arus kas keluar (indirect method)
 		cfData.OperatingActivities.WorkingCapitalChanges.AccountsReceivableChange += amount * -1
+		item.Amount = amount * -1  // Update item amount to match the calculation
 		if amount > 0 {
 			item.Type = "decrease"
 		} else {
@@ -396,6 +397,7 @@ func (s *SSOTCashFlowService) categorizeCashFlowTransaction(cfData *SSOTCashFlow
 	case strings.HasPrefix(code, "13"): // Inventory (13xx)
 		// Per COA: 13xx = Persediaan. Kenaikan persediaan = arus kas keluar
 		cfData.OperatingActivities.WorkingCapitalChanges.InventoryChange += amount * -1
+		item.Amount = amount * -1  // Update item amount to match the calculation
 		if amount > 0 {
 			item.Type = "decrease"
 		} else {
@@ -405,6 +407,7 @@ func (s *SSOTCashFlowService) categorizeCashFlowTransaction(cfData *SSOTCashFlow
 		
 	case strings.HasPrefix(code, "114") || strings.HasPrefix(code, "115"): // Prepaid Expenses
 		cfData.OperatingActivities.WorkingCapitalChanges.PrepaidExpensesChange += amount * -1
+		item.Amount = amount * -1  // Update item amount to match the calculation
 		if amount > 0 {
 			item.Type = "decrease"
 		} else {
