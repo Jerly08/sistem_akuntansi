@@ -15,6 +15,7 @@ type Payment struct {
     Method          string         `json:"method" gorm:"size:20"` // CASH, BANK_TRANSFER, CHECK, etc.
     Reference       string         `json:"reference" gorm:"size:50"`
     Status          string         `json:"status" gorm:"size:20"` // PENDING, COMPLETED, FAILED, REVERSED
+    PaymentType     string         `json:"payment_type" gorm:"size:30;index"` // REGULAR, TAX_PPN, TAX_PPN_INPUT, TAX_PPN_OUTPUT
     Notes           string         `json:"notes" gorm:"type:text"`
     JournalEntryID  *uint          `json:"journal_entry_id" gorm:"index"`  // Link to SSOT journal entry
     CreatedAt       time.Time      `json:"created_at"`
@@ -57,4 +58,12 @@ const (
     PaymentMethodCreditCard   = "CREDIT_CARD"
     PaymentMethodDebitCard    = "DEBIT_CARD"
     PaymentMethodDigitalWallet = "DIGITAL_WALLET"
+)
+
+// Payment Type Constants
+const (
+    PaymentTypeRegular        = "REGULAR"
+    PaymentTypeTaxPPN         = "TAX_PPN"
+    PaymentTypeTaxPPNInput    = "TAX_PPN_INPUT"
+    PaymentTypeTaxPPNOutput   = "TAX_PPN_OUTPUT"
 )

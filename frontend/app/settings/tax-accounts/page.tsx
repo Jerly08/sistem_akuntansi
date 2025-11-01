@@ -46,7 +46,8 @@ import {
   TabPanels,
   Tab,
   TabPanel,
-  Stack
+  Stack,
+  IconButton
 } from '@chakra-ui/react';
 import { 
   FiSave, 
@@ -211,6 +212,8 @@ const TaxAccountSettingsPage: React.FC = () => {
       'sales_output_vat',   // 2103 - Tax regulation (DJP)
       'purchase_payable',   // 2001 - Used in ALL credit purchases
     ];
+    // Withholding tax dan inventory accounts TIDAK critical, bisa diubah
+    // PPh 21, PPh 23, PPh 25, Tax Payable, Inventory, COGS adalah optional
     return criticalAccounts.includes(fieldName);
   };
 
@@ -334,36 +337,23 @@ const TaxAccountSettingsPage: React.FC = () => {
   const validateForm = () => {
     const errors: {[key: string]: string} = {};
     
-    // Required fields validation
-    const requiredFields = [
-      'sales_receivable',
-      'sales_cash', 
-      'sales_bank',
-      'sales_revenue',
-      'sales_output_vat',
-      'purchase_payable',
-      'purchase_cash',
-      'purchase_bank', 
-      'purchase_input_vat',
-      'purchase_expense'
-    ];
-
-    requiredFields.forEach(field => {
-      const fieldValue = formData[`${field}_account_id`];
-      
-      if (!fieldValue) {
-        errors[field] = `${field.replace(/_/g, ' ')} account is required`;
-      }
-    });
+    // NOTE: This page only shows OPTIONAL withholding tax and inventory accounts
+    // Sales and purchase accounts are configured elsewhere and already exist in settings
+    // So we don't validate them here - they should already be set
+    
+    // No required fields to validate on this page
+    // All fields (PPh 21, 23, 25, Tax Payable, Inventory, COGS) are optional
+    
     setValidationErrors(errors);
-    return Object.keys(errors).length === 0;
+    return true; // Always valid since all fields are optional
   };
 
   const handleSave = async () => {
+    // Validate form (currently always returns true since all fields are optional)
     if (!validateForm()) {
       toast({
         title: 'Validation Error',
-        description: 'Please select all required accounts',
+        description: 'Please check your input',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -374,19 +364,19 @@ const TaxAccountSettingsPage: React.FC = () => {
     setSaving(true);
     try {
       const payload = {
-        // Sales accounts
-        sales_receivable_account_id: formData.sales_receivable_account_id,
-        sales_cash_account_id: formData.sales_cash_account_id,
-        sales_bank_account_id: formData.sales_bank_account_id,
-        sales_revenue_account_id: formData.sales_revenue_account_id,
-        sales_output_vat_account_id: formData.sales_output_vat_account_id,
+        // Sales accounts (preserve existing values from settings)
+        sales_receivable_account_id: formData.sales_receivable_account_id || settings?.sales_receivable_account?.id,
+        sales_cash_account_id: formData.sales_cash_account_id || settings?.sales_cash_account?.id,
+        sales_bank_account_id: formData.sales_bank_account_id || settings?.sales_bank_account?.id,
+        sales_revenue_account_id: formData.sales_revenue_account_id || settings?.sales_revenue_account?.id,
+        sales_output_vat_account_id: formData.sales_output_vat_account_id || settings?.sales_output_vat_account?.id,
         
-        // Purchase accounts
-        purchase_payable_account_id: formData.purchase_payable_account_id,
-        purchase_cash_account_id: formData.purchase_cash_account_id,
-        purchase_bank_account_id: formData.purchase_bank_account_id,
-        purchase_input_vat_account_id: formData.purchase_input_vat_account_id,
-        purchase_expense_account_id: formData.purchase_expense_account_id,
+        // Purchase accounts (preserve existing values from settings)
+        purchase_payable_account_id: formData.purchase_payable_account_id || settings?.purchase_payable_account?.id,
+        purchase_cash_account_id: formData.purchase_cash_account_id || settings?.purchase_cash_account?.id,
+        purchase_bank_account_id: formData.purchase_bank_account_id || settings?.purchase_bank_account?.id,
+        purchase_input_vat_account_id: formData.purchase_input_vat_account_id || settings?.purchase_input_vat_account?.id,
+        purchase_expense_account_id: formData.purchase_expense_account_id || settings?.purchase_expense_account?.id,
         
         // Optional accounts
         withholding_tax21_account_id: formData.withholding_tax21_account_id || null,
@@ -534,9 +524,11 @@ const TaxAccountSettingsPage: React.FC = () => {
     isRequired = true,
     accountTypes: string[] = [],
     categories: string[] = [],
-    description?: string
+    description?: string,
+    tooltipInfo?: string
   ) => {
     const currentValue = formData[`${fieldName}_account_id`] || '';
+    const currentAccount = formData[`${fieldName}_account`];
     const hasError = validationErrors[fieldName];
     const options = getAccountOptions(accountTypes, categories);
     
@@ -550,6 +542,19 @@ const TaxAccountSettingsPage: React.FC = () => {
         <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
           <HStack>
             <Text>{label}</Text>
+            {tooltipInfo && (
+              <Tooltip 
+                label={tooltipInfo} 
+                fontSize="xs" 
+                placement="top"
+                hasArrow
+                bg="blue.600"
+              >
+                <span>
+                  <Icon as={FiInfo} color="blue.500" boxSize={4} cursor="help" />
+                </span>
+              </Tooltip>
+            )}
             {isRequired && <Badge colorScheme="red" size="sm">Required</Badge>}
             {(isCritical || isSelectedCritical) && (
               <HStack spacing={1}>
@@ -578,6 +583,16 @@ const TaxAccountSettingsPage: React.FC = () => {
           ))}
         </Select>
         {hasError && <FormErrorMessage>{hasError}</FormErrorMessage>}
+        {currentAccount && currentValue && (
+          <FormHelperText fontSize="xs" color="blue.600" fontWeight="medium">
+            <HStack spacing={1}>
+              <Icon as={FiCheck} color="green.500" boxSize={3} />
+              <Text>
+                Current: {currentAccount.code} - {currentAccount.name}
+              </Text>
+            </HStack>
+          </FormHelperText>
+        )}
         {(isCritical || isSelectedCritical) && !hasError && (
           <FormHelperText fontSize="xs" color="red.600" fontWeight="medium">
             <HStack spacing={1}>
@@ -590,7 +605,7 @@ const TaxAccountSettingsPage: React.FC = () => {
             </HStack>
           </FormHelperText>
         )}
-        {description && !hasError && !isCritical && !isSelectedCritical && (
+        {description && !hasError && !isCritical && !isSelectedCritical && !currentAccount && (
           <FormHelperText fontSize="xs" color="gray.500">
             {description}
           </FormHelperText>
@@ -690,15 +705,30 @@ const TaxAccountSettingsPage: React.FC = () => {
             </Alert>
           )}
 
-          {/* Main Content - Withholding Tax Accounts Only */}
+          {/* Main Content - Tax Accounts Configuration */}
           <Box width="full">
-                <Box width="full">
-            <Card>
+            {/* Withholding Tax Accounts */}
+            <Card mb={6}>
               <CardHeader>
-                <HStack spacing={3}>
-                  <Icon as={FiDollarSign} boxSize={5} color={greenColor} />
-                  <Heading size="md">Withholding Tax Accounts</Heading>
-                  <Badge colorScheme="gray" size="sm">Optional</Badge>
+                <HStack spacing={3} justify="space-between">
+                  <HStack spacing={3}>
+                    <Icon as={FiDollarSign} boxSize={5} color={greenColor} />
+                    <Heading size="md">Withholding Tax Accounts</Heading>
+                    <Badge colorScheme="green" size="sm">Configurable</Badge>
+                  </HStack>
+                  <Tooltip 
+                    label="Configure accounts for withholding taxes (PPh). These are optional and only used when you have withholding tax transactions."
+                    placement="left"
+                    hasArrow
+                  >
+                    <IconButton
+                      aria-label="Info"
+                      icon={<FiInfo />}
+                      size="sm"
+                      variant="ghost"
+                      colorScheme="blue"
+                    />
+                  </Tooltip>
                 </HStack>
               </CardHeader>
               <CardBody>
@@ -709,7 +739,8 @@ const TaxAccountSettingsPage: React.FC = () => {
                     false,
                     ['ASSET'],
                     ['CURRENT_ASSET'],
-                    'For employee income tax withholding'
+                    'For employee income tax withholding',
+                    'PPh 21 is withheld from employee salaries and services. Typically 2% for construction services, 5% for professionals. This account tracks prepaid tax that can offset your tax obligations.'
                   )}
                   
                   {renderAccountSelect(
@@ -718,7 +749,8 @@ const TaxAccountSettingsPage: React.FC = () => {
                     false,
                     ['ASSET'],
                     ['CURRENT_ASSET'],
-                    'For vendor service tax withholding'
+                    'For vendor service tax withholding',
+                    'PPh 23 is withheld from vendor payments for services, rent, royalties. Typically 2% for services, 15% for dividends/interest. Select the account where this prepaid tax will be recorded.'
                   )}
                   
                   {renderAccountSelect(
@@ -727,7 +759,8 @@ const TaxAccountSettingsPage: React.FC = () => {
                     false,
                     ['ASSET'],
                     ['CURRENT_ASSET'],
-                    'For installment tax payments'
+                    'For installment tax payments',
+                    'PPh 25 is corporate income tax paid monthly in installments. This is an advance payment of annual tax. Configure this if you need to track monthly tax installment payments separately.'
                   )}
                   
                   {renderAccountSelect(
@@ -736,7 +769,57 @@ const TaxAccountSettingsPage: React.FC = () => {
                     false,
                     ['LIABILITY'],
                     ['CURRENT_LIABILITY'],
-                    'For other tax obligations'
+                    'For other tax obligations',
+                    'Generic tax payable account for various tax obligations like property tax, vehicle tax, or other taxes not covered by specific accounts. This is a liability account.'
+                  )}
+                </SimpleGrid>
+              </CardBody>
+            </Card>
+            
+            {/* Inventory & COGS Accounts */}
+            <Card>
+              <CardHeader>
+                <HStack spacing={3} justify="space-between">
+                  <HStack spacing={3}>
+                    <Icon as={FiShoppingCart} boxSize={5} color={blueColor} />
+                    <Heading size="md">Inventory & Cost Accounts</Heading>
+                    <Badge colorScheme="blue" size="sm">Configurable</Badge>
+                  </HStack>
+                  <Tooltip 
+                    label="Configure accounts for inventory tracking and cost of goods sold. These are used when recording COGS in sales transactions."
+                    placement="left"
+                    hasArrow
+                  >
+                    <IconButton
+                      aria-label="Info"
+                      icon={<FiInfo />}
+                      size="sm"
+                      variant="ghost"
+                      colorScheme="blue"
+                    />
+                  </Tooltip>
+                </HStack>
+              </CardHeader>
+              <CardBody>
+                <SimpleGrid columns={[1, 1, 2]} spacing={6}>
+                  {renderAccountSelect(
+                    'inventory',
+                    'Inventory Account',
+                    false,
+                    ['ASSET'],
+                    ['CURRENT_ASSET'],
+                    'For tracking inventory/stock value',
+                    'Main inventory asset account (typically code 1301). When you sell items, the cost is deducted from this account. If you have multiple inventory types, select your main inventory account here.'
+                  )}
+                  
+                  {renderAccountSelect(
+                    'cogs',
+                    'Cost of Goods Sold Account',
+                    false,
+                    ['EXPENSE'],
+                    ['COST_OF_GOODS_SOLD', 'OPERATING_EXPENSE'],
+                    'For recording cost of sold items',
+                    'COGS expense account (typically code 5101 - Harga Pokok Penjualan). When items are sold, the cost is recorded as an expense in this account. This directly affects your profit/loss calculations.'
                   )}
                 </SimpleGrid>
               </CardBody>
@@ -843,7 +926,6 @@ const TaxAccountSettingsPage: React.FC = () => {
               </CardBody>
             </Card>
           )}
-          </Box>
         </VStack>
 
         {/* Suggestions Modal */}

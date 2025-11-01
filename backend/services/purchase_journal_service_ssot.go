@@ -13,15 +13,17 @@ import (
 // PurchaseJournalServiceSSOT handles purchase journal entries with CORRECT unified_journal_ledger integration
 // This service writes to unified_journal_ledger which is read by Balance Sheet service
 type PurchaseJournalServiceSSOT struct {
-	db         *gorm.DB
-	coaService *COAService
+	db               *gorm.DB
+	coaService       *COAService
+	taxAccountHelper *TaxAccountHelper
 }
 
 // NewPurchaseJournalServiceSSOT creates a new instance
 func NewPurchaseJournalServiceSSOT(db *gorm.DB, coaService *COAService) *PurchaseJournalServiceSSOT {
 	return &PurchaseJournalServiceSSOT{
-		db:         db,
-		coaService: coaService,
+		db:               db,
+		coaService:       coaService,
+		taxAccountHelper: NewTaxAccountHelper(db),
 	}
 }
 
@@ -106,8 +108,8 @@ func (s *PurchaseJournalServiceSSOT) CreatePurchaseJournal(purchase *models.Purc
 				}
 			}
 		} else {
-			// Default to inventory account
-			debitAccount, err = resolveByCode("1301") // Persediaan Barang
+			// Default to inventory account - use configured account
+			debitAccount, err = s.taxAccountHelper.GetInventoryAccount(dbToUse)
 			if err != nil {
 				return fmt.Errorf("inventory account not found: %v", err)
 			}
@@ -173,9 +175,9 @@ func (s *PurchaseJournalServiceSSOT) CreatePurchaseJournal(purchase *models.Purc
 	// Calculate total credit (subtotal + PPN - any withholdings)
 	totalCredit := subtotal + purchase.PPNAmount
 
-	// Handle withholding taxes (reduce the credit amount)
+	// Handle withholding taxes (reduce the credit amount) - use configured account
 	if purchase.PPh21Amount > 0 {
-		pph21Account, err := resolveByCode("1114") // PPh 21 Dibayar Dimuka
+		pph21Account, err := s.taxAccountHelper.GetWithholdingTax21Account(dbToUse)
 		if err != nil {
 			log.Printf("⚠️ PPh 21 account not found, skipping PPh21 entry: %v", err)
 		} else {
@@ -190,7 +192,7 @@ func (s *PurchaseJournalServiceSSOT) CreatePurchaseJournal(purchase *models.Purc
 	}
 
 	if purchase.PPh23Amount > 0 {
-		pph23Account, err := resolveByCode("1115") // PPh 23 Dibayar Dimuka
+		pph23Account, err := s.taxAccountHelper.GetWithholdingTax23Account(dbToUse)
 		if err != nil {
 			log.Printf("⚠️ PPh 23 account not found, skipping PPh23 entry: %v", err)
 		} else {

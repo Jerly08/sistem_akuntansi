@@ -14,15 +14,17 @@ import (
 // SalesJournalServiceSSOT handles sales journal entries with CORRECT unified_journal_ledger integration
 // This service writes to unified_journal_ledger which is read by Balance Sheet service
 type SalesJournalServiceSSOT struct {
-	db         *gorm.DB
-	coaService *COAService
+	db               *gorm.DB
+	coaService       *COAService
+	taxAccountHelper *TaxAccountHelper
 }
 
 // NewSalesJournalServiceSSOT creates a new instance
 func NewSalesJournalServiceSSOT(db *gorm.DB, coaService *COAService) *SalesJournalServiceSSOT {
 	return &SalesJournalServiceSSOT{
-		db:         db,
-		coaService: coaService,
+		db:               db,
+		coaService:       coaService,
+		taxAccountHelper: NewTaxAccountHelper(db),
 	}
 }
 
@@ -347,13 +349,9 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 	// When customer withholds tax, we DEBIT prepaid tax account
 	// Later we can use this to offset our tax obligations
 	
-	// Legacy PPh field
+	// Legacy PPh field - use configured account
 	if sale.PPh > 0 {
-		pphAccount, err := resolveByCode("1114") // PPh 21 Dibayar Dimuka (Asset)
-		if err != nil {
-			log.Printf("⚠️ PPh prepaid account (1114) not found, trying 1115")
-			pphAccount, err = resolveByCode("1115") // PPh 23 Dibayar Dimuka
-		}
+		pphAccount, err := s.taxAccountHelper.GetWithholdingTax21Account(dbToUse)
 		if err == nil {
 			lines = append(lines, SalesJournalLineRequest{
 				AccountID:    uint64(pphAccount.ID),
@@ -367,11 +365,11 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		}
 	}
 	
-	// PPh 21
+	// PPh 21 - use configured account
 	if sale.PPh21Amount > 0 {
-		pph21Account, err := resolveByCode("1114") // PPh 21 Dibayar Dimuka (Asset)
+		pph21Account, err := s.taxAccountHelper.GetWithholdingTax21Account(dbToUse)
 		if err != nil {
-			log.Printf("⚠️ PPh21 prepaid account (1114) not found, skipping")
+			log.Printf("⚠️ PPh21 prepaid account not found, skipping: %v", err)
 		} else {
 			lines = append(lines, SalesJournalLineRequest{
 				AccountID:    uint64(pph21Account.ID),
@@ -383,11 +381,11 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		}
 	}
 	
-	// PPh 23
+	// PPh 23 - use configured account
 	if sale.PPh23Amount > 0 {
-		pph23Account, err := resolveByCode("1115") // PPh 23 Dibayar Dimuka (Asset)
+		pph23Account, err := s.taxAccountHelper.GetWithholdingTax23Account(dbToUse)
 		if err != nil {
-			log.Printf("⚠️ PPh23 prepaid account (1115) not found, skipping")
+			log.Printf("⚠️ PPh23 prepaid account not found, skipping: %v", err)
 		} else {
 			lines = append(lines, SalesJournalLineRequest{
 				AccountID:    uint64(pph23Account.ID),
@@ -456,10 +454,10 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		
 		// Only create COGS entry if total COGS > 0
 		if !totalCOGS.IsZero() {
-			// DEBIT: 5101 - Harga Pokok Penjualan (COGS Expense)
-			cogsAccount, err := resolveByCode("5101")
+			// DEBIT: COGS Account - use configured account
+			cogsAccount, err := s.taxAccountHelper.GetCOGSAccount(dbToUse)
 			if err != nil {
-				log.Printf("⚠️ COGS account (5101) not found, skipping COGS entry: %v", err)
+				log.Printf("⚠️ COGS account not found, skipping COGS entry: %v", err)
 			} else {
 				lines = append(lines, SalesJournalLineRequest{
 					AccountID:    uint64(cogsAccount.ID),
@@ -468,10 +466,10 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 					Description:  fmt.Sprintf("HPP - %s", sale.InvoiceNumber),
 				})
 				
-				// CREDIT: 1301 - Persediaan Barang (Inventory)
-				inventoryAccount, err := resolveByCode("1301")
+				// CREDIT: Inventory Account - use configured account
+				inventoryAccount, err := s.taxAccountHelper.GetInventoryAccount(dbToUse)
 				if err != nil {
-					log.Printf("⚠️ Inventory account (1301) not found, skipping inventory credit: %v", err)
+					log.Printf("⚠️ Inventory account not found, skipping inventory credit: %v", err)
 				} else {
 					lines = append(lines, SalesJournalLineRequest{
 						AccountID:    uint64(inventoryAccount.ID),

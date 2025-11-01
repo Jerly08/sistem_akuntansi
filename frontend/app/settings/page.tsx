@@ -130,6 +130,19 @@ function computeFiscalRange(currentISO: string): { startISO: string; endISO: str
   return { startISO: toISO(start), endISO: toISO(end) };
 }
 
+interface TaxAccountSettings {
+  sales_receivable_account?: { id: number; code: string; name: string };
+  sales_revenue_account?: { id: number; code: string; name: string };
+  purchase_payable_account?: { id: number; code: string; name: string };
+  withholding_tax21_account?: { id: number; code: string; name: string };
+  withholding_tax23_account?: { id: number; code: string; name: string };
+  withholding_tax25_account?: { id: number; code: string; name: string };
+  inventory_account?: { id: number; code: string; name: string };
+  cogs_account?: { id: number; code: string; name: string };
+  is_active?: boolean;
+  updated_at?: string;
+}
+
 interface SystemSettings {
   id?: number;
   company_name: string;
@@ -177,12 +190,30 @@ const SettingsPage: React.FC = () => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   // Local UI state for date input binding (ISO format required by <input type="date">)
   const [fiscalStartISO, setFiscalStartISO] = useState<string>('');
+  // Tax account settings
+  const [taxAccountSettings, setTaxAccountSettings] = useState<TaxAccountSettings | null>(null);
+  const [loadingTaxAccounts, setLoadingTaxAccounts] = useState(false);
   
   // Move useColorModeValue to top level to fix hooks order
   const blueColor = useColorModeValue('blue.500', 'blue.300');
   const greenColor = useColorModeValue('green.500', 'green.300');
   const purpleColor = useColorModeValue('purple.500', 'purple.300');
   const orangeColor = useColorModeValue('orange.500', 'orange.300');
+
+  const fetchTaxAccountSettings = async () => {
+    setLoadingTaxAccounts(true);
+    try {
+      const response = await api.get('/api/v1/tax-accounts/current');
+      if (response.data.success) {
+        setTaxAccountSettings(response.data.data);
+      }
+    } catch (err: any) {
+      console.error('Error fetching tax account settings:', err);
+      // Don't show error if tax accounts are not configured yet
+    } finally {
+      setLoadingTaxAccounts(false);
+    }
+  };
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -209,6 +240,7 @@ const SettingsPage: React.FC = () => {
 
   useEffect(() => {
     fetchSettings();
+    fetchTaxAccountSettings();
   }, []);
 
   // Keep ISO date in sync when settings are populated later
@@ -624,94 +656,6 @@ const SettingsPage: React.FC = () => {
               </CardBody>
             </Card>
             
-            {/* Invoice Settings Card */}
-            <Card border="1px" borderColor="gray.200" boxShadow="md">
-              <CardHeader>
-                <HStack spacing={3}>
-                  <Icon as={FiSettings} boxSize={6} color={purpleColor} />
-                  <Heading size="md">{t('settings.invoiceSettings')}</Heading>
-                </HStack>
-              </CardHeader>
-              <CardBody>
-                <VStack spacing={4} alignItems="start">
-                  <FormControl>
-                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.invoicePrefix')}
-                    </FormLabel>
-                    <Input
-                      value={formData?.invoice_prefix || settings?.invoice_prefix || ''}
-                      onChange={(e) => handleFormChange('invoice_prefix', e.target.value)}
-                      placeholder="e.g. INV"
-                      variant="filled"
-                      _hover={{ bg: 'gray.100' }}
-                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                    />
-                  </FormControl>
-                  <Divider />
-                  
-                  <FormControl>
-                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.quotePrefix')}
-                    </FormLabel>
-                    <Input
-                      value={formData?.quote_prefix || settings?.quote_prefix || ''}
-                      onChange={(e) => handleFormChange('quote_prefix', e.target.value)}
-                      placeholder="e.g. QUO"
-                      variant="filled"
-                      _hover={{ bg: 'gray.100' }}
-                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                    />
-                  </FormControl>
-                  <Divider />
-                  
-                  <FormControl>
-                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.purchasePrefix')}
-                    </FormLabel>
-                    <Input
-                      value={formData?.purchase_prefix || settings?.purchase_prefix || ''}
-                      onChange={(e) => handleFormChange('purchase_prefix', e.target.value)}
-                      placeholder="e.g. PUR"
-                      variant="filled"
-                      _hover={{ bg: 'gray.100' }}
-                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                    />
-                  </FormControl>
-                  <Divider />
-                  
-                  {/* Payment prefixes */}
-                  <FormControl>
-                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.paymentReceivablePrefix')}
-                    </FormLabel>
-                    <Input
-                      value={formData?.payment_receivable_prefix || settings?.payment_receivable_prefix || ''}
-                      onChange={(e) => handleFormChange('payment_receivable_prefix', e.target.value)}
-                      placeholder="RCV"
-                      variant="filled"
-                      _hover={{ bg: 'gray.100' }}
-                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                    />
-                  </FormControl>
-                  <Divider />
-
-                  <FormControl>
-                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.paymentPayablePrefix')}
-                    </FormLabel>
-                    <Input
-                      value={formData?.payment_payable_prefix || settings?.payment_payable_prefix || ''}
-                      onChange={(e) => handleFormChange('payment_payable_prefix', e.target.value)}
-                      placeholder="PAY"
-                      variant="filled"
-                      _hover={{ bg: 'gray.100' }}
-                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                    />
-                  </FormControl>
-                </VStack>
-              </CardBody>
-            </Card>
-            
             {/* Tax Account Configuration Card */}
             <Card border="1px" borderColor="gray.200" boxShadow="md">
               <CardHeader>
@@ -733,47 +677,94 @@ const SettingsPage: React.FC = () => {
                     </AlertDescription>
                   </Alert>
                   
-                  <VStack spacing={3} width="full" alignItems="start">
-                    <HStack justify="space-between" width="full">
-                      <VStack alignItems="start" spacing={1}>
-                        <Text fontSize="sm" fontWeight="semibold" color="gray.700">
-                          Sales Accounts
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          Receivable, Cash, Bank, Revenue, Output VAT
-                        </Text>
-                      </VStack>
-                      <Icon as={FiTrendingUp} color="green.500" boxSize={4} />
+                  {loadingTaxAccounts ? (
+                    <HStack width="full" justify="center" py={4}>
+                      <Spinner size="sm" color="blue.500" />
+                      <Text fontSize="xs" color="gray.500">Loading configuration...</Text>
                     </HStack>
-                    
-                    <Divider />
-                    
-                    <HStack justify="space-between" width="full">
-                      <VStack alignItems="start" spacing={1}>
-                        <Text fontSize="sm" fontWeight="semibold" color="gray.700">
-                          Purchase Accounts
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          Payable, Cash, Bank, Input VAT, Expenses
-                        </Text>
-                      </VStack>
-                      <Icon as={FiCreditCard} color="purple.500" boxSize={4} />
-                    </HStack>
-                    
-                    <Divider />
-                    
-                    <HStack justify="space-between" width="full">
-                      <VStack alignItems="start" spacing={1}>
-                        <Text fontSize="sm" fontWeight="semibold" color="gray.700">
-                          Tax & Other Accounts
-                        </Text>
-                        <Text fontSize="xs" color="gray.500">
-                          Withholding Tax (PPh 21, 23, 25), Inventory, COGS
-                        </Text>
-                      </VStack>
-                      <Icon as={FiDollarSign} color="orange.500" boxSize={4} />
-                    </HStack>
-                  </VStack>
+                  ) : taxAccountSettings ? (
+                    <VStack spacing={3} width="full" alignItems="start">
+                      <HStack justify="space-between" width="full">
+                        <VStack alignItems="start" spacing={1}>
+                          <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                            Withholding Tax Accounts
+                          </Text>
+                          <VStack spacing={1} alignItems="start" mt={2}>
+                            {taxAccountSettings.withholding_tax21_account ? (
+                              <HStack spacing={1}>
+                                <Icon as={FiDollarSign} color="green.500" boxSize={3} />
+                                <Text fontSize="xs" color="green.600" fontWeight="medium">
+                                  PPh 21: {taxAccountSettings.withholding_tax21_account.code} - {taxAccountSettings.withholding_tax21_account.name}
+                                </Text>
+                              </HStack>
+                            ) : (
+                              <Text fontSize="xs" color="gray.400">PPh 21: Not configured</Text>
+                            )}
+                            {taxAccountSettings.withholding_tax23_account ? (
+                              <HStack spacing={1}>
+                                <Icon as={FiDollarSign} color="green.500" boxSize={3} />
+                                <Text fontSize="xs" color="green.600" fontWeight="medium">
+                                  PPh 23: {taxAccountSettings.withholding_tax23_account.code} - {taxAccountSettings.withholding_tax23_account.name}
+                                </Text>
+                              </HStack>
+                            ) : (
+                              <Text fontSize="xs" color="gray.400">PPh 23: Not configured</Text>
+                            )}
+                            {taxAccountSettings.withholding_tax25_account ? (
+                              <HStack spacing={1}>
+                                <Icon as={FiDollarSign} color="green.500" boxSize={3} />
+                                <Text fontSize="xs" color="green.600" fontWeight="medium">
+                                  PPh 25: {taxAccountSettings.withholding_tax25_account.code} - {taxAccountSettings.withholding_tax25_account.name}
+                                </Text>
+                              </HStack>
+                            ) : (
+                              <Text fontSize="xs" color="gray.400">PPh 25: Not configured</Text>
+                            )}
+                          </VStack>
+                        </VStack>
+                        <Icon as={FiDollarSign} color="orange.500" boxSize={4} />
+                      </HStack>
+                      
+                      <Divider />
+                      
+                      <HStack justify="space-between" width="full">
+                        <VStack alignItems="start" spacing={1}>
+                          <Text fontSize="sm" fontWeight="semibold" color="gray.700">
+                            Inventory & COGS
+                          </Text>
+                          <VStack spacing={1} alignItems="start" mt={2}>
+                            {taxAccountSettings.inventory_account ? (
+                              <HStack spacing={1}>
+                                <Icon as={FiTrendingUp} color="blue.500" boxSize={3} />
+                                <Text fontSize="xs" color="blue.600" fontWeight="medium">
+                                  Inventory: {taxAccountSettings.inventory_account.code} - {taxAccountSettings.inventory_account.name}
+                                </Text>
+                              </HStack>
+                            ) : (
+                              <Text fontSize="xs" color="gray.400">Inventory: Not configured</Text>
+                            )}
+                            {taxAccountSettings.cogs_account ? (
+                              <HStack spacing={1}>
+                                <Icon as={FiTrendingUp} color="blue.500" boxSize={3} />
+                                <Text fontSize="xs" color="blue.600" fontWeight="medium">
+                                  COGS: {taxAccountSettings.cogs_account.code} - {taxAccountSettings.cogs_account.name}
+                                </Text>
+                              </HStack>
+                            ) : (
+                              <Text fontSize="xs" color="gray.400">COGS: Not configured</Text>
+                            )}
+                          </VStack>
+                        </VStack>
+                        <Icon as={FiTrendingUp} color="blue.500" boxSize={4} />
+                      </HStack>
+                    </VStack>
+                  ) : (
+                    <VStack spacing={3} width="full" alignItems="start">
+                      <Text fontSize="xs" color="gray.500">
+                        No tax account configuration found. Click the button below to configure withholding tax accounts.
+                      </Text>
+                    </VStack>
+                  )}
                   
                   <Link href="/settings/tax-accounts">
                     <Button

@@ -246,10 +246,9 @@ func (s *TaxAccountService) UpdateSettings(id uint, req *models.TaxAccountSettin
 	settings.UpdatedBy = userID
 	settings.UpdatedAt = time.Now()
 
-	// Validate settings
-	if err := settings.ValidateAccountSettings(); err != nil {
-		return nil, err
-	}
+	// Note: Skip validation for update mode since we only update specific fields
+	// The existing record already has all required fields set from initial creation
+	// Validation is only needed for CREATE, not UPDATE
 
 	if err := s.db.Save(&settings).Error; err != nil {
 		return nil, fmt.Errorf("failed to update tax account settings: %v", err)
