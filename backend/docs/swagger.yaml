@@ -1,5 +1,87 @@
 basePath: /api/v1
 definitions:
+  controllers.AccountCodeValidationResponse:
+    properties:
+      is_valid:
+        type: boolean
+      message:
+        type: string
+    type: object
+  controllers.AccountStatus:
+    properties:
+      account:
+        $ref: '#/definitions/models.AccountResponse'
+      is_configured:
+        type: boolean
+      recommendations:
+        items:
+          type: string
+        type: array
+      warnings:
+        items:
+          type: string
+        type: array
+    type: object
+  controllers.CustomerHistoryData:
+    properties:
+      company:
+        $ref: '#/definitions/models.CompanyInfo'
+      currency:
+        type: string
+      customer:
+        $ref: '#/definitions/controllers.CustomerInfo'
+      end_date:
+        type: string
+      generated_at:
+        type: string
+      start_date:
+        type: string
+      summary:
+        $ref: '#/definitions/controllers.HistorySummary'
+      transactions:
+        items:
+          $ref: '#/definitions/controllers.TransactionHistory'
+        type: array
+    type: object
+  controllers.CustomerInfo:
+    properties:
+      address:
+        type: string
+      code:
+        type: string
+      credit_limit:
+        type: number
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
+  controllers.GenerateCodeRequest:
+    properties:
+      account_name:
+        type: string
+      account_type:
+        type: string
+      parent_code:
+        type: string
+    required:
+    - account_type
+    type: object
+  controllers.GenerateCodeResponse:
+    properties:
+      alternative_codes:
+        items:
+          type: string
+        type: array
+      recommended_code:
+        type: string
+      validation:
+        $ref: '#/definitions/controllers.AccountCodeValidationResponse'
+    type: object
   controllers.GetPurchaseReportResponse:
     properties:
       data:
@@ -12,6 +94,21 @@ definitions:
         type: boolean
       timestamp:
         type: string
+    type: object
+  controllers.HistorySummary:
+    properties:
+      first_transaction:
+        type: string
+      last_transaction:
+        type: string
+      total_amount:
+        type: number
+      total_outstanding:
+        type: number
+      total_paid:
+        type: number
+      total_transactions:
+        type: integer
     type: object
   controllers.JournalSummary:
     properties:
@@ -170,6 +267,21 @@ definitions:
       uses_materialized_view:
         type: boolean
     type: object
+  controllers.ResetCounterRequest:
+    properties:
+      counter:
+        example: 0
+        minimum: 0
+        type: integer
+      year:
+        example: 2024
+        maximum: 2050
+        minimum: 2020
+        type: integer
+    required:
+    - counter
+    - year
+    type: object
   controllers.ReversePaymentRequest:
     properties:
       reason:
@@ -187,6 +299,127 @@ definitions:
       metadata:
         $ref: '#/definitions/controllers.ReportMetadata'
       status:
+        type: string
+    type: object
+  controllers.TaxAccountStatusResponse:
+    properties:
+      cogs:
+        $ref: '#/definitions/controllers.AccountStatus'
+      configuration_id:
+        type: integer
+      health_score:
+        description: 0-100
+        type: integer
+      inventory:
+        $ref: '#/definitions/controllers.AccountStatus'
+      is_fully_configured:
+        type: boolean
+      last_updated:
+        type: string
+      missing_accounts:
+        description: Overall status
+        items:
+          type: string
+        type: array
+      purchase_bank:
+        $ref: '#/definitions/controllers.AccountStatus'
+      purchase_cash:
+        $ref: '#/definitions/controllers.AccountStatus'
+      purchase_expense:
+        $ref: '#/definitions/controllers.AccountStatus'
+      purchase_input_vat:
+        $ref: '#/definitions/controllers.AccountStatus'
+      purchase_payable:
+        allOf:
+        - $ref: '#/definitions/controllers.AccountStatus'
+        description: Purchase accounts status
+      sales_bank:
+        $ref: '#/definitions/controllers.AccountStatus'
+      sales_cash:
+        $ref: '#/definitions/controllers.AccountStatus'
+      sales_output_vat:
+        $ref: '#/definitions/controllers.AccountStatus'
+      sales_receivable:
+        allOf:
+        - $ref: '#/definitions/controllers.AccountStatus'
+        description: Sales accounts status
+      sales_revenue:
+        $ref: '#/definitions/controllers.AccountStatus'
+      system_warnings:
+        items:
+          type: string
+        type: array
+      tax_payable:
+        $ref: '#/definitions/controllers.AccountStatus'
+      updated_by:
+        $ref: '#/definitions/models.UserResponse'
+      withholding_tax21:
+        allOf:
+        - $ref: '#/definitions/controllers.AccountStatus'
+        description: Optional accounts
+      withholding_tax23:
+        $ref: '#/definitions/controllers.AccountStatus'
+      withholding_tax25:
+        $ref: '#/definitions/controllers.AccountStatus'
+    type: object
+  controllers.TransactionHistory:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      outstanding:
+        type: number
+      paid_amount:
+        type: number
+      reference:
+        type: string
+      status:
+        type: string
+      transaction_code:
+        type: string
+      transaction_type:
+        description: SALE, INVOICE, PAYMENT, PURCHASE, BILL
+        type: string
+    type: object
+  controllers.VendorHistoryData:
+    properties:
+      company:
+        $ref: '#/definitions/models.CompanyInfo'
+      currency:
+        type: string
+      end_date:
+        type: string
+      generated_at:
+        type: string
+      start_date:
+        type: string
+      summary:
+        $ref: '#/definitions/controllers.HistorySummary'
+      transactions:
+        items:
+          $ref: '#/definitions/controllers.TransactionHistory'
+        type: array
+      vendor:
+        $ref: '#/definitions/controllers.VendorInfo'
+    type: object
+  controllers.VendorInfo:
+    properties:
+      address:
+        type: string
+      code:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      phone:
         type: string
     type: object
   models.APIResponse:
@@ -224,6 +457,9 @@ definitions:
       is_active:
         type: boolean
       is_header:
+        type: boolean
+      is_system_critical:
+        description: Lock critical accounts from modification
         type: boolean
       level:
         type: integer
@@ -454,12 +690,150 @@ definitions:
       updated_at:
         type: string
     type: object
+  models.BankReconciliation:
+    properties:
+      added_transactions:
+        type: integer
+      balance_confirmed:
+        type: boolean
+      base_balance:
+        description: Balance Comparison
+        type: number
+      base_snapshot:
+        $ref: '#/definitions/models.BankReconciliationSnapshot'
+      base_snapshot_id:
+        description: Snapshot References
+        type: integer
+      base_transaction_count:
+        description: Transaction Comparison
+        type: integer
+      cash_bank:
+        allOf:
+        - $ref: '#/definitions/models.CashBank'
+        description: Relations
+      cash_bank_id:
+        type: integer
+      comparison_snapshot:
+        $ref: '#/definitions/models.BankReconciliationSnapshot'
+      comparison_snapshot_id:
+        description: PDF baru (optional)
+        type: integer
+      created_at:
+        type: string
+      current_balance:
+        type: number
+      current_transaction_count:
+        type: integer
+      differences:
+        items:
+          $ref: '#/definitions/models.ReconciliationDifference'
+        type: array
+      id:
+        type: integer
+      is_balanced:
+        description: Result
+        type: boolean
+      missing_transactions:
+        description: Differences Found
+        type: integer
+      modified_transactions:
+        type: integer
+      notes:
+        type: string
+      period:
+        description: 'Format: YYYY-MM'
+        type: string
+      reconciliation_by:
+        type: integer
+      reconciliation_by_user:
+        $ref: '#/definitions/models.User'
+      reconciliation_date:
+        description: Reconciliation Info
+        type: string
+      reconciliation_number:
+        type: string
+      review_notes:
+        type: string
+      reviewed_at:
+        type: string
+      reviewed_by:
+        type: integer
+      reviewed_by_user:
+        $ref: '#/definitions/models.User'
+      status:
+        description: Status & Approval
+        type: string
+      transaction_variance:
+        type: integer
+      updated_at:
+        type: string
+      variance:
+        type: number
+    type: object
+  models.BankReconciliationSnapshot:
+    properties:
+      cash_bank:
+        allOf:
+        - $ref: '#/definitions/models.CashBank'
+        description: Relations
+      cash_bank_id:
+        type: integer
+      closing_balance:
+        type: number
+      created_at:
+        type: string
+      data_hash:
+        description: Integrity & Security
+        type: string
+      generated_by:
+        type: integer
+      generated_by_user:
+        $ref: '#/definitions/models.User'
+      id:
+        type: integer
+      is_locked:
+        type: boolean
+      locked_at:
+        type: string
+      locked_by:
+        type: integer
+      locked_by_user:
+        $ref: '#/definitions/models.User'
+      notes:
+        description: Metadata
+        type: string
+      opening_balance:
+        description: Balance Information
+        type: number
+      period:
+        description: 'Format: YYYY-MM'
+        type: string
+      snapshot_date:
+        type: string
+      status:
+        description: ACTIVE, ARCHIVED, SUPERSEDED
+        type: string
+      total_credit:
+        type: number
+      total_debit:
+        type: number
+      transaction_count:
+        type: integer
+      transactions:
+        items:
+          $ref: '#/definitions/models.ReconciliationTransactionSnapshot'
+        type: array
+      updated_at:
+        type: string
+    type: object
   models.CashBank:
     properties:
       account:
         allOf:
         - $ref: '#/definitions/models.Account'
         description: Relations
+      account_holder_name:
+        type: string
       account_id:
         type: integer
       account_no:
@@ -467,6 +841,8 @@ definitions:
       balance:
         type: number
       bank_name:
+        type: string
+      branch:
         type: string
       code:
         type: string
@@ -504,6 +880,59 @@ definitions:
       user_id:
         type: integer
     type: object
+  models.CashBankAuditTrail:
+    properties:
+      action:
+        description: CREATE, UPDATE, DELETE, VOID, RESTORE
+        type: string
+      approval_status:
+        description: PENDING, APPROVED, REJECTED
+        type: string
+      approved_at:
+        type: string
+      approved_by:
+        type: integer
+      approved_by_user:
+        $ref: '#/definitions/models.User'
+      cash_bank:
+        allOf:
+        - $ref: '#/definitions/models.CashBank'
+        description: Relations
+      cash_bank_id:
+        type: integer
+      created_at:
+        type: string
+      entity_id:
+        type: integer
+      entity_type:
+        description: CASH_BANK, TRANSACTION, TRANSFER, DEPOSIT, WITHDRAWAL
+        type: string
+      field_changed:
+        description: Change Details
+        type: string
+      id:
+        type: integer
+      ip_address:
+        type: string
+      new_value:
+        type: string
+      old_value:
+        type: string
+      reason:
+        description: Context
+        type: string
+      requires_approval:
+        description: Approval (for backdated or sensitive changes)
+        type: boolean
+      transaction_id:
+        type: integer
+      user:
+        $ref: '#/definitions/models.User'
+      user_agent:
+        type: string
+      user_id:
+        type: integer
+    type: object
   models.CashBankTransaction:
     properties:
       amount:
@@ -530,6 +959,29 @@ definitions:
       transaction_date:
         type: string
       updated_at:
+        type: string
+    type: object
+  models.CompanyInfo:
+    properties:
+      address:
+        type: string
+      city:
+        type: string
+      email:
+        type: string
+      logo:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      postal_code:
+        type: string
+      state:
+        type: string
+      tax_number:
+        type: string
+      website:
         type: string
     type: object
   models.Contact:
@@ -629,6 +1081,16 @@ definitions:
         example: error
         type: string
     type: object
+  models.InvoiceNumberRequest:
+    properties:
+      date:
+        type: string
+      invoice_type_id:
+        type: integer
+    required:
+    - date
+    - invoice_type_id
+    type: object
   models.InvoiceType:
     properties:
       code:
@@ -655,6 +1117,39 @@ definitions:
         description: e.g., "Corporate Sales", "Retail Sales"
         type: string
       updated_at:
+        type: string
+    type: object
+  models.InvoiceTypeCreateRequest:
+    properties:
+      code:
+        maxLength: 20
+        minLength: 1
+        type: string
+      description:
+        maxLength: 500
+        type: string
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+    required:
+    - code
+    - name
+    type: object
+  models.InvoiceTypeUpdateRequest:
+    properties:
+      code:
+        maxLength: 20
+        minLength: 1
+        type: string
+      description:
+        maxLength: 500
+        type: string
+      is_active:
+        type: boolean
+      name:
+        maxLength: 100
+        minLength: 1
         type: string
     type: object
   models.IpWhitelist:
@@ -870,6 +1365,9 @@ definitions:
         description: CASH, BANK_TRANSFER, CHECK, etc.
         type: string
       notes:
+        type: string
+      payment_type:
+        description: REGULAR, TAX_PPN, TAX_PPN_INPUT, TAX_PPN_OUTPUT
         type: string
       reference:
         type: string
@@ -1345,6 +1843,85 @@ definitions:
         description: Legacy tax field (for backward compatibility - ignored in calculation)
         type: number
       vendor_id:
+        type: integer
+    type: object
+  models.ReconciliationDifference:
+    properties:
+      amount_difference:
+        type: number
+      base_transaction_id:
+        description: Transaction References
+        type: integer
+      created_at:
+        type: string
+      current_transaction_id:
+        type: integer
+      description:
+        type: string
+      difference_type:
+        description: MISSING, ADDED, MODIFIED, AMOUNT_CHANGE, DATE_CHANGE
+        type: string
+      field:
+        description: Difference Details
+        type: string
+      id:
+        type: integer
+      new_value:
+        type: string
+      old_value:
+        type: string
+      reconciliation_id:
+        type: integer
+      resolution_notes:
+        type: string
+      resolved_at:
+        type: string
+      resolved_by:
+        type: integer
+      resolved_by_user:
+        $ref: '#/definitions/models.User'
+      severity:
+        description: LOW, MEDIUM, HIGH, CRITICAL
+        type: string
+      status:
+        description: Resolution
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.ReconciliationTransactionSnapshot:
+    properties:
+      amount:
+        type: number
+      balance_after:
+        type: number
+      created_at:
+        type: string
+      created_by:
+        description: Audit Info
+        type: integer
+      credit_amount:
+        type: number
+      debit_amount:
+        type: number
+      description:
+        type: string
+      id:
+        type: integer
+      notes:
+        type: string
+      reference_id:
+        type: integer
+      reference_number:
+        type: string
+      reference_type:
+        type: string
+      snapshot_id:
+        type: integer
+      transaction_date:
+        description: Transaction Data (frozen at snapshot time)
+        type: string
+      transaction_id:
         type: integer
     type: object
   models.RefreshTokenRequest:
@@ -2381,6 +2958,19 @@ definitions:
       total_debit:
         type: number
     type: object
+  services.AccountCodeFix:
+    properties:
+      account_name:
+        type: string
+      account_type:
+        type: string
+      current_code:
+        type: string
+      reason:
+        type: string
+      suggested_code:
+        type: string
+    type: object
   services.AccountTypeSummary:
     properties:
       account_count:
@@ -2528,11 +3118,15 @@ definitions:
     type: object
   services.CashBankCreateRequest:
     properties:
+      account_holder_name:
+        type: string
       account_id:
         type: integer
       account_no:
         type: string
       bank_name:
+        type: string
+      branch:
         type: string
       currency:
         type: string
@@ -2586,9 +3180,13 @@ definitions:
     type: object
   services.CashBankUpdateRequest:
     properties:
+      account_holder_name:
+        type: string
       account_no:
         type: string
       bank_name:
+        type: string
+      branch:
         type: string
       description:
         type: string
@@ -2708,9 +3306,61 @@ definitions:
       total_checks:
         type: integer
     type: object
+  services.CreatePPNPaymentRequest:
+    properties:
+      amount:
+        type: number
+      cash_bank_id:
+        type: integer
+      date:
+        type: string
+      notes:
+        type: string
+      ppn_type:
+        description: INPUT (Masukan) or OUTPUT (Keluaran)
+        type: string
+      reference:
+        type: string
+    required:
+    - amount
+    - cash_bank_id
+    - date
+    - ppn_type
+    type: object
+  services.CreateReconciliationRequest:
+    properties:
+      base_snapshot_id:
+        type: integer
+      cash_bank_id:
+        type: integer
+      comparison_snapshot_id:
+        description: Optional, akan di-generate jika null
+        type: integer
+      notes:
+        type: string
+      period:
+        type: string
+    required:
+    - base_snapshot_id
+    - cash_bank_id
+    - period
+    type: object
+  services.CreateSnapshotRequest:
+    properties:
+      cash_bank_id:
+        type: integer
+      notes:
+        type: string
+      period:
+        description: 'Format: YYYY-MM'
+        type: string
+    required:
+    - cash_bank_id
+    - period
+    type: object
   services.CustomerSalesData:
     properties:
-      average_order:
+      average_transaction:
         type: number
       customer_id:
         type: integer
@@ -2718,22 +3368,26 @@ definitions:
         type: string
       first_order_date:
         type: string
+      items:
+        items:
+          $ref: '#/definitions/services.SaleItemDetail'
+        type: array
       last_order_date:
         type: string
-      total_amount:
+      total_sales:
         type: number
       transaction_count:
         type: integer
     type: object
   services.DataQualityIssue:
     properties:
-      category:
-        type: string
       count:
         type: integer
       description:
         type: string
       severity:
+        type: string
+      type:
         type: string
     type: object
   services.DataQualityMetrics:
@@ -4110,6 +4764,27 @@ definitions:
         - $ref: '#/definitions/services.ValidationReport'
         description: Data Quality and Validation Fields
     type: object
+  services.PurchaseItemDetail:
+    properties:
+      invoice_number:
+        type: string
+      product_code:
+        type: string
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      purchase_date:
+        type: string
+      quantity:
+        type: number
+      total_price:
+        type: number
+      unit:
+        type: string
+      unit_price:
+        type: number
+    type: object
   services.PurchasePaymentAnalysis:
     properties:
       average_order_value:
@@ -4248,6 +4923,27 @@ definitions:
       reconciliation_status:
         type: string
       ssot_balance:
+        type: number
+    type: object
+  services.SaleItemDetail:
+    properties:
+      invoice_number:
+        type: string
+      product_code:
+        type: string
+      product_id:
+        type: integer
+      product_name:
+        type: string
+      quantity:
+        type: number
+      sale_date:
+        type: string
+      total_price:
+        type: number
+      unit:
+        type: string
+      unit_price:
         type: number
     type: object
   services.SalesSummaryData:
@@ -4571,6 +5267,10 @@ definitions:
     type: object
   services.VendorPurchaseSummary:
     properties:
+      items:
+        items:
+          $ref: '#/definitions/services.PurchaseItemDetail'
+        type: array
       last_purchase_date:
         type: string
       outstanding:
@@ -4713,6 +5413,290 @@ paths:
       summary: Fix cash bank GL account links
       tags:
       - Admin
+  /api/bank-reconciliation/audit-trail:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve complete audit trail of all changes
+      parameters:
+      - description: Cash Bank ID
+        in: query
+        name: cash_bank_id
+        required: true
+        type: integer
+      - description: Limit number of records
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.CashBankAuditTrail'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get audit trail for cash bank account
+      tags:
+      - BankReconciliation
+    post:
+      consumes:
+      - application/json
+      description: Create audit trail entry for cash bank changes
+      parameters:
+      - description: Audit log entry
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.CashBankAuditTrail'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Log audit trail entry
+      tags:
+      - BankReconciliation
+  /api/bank-reconciliation/reconcile:
+    post:
+      consumes:
+      - application/json
+      description: Compare base snapshot with current data to detect changes
+      parameters:
+      - description: Reconciliation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.CreateReconciliationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.BankReconciliation'
+      security:
+      - Bearer: []
+      summary: Perform bank reconciliation
+      tags:
+      - BankReconciliation
+  /api/bank-reconciliation/reconciliations:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all reconciliation records for a specific cash bank account
+      parameters:
+      - description: Cash Bank ID
+        in: query
+        name: cash_bank_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.BankReconciliation'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get all reconciliations for a cash bank account
+      tags:
+      - BankReconciliation
+  /api/bank-reconciliation/reconciliations/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed reconciliation report with differences
+      parameters:
+      - description: Reconciliation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BankReconciliation'
+      security:
+      - Bearer: []
+      summary: Get reconciliation by ID
+      tags:
+      - BankReconciliation
+  /api/bank-reconciliation/reconciliations/{id}/approve:
+    post:
+      consumes:
+      - application/json
+      description: Approve a reconciliation report (manager/supervisor only)
+      parameters:
+      - description: Reconciliation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Approval notes
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Approve reconciliation
+      tags:
+      - BankReconciliation
+  /api/bank-reconciliation/reconciliations/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      description: Reject a reconciliation report (manager/supervisor only)
+      parameters:
+      - description: Reconciliation ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Rejection notes (required)
+        in: body
+        name: request
+        required: true
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Reject reconciliation
+      tags:
+      - BankReconciliation
+  /api/bank-reconciliation/snapshots:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all snapshots for a specific cash bank account
+      parameters:
+      - description: Cash Bank ID
+        in: query
+        name: cash_bank_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.BankReconciliationSnapshot'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get all snapshots for a cash bank account
+      tags:
+      - BankReconciliation
+    post:
+      consumes:
+      - application/json
+      description: Create a frozen snapshot of bank transactions for a specific period
+      parameters:
+      - description: Snapshot request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.CreateSnapshotRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.BankReconciliationSnapshot'
+      security:
+      - Bearer: []
+      summary: Generate bank statement snapshot
+      tags:
+      - BankReconciliation
+  /api/bank-reconciliation/snapshots/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve snapshot details with transactions
+      parameters:
+      - description: Snapshot ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.BankReconciliationSnapshot'
+      security:
+      - Bearer: []
+      summary: Get snapshot by ID
+      tags:
+      - BankReconciliation
+  /api/bank-reconciliation/snapshots/{id}/lock:
+    post:
+      consumes:
+      - application/json
+      description: Lock a snapshot after period close to ensure data integrity
+      parameters:
+      - description: Snapshot ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Lock snapshot to prevent modifications
+      tags:
+      - BankReconciliation
   /api/cashbank/accounts:
     get:
       consumes:
@@ -5966,6 +6950,416 @@ paths:
       summary: Get unpaid invoices
       tags:
       - Payments
+  /api/v1/account-codes/availability:
+    get:
+      consumes:
+      - application/json
+      description: Check if an account code is already in use
+      parameters:
+      - description: Account code to check
+        in: query
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Check code availability
+      tags:
+      - Account Code
+  /api/v1/account-codes/generate:
+    post:
+      consumes:
+      - application/json
+      description: Generate a sequential account code based on account type and parent
+      parameters:
+      - description: Code generation parameters
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.GenerateCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controllers.GenerateCodeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Generate account code
+      tags:
+      - Account Code
+  /api/v1/account-codes/next:
+    get:
+      consumes:
+      - application/json
+      description: Get the next available sequential code for an account type
+      parameters:
+      - description: Account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)
+        in: query
+        name: account_type
+        required: true
+        type: string
+      - description: Parent account code
+        in: query
+        name: parent_code
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get next sequential code
+      tags:
+      - Account Code
+  /api/v1/account-codes/non-standard:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of account codes that don't follow standard patterns
+        with suggested fixes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/services.AccountCodeFix'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get non-standard codes
+      tags:
+      - Account Code
+  /api/v1/account-codes/structure:
+    get:
+      consumes:
+      - application/json
+      description: Get the standard account code ranges and rules
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get accounting structure
+      tags:
+      - Account Code
+  /api/v1/account-codes/suggest:
+    get:
+      consumes:
+      - application/json
+      description: Suggest account codes based on account name and type
+      parameters:
+      - description: Account name
+        in: query
+        name: account_name
+        required: true
+        type: string
+      - description: Account type
+        in: query
+        name: account_type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Suggest code by name
+      tags:
+      - Account Code
+  /api/v1/account-codes/validate:
+    get:
+      consumes:
+      - application/json
+      description: Validate if an account code follows proper hierarchy and is available
+      parameters:
+      - description: Account code to validate
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: Account type
+        in: query
+        name: account_type
+        required: true
+        type: string
+      - description: Parent account code
+        in: query
+        name: parent_code
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controllers.AccountCodeValidationResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Validate account code
+      tags:
+      - Account Code
+  /api/v1/activity-logs/me:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve activity logs for the authenticated user
+      parameters:
+      - description: Start date (RFC3339 format)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (RFC3339 format)
+        in: query
+        name: end_date
+        type: string
+      - description: 'Limit results (default: 50)'
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity logs retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get my activity logs
+      tags:
+      - Activity Logs
+  /api/v1/admin/activity-logs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve activity logs with optional filters (admin only)
+      parameters:
+      - description: Filter by user ID
+        in: query
+        name: user_id
+        type: integer
+      - description: Filter by username
+        in: query
+        name: username
+        type: string
+      - description: Filter by role
+        in: query
+        name: role
+        type: string
+      - description: Filter by HTTP method
+        in: query
+        name: method
+        type: string
+      - description: Filter by path
+        in: query
+        name: path
+        type: string
+      - description: Filter by resource
+        in: query
+        name: resource
+        type: string
+      - description: Filter by status code
+        in: query
+        name: status_code
+        type: integer
+      - description: Filter by error status
+        in: query
+        name: is_error
+        type: boolean
+      - description: Filter by IP address
+        in: query
+        name: ip_address
+        type: string
+      - description: Start date (RFC3339 format)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (RFC3339 format)
+        in: query
+        name: end_date
+        type: string
+      - description: 'Limit results (default: 100)'
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity logs retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid request parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get activity logs
+      tags:
+      - Activity Logs
+  /api/v1/admin/activity-logs/cleanup:
+    post:
+      consumes:
+      - application/json
+      description: Remove activity logs older than specified days (admin only)
+      parameters:
+      - description: 'Number of days to keep (default: 90)'
+        in: query
+        name: days_to_keep
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Old logs cleaned up successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Cleanup old activity logs
+      tags:
+      - Activity Logs
+  /api/v1/admin/activity-logs/stats:
+    get:
+      consumes:
+      - application/json
+      description: Get activity statistics for dashboard (admin only)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity statistics retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get activity statistics
+      tags:
+      - Activity Logs
+  /api/v1/admin/activity-logs/summary:
+    get:
+      consumes:
+      - application/json
+      description: Get activity summary grouped by user and date (admin only)
+      parameters:
+      - description: Start date (RFC3339 format)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (RFC3339 format)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Activity summary retrieved successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Invalid date parameters
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get activity summary
+      tags:
+      - Activity Logs
   /api/v1/admin/balance-health/auto-heal:
     post:
       consumes:
@@ -6403,6 +7797,531 @@ paths:
       summary: Get security metrics
       tags:
       - Security
+  /api/v1/cogs/backfill:
+    post:
+      consumes:
+      - application/json
+      description: Create COGS journal entries for sales that don't have them yet
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - description: Preview without making changes
+        in: query
+        name: dry_run
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Backfill COGS Entries
+      tags:
+      - COGS
+  /api/v1/cogs/missing:
+    get:
+      consumes:
+      - application/json
+      description: Get list of sales that don't have COGS entries yet
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get Sales Without COGS
+      tags:
+      - COGS
+  /api/v1/cogs/record/{sale_id}:
+    post:
+      consumes:
+      - application/json
+      description: Create COGS journal entry for a specific sale transaction
+      parameters:
+      - description: Sale ID
+        in: path
+        name: sale_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Record COGS for Sale
+      tags:
+      - COGS
+  /api/v1/cogs/summary:
+    get:
+      consumes:
+      - application/json
+      description: Get Cost of Goods Sold summary for a specific period
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get COGS Summary
+      tags:
+      - COGS
+  /api/v1/invoice-types:
+    get:
+      consumes:
+      - application/json
+      description: Get all invoice types, with optional active_only=true to filter
+        only active ones
+      parameters:
+      - default: false
+        description: Filter only active types
+        in: query
+        name: active_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: List invoice types
+      tags:
+      - Invoice Types
+    post:
+      consumes:
+      - application/json
+      description: Create a new invoice type
+      parameters:
+      - description: Invoice type data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.InvoiceTypeCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Create invoice type
+      tags:
+      - Invoice Types
+  /api/v1/invoice-types/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an invoice type (only if not used)
+      parameters:
+      - description: Invoice Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Delete invoice type
+      tags:
+      - Invoice Types
+    get:
+      consumes:
+      - application/json
+      description: Get a single invoice type by ID
+      parameters:
+      - description: Invoice Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get invoice type
+      tags:
+      - Invoice Types
+    put:
+      consumes:
+      - application/json
+      description: Update an existing invoice type
+      parameters:
+      - description: Invoice Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Invoice type update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.InvoiceTypeUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Update invoice type
+      tags:
+      - Invoice Types
+  /api/v1/invoice-types/{id}/counter-history:
+    get:
+      consumes:
+      - application/json
+      description: Get counter history for a specific invoice type
+      parameters:
+      - description: Invoice Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Get counter history
+      tags:
+      - Invoice Types
+  /api/v1/invoice-types/{id}/preview:
+    get:
+      consumes:
+      - application/json
+      description: Preview the next invoice number using path param and optional date
+        query (?date=YYYY-MM-DD)
+      parameters:
+      - description: Invoice Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Custom date (YYYY-MM-DD)
+        in: query
+        name: date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Preview next invoice number by ID
+      tags:
+      - Invoice Types
+  /api/v1/invoice-types/{id}/reset-counter:
+    post:
+      consumes:
+      - application/json
+      description: Reset counter for a specific invoice type and year
+      parameters:
+      - description: Invoice Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Year and new counter value
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/controllers.ResetCounterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Reset invoice counter
+      tags:
+      - Invoice Types
+  /api/v1/invoice-types/{id}/toggle:
+    post:
+      consumes:
+      - application/json
+      description: Toggle the active status of an invoice type
+      parameters:
+      - description: Invoice Type ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Toggle active status
+      tags:
+      - Invoice Types
+  /api/v1/invoice-types/active:
+    get:
+      consumes:
+      - application/json
+      description: Get only active invoice types (for dropdowns)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: List active invoice types
+      tags:
+      - Invoice Types
+  /api/v1/invoice-types/preview-number:
+    post:
+      consumes:
+      - application/json
+      description: Preview what the next invoice number would be for a given type
+        and date
+      parameters:
+      - description: Invoice number preview request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.InvoiceNumberRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - Bearer: []
+      summary: Preview next invoice number
+      tags:
+      - Invoice Types
   /api/v1/journals:
     get:
       description: Get journal entries with filtering, pagination, and sorting
@@ -6584,6 +8503,30 @@ paths:
       summary: Get journal summary
       tags:
       - Journal
+  /api/v1/monitoring/sessions/active:
+    get:
+      consumes:
+      - application/json
+      description: Get all active sessions for the current user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Active sessions
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get active sessions
+      tags:
+      - Session Management
   /api/v1/purchases:
     get:
       consumes:
@@ -6953,6 +8896,53 @@ paths:
       summary: Submit purchase for approval
       tags:
       - Purchases
+  /api/v1/reports/customer-history:
+    get:
+      description: Generate comprehensive customer transaction history including sales
+        and payments
+      parameters:
+      - description: Customer ID
+        in: query
+        name: customer_id
+        required: true
+        type: string
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format (json, pdf, csv)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controllers.CustomerHistoryData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get customer transaction history
+      tags:
+      - Contact History
   /api/v1/reports/optimized/balance-sheet:
     get:
       consumes:
@@ -7252,6 +9242,53 @@ paths:
       summary: Get list of supported PSAK standards
       tags:
       - PSAK Reports
+  /api/v1/reports/vendor-history:
+    get:
+      description: Generate comprehensive vendor transaction history including purchases
+        and payments
+      parameters:
+      - description: Vendor ID
+        in: query
+        name: vendor_id
+        required: true
+        type: string
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - default: json
+        description: Output format (json, pdf, csv)
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controllers.VendorHistoryData'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get vendor transaction history
+      tags:
+      - Contact History
   /api/v1/sales:
     get:
       consumes:
@@ -7578,104 +9615,51 @@ paths:
       summary: Validate stock for sale
       tags:
       - Sales
-  /api/v1/settings/tax-accounts:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve the currently active tax account settings
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.TaxAccountSettingsResponse'
-        "404":
-          description: Not Found
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get current tax account settings
-      tags:
-      - Tax Account Settings
+  /api/v1/sessions/cleanup:
     post:
       consumes:
       - application/json
-      description: Create a new tax account configuration
-      parameters:
-      - description: Tax account settings data
-        in: body
-        name: settings
-        required: true
-        schema:
-          $ref: '#/definitions/models.TaxAccountSettingsCreateRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.TaxAccountSettingsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Create new tax account settings
-      tags:
-      - Tax Account Settings
-  /api/v1/settings/tax-accounts/{id}:
-    put:
-      consumes:
-      - application/json
-      description: Update an existing tax account configuration
-      parameters:
-      - description: Settings ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Tax account settings data
-        in: body
-        name: settings
-        required: true
-        schema:
-          $ref: '#/definitions/models.TaxAccountSettingsUpdateRequest'
+      description: Manually trigger cleanup of expired sessions and tokens
       produces:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Cleanup completed
           schema:
-            $ref: '#/definitions/models.TaxAccountSettingsResponse'
-        "400":
-          description: Bad Request
-          schema:
-            additionalProperties: true
+            additionalProperties:
+              type: string
             type: object
-        "404":
-          description: Not Found
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Force session cleanup
+      tags:
+      - Session Management
+  /api/v1/sessions/stats:
+    get:
+      consumes:
+      - application/json
+      description: Get statistics about active, expired, and total sessions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Session statistics
           schema:
             additionalProperties: true
             type: object
         "500":
-          description: Internal Server Error
+          description: Internal server error
           schema:
-            additionalProperties: true
+            additionalProperties:
+              type: string
             type: object
-      summary: Update tax account settings
+      summary: Get session statistics
       tags:
-      - Tax Account Settings
+      - Session Management
   /api/v1/settings/tax-accounts/{id}/activate:
     post:
       consumes:
@@ -7735,37 +9719,6 @@ paths:
       summary: Get all tax account settings
       tags:
       - Tax Account Settings
-  /api/v1/settings/tax-accounts/available-accounts:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve available accounts that can be used for tax account configuration
-      parameters:
-      - description: Filter by account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)
-        in: query
-        name: type
-        type: string
-      - description: Filter by account category
-        in: query
-        name: category
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            items:
-              $ref: '#/definitions/models.AccountResponse'
-            type: array
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Get available accounts
-      tags:
-      - Tax Account Settings
   /api/v1/settings/tax-accounts/refresh-cache:
     post:
       consumes:
@@ -7787,11 +9740,44 @@ paths:
       summary: Refresh cache
       tags:
       - Tax Account Settings
-  /api/v1/settings/tax-accounts/suggestions:
+  /api/v1/settings/tax-accounts/status:
     get:
       consumes:
       - application/json
-      description: Get suggested accounts for tax account configuration setup
+      description: Get detailed status information about tax account configuration
+        including validation and recommendations
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/controllers.TaxAccountStatusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get tax account configuration status
+      tags:
+      - Tax Account Status
+  /api/v1/settings/tax-accounts/validate:
+    get:
+      consumes:
+      - application/json
+      description: Validate if a specific account is suitable for a particular tax
+        account role
+      parameters:
+      - description: Account ID to validate
+        in: query
+        name: account_id
+        required: true
+        type: integer
+      - description: Role to validate for (sales_receivable, sales_cash, etc.)
+        in: query
+        name: role
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -7800,15 +9786,14 @@ paths:
           schema:
             additionalProperties: true
             type: object
-        "500":
-          description: Internal Server Error
+        "400":
+          description: Bad Request
           schema:
             additionalProperties: true
             type: object
-      summary: Get account suggestions
+      summary: Validate account selection
       tags:
-      - Tax Account Settings
-  /api/v1/settings/tax-accounts/validate:
+      - Tax Account Status
     post:
       consumes:
       - application/json
@@ -8245,6 +10230,394 @@ paths:
       summary: Get vendor analysis integrated with SSOT journal
       tags:
       - SSOT Reports
+  /api/v1/tax-accounts:
+    post:
+      consumes:
+      - application/json
+      description: Create new withholding tax and inventory account configuration
+      parameters:
+      - description: Withholding tax and inventory settings data
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/models.TaxAccountSettingsCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.TaxAccountSettingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Create withholding tax and inventory settings
+      tags:
+      - Withholding Tax & Inventory Settings
+  /api/v1/tax-accounts/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Update existing withholding tax and inventory account settings
+      parameters:
+      - description: Settings ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Withholding tax and inventory update data
+        in: body
+        name: settings
+        required: true
+        schema:
+          $ref: '#/definitions/models.TaxAccountSettingsUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TaxAccountSettingsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Update withholding tax and inventory settings
+      tags:
+      - Withholding Tax & Inventory Settings
+  /api/v1/tax-accounts/accounts:
+    get:
+      consumes:
+      - application/json
+      description: Get available accounts for withholding tax and inventory configuration
+      parameters:
+      - description: Filter by account type (ASSET, LIABILITY)
+        in: query
+        name: type
+        type: string
+      - description: Filter by category (CURRENT_ASSET, CURRENT_LIABILITY)
+        in: query
+        name: category
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.AccountResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get available accounts for configuration
+      tags:
+      - Withholding Tax & Inventory Settings
+  /api/v1/tax-accounts/current:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the currently active withholding tax and inventory account
+        settings
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.TaxAccountSettingsResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get withholding tax and inventory settings
+      tags:
+      - Withholding Tax & Inventory Settings
+  /api/v1/tax-accounts/suggestions:
+    get:
+      consumes:
+      - application/json
+      description: Get suggestions for withholding tax and inventory account configuration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      summary: Get account configuration suggestions
+      tags:
+      - Withholding Tax & Inventory Settings
+  /api/v1/tax-payments/ppn:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve PPN payments filtered by type and date range
+      parameters:
+      - description: Payment Type (TAX_PPN_INPUT or TAX_PPN_OUTPUT)
+        in: query
+        name: payment_type
+        type: string
+      - description: Start Date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End Date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get PPN Payments
+      tags:
+      - Tax Payments
+    post:
+      consumes:
+      - application/json
+      description: Create payment for PPN (either PPN Masukan or PPN Keluaran)
+      parameters:
+      - description: PPN Payment Request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.CreatePPNPaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create PPN Payment
+      tags:
+      - Tax Payments
+  /api/v1/tax-payments/ppn/keluaran:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve PPN Keluaran (Sales VAT) payments
+      parameters:
+      - description: Start Date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End Date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get PPN Keluaran Payments
+      tags:
+      - Tax Payments
+  /api/v1/tax-payments/ppn/masukan:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve PPN Masukan (Purchase VAT) payments
+      parameters:
+      - description: Start Date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End Date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get PPN Masukan Payments
+      tags:
+      - Tax Payments
+  /api/v1/tax-payments/ppn/summary:
+    get:
+      consumes:
+      - application/json
+      description: Get summary of PPN payments (both Input and Output)
+      parameters:
+      - description: Start Date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End Date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: success
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get PPN Payment Summary
+      tags:
+      - Tax Payments
   /auth/login:
     post:
       consumes:
@@ -8344,6 +10717,28 @@ paths:
       summary: User registration
       tags:
       - Authentication
+  /auth/session-info:
+    get:
+      consumes:
+      - application/json
+      description: Get current session information for debugging purposes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Session information
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get session information
+      tags:
+      - Authentication
   /auth/validate-token:
     get:
       consumes:
@@ -8398,6 +10793,199 @@ paths:
       security:
       - BearerAuth: []
       summary: Get analytics data
+      tags:
+      - Dashboard
+  /dashboard/employee:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve employee-specific dashboard data including pending approvals,
+        submitted requests, and notifications
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Employee dashboard data retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get employee dashboard data
+      tags:
+      - Dashboard
+  /dashboard/employee/approval-notifications:
+    get:
+      consumes:
+      - application/json
+      description: Get approval-related notifications including status updates on
+        purchase requests
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Approval notifications retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get employee approval notifications
+      tags:
+      - Dashboard
+  /dashboard/employee/notifications-summary:
+    get:
+      consumes:
+      - application/json
+      description: Get summary of notifications for the employee including unread
+        count
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notifications summary retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get employee notifications summary
+      tags:
+      - Dashboard
+  /dashboard/employee/notifications/{id}/read:
+    patch:
+      consumes:
+      - application/json
+      description: Mark a specific notification as read for the current user
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notification marked as read successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: Invalid notification ID
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "404":
+          description: Notification not found
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark notification as read
+      tags:
+      - Dashboard
+  /dashboard/employee/purchase-approval-status:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed approval status for purchases submitted by employee
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Purchase approval status retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get employee purchase approval status
+      tags:
+      - Dashboard
+  /dashboard/employee/purchase-requests:
+    get:
+      consumes:
+      - application/json
+      description: Get purchase requests submitted by the employee with approval status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Purchase requests retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get employee purchase requests
+      tags:
+      - Dashboard
+  /dashboard/employee/workflows:
+    get:
+      consumes:
+      - application/json
+      description: Get approval workflows where the employee has a role or can submit
+        requests
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Approval workflows retrieved successfully
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get employee approval workflows
       tags:
       - Dashboard
   /dashboard/finance:

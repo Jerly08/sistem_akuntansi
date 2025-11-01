@@ -80,6 +80,458 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/bank-reconciliation/audit-trail": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieve complete audit trail of all changes",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Get audit trail for cash bank account",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Cash Bank ID",
+                        "name": "cash_bank_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit number of records",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.CashBankAuditTrail"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create audit trail entry for cash bank changes",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Log audit trail entry",
+                "parameters": [
+                    {
+                        "description": "Audit log entry",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.CashBankAuditTrail"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/bank-reconciliation/reconcile": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Compare base snapshot with current data to detect changes",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Perform bank reconciliation",
+                "parameters": [
+                    {
+                        "description": "Reconciliation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.CreateReconciliationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.BankReconciliation"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/bank-reconciliation/reconciliations": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieve all reconciliation records for a specific cash bank account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Get all reconciliations for a cash bank account",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Cash Bank ID",
+                        "name": "cash_bank_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.BankReconciliation"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/bank-reconciliation/reconciliations/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieve detailed reconciliation report with differences",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Get reconciliation by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Reconciliation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BankReconciliation"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/bank-reconciliation/reconciliations/{id}/approve": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Approve a reconciliation report (manager/supervisor only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Approve reconciliation",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Reconciliation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Approval notes",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/bank-reconciliation/reconciliations/{id}/reject": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Reject a reconciliation report (manager/supervisor only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Reject reconciliation",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Reconciliation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Rejection notes (required)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/bank-reconciliation/snapshots": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieve all snapshots for a specific cash bank account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Get all snapshots for a cash bank account",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Cash Bank ID",
+                        "name": "cash_bank_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.BankReconciliationSnapshot"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a frozen snapshot of bank transactions for a specific period",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Generate bank statement snapshot",
+                "parameters": [
+                    {
+                        "description": "Snapshot request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.CreateSnapshotRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.BankReconciliationSnapshot"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/bank-reconciliation/snapshots/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieve snapshot details with transactions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Get snapshot by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Snapshot ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.BankReconciliationSnapshot"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/bank-reconciliation/snapshots/{id}/lock": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Lock a snapshot after period close to ensure data integrity",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "BankReconciliation"
+                ],
+                "summary": "Lock snapshot to prevent modifications",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Snapshot ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/cashbank/accounts": {
             "get": {
                 "security": [
@@ -2031,6 +2483,617 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/account-codes/availability": {
+            "get": {
+                "description": "Check if an account code is already in use",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account Code"
+                ],
+                "summary": "Check code availability",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account code to check",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/account-codes/generate": {
+            "post": {
+                "description": "Generate a sequential account code based on account type and parent",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account Code"
+                ],
+                "summary": "Generate account code",
+                "parameters": [
+                    {
+                        "description": "Code generation parameters",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.GenerateCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.GenerateCodeResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/account-codes/next": {
+            "get": {
+                "description": "Get the next available sequential code for an account type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account Code"
+                ],
+                "summary": "Get next sequential code",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)",
+                        "name": "account_type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Parent account code",
+                        "name": "parent_code",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/account-codes/non-standard": {
+            "get": {
+                "description": "Get a list of account codes that don't follow standard patterns with suggested fixes",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account Code"
+                ],
+                "summary": "Get non-standard codes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/services.AccountCodeFix"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/account-codes/structure": {
+            "get": {
+                "description": "Get the standard account code ranges and rules",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account Code"
+                ],
+                "summary": "Get accounting structure",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/account-codes/suggest": {
+            "get": {
+                "description": "Suggest account codes based on account name and type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account Code"
+                ],
+                "summary": "Suggest code by name",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account name",
+                        "name": "account_name",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Account type",
+                        "name": "account_type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/account-codes/validate": {
+            "get": {
+                "description": "Validate if an account code follows proper hierarchy and is available",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Account Code"
+                ],
+                "summary": "Validate account code",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account code to validate",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Account type",
+                        "name": "account_type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Parent account code",
+                        "name": "parent_code",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.AccountCodeValidationResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/activity-logs/me": {
+            "get": {
+                "description": "Retrieve activity logs for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity Logs"
+                ],
+                "summary": "Get my activity logs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (RFC3339 format)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (RFC3339 format)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit results (default: 50)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Activity logs retrieved successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/activity-logs": {
+            "get": {
+                "description": "Retrieve activity logs with optional filters (admin only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity Logs"
+                ],
+                "summary": "Get activity logs",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Filter by user ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by username",
+                        "name": "username",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by role",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by HTTP method",
+                        "name": "method",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by path",
+                        "name": "path",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by resource",
+                        "name": "resource",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Filter by status code",
+                        "name": "status_code",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by error status",
+                        "name": "is_error",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by IP address",
+                        "name": "ip_address",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (RFC3339 format)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (RFC3339 format)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit results (default: 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Activity logs retrieved successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/activity-logs/cleanup": {
+            "post": {
+                "description": "Remove activity logs older than specified days (admin only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity Logs"
+                ],
+                "summary": "Cleanup old activity logs",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of days to keep (default: 90)",
+                        "name": "days_to_keep",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Old logs cleaned up successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/activity-logs/stats": {
+            "get": {
+                "description": "Get activity statistics for dashboard (admin only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity Logs"
+                ],
+                "summary": "Get activity statistics",
+                "responses": {
+                    "200": {
+                        "description": "Activity statistics retrieved successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/activity-logs/summary": {
+            "get": {
+                "description": "Get activity summary grouped by user and date (admin only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Activity Logs"
+                ],
+                "summary": "Get activity summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (RFC3339 format)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (RFC3339 format)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Activity summary retrieved successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid date parameters",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/admin/balance-health/auto-heal": {
             "post": {
                 "security": [
@@ -2707,6 +3770,812 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/cogs/backfill": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create COGS journal entries for sales that don't have them yet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "COGS"
+                ],
+                "summary": "Backfill COGS Entries",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Preview without making changes",
+                        "name": "dry_run",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/cogs/missing": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get list of sales that don't have COGS entries yet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "COGS"
+                ],
+                "summary": "Get Sales Without COGS",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/cogs/record/{sale_id}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create COGS journal entry for a specific sale transaction",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "COGS"
+                ],
+                "summary": "Record COGS for Sale",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Sale ID",
+                        "name": "sale_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/cogs/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get Cost of Goods Sold summary for a specific period",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "COGS"
+                ],
+                "summary": "Get COGS Summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoice-types": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get all invoice types, with optional active_only=true to filter only active ones",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "List invoice types",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Filter only active types",
+                        "name": "active_only",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a new invoice type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Create invoice type",
+                "parameters": [
+                    {
+                        "description": "Invoice type data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.InvoiceTypeCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoice-types/active": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get only active invoice types (for dropdowns)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "List active invoice types",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoice-types/preview-number": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Preview what the next invoice number would be for a given type and date",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Preview next invoice number",
+                "parameters": [
+                    {
+                        "description": "Invoice number preview request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.InvoiceNumberRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoice-types/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get a single invoice type by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Get invoice type",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Invoice Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update an existing invoice type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Update invoice type",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Invoice Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Invoice type update data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.InvoiceTypeUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete an invoice type (only if not used)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Delete invoice type",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Invoice Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoice-types/{id}/counter-history": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get counter history for a specific invoice type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Get counter history",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Invoice Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoice-types/{id}/preview": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Preview the next invoice number using path param and optional date query (?date=YYYY-MM-DD)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Preview next invoice number by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Invoice Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Custom date (YYYY-MM-DD)",
+                        "name": "date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoice-types/{id}/reset-counter": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Reset counter for a specific invoice type and year",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Reset invoice counter",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Invoice Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Year and new counter value",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/controllers.ResetCounterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invoice-types/{id}/toggle": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Toggle the active status of an invoice type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoice Types"
+                ],
+                "summary": "Toggle active status",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Invoice Type ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/journals": {
             "get": {
                 "description": "Get journal entries with filtering, pagination, and sorting",
@@ -2971,6 +4840,44 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/monitoring/sessions/active": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all active sessions for the current user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Session Management"
+                ],
+                "summary": "Get active sessions",
+                "responses": {
+                    "200": {
+                        "description": "Active sessions",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -3557,6 +5464,74 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/reports/customer-history": {
+            "get": {
+                "description": "Generate comprehensive customer transaction history including sales and payments",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contact History"
+                ],
+                "summary": "Get customer transaction history",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "customer_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format (json, pdf, csv)",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.CustomerHistoryData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/reports/optimized/balance-sheet": {
             "get": {
                 "description": "Generate balance sheet using materialized view for optimal performance",
@@ -4043,6 +6018,74 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/reports/vendor-history": {
+            "get": {
+                "description": "Generate comprehensive vendor transaction history including purchases and payments",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Contact History"
+                ],
+                "summary": "Get vendor transaction history",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Vendor ID",
+                        "name": "vendor_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "default": "json",
+                        "description": "Output format (json, pdf, csv)",
+                        "name": "format",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/controllers.VendorHistoryData"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -4554,9 +6597,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/settings/tax-accounts": {
-            "get": {
-                "description": "Retrieve the currently active tax account settings",
+        "/api/v1/sessions/cleanup": {
+            "post": {
+                "description": "Manually trigger cleanup of expired sessions and tokens",
                 "consumes": [
                     "application/json"
                 ],
@@ -4564,34 +6607,34 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Tax Account Settings"
+                    "Session Management"
                 ],
-                "summary": "Get current tax account settings",
+                "summary": "Force session cleanup",
                 "responses": {
                     "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
+                        "description": "Cleanup completed",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
-            },
-            "post": {
-                "description": "Create a new tax account configuration",
+            }
+        },
+        "/api/v1/sessions/stats": {
+            "get": {
+                "description": "Get statistics about active, expired, and total sessions",
                 "consumes": [
                     "application/json"
                 ],
@@ -4599,39 +6642,24 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Tax Account Settings"
+                    "Session Management"
                 ],
-                "summary": "Create new tax account settings",
-                "parameters": [
-                    {
-                        "description": "Tax account settings data",
-                        "name": "settings",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
-                        }
-                    }
-                ],
+                "summary": "Get session statistics",
                 "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
+                    "200": {
+                        "description": "Session statistics",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error",
                         "schema": {
                             "type": "object",
-                            "additionalProperties": true
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -4657,53 +6685,6 @@ const docTemplate = `{
                             "type": "array",
                             "items": {
                                 "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-                            }
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/settings/tax-accounts/available-accounts": {
-            "get": {
-                "description": "Retrieve available accounts that can be used for tax account configuration",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tax Account Settings"
-                ],
-                "summary": "Get available accounts",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Filter by account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)",
-                        "name": "type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by account category",
-                        "name": "category",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/models.AccountResponse"
                             }
                         }
                     },
@@ -4748,9 +6729,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/settings/tax-accounts/suggestions": {
+        "/api/v1/settings/tax-accounts/status": {
             "get": {
-                "description": "Get suggested accounts for tax account configuration setup",
+                "description": "Get detailed status information about tax account configuration including validation and recommendations",
                 "consumes": [
                     "application/json"
                 ],
@@ -4758,15 +6739,14 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Tax Account Settings"
+                    "Tax Account Status"
                 ],
-                "summary": "Get account suggestions",
+                "summary": "Get tax account configuration status",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/controllers.TaxAccountStatusResponse"
                         }
                     },
                     "500": {
@@ -4780,6 +6760,51 @@ const docTemplate = `{
             }
         },
         "/api/v1/settings/tax-accounts/validate": {
+            "get": {
+                "description": "Validate if a specific account is suitable for a particular tax account role",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Account Status"
+                ],
+                "summary": "Validate account selection",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Account ID to validate",
+                        "name": "account_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Role to validate for (sales_receivable, sales_cash, etc.)",
+                        "name": "role",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
             "post": {
                 "description": "Validate the tax account configuration before saving",
                 "consumes": [
@@ -4813,68 +6838,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/settings/tax-accounts/{id}": {
-            "put": {
-                "description": "Update an existing tax account configuration",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tax Account Settings"
-                ],
-                "summary": "Update tax account settings",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Settings ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Tax account settings data",
-                        "name": "settings",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.TaxAccountSettingsUpdateRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -5545,6 +7508,607 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/tax-accounts": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create new withholding tax and inventory account configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Withholding Tax \u0026 Inventory Settings"
+                ],
+                "summary": "Create withholding tax and inventory settings",
+                "parameters": [
+                    {
+                        "description": "Withholding tax and inventory settings data",
+                        "name": "settings",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsCreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax-accounts/accounts": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get available accounts for withholding tax and inventory configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Withholding Tax \u0026 Inventory Settings"
+                ],
+                "summary": "Get available accounts for configuration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by account type (ASSET, LIABILITY)",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by category (CURRENT_ASSET, CURRENT_LIABILITY)",
+                        "name": "category",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/models.AccountResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax-accounts/current": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieve the currently active withholding tax and inventory account settings",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Withholding Tax \u0026 Inventory Settings"
+                ],
+                "summary": "Get withholding tax and inventory settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax-accounts/suggestions": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get suggestions for withholding tax and inventory account configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Withholding Tax \u0026 Inventory Settings"
+                ],
+                "summary": "Get account configuration suggestions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax-accounts/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update existing withholding tax and inventory account settings",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Withholding Tax \u0026 Inventory Settings"
+                ],
+                "summary": "Update withholding tax and inventory settings",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Settings ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Withholding tax and inventory update data",
+                        "name": "settings",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsUpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.TaxAccountSettingsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax-payments/ppn": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve PPN payments filtered by type and date range",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Payments"
+                ],
+                "summary": "Get PPN Payments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Payment Type (TAX_PPN_INPUT or TAX_PPN_OUTPUT)",
+                        "name": "payment_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start Date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End Date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create payment for PPN (either PPN Masukan or PPN Keluaran)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Payments"
+                ],
+                "summary": "Create PPN Payment",
+                "parameters": [
+                    {
+                        "description": "PPN Payment Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.CreatePPNPaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "success",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax-payments/ppn/keluaran": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve PPN Keluaran (Sales VAT) payments",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Payments"
+                ],
+                "summary": "Get PPN Keluaran Payments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start Date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End Date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax-payments/ppn/masukan": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve PPN Masukan (Purchase VAT) payments",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Payments"
+                ],
+                "summary": "Get PPN Masukan Payments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start Date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End Date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/tax-payments/ppn/summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get summary of PPN payments (both Input and Output)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tax Payments"
+                ],
+                "summary": "Get PPN Payment Summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start Date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End Date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "success",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Authenticate user and return access token and refresh token",
@@ -5695,6 +8259,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/auth/session-info": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get current session information for debugging purposes",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Get session information",
+                "responses": {
+                    "200": {
+                        "description": "Session information",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/validate-token": {
             "get": {
                 "security": [
@@ -5774,6 +8373,307 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden - insufficient privileges",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/employee": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve employee-specific dashboard data including pending approvals, submitted requests, and notifications",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get employee dashboard data",
+                "responses": {
+                    "200": {
+                        "description": "Employee dashboard data retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/employee/approval-notifications": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get approval-related notifications including status updates on purchase requests",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get employee approval notifications",
+                "responses": {
+                    "200": {
+                        "description": "Approval notifications retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/employee/notifications-summary": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get summary of notifications for the employee including unread count",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get employee notifications summary",
+                "responses": {
+                    "200": {
+                        "description": "Notifications summary retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/employee/notifications/{id}/read": {
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mark a specific notification as read for the current user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Mark notification as read",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Notification ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Notification marked as read successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid notification ID",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Access denied",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Notification not found",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/employee/purchase-approval-status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get detailed approval status for purchases submitted by employee",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get employee purchase approval status",
+                "responses": {
+                    "200": {
+                        "description": "Purchase approval status retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/employee/purchase-requests": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get purchase requests submitted by the employee with approval status",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get employee purchase requests",
+                "responses": {
+                    "200": {
+                        "description": "Purchase requests retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/dashboard/employee/workflows": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get approval workflows where the employee has a role or can submit requests",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard"
+                ],
+                "summary": "Get employee approval workflows",
+                "responses": {
+                    "200": {
+                        "description": "Approval workflows retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/models.ErrorResponse"
                         }
@@ -6528,6 +9428,132 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "controllers.AccountCodeValidationResponse": {
+            "type": "object",
+            "properties": {
+                "is_valid": {
+                    "type": "boolean"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.AccountStatus": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "$ref": "#/definitions/models.AccountResponse"
+                },
+                "is_configured": {
+                    "type": "boolean"
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "controllers.CustomerHistoryData": {
+            "type": "object",
+            "properties": {
+                "company": {
+                    "$ref": "#/definitions/models.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer": {
+                    "$ref": "#/definitions/controllers.CustomerInfo"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "summary": {
+                    "$ref": "#/definitions/controllers.HistorySummary"
+                },
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controllers.TransactionHistory"
+                    }
+                }
+            }
+        },
+        "controllers.CustomerInfo": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "credit_limit": {
+                    "type": "number"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.GenerateCodeRequest": {
+            "type": "object",
+            "required": [
+                "account_type"
+            ],
+            "properties": {
+                "account_name": {
+                    "type": "string"
+                },
+                "account_type": {
+                    "type": "string"
+                },
+                "parent_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.GenerateCodeResponse": {
+            "type": "object",
+            "properties": {
+                "alternative_codes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "recommended_code": {
+                    "type": "string"
+                },
+                "validation": {
+                    "$ref": "#/definitions/controllers.AccountCodeValidationResponse"
+                }
+            }
+        },
         "controllers.GetPurchaseReportResponse": {
             "type": "object",
             "properties": {
@@ -6545,6 +9571,29 @@ const docTemplate = `{
                 },
                 "timestamp": {
                     "type": "string"
+                }
+            }
+        },
+        "controllers.HistorySummary": {
+            "type": "object",
+            "properties": {
+                "first_transaction": {
+                    "type": "string"
+                },
+                "last_transaction": {
+                    "type": "string"
+                },
+                "total_amount": {
+                    "type": "number"
+                },
+                "total_outstanding": {
+                    "type": "number"
+                },
+                "total_paid": {
+                    "type": "number"
+                },
+                "total_transactions": {
+                    "type": "integer"
                 }
             }
         },
@@ -6780,6 +9829,26 @@ const docTemplate = `{
                 }
             }
         },
+        "controllers.ResetCounterRequest": {
+            "type": "object",
+            "required": [
+                "counter",
+                "year"
+            ],
+            "properties": {
+                "counter": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "example": 0
+                },
+                "year": {
+                    "type": "integer",
+                    "maximum": 2050,
+                    "minimum": 2020,
+                    "example": 2024
+                }
+            }
+        },
         "controllers.ReversePaymentRequest": {
             "type": "object",
             "required": [
@@ -6805,6 +9874,194 @@ const docTemplate = `{
                     "$ref": "#/definitions/controllers.ReportMetadata"
                 },
                 "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.TaxAccountStatusResponse": {
+            "type": "object",
+            "properties": {
+                "cogs": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "configuration_id": {
+                    "type": "integer"
+                },
+                "health_score": {
+                    "description": "0-100",
+                    "type": "integer"
+                },
+                "inventory": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "is_fully_configured": {
+                    "type": "boolean"
+                },
+                "last_updated": {
+                    "type": "string"
+                },
+                "missing_accounts": {
+                    "description": "Overall status",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "purchase_bank": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "purchase_cash": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "purchase_expense": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "purchase_input_vat": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "purchase_payable": {
+                    "description": "Purchase accounts status",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/controllers.AccountStatus"
+                        }
+                    ]
+                },
+                "sales_bank": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "sales_cash": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "sales_output_vat": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "sales_receivable": {
+                    "description": "Sales accounts status",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/controllers.AccountStatus"
+                        }
+                    ]
+                },
+                "sales_revenue": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "system_warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tax_payable": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "updated_by": {
+                    "$ref": "#/definitions/models.UserResponse"
+                },
+                "withholding_tax21": {
+                    "description": "Optional accounts",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/controllers.AccountStatus"
+                        }
+                    ]
+                },
+                "withholding_tax23": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                },
+                "withholding_tax25": {
+                    "$ref": "#/definitions/controllers.AccountStatus"
+                }
+            }
+        },
+        "controllers.TransactionHistory": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "type": "string"
+                },
+                "outstanding": {
+                    "type": "number"
+                },
+                "paid_amount": {
+                    "type": "number"
+                },
+                "reference": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "transaction_code": {
+                    "type": "string"
+                },
+                "transaction_type": {
+                    "description": "SALE, INVOICE, PAYMENT, PURCHASE, BILL",
+                    "type": "string"
+                }
+            }
+        },
+        "controllers.VendorHistoryData": {
+            "type": "object",
+            "properties": {
+                "company": {
+                    "$ref": "#/definitions/models.CompanyInfo"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "generated_at": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "summary": {
+                    "$ref": "#/definitions/controllers.HistorySummary"
+                },
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/controllers.TransactionHistory"
+                    }
+                },
+                "vendor": {
+                    "$ref": "#/definitions/controllers.VendorInfo"
+                }
+            }
+        },
+        "controllers.VendorInfo": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
                     "type": "string"
                 }
             }
@@ -6859,6 +10116,10 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "is_header": {
+                    "type": "boolean"
+                },
+                "is_system_critical": {
+                    "description": "Lock critical accounts from modification",
                     "type": "boolean"
                 },
                 "level": {
@@ -7205,6 +10466,208 @@ const docTemplate = `{
                 }
             }
         },
+        "models.BankReconciliation": {
+            "type": "object",
+            "properties": {
+                "added_transactions": {
+                    "type": "integer"
+                },
+                "balance_confirmed": {
+                    "type": "boolean"
+                },
+                "base_balance": {
+                    "description": "Balance Comparison",
+                    "type": "number"
+                },
+                "base_snapshot": {
+                    "$ref": "#/definitions/models.BankReconciliationSnapshot"
+                },
+                "base_snapshot_id": {
+                    "description": "Snapshot References",
+                    "type": "integer"
+                },
+                "base_transaction_count": {
+                    "description": "Transaction Comparison",
+                    "type": "integer"
+                },
+                "cash_bank": {
+                    "description": "Relations",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.CashBank"
+                        }
+                    ]
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "comparison_snapshot": {
+                    "$ref": "#/definitions/models.BankReconciliationSnapshot"
+                },
+                "comparison_snapshot_id": {
+                    "description": "PDF baru (optional)",
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "current_balance": {
+                    "type": "number"
+                },
+                "current_transaction_count": {
+                    "type": "integer"
+                },
+                "differences": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ReconciliationDifference"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_balanced": {
+                    "description": "Result",
+                    "type": "boolean"
+                },
+                "missing_transactions": {
+                    "description": "Differences Found",
+                    "type": "integer"
+                },
+                "modified_transactions": {
+                    "type": "integer"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "period": {
+                    "description": "Format: YYYY-MM",
+                    "type": "string"
+                },
+                "reconciliation_by": {
+                    "type": "integer"
+                },
+                "reconciliation_by_user": {
+                    "$ref": "#/definitions/models.User"
+                },
+                "reconciliation_date": {
+                    "description": "Reconciliation Info",
+                    "type": "string"
+                },
+                "reconciliation_number": {
+                    "type": "string"
+                },
+                "review_notes": {
+                    "type": "string"
+                },
+                "reviewed_at": {
+                    "type": "string"
+                },
+                "reviewed_by": {
+                    "type": "integer"
+                },
+                "reviewed_by_user": {
+                    "$ref": "#/definitions/models.User"
+                },
+                "status": {
+                    "description": "Status \u0026 Approval",
+                    "type": "string"
+                },
+                "transaction_variance": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "variance": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.BankReconciliationSnapshot": {
+            "type": "object",
+            "properties": {
+                "cash_bank": {
+                    "description": "Relations",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.CashBank"
+                        }
+                    ]
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "closing_balance": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "data_hash": {
+                    "description": "Integrity \u0026 Security",
+                    "type": "string"
+                },
+                "generated_by": {
+                    "type": "integer"
+                },
+                "generated_by_user": {
+                    "$ref": "#/definitions/models.User"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_locked": {
+                    "type": "boolean"
+                },
+                "locked_at": {
+                    "type": "string"
+                },
+                "locked_by": {
+                    "type": "integer"
+                },
+                "locked_by_user": {
+                    "$ref": "#/definitions/models.User"
+                },
+                "notes": {
+                    "description": "Metadata",
+                    "type": "string"
+                },
+                "opening_balance": {
+                    "description": "Balance Information",
+                    "type": "number"
+                },
+                "period": {
+                    "description": "Format: YYYY-MM",
+                    "type": "string"
+                },
+                "snapshot_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "description": "ACTIVE, ARCHIVED, SUPERSEDED",
+                    "type": "string"
+                },
+                "total_credit": {
+                    "type": "number"
+                },
+                "total_debit": {
+                    "type": "number"
+                },
+                "transaction_count": {
+                    "type": "integer"
+                },
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ReconciliationTransactionSnapshot"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "models.CashBank": {
             "type": "object",
             "properties": {
@@ -7216,6 +10679,9 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "account_holder_name": {
+                    "type": "string"
+                },
                 "account_id": {
                     "type": "integer"
                 },
@@ -7226,6 +10692,9 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "bank_name": {
+                    "type": "string"
+                },
+                "branch": {
                     "type": "string"
                 },
                 "code": {
@@ -7282,6 +10751,85 @@ const docTemplate = `{
                 }
             }
         },
+        "models.CashBankAuditTrail": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "description": "CREATE, UPDATE, DELETE, VOID, RESTORE",
+                    "type": "string"
+                },
+                "approval_status": {
+                    "description": "PENDING, APPROVED, REJECTED",
+                    "type": "string"
+                },
+                "approved_at": {
+                    "type": "string"
+                },
+                "approved_by": {
+                    "type": "integer"
+                },
+                "approved_by_user": {
+                    "$ref": "#/definitions/models.User"
+                },
+                "cash_bank": {
+                    "description": "Relations",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.CashBank"
+                        }
+                    ]
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "integer"
+                },
+                "entity_type": {
+                    "description": "CASH_BANK, TRANSACTION, TRANSFER, DEPOSIT, WITHDRAWAL",
+                    "type": "string"
+                },
+                "field_changed": {
+                    "description": "Change Details",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "ip_address": {
+                    "type": "string"
+                },
+                "new_value": {
+                    "type": "string"
+                },
+                "old_value": {
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "Context",
+                    "type": "string"
+                },
+                "requires_approval": {
+                    "description": "Approval (for backdated or sensitive changes)",
+                    "type": "boolean"
+                },
+                "transaction_id": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/models.User"
+                },
+                "user_agent": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.CashBankTransaction": {
             "type": "object",
             "properties": {
@@ -7322,6 +10870,41 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.CompanyInfo": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "logo": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "postal_code": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "tax_number": {
+                    "type": "string"
+                },
+                "website": {
                     "type": "string"
                 }
             }
@@ -7467,6 +11050,21 @@ const docTemplate = `{
                 }
             }
         },
+        "models.InvoiceNumberRequest": {
+            "type": "object",
+            "required": [
+                "date",
+                "invoice_type_id"
+            ],
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "invoice_type_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.InvoiceType": {
             "type": "object",
             "properties": {
@@ -7506,6 +11104,51 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "models.InvoiceTypeCreateRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "name"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 1
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                }
+            }
+        },
+        "models.InvoiceTypeUpdateRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "maxLength": 20,
+                    "minLength": 1
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 }
             }
         },
@@ -7827,6 +11470,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "notes": {
+                    "type": "string"
+                },
+                "payment_type": {
+                    "description": "REGULAR, TAX_PPN, TAX_PPN_INPUT, TAX_PPN_OUTPUT",
                     "type": "string"
                 },
                 "reference": {
@@ -8530,6 +12177,122 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "vendor_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ReconciliationDifference": {
+            "type": "object",
+            "properties": {
+                "amount_difference": {
+                    "type": "number"
+                },
+                "base_transaction_id": {
+                    "description": "Transaction References",
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "current_transaction_id": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "difference_type": {
+                    "description": "MISSING, ADDED, MODIFIED, AMOUNT_CHANGE, DATE_CHANGE",
+                    "type": "string"
+                },
+                "field": {
+                    "description": "Difference Details",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "new_value": {
+                    "type": "string"
+                },
+                "old_value": {
+                    "type": "string"
+                },
+                "reconciliation_id": {
+                    "type": "integer"
+                },
+                "resolution_notes": {
+                    "type": "string"
+                },
+                "resolved_at": {
+                    "type": "string"
+                },
+                "resolved_by": {
+                    "type": "integer"
+                },
+                "resolved_by_user": {
+                    "$ref": "#/definitions/models.User"
+                },
+                "severity": {
+                    "description": "LOW, MEDIUM, HIGH, CRITICAL",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Resolution",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ReconciliationTransactionSnapshot": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "balance_after": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "description": "Audit Info",
+                    "type": "integer"
+                },
+                "credit_amount": {
+                    "type": "number"
+                },
+                "debit_amount": {
+                    "type": "number"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "reference_id": {
+                    "type": "integer"
+                },
+                "reference_number": {
+                    "type": "string"
+                },
+                "reference_type": {
+                    "type": "string"
+                },
+                "snapshot_id": {
+                    "type": "integer"
+                },
+                "transaction_date": {
+                    "description": "Transaction Data (frozen at snapshot time)",
+                    "type": "string"
+                },
+                "transaction_id": {
                     "type": "integer"
                 }
             }
@@ -10072,6 +13835,26 @@ const docTemplate = `{
                 }
             }
         },
+        "services.AccountCodeFix": {
+            "type": "object",
+            "properties": {
+                "account_name": {
+                    "type": "string"
+                },
+                "account_type": {
+                    "type": "string"
+                },
+                "current_code": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "suggested_code": {
+                    "type": "string"
+                }
+            }
+        },
         "services.AccountTypeSummary": {
             "type": "object",
             "properties": {
@@ -10300,6 +14083,9 @@ const docTemplate = `{
                 "type"
             ],
             "properties": {
+                "account_holder_name": {
+                    "type": "string"
+                },
                 "account_id": {
                     "type": "integer"
                 },
@@ -10307,6 +14093,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "bank_name": {
+                    "type": "string"
+                },
+                "branch": {
                     "type": "string"
                 },
                 "currency": {
@@ -10383,10 +14172,16 @@ const docTemplate = `{
         "services.CashBankUpdateRequest": {
             "type": "object",
             "properties": {
+                "account_holder_name": {
+                    "type": "string"
+                },
                 "account_no": {
                     "type": "string"
                 },
                 "bank_name": {
+                    "type": "string"
+                },
+                "branch": {
                     "type": "string"
                 },
                 "description": {
@@ -10570,10 +14365,85 @@ const docTemplate = `{
                 }
             }
         },
+        "services.CreatePPNPaymentRequest": {
+            "type": "object",
+            "required": [
+                "amount",
+                "cash_bank_id",
+                "date",
+                "ppn_type"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "ppn_type": {
+                    "description": "INPUT (Masukan) or OUTPUT (Keluaran)",
+                    "type": "string"
+                },
+                "reference": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.CreateReconciliationRequest": {
+            "type": "object",
+            "required": [
+                "base_snapshot_id",
+                "cash_bank_id",
+                "period"
+            ],
+            "properties": {
+                "base_snapshot_id": {
+                    "type": "integer"
+                },
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "comparison_snapshot_id": {
+                    "description": "Optional, akan di-generate jika null",
+                    "type": "integer"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "period": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.CreateSnapshotRequest": {
+            "type": "object",
+            "required": [
+                "cash_bank_id",
+                "period"
+            ],
+            "properties": {
+                "cash_bank_id": {
+                    "type": "integer"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "period": {
+                    "description": "Format: YYYY-MM",
+                    "type": "string"
+                }
+            }
+        },
         "services.CustomerSalesData": {
             "type": "object",
             "properties": {
-                "average_order": {
+                "average_transaction": {
                     "type": "number"
                 },
                 "customer_id": {
@@ -10585,10 +14455,16 @@ const docTemplate = `{
                 "first_order_date": {
                     "type": "string"
                 },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.SaleItemDetail"
+                    }
+                },
                 "last_order_date": {
                     "type": "string"
                 },
-                "total_amount": {
+                "total_sales": {
                     "type": "number"
                 },
                 "transaction_count": {
@@ -10599,9 +14475,6 @@ const docTemplate = `{
         "services.DataQualityIssue": {
             "type": "object",
             "properties": {
-                "category": {
-                    "type": "string"
-                },
                 "count": {
                     "type": "integer"
                 },
@@ -10609,6 +14482,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "severity": {
+                    "type": "string"
+                },
+                "type": {
                     "type": "string"
                 }
             }
@@ -12679,6 +16555,38 @@ const docTemplate = `{
                 }
             }
         },
+        "services.PurchaseItemDetail": {
+            "type": "object",
+            "properties": {
+                "invoice_number": {
+                    "type": "string"
+                },
+                "product_code": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "purchase_date": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "total_price": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "unit_price": {
+                    "type": "number"
+                }
+            }
+        },
         "services.PurchasePaymentAnalysis": {
             "type": "object",
             "properties": {
@@ -12888,6 +16796,38 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "ssot_balance": {
+                    "type": "number"
+                }
+            }
+        },
+        "services.SaleItemDetail": {
+            "type": "object",
+            "properties": {
+                "invoice_number": {
+                    "type": "string"
+                },
+                "product_code": {
+                    "type": "string"
+                },
+                "product_id": {
+                    "type": "integer"
+                },
+                "product_name": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "sale_date": {
+                    "type": "string"
+                },
+                "total_price": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "string"
+                },
+                "unit_price": {
                     "type": "number"
                 }
             }
@@ -13375,6 +17315,12 @@ const docTemplate = `{
         "services.VendorPurchaseSummary": {
             "type": "object",
             "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.PurchaseItemDetail"
+                    }
+                },
                 "last_purchase_date": {
                     "type": "string"
                 },

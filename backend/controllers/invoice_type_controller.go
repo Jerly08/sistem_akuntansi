@@ -407,6 +407,12 @@ func (c *InvoiceTypeController) GetCounterHistory(ctx *gin.Context) {
 	utils.SendSuccess(ctx, "Counter history retrieved successfully", history)
 }
 
+// ResetCounterRequest represents the request to reset invoice counter
+type ResetCounterRequest struct {
+	Year    int `json:"year" binding:"required,min=2020,max=2050" example:"2024"`
+	Counter int `json:"counter" binding:"required,min=0" example:"0"`
+}
+
 // ResetCounterForYear godoc
 // @Summary Reset invoice counter
 // @Description Reset counter for a specific invoice type and year
@@ -415,7 +421,7 @@ func (c *InvoiceTypeController) GetCounterHistory(ctx *gin.Context) {
 // @Produce json
 // @Security Bearer
 // @Param id path int true "Invoice Type ID"
-// @Param request body struct{Year int `json:"year"`; Counter int `json:"counter"`} true "Year and new counter value"
+// @Param request body ResetCounterRequest true "Year and new counter value"
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} utils.ErrorResponse
 // @Failure 500 {object} utils.ErrorResponse

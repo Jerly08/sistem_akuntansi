@@ -27,15 +27,16 @@ func NewTaxAccountController(
 }
 
 // GetCurrentSettings gets the current active tax account settings
-// @Summary Get current tax account settings
-// @Description Retrieve the currently active tax account settings
-// @Tags Tax Account Settings
+// @Summary Get withholding tax and inventory settings
+// @Description Retrieve the currently active withholding tax and inventory account settings
+// @Tags Withholding Tax & Inventory Settings
 // @Accept json
 // @Produce json
+// @Security Bearer
 // @Success 200 {object} models.TaxAccountSettingsResponse
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/settings/tax-accounts [get]
+// @Router /api/v1/tax-accounts/current [get]
 func (c *TaxAccountController) GetCurrentSettings(ctx *gin.Context) {
 	settings, err := c.taxAccountService.GetSettings()
 	if err != nil {
@@ -84,16 +85,17 @@ func (c *TaxAccountController) GetAllSettings(ctx *gin.Context) {
 }
 
 // CreateSettings creates new tax account settings
-// @Summary Create new tax account settings
-// @Description Create a new tax account configuration
-// @Tags Tax Account Settings
+// @Summary Create withholding tax and inventory settings
+// @Description Create new withholding tax and inventory account configuration
+// @Tags Withholding Tax & Inventory Settings
 // @Accept json
 // @Produce json
-// @Param settings body models.TaxAccountSettingsCreateRequest true "Tax account settings data"
+// @Security Bearer
+// @Param settings body models.TaxAccountSettingsCreateRequest true "Withholding tax and inventory settings data"
 // @Success 201 {object} models.TaxAccountSettingsResponse
 // @Failure 400 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/settings/tax-accounts [post]
+// @Router /api/v1/tax-accounts [post]
 func (c *TaxAccountController) CreateSettings(ctx *gin.Context) {
 	var req models.TaxAccountSettingsCreateRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -131,18 +133,19 @@ func (c *TaxAccountController) CreateSettings(ctx *gin.Context) {
 }
 
 // UpdateSettings updates existing tax account settings
-// @Summary Update tax account settings
-// @Description Update an existing tax account configuration
-// @Tags Tax Account Settings
+// @Summary Update withholding tax and inventory settings
+// @Description Update existing withholding tax and inventory account settings
+// @Tags Withholding Tax & Inventory Settings
 // @Accept json
 // @Produce json
+// @Security Bearer
 // @Param id path int true "Settings ID"
-// @Param settings body models.TaxAccountSettingsUpdateRequest true "Tax account settings data"
+// @Param settings body models.TaxAccountSettingsUpdateRequest true "Withholding tax and inventory update data"
 // @Success 200 {object} models.TaxAccountSettingsResponse
 // @Failure 400 {object} map[string]interface{}
 // @Failure 404 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/settings/tax-accounts/{id} [put]
+// @Router /api/v1/tax-accounts/{id} [put]
 func (c *TaxAccountController) UpdateSettings(ctx *gin.Context) {
 	idParam := ctx.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -235,16 +238,17 @@ func (c *TaxAccountController) ActivateSettings(ctx *gin.Context) {
 }
 
 // GetAvailableAccounts gets available accounts for dropdown selection
-// @Summary Get available accounts
-// @Description Retrieve available accounts that can be used for tax account configuration
-// @Tags Tax Account Settings
+// @Summary Get available accounts for configuration
+// @Description Get available accounts for withholding tax and inventory configuration
+// @Tags Withholding Tax & Inventory Settings
 // @Accept json
 // @Produce json
-// @Param type query string false "Filter by account type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE)"
-// @Param category query string false "Filter by account category"
+// @Security Bearer
+// @Param type query string false "Filter by account type (ASSET, LIABILITY)"
+// @Param category query string false "Filter by category (CURRENT_ASSET, CURRENT_LIABILITY)"
 // @Success 200 {array} models.AccountResponse
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/settings/tax-accounts/available-accounts [get]
+// @Router /api/v1/tax-accounts/accounts [get]
 func (c *TaxAccountController) GetAvailableAccounts(ctx *gin.Context) {
 	// Get query parameters
 	accountType := ctx.Query("type")
@@ -372,14 +376,15 @@ func (c *TaxAccountController) RefreshCache(ctx *gin.Context) {
 }
 
 // GetAccountSuggestions provides account suggestions based on account type for setup wizard
-// @Summary Get account suggestions
-// @Description Get suggested accounts for tax account configuration setup
-// @Tags Tax Account Settings
+// @Summary Get account configuration suggestions
+// @Description Get suggestions for withholding tax and inventory account configuration
+// @Tags Withholding Tax & Inventory Settings
 // @Accept json
 // @Produce json
+// @Security Bearer
 // @Success 200 {object} map[string]interface{}
 // @Failure 500 {object} map[string]interface{}
-// @Router /api/v1/settings/tax-accounts/suggestions [get]
+// @Router /api/v1/tax-accounts/suggestions [get]
 func (c *TaxAccountController) GetAccountSuggestions(ctx *gin.Context) {
 	// Define account type mappings for suggestions
 	suggestions := map[string]interface{}{
