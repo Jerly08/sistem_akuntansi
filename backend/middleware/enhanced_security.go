@@ -156,8 +156,8 @@ func (esm *EnhancedSecurityMiddleware) RequestMonitoring() gin.HandlerFunc {
 		// Check for suspicious patterns using security service
 		isSuspicious, suspiciousReason := esm.securityService.DetectSuspiciousPattern(method, path, userAgent, clientIP, headers)
 		
-		// Block highly suspicious requests
-		if isSuspicious && !esm.securityService.IsIPWhitelisted(clientIP) {
+		// Block highly suspicious requests (but allow localhost and whitelisted IPs)
+		if isSuspicious && !esm.securityService.IsIPWhitelisted(clientIP) && !esm.isIPAllowed(clientIP) {
 			if strings.Contains(suspiciousReason, "SQL_INJECTION") ||
 			   strings.Contains(suspiciousReason, "DIRECTORY_TRAVERSAL") ||
 			   strings.Contains(suspiciousReason, "XSS_ATTEMPT") {

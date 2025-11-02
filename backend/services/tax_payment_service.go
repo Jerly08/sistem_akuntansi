@@ -26,30 +26,30 @@ func NewTaxPaymentService(db *gorm.DB) *TaxPaymentService {
 	}
 }
 
-// CreatePPNPaymentRequest represents a request to pay PPN
+// CreatePPNPaymentRequest represents a request to remit PPN (Setor PPN)
 type CreatePPNPaymentRequest struct {
-	PPNType     string    `json:"ppn_type" binding:"required"` // INPUT (Masukan) or OUTPUT (Keluaran)
-	Amount      float64   `json:"amount" binding:"required"`
+	PPNType     string    `json:"ppn_type" binding:"required"` // REMIT (Setor PPN) - deprecated but kept for compatibility
+	Amount      float64   `json:"amount" binding:"required"`    // Amount to remit (optional, will be calculated if 0)
 	Date        time.Time `json:"date" binding:"required"`
 	CashBankID  uint      `json:"cash_bank_id" binding:"required"`
 	Reference   string    `json:"reference"`
 	Notes       string    `json:"notes"`
+	PeriodMonth int       `json:"period_month"` // Tax period month
+	PeriodYear  int       `json:"period_year"`  // Tax period year
 }
 
-// CreatePPNPayment creates a payment for PPN (either input or output)
-// Logic: Debit PPN Account (mengurangi hutang/piutang PPN), Credit Cash/Bank (kas berkurang)
+// CreatePPNPayment creates PPN remittance (Setor PPN) with proper PSAK-compliant double-entry
+// Logic per PSAK:
+// - Calculate: PPN Terutang = PPN Keluaran - PPN Masukan
+// - If positive (Kurang Bayar): Debit PPN Keluaran, Credit PPN Masukan, Credit Cash/Bank
+// - If negative (Lebih Bayar): No payment needed, create adjustment entry
 func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID uint) (*models.Payment, error) {
-	log.Printf("🏦 Starting PPN Payment: Type=%s, Amount=%.2f", req.PPNType, req.Amount)
+	log.Printf("🏦 Starting PPN Remittance (Setor PPN): Amount=%.2f", req.Amount)
 
-	// Validate PPN type
-	if req.PPNType != "INPUT" && req.PPNType != "OUTPUT" {
-		return nil, fmt.Errorf("ppn_type must be INPUT (Masukan) or OUTPUT (Keluaran)")
-	}
+	// Note: ppn_type is deprecated but kept for backward compatibility
+	// Modern implementation auto-calculates from balances
 
-	// Validate amount
-	if req.Amount <= 0 {
-		return nil, fmt.Errorf("amount must be greater than zero")
-	}
+	// Amount validation removed - will be calculated from PPN balances if not provided
 
 	// Validate date
 	if req.Date.IsZero() {
@@ -77,46 +77,71 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 	}
 	log.Printf("📋 Cash/Bank Account: %s (ID: %d)", cashBank.Account.Name, cashBank.AccountID)
 
-	// Get PPN account from settings
+	// Get PPN accounts from settings
 	settings, err := s.taxAccountService.GetSettings()
 	if err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to get tax settings: %v", err)
 	}
 
-	var taxAccountID uint
-	if req.PPNType == "INPUT" {
-		// PPN Masukan (Purchase VAT) - account 1240
-		if settings.PurchaseInputVATAccountID == 0 {
-			tx.Rollback()
-			return nil, fmt.Errorf("PPN Masukan account not configured in tax settings")
-		}
-		taxAccountID = settings.PurchaseInputVATAccountID
-	} else {
-		// PPN Keluaran (Sales VAT) - account 2103
-		if settings.SalesOutputVATAccountID == 0 {
-			tx.Rollback()
-			return nil, fmt.Errorf("PPN Keluaran account not configured in tax settings")
-		}
-		taxAccountID = settings.SalesOutputVATAccountID
-	}
-
-	// Validate tax account exists
-	var taxAccount models.Account
-	if err := tx.First(&taxAccount, taxAccountID).Error; err != nil {
+	// Validate both PPN accounts are configured
+	if settings.PurchaseInputVATAccountID == 0 {
 		tx.Rollback()
-		return nil, fmt.Errorf("tax account not found: %v", err)
+		return nil, fmt.Errorf("PPN Masukan account not configured in tax settings")
 	}
-	log.Printf("📋 Tax Account: %s - %s (ID: %d)", taxAccount.Code, taxAccount.Name, taxAccount.ID)
+	if settings.SalesOutputVATAccountID == 0 {
+		tx.Rollback()
+		return nil, fmt.Errorf("PPN Keluaran account not configured in tax settings")
+	}
 
-	// Generate payment code
-	prefix := "PPN"
-	if req.PPNType == "INPUT" {
-		prefix = "PPNM" // PPN Masukan
-	} else {
-		prefix = "PPNK" // PPN Keluaran
+	// Get PPN Masukan account (Asset - 1240)
+	var ppnMasukanAccount models.Account
+	if err := tx.First(&ppnMasukanAccount, settings.PurchaseInputVATAccountID).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("PPN Masukan account not found: %v", err)
 	}
-	code := s.generatePaymentCode(prefix, tx)
+
+	// Get PPN Keluaran account (Liability - 2103)
+	var ppnKeluaranAccount models.Account
+	if err := tx.First(&ppnKeluaranAccount, settings.SalesOutputVATAccountID).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("PPN Keluaran account not found: %v", err)
+	}
+
+	log.Printf("📋 PPN Masukan: %s - %s (Balance: %.2f)", ppnMasukanAccount.Code, ppnMasukanAccount.Name, ppnMasukanAccount.Balance)
+	log.Printf("📋 PPN Keluaran: %s - %s (Balance: %.2f)", ppnKeluaranAccount.Code, ppnKeluaranAccount.Name, ppnKeluaranAccount.Balance)
+
+	// Calculate PPN Terutang (PPN yang harus dibayar)
+	// PPN Terutang = PPN Keluaran (Liability) - PPN Masukan (Asset)
+	// Note: PPN Keluaran balance is positive for liability, PPN Masukan balance is positive for asset
+	ppnTerutang := ppnKeluaranAccount.Balance - ppnMasukanAccount.Balance
+
+	log.Printf("📊 Calculated PPN Terutang: %.2f (Keluaran: %.2f - Masukan: %.2f)", ppnTerutang, ppnKeluaranAccount.Balance, ppnMasukanAccount.Balance)
+
+	// Validate PPN Terutang
+	if ppnTerutang <= 0 {
+		tx.Rollback()
+		return nil, fmt.Errorf("tidak ada PPN yang harus dibayar. PPN Terutang: %.2f (PPN Masukan lebih besar dari PPN Keluaran)", ppnTerutang)
+	}
+
+	// Use calculated amount or provided amount
+	paymentAmount := req.Amount
+	if paymentAmount <= 0 {
+		paymentAmount = ppnTerutang
+		log.Printf("✅ Using calculated PPN Terutang: %.2f", paymentAmount)
+	} else if paymentAmount > ppnTerutang {
+		tx.Rollback()
+		return nil, fmt.Errorf("payment amount (%.2f) cannot exceed PPN Terutang (%.2f)", paymentAmount, ppnTerutang)
+	}
+
+	// Validate cash/bank balance
+	if cashBank.Balance < paymentAmount {
+		tx.Rollback()
+		return nil, fmt.Errorf("insufficient cash/bank balance. Available: %.2f, Required: %.2f", cashBank.Balance, paymentAmount)
+	}
+
+	// Generate payment code for PPN remittance
+	code := s.generatePaymentCode("SETOR-PPN", tx)
 
 	// Use default system contact (Tax Office)
 	contactID := uint(1)
@@ -127,11 +152,11 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 		ContactID:   contactID,
 		UserID:      userID,
 		Date:        req.Date,
-		Amount:      req.Amount,
-		Method:      models.PaymentMethodBankTransfer, // Default untuk pembayaran PPN
+		Amount:      paymentAmount,
+		Method:      models.PaymentMethodBankTransfer, // Default untuk setor PPN
 		Reference:   req.Reference,
-		Status:      models.PaymentStatusCompleted, // PPN payment langsung completed
-		Notes:       req.Notes,
+		Status:      models.PaymentStatusCompleted, // PPN remittance langsung completed
+		Notes:       fmt.Sprintf("Setor PPN - Terutang: %.2f. %s", ppnTerutang, req.Notes),
 		PaymentType: models.PaymentTypeTaxPPN,
 	}
 
@@ -141,28 +166,38 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 	}
 	log.Printf("✅ Payment record created: ID=%d, Code=%s", payment.ID, payment.Code)
 
-	// Create journal entry
-	// Logika PPN Payment:
-	// - PPN Masukan (Asset): Debit mengurangi piutang PPN
-	// - PPN Keluaran (Liability): Debit mengurangi hutang PPN  
-	// - Cash/Bank: Credit karena kas keluar
-	ppnLabel := "PPN Masukan"
-	if req.PPNType == "OUTPUT" {
-		ppnLabel = "PPN Keluaran"
-	}
+	// Create journal entry per PSAK
+	// Logika Setor PPN yang benar:
+	// Debit:  PPN Keluaran (Liability berkurang) - full amount
+	// Credit: PPN Masukan (Asset berkurang) - offset amount  
+	// Credit: Cash/Bank (kas keluar) - net payment
+	//
+	// Example: PPN Keluaran 50jt, PPN Masukan 30jt, Bayar 20jt
+	// Debit:  PPN Keluaran 50jt
+	// Credit: PPN Masukan 30jt
+	// Credit: Cash/Bank 20jt
 	
 	journalLines := []JournalLineRequest{
+		// Debit PPN Keluaran (full liability)
 		{
-			AccountID:    uint64(taxAccountID),
-			Description:  fmt.Sprintf("Pembayaran %s - %s", ppnLabel, payment.Code),
-			DebitAmount:  decimal.NewFromFloat(req.Amount),
+			AccountID:    uint64(settings.SalesOutputVATAccountID),
+			Description:  fmt.Sprintf("Setor PPN - %s", payment.Code),
+			DebitAmount:  decimal.NewFromFloat(ppnKeluaranAccount.Balance),
 			CreditAmount: decimal.Zero,
 		},
+		// Credit PPN Masukan (offset asset)
+		{
+			AccountID:    uint64(settings.PurchaseInputVATAccountID),
+			Description:  fmt.Sprintf("Setor PPN - Kompensasi - %s", payment.Code),
+			DebitAmount:  decimal.Zero,
+			CreditAmount: decimal.NewFromFloat(ppnMasukanAccount.Balance),
+		},
+		// Credit Cash/Bank (net payment)
 		{
 			AccountID:    uint64(cashBank.AccountID),
-			Description:  fmt.Sprintf("Pembayaran %s - %s", ppnLabel, payment.Code),
+			Description:  fmt.Sprintf("Setor PPN - Pembayaran Neto - %s", payment.Code),
 			DebitAmount:  decimal.Zero,
-			CreditAmount: decimal.NewFromFloat(req.Amount),
+			CreditAmount: decimal.NewFromFloat(paymentAmount),
 		},
 	}
 
@@ -172,7 +207,7 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 		SourceID:    uint64(payment.ID),
 		Reference:   payment.Code,
 		EntryDate:   payment.Date,
-		Description: fmt.Sprintf("Pembayaran %s %s", ppnLabel, payment.Code),
+		Description: fmt.Sprintf("Setor PPN ke Negara - %s (Terutang: %.2f)", payment.Code, ppnTerutang),
 		Lines:       journalLines,
 		AutoPost:    true,
 		CreatedBy:   uint64(userID),
@@ -199,7 +234,7 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 		return nil, fmt.Errorf("failed to commit transaction: %v", err)
 	}
 
-	log.Printf("✅ PPN Payment successfully created: %s", payment.Code)
+	log.Printf("✅ PPN Remittance (Setor PPN) successfully created: %s (Amount: %.2f, PPN Terutang: %.2f)", payment.Code, paymentAmount, ppnTerutang)
 
 	// Load relations for response
 	if err := s.db.Preload("Contact").Preload("User").First(payment, payment.ID).Error; err != nil {
@@ -305,4 +340,43 @@ func (s *TaxPaymentService) GetPPNPaymentSummary(startDate, endDate time.Time) (
 	}
 	
 	return summary, nil
+}
+
+// GetPPNBalance retrieves current balance of PPN account (Masukan or Keluaran)
+func (s *TaxPaymentService) GetPPNBalance(ppnType string) (float64, error) {
+	// Validate PPN type
+	if ppnType != "INPUT" && ppnType != "OUTPUT" {
+		return 0, fmt.Errorf("ppn_type must be INPUT or OUTPUT")
+	}
+	
+	// Get PPN account from settings
+	settings, err := s.taxAccountService.GetSettings()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get tax settings: %v", err)
+	}
+	
+	var accountID uint
+	if ppnType == "INPUT" {
+		// PPN Masukan (Purchase VAT)
+		if settings.PurchaseInputVATAccountID == 0 {
+			return 0, fmt.Errorf("PPN Masukan account not configured in tax settings")
+		}
+		accountID = settings.PurchaseInputVATAccountID
+	} else {
+		// PPN Keluaran (Sales VAT)
+		if settings.SalesOutputVATAccountID == 0 {
+			return 0, fmt.Errorf("PPN Keluaran account not configured in tax settings")
+		}
+		accountID = settings.SalesOutputVATAccountID
+	}
+	
+	// Get account balance
+	var account models.Account
+	if err := s.db.First(&account, accountID).Error; err != nil {
+		return 0, fmt.Errorf("account not found: %v", err)
+	}
+	
+	log.Printf("📊 PPN %s Balance: %.2f (Account: %s - %s)", ppnType, account.Balance, account.Code, account.Name)
+	
+	return account.Balance, nil
 }

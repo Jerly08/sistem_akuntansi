@@ -218,7 +218,8 @@ func (aps *AccountingPeriodService) ValidatePeriodPosting(ctx context.Context, e
 	month := int(entryDate.Month())
 
 	var period models.AccountingPeriod
-	err := aps.db.Where("year = ? AND month = ?", year, month).First(&period).Error
+	// Support both standard context and gin.Context
+	err := aps.db.WithContext(ctx).Where("year = ? AND month = ?", year, month).First(&period).Error
 
 	if err == gorm.ErrRecordNotFound {
 		// Period doesn't exist, check if it's too old or too future
@@ -250,10 +251,17 @@ func (aps *AccountingPeriodService) ValidatePeriodPosting(ctx context.Context, e
 
 // validatePeriodForClosing validates if a period can be closed
 func (aps *AccountingPeriodService) validatePeriodForClosing(ctx context.Context, tx *gorm.DB, period *models.AccountingPeriod) error {
-	// Check for unbalanced journal entries
+	// Calculate period end date
+	periodEnd := period.EndDate
+	if periodEnd.IsZero() {
+		// If EndDate not set, calculate it (last day of month)
+		periodEnd = time.Date(period.Year, time.Month(period.Month+1), 1, 0, 0, 0, 0, time.UTC).Add(-time.Second)
+	}
+
+	// Check for unbalanced journal entries using BETWEEN (avoids DATE_TRUNC ambiguity)
 	var unbalancedCount int64
 	err := tx.Model(&models.JournalEntry{}).
-		Where("DATE_TRUNC('month', entry_date) = DATE_TRUNC('month', ?)", period.StartDate).
+		Where("entry_date >= ? AND entry_date <= ?", period.StartDate, periodEnd).
 		Where("is_balanced = false").
 		Count(&unbalancedCount).Error
 
@@ -268,7 +276,7 @@ func (aps *AccountingPeriodService) validatePeriodForClosing(ctx context.Context
 	// Check for draft journal entries
 	var draftCount int64
 	err = tx.Model(&models.JournalEntry{}).
-		Where("DATE_TRUNC('month', entry_date) = DATE_TRUNC('month', ?)", period.StartDate).
+		Where("entry_date >= ? AND entry_date <= ?", period.StartDate, periodEnd).
 		Where("status = ?", models.JournalStatusDraft).
 		Count(&draftCount).Error
 

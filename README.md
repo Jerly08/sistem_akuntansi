@@ -177,7 +177,7 @@ app_sistem_akuntansi/
 
 #### 💰 Enhanced Financial Management
 - **Chart of Accounts**: Hierarchical account structure
-- **Cash & Bank Management**: Multi-account, transfers, reconciliation
+- **Cash & Bank Management**: Multi-account, transfers
 - **Payment Processing**: Multiple payment methods
 - **Tax Management**: PPN, PPh calculations
 - **Advanced Financial Reports**: Professional P&L, Balance Sheet, Cash Flow
@@ -616,7 +616,7 @@ NEXT_PUBLIC_API_URL=https://your-api-domain.com/
 - [x] **Inventory Management** - Real-time stock tracking dengan smart notifications
 - [x] **Financial Management** - Chart of accounts, journal entries, balance monitoring
 - [x] **Asset Management** - Fixed asset tracking dengan depreciation calculations
-- [x] **Cash & Bank** - Multi-account management, transfers, reconciliation
+- [x] **Cash & Bank** - Multi-account management, transfers
 
 #### 📈 Reporting & Analytics
 - [x] **Financial Reports** - P&L, Balance Sheet, Cash Flow dengan PDF/Excel export

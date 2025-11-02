@@ -46,20 +46,15 @@ BEGIN
     
     RAISE NOTICE '✅ Marked 4 critical accounts (1201, 4101, 2103, 2001) as system_critical';
     
-    -- Optional: Also lock Level 2 accounts (Cash, Bank, Input VAT)
-    -- Uncomment if you want to lock these as well:
-    /*
+    -- Also lock PPN Masukan (Input VAT) for tax compliance
     UPDATE accounts 
     SET is_system_critical = TRUE 
     WHERE code IN (
-        '1101',  -- Kas (Cash)
-        '1102',  -- Bank
-        '1240'   -- PPN Masukan (Input VAT)
+        '1240'   -- PPN Masukan (Input VAT) - Critical for tax remittance
     )
     AND deleted_at IS NULL;
     
-    RAISE NOTICE '✅ Also marked Level 2 accounts (1101, 1102, 1240) as system_critical';
-    */
+    RAISE NOTICE '✅ Also marked account 1240 (PPN Masukan) as system_critical';
 END $$;
 
 -- ============================================================================

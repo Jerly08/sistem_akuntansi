@@ -242,3 +242,40 @@ func (c *TaxPaymentController) GetPPNKeluaranPayments(ctx *gin.Context) {
 	ctx.Set("payment_type", "TAX_PPN_OUTPUT")
 	c.GetPPNPayments(ctx)
 }
+
+// GetPPNBalance godoc
+// @Summary Get PPN Balance
+// @Description Get current PPN balance (either Input or Output)
+// @Tags Tax Payments
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param type query string true "PPN Type (INPUT or OUTPUT)"
+// @Success 200 {object} map[string]interface{} "success"
+// @Failure 400 {object} map[string]string "Bad Request"
+// @Failure 401 {object} map[string]string "Unauthorized"
+// @Failure 500 {object} map[string]string "Internal Server Error"
+// @Router /api/v1/tax-payments/ppn/balance [get]
+func (c *TaxPaymentController) GetPPNBalance(ctx *gin.Context) {
+	ppnType := ctx.Query("type")
+	
+	// Validate PPN type
+	if ppnType != "INPUT" && ppnType != "OUTPUT" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "type must be INPUT or OUTPUT"})
+		return
+	}
+	
+	// Get balance from service
+	balance, err := c.taxPaymentService.GetPPNBalance(ppnType)
+	if err != nil {
+		log.Printf("❌ Failed to get PPN balance: %v", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"balance": balance,
+		"type":    ppnType,
+	})
+}

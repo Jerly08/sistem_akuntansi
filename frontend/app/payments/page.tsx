@@ -69,11 +69,14 @@ import {
   FiSearch,
   FiMoreVertical,
   FiFileText,
-  FiChevronDown
+  FiChevronDown,
+  FiArrowDown,
+  FiArrowRight
 } from 'react-icons/fi';
 import paymentService, { Payment, PaymentFilters, PaymentResult, PaymentCreateRequest } from '@/services/paymentService';
 import AdvancedPaymentForm from '@/components/payments/AdvancedPaymentForm';
 import PaymentDetailModal from '@/components/payments/PaymentDetailModal';
+import PPNPaymentModal from '@/components/payments/PPNPaymentModal';
 import { exportPaymentsToPDF, exportPaymentDetailToPDF, PDFExportOptions } from '@/utils/pdfExport';
 import ExportButton from '@/components/common/ExportButton';
 
@@ -162,10 +165,13 @@ const PaymentsPage: React.FC = () => {
   
   // State for modals
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentType, setPaymentType] = useState<'receivable' | 'payable'>('receivable');
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [showPaymentDetail, setShowPaymentDetail] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
+  const [showPPNPayment, setShowPPNPayment] = useState(false);
+  const [ppnPaymentType, setPPNPaymentType] = useState<'REMIT'>('REMIT');
 
   // Permission checks - Normalize role comparison for case-insensitive check
   const userRole = user?.role?.toLowerCase();
@@ -175,9 +181,16 @@ const PaymentsPage: React.FC = () => {
   const canExport = userRole === 'admin' || userRole === 'finance' || userRole === 'director';
 
   // New Payment handler
-  const handleNewPayment = () => {
+  const handleNewPayment = (type: 'receivable' | 'payable' = 'receivable') => {
+    setPaymentType(type);
     setSelectedPayment(null);
     setShowPaymentForm(true);
+  };
+  
+  // PPN Payment handler
+  const handlePPNPayment = () => {
+    setPPNPaymentType('REMIT');
+    setShowPPNPayment(true);
   };
   
   // Edit Payment handler
@@ -704,14 +717,38 @@ const resetFilters = () => {
               </Menu>
             )}
             {canCreate && (
-              <Button 
-                leftIcon={<FiPlus />} 
-                colorScheme="blue"
-                size="md"
-                onClick={handleNewPayment}
-              >
-                Create Payment
-              </Button>
+              <Menu>
+                <MenuButton 
+                  as={Button} 
+                  leftIcon={<FiPlus />}
+                  rightIcon={<FiChevronDown />}
+                  colorScheme="blue"
+                  size="md"
+                >
+                  Create Payment
+                </MenuButton>
+                <MenuList>
+                  <MenuItem 
+                    icon={<FiArrowDown />} 
+                    onClick={() => handleNewPayment('receivable')}
+                  >
+                    Receivable Payment (from Customer)
+                  </MenuItem>
+                  <MenuItem 
+                    icon={<FiArrowRight />} 
+                    onClick={() => handleNewPayment('payable')}
+                  >
+                    Payable Payment (to Vendor)
+                  </MenuItem>
+                  <MenuDivider />
+                  <MenuItem 
+                    icon={<FiDollarSign />} 
+                    onClick={() => handlePPNPayment()}
+                  >
+                    Setor PPN (Tax Remittance)
+                  </MenuItem>
+                </MenuList>
+              </Menu>
             )}
           </HStack>
         </Flex>
@@ -821,7 +858,7 @@ const resetFilters = () => {
       <AdvancedPaymentForm
         isOpen={showPaymentForm}
         onClose={handleFormCancel}
-        type="receivable" // Default to receivable, could be made dynamic
+        type={paymentType}
         onSuccess={handleFormSave}
         preSelectedContact={selectedPayment ? { 
           id: selectedPayment.contact_id,
@@ -870,6 +907,23 @@ const resetFilters = () => {
         onClose={() => {
           setShowPaymentDetail(false);
           setSelectedPayment(null);
+        }}
+      />
+      
+      {/* PPN Payment Modal */}
+      <PPNPaymentModal
+        isOpen={showPPNPayment}
+        onClose={() => setShowPPNPayment(false)}
+        ppnType={ppnPaymentType}
+        onSuccess={() => {
+          setShowPPNPayment(false);
+          loadPayments();
+          toast({
+            title: 'Success',
+            description: 'PPN remittance (Setor PPN) has been processed successfully',
+            status: 'success',
+            duration: 3000,
+          });
         }}
       />
       </Box>

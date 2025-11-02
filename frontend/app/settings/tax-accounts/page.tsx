@@ -207,10 +207,11 @@ const TaxAccountSettingsPage: React.FC = () => {
   // Critical accounts that should not be changed
   const isCriticalAccount = (fieldName: string): boolean => {
     const criticalAccounts = [
-      'sales_receivable',   // 1201 - Used in ALL credit sales
-      'sales_revenue',      // 4101 - Used in ALL sales
-      'sales_output_vat',   // 2103 - Tax regulation (DJP)
-      'purchase_payable',   // 2001 - Used in ALL credit purchases
+      'sales_receivable',     // 1201 - Used in ALL credit sales
+      'sales_revenue',        // 4101 - Used in ALL sales
+      'sales_output_vat',     // 2103 - Tax regulation (DJP)
+      'purchase_input_vat',   // 1240 - Tax regulation (DJP)
+      'purchase_payable',     // 2001 - Used in ALL credit purchases
     ];
     // Withholding tax dan inventory accounts TIDAK critical, bisa diubah
     // PPh 21, PPh 23, PPh 25, Tax Payable, Inventory, COGS adalah optional
@@ -635,9 +636,9 @@ const TaxAccountSettingsPage: React.FC = () => {
           {/* Header */}
           <HStack justify="space-between" width="full">
             <VStack alignItems="start" spacing={2}>
-              <Heading as="h1" size="xl">Withholding Tax Account Settings</Heading>
+              <Heading as="h1" size="xl">Tax Account Settings</Heading>
               <Text color="gray.600" fontSize="sm">
-                Configure withholding tax accounts for PPh 21, PPh 23, PPh 25, and other tax obligations
+                Configure VAT/PPN accounts, withholding tax accounts (PPh 21, 23, 25), and other tax obligations
               </Text>
             </VStack>
             
@@ -707,6 +708,127 @@ const TaxAccountSettingsPage: React.FC = () => {
 
           {/* Main Content - Tax Accounts Configuration */}
           <Box width="full">
+            {/* VAT/PPN Accounts - Critical for Sales & Purchase */}
+            <Card mb={6}>
+              <CardHeader>
+                <HStack spacing={3} justify="space-between">
+                  <HStack spacing={3}>
+                    <Icon as={FiCreditCard} boxSize={5} color={purpleColor} />
+                    <Heading size="md">VAT/PPN Accounts</Heading>
+                    <Badge colorScheme="red" size="sm">CRITICAL - LOCKED</Badge>
+                  </HStack>
+                  <Tooltip 
+                    label="VAT/PPN accounts are critical for tax compliance (DJP). These accounts are locked to ensure data integrity."
+                    placement="left"
+                    hasArrow
+                  >
+                    <IconButton
+                      aria-label="Info"
+                      icon={<FiInfo />}
+                      size="sm"
+                      variant="ghost"
+                      colorScheme="purple"
+                    />
+                  </Tooltip>
+                </HStack>
+              </CardHeader>
+              <CardBody>
+                <Alert status="info" mb={4} variant="left-accent">
+                  <AlertIcon />
+                  <Box>
+                    <AlertTitle fontSize="sm">Tax Remittance (Setor PPN)</AlertTitle>
+                    <AlertDescription fontSize="xs">
+                      These accounts are used to calculate PPN Terutang = PPN Keluaran - PPN Masukan when you make tax remittance payments. 
+                      These settings are automatically configured and locked by the system for compliance.
+                    </AlertDescription>
+                  </Box>
+                </Alert>
+                <SimpleGrid columns={[1, 1, 2]} spacing={6}>
+                  <Box>
+                    <FormControl isReadOnly>
+                      <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                        <HStack>
+                          <Text>Purchase Input VAT (PPN Masukan)</Text>
+                          <Badge colorScheme="red" size="sm">LOCKED</Badge>
+                          <Icon as={FiLock} color="red.500" boxSize={3} />
+                        </HStack>
+                      </FormLabel>
+                      {settings?.purchase_input_vat_account ? (
+                        <Box 
+                          p={3} 
+                          bg="gray.100" 
+                          borderRadius="md" 
+                          borderWidth="1px" 
+                          borderColor="gray.300"
+                        >
+                          <HStack spacing={2}>
+                            <Icon as={FiCheck} color="green.500" />
+                            <Text fontSize="md" fontWeight="medium">
+                              {settings.purchase_input_vat_account.code} - {settings.purchase_input_vat_account.name}
+                            </Text>
+                          </HStack>
+                          <Text fontSize="xs" color="gray.600" mt={1}>
+                            {settings.purchase_input_vat_account.type} • Hardcoded by system
+                          </Text>
+                        </Box>
+                      ) : (
+                        <Box p={3} bg="red.50" borderRadius="md" borderWidth="1px" borderColor="red.200">
+                          <HStack spacing={2}>
+                            <Icon as={FiInfo} color="red.500" />
+                            <Text fontSize="sm" color="red.600">Account 1240 not found in database</Text>
+                          </HStack>
+                        </Box>
+                      )}
+                      <FormHelperText fontSize="xs" color="gray.500">
+                        PPN Masukan (Asset account) tracks VAT paid on purchases that can be credited when remitting tax.
+                      </FormHelperText>
+                    </FormControl>
+                  </Box>
+                  
+                  <Box>
+                    <FormControl isReadOnly>
+                      <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
+                        <HStack>
+                          <Text>Sales Output VAT (PPN Keluaran)</Text>
+                          <Badge colorScheme="red" size="sm">LOCKED</Badge>
+                          <Icon as={FiLock} color="red.500" boxSize={3} />
+                        </HStack>
+                      </FormLabel>
+                      {settings?.sales_output_vat_account ? (
+                        <Box 
+                          p={3} 
+                          bg="gray.100" 
+                          borderRadius="md" 
+                          borderWidth="1px" 
+                          borderColor="gray.300"
+                        >
+                          <HStack spacing={2}>
+                            <Icon as={FiCheck} color="green.500" />
+                            <Text fontSize="md" fontWeight="medium">
+                              {settings.sales_output_vat_account.code} - {settings.sales_output_vat_account.name}
+                            </Text>
+                          </HStack>
+                          <Text fontSize="xs" color="gray.600" mt={1}>
+                            {settings.sales_output_vat_account.type} • Hardcoded by system
+                          </Text>
+                        </Box>
+                      ) : (
+                        <Box p={3} bg="red.50" borderRadius="md" borderWidth="1px" borderColor="red.200">
+                          <HStack spacing={2}>
+                            <Icon as={FiInfo} color="red.500" />
+                            <Text fontSize="sm" color="red.600">Account 2103 not found in database</Text>
+                          </HStack>
+                        </Box>
+                      )}
+                      <FormHelperText fontSize="xs" color="gray.500">
+                        PPN Keluaran (Liability account) tracks VAT collected from customers to be remitted to the government.
+                      </FormHelperText>
+                    </FormControl>
+                  </Box>
+                </SimpleGrid>
+              </CardBody>
+            </Card>
+            
             {/* Withholding Tax Accounts */}
             <Card mb={6}>
               <CardHeader>
@@ -832,12 +954,58 @@ const TaxAccountSettingsPage: React.FC = () => {
               <CardHeader>
                 <HStack spacing={2}>
                   <Icon as={FiCheck} color="green.500" />
-                  <Heading size="sm">Current Withholding Tax Configuration</Heading>
+                  <Heading size="sm">Current Tax Configuration Status</Heading>
                 </HStack>
               </CardHeader>
               <CardBody>
-                <SimpleGrid columns={[1, 2, 3]} spacing={6}>
-                  <VStack spacing={2} alignItems="start">
+                <VStack spacing={6} alignItems="start" width="full">
+                  {/* VAT/PPN Status */}
+                  <Box width="full">
+                    <Text fontSize="sm" fontWeight="bold" mb={3} color="purple.600">VAT/PPN Accounts</Text>
+                    <SimpleGrid columns={[1, 2]} spacing={4}>
+                      <VStack spacing={2} alignItems="start">
+                        <Text fontSize="xs" color="gray.500" fontWeight="bold">PPN Masukan (Input VAT)</Text>
+                        {settings.purchase_input_vat_account ? (
+                          <HStack spacing={2}>
+                            <Badge colorScheme="green">Configured</Badge>
+                            <Text fontSize="sm">
+                              {settings.purchase_input_vat_account?.code} - {settings.purchase_input_vat_account?.name}
+                            </Text>
+                          </HStack>
+                        ) : (
+                          <HStack spacing={2}>
+                            <Badge colorScheme="red">Not Set</Badge>
+                            <Text fontSize="xs" color="red.500">Required for Setor PPN</Text>
+                          </HStack>
+                        )}
+                      </VStack>
+
+                      <VStack spacing={2} alignItems="start">
+                        <Text fontSize="xs" color="gray.500" fontWeight="bold">PPN Keluaran (Output VAT)</Text>
+                        {settings.sales_output_vat_account ? (
+                          <HStack spacing={2}>
+                            <Badge colorScheme="green">Configured</Badge>
+                            <Text fontSize="sm">
+                              {settings.sales_output_vat_account?.code} - {settings.sales_output_vat_account?.name}
+                            </Text>
+                          </HStack>
+                        ) : (
+                          <HStack spacing={2}>
+                            <Badge colorScheme="red">Not Set</Badge>
+                            <Text fontSize="xs" color="red.500">Required for Setor PPN</Text>
+                          </HStack>
+                        )}
+                      </VStack>
+                    </SimpleGrid>
+                  </Box>
+
+                  <Divider />
+
+                  {/* Withholding Tax Status */}
+                  <Box width="full">
+                    <Text fontSize="sm" fontWeight="bold" mb={3} color="green.600">Withholding Tax Accounts (Optional)</Text>
+                    <SimpleGrid columns={[1, 2, 3]} spacing={6}>
+                      <VStack spacing={2} alignItems="start">
                     <Text fontSize="xs" color="gray.500" fontWeight="bold">PPh 21 (Employee Tax)</Text>
                     {settings.withholding_tax21_account ? (
                       <HStack spacing={2}>
@@ -923,6 +1091,8 @@ const TaxAccountSettingsPage: React.FC = () => {
                     </Text>
                   </VStack>
                 </SimpleGrid>
+                  </Box>
+                </VStack>
               </CardBody>
             </Card>
           )}

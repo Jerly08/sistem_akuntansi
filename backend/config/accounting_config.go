@@ -202,7 +202,7 @@ func getDefaultConfig() *AccountingConfig {
 
 			// Equity Accounts
 			ShareCapital:     3001,
-			RetainedEarnings: 3101,
+			RetainedEarnings: 3201, // LABA DITAHAN - Fixed from 3101 (Modal Pemilik)
 
 			// Revenue Accounts
 			SalesRevenue:   4101,
