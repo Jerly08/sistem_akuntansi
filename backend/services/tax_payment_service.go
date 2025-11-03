@@ -168,31 +168,45 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 
 	// Create journal entry per PSAK
 	// Logika Setor PPN yang benar:
-	// Debit:  PPN Keluaran (Liability berkurang) - full amount
-	// Credit: PPN Masukan (Asset berkurang) - offset amount  
-	// Credit: Cash/Bank (kas keluar) - net payment
+	// Debit:  PPN Keluaran (Liability berkurang) - sesuai payment amount + kompensasi
+	// Credit: PPN Masukan (Asset berkurang) - kompensasi dari masukan
+	// Credit: Cash/Bank (kas keluar) - payment amount (neto)
 	//
-	// Example: PPN Keluaran 50jt, PPN Masukan 30jt, Bayar 20jt
-	// Debit:  PPN Keluaran 50jt
-	// Credit: PPN Masukan 30jt
-	// Credit: Cash/Bank 20jt
+	// Example: PPN Keluaran 50jt, PPN Masukan 30jt, Terutang 20jt, Bayar 20jt
+	// Debit:  PPN Keluaran 50jt (sesuai balance yang akan dikosongkan)
+	// Credit: PPN Masukan 30jt (kompensasi sesuai balance yang akan dikosongkan)
+	// Credit: Cash/Bank 20jt (pembayaran neto)
+	
+	// Calculate kompensasi amount (PPN Masukan yang akan dikompensasi)
+	// Kompensasi tidak boleh lebih dari balance PPN Masukan
+	kompensasiAmount := ppnMasukanAccount.Balance
+	if kompensasiAmount > ppnKeluaranAccount.Balance {
+		kompensasiAmount = ppnKeluaranAccount.Balance
+	}
+	
+	// Debit amount untuk PPN Keluaran = payment amount + kompensasi
+	// Karena kita bayar net (payment) tapi juga kompensasi (masukan)
+	ppnKeluaranDebit := paymentAmount + kompensasiAmount
+	
+	log.Printf("📋 Journal Entry breakdown: PPN Keluaran Debit=%.2f, PPN Masukan Credit=%.2f, Cash Credit=%.2f",
+		ppnKeluaranDebit, kompensasiAmount, paymentAmount)
 	
 	journalLines := []JournalLineRequest{
-		// Debit PPN Keluaran (full liability)
+		// Debit PPN Keluaran (liability berkurang)
 		{
 			AccountID:    uint64(settings.SalesOutputVATAccountID),
 			Description:  fmt.Sprintf("Setor PPN - %s", payment.Code),
-			DebitAmount:  decimal.NewFromFloat(ppnKeluaranAccount.Balance),
+			DebitAmount:  decimal.NewFromFloat(ppnKeluaranDebit),
 			CreditAmount: decimal.Zero,
 		},
-		// Credit PPN Masukan (offset asset)
+		// Credit PPN Masukan (asset berkurang - kompensasi)
 		{
 			AccountID:    uint64(settings.PurchaseInputVATAccountID),
 			Description:  fmt.Sprintf("Setor PPN - Kompensasi - %s", payment.Code),
 			DebitAmount:  decimal.Zero,
-			CreditAmount: decimal.NewFromFloat(ppnMasukanAccount.Balance),
+			CreditAmount: decimal.NewFromFloat(kompensasiAmount),
 		},
-		// Credit Cash/Bank (net payment)
+		// Credit Cash/Bank (pembayaran neto)
 		{
 			AccountID:    uint64(cashBank.AccountID),
 			Description:  fmt.Sprintf("Setor PPN - Pembayaran Neto - %s", payment.Code),
