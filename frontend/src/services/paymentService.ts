@@ -563,8 +563,24 @@ class PaymentService {
       return dateString;
     }
     
-    // Convert YYYY-MM-DD to YYYY-MM-DDTHH:mm:ssZ (assume local timezone)
-    const date = new Date(dateString + 'T00:00:00');
+    let date: Date;
+    
+    // Try to parse DD/MM/YYYY or MM/DD/YYYY format first (from date picker)
+    if (dateString.includes('/')) {
+      const parts = dateString.split('/');
+      if (parts.length === 3) {
+        // Assume DD/MM/YYYY format (common in Indonesia)
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+        const year = parseInt(parts[2], 10);
+        date = new Date(year, month, day, 0, 0, 0);
+      } else {
+        throw new Error('Invalid date format');
+      }
+    } else {
+      // Convert YYYY-MM-DD to YYYY-MM-DDTHH:mm:ssZ (assume local timezone)
+      date = new Date(dateString + 'T00:00:00');
+    }
     
     // Check if date is valid
     if (isNaN(date.getTime())) {

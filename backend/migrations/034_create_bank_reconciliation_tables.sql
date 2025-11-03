@@ -36,11 +36,11 @@ CREATE TABLE IF NOT EXISTS bank_reconciliation_snapshots (
     CONSTRAINT unique_snapshot_per_period UNIQUE(cash_bank_id, period, snapshot_date)
 );
 
-CREATE INDEX idx_snapshots_cash_bank ON bank_reconciliation_snapshots(cash_bank_id);
-CREATE INDEX idx_snapshots_period ON bank_reconciliation_snapshots(period);
-CREATE INDEX idx_snapshots_date ON bank_reconciliation_snapshots(snapshot_date);
-CREATE INDEX idx_snapshots_status ON bank_reconciliation_snapshots(status);
-CREATE INDEX idx_snapshots_deleted ON bank_reconciliation_snapshots(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_snapshots_cash_bank ON bank_reconciliation_snapshots(cash_bank_id);
+CREATE INDEX IF NOT EXISTS idx_snapshots_period ON bank_reconciliation_snapshots(period);
+CREATE INDEX IF NOT EXISTS idx_snapshots_date ON bank_reconciliation_snapshots(snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_snapshots_status ON bank_reconciliation_snapshots(status);
+CREATE INDEX IF NOT EXISTS idx_snapshots_deleted ON bank_reconciliation_snapshots(deleted_at);
 
 COMMENT ON TABLE bank_reconciliation_snapshots IS 'Frozen snapshots of bank account transactions for reconciliation purposes';
 COMMENT ON COLUMN bank_reconciliation_snapshots.data_hash IS 'SHA-256 hash of transaction data for integrity verification';
@@ -71,10 +71,10 @@ CREATE TABLE IF NOT EXISTS reconciliation_transaction_snapshots (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_snapshot_transactions_snapshot ON reconciliation_transaction_snapshots(snapshot_id);
-CREATE INDEX idx_snapshot_transactions_original ON reconciliation_transaction_snapshots(transaction_id);
-CREATE INDEX idx_snapshot_transactions_date ON reconciliation_transaction_snapshots(transaction_date);
-CREATE INDEX idx_snapshot_transactions_ref ON reconciliation_transaction_snapshots(reference_type, reference_id);
+CREATE INDEX IF NOT EXISTS idx_snapshot_transactions_snapshot ON reconciliation_transaction_snapshots(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_snapshot_transactions_original ON reconciliation_transaction_snapshots(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_snapshot_transactions_date ON reconciliation_transaction_snapshots(transaction_date);
+CREATE INDEX IF NOT EXISTS idx_snapshot_transactions_ref ON reconciliation_transaction_snapshots(reference_type, reference_id);
 
 COMMENT ON TABLE reconciliation_transaction_snapshots IS 'Immutable record of transactions at snapshot time';
 
@@ -126,12 +126,29 @@ CREATE TABLE IF NOT EXISTS bank_reconciliations (
     deleted_at TIMESTAMP
 );
 
-CREATE INDEX idx_reconciliations_cash_bank ON bank_reconciliations(cash_bank_id);
-CREATE INDEX idx_reconciliations_period ON bank_reconciliations(period);
-CREATE INDEX idx_reconciliations_status ON bank_reconciliations(status);
-CREATE INDEX idx_reconciliations_number ON bank_reconciliations(reconciliation_number);
-CREATE INDEX idx_reconciliations_date ON bank_reconciliations(reconciliation_date);
-CREATE INDEX idx_reconciliations_deleted ON bank_reconciliations(deleted_at);
+-- Add period column if not exists (table may exist from earlier migration)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'bank_reconciliations' AND column_name = 'period') THEN
+        ALTER TABLE bank_reconciliations ADD COLUMN period VARCHAR(7);
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_reconciliations_cash_bank ON bank_reconciliations(cash_bank_id);
+
+-- Create index on period only if column exists
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_name = 'bank_reconciliations' AND column_name = 'period') THEN
+        CREATE INDEX IF NOT EXISTS idx_reconciliations_period ON bank_reconciliations(period);
+    END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_reconciliations_status ON bank_reconciliations(status);
+CREATE INDEX IF NOT EXISTS idx_reconciliations_number ON bank_reconciliations(reconciliation_number);
+CREATE INDEX IF NOT EXISTS idx_reconciliations_date ON bank_reconciliations(reconciliation_date);
+CREATE INDEX IF NOT EXISTS idx_reconciliations_deleted ON bank_reconciliations(deleted_at);
 
 COMMENT ON TABLE bank_reconciliations IS 'Records of bank reconciliation processes comparing snapshots';
 
@@ -166,10 +183,10 @@ CREATE TABLE IF NOT EXISTS reconciliation_differences (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_differences_reconciliation ON reconciliation_differences(reconciliation_id);
-CREATE INDEX idx_differences_type ON reconciliation_differences(difference_type);
-CREATE INDEX idx_differences_severity ON reconciliation_differences(severity);
-CREATE INDEX idx_differences_status ON reconciliation_differences(status);
+CREATE INDEX IF NOT EXISTS idx_differences_reconciliation ON reconciliation_differences(reconciliation_id);
+CREATE INDEX IF NOT EXISTS idx_differences_type ON reconciliation_differences(difference_type);
+CREATE INDEX IF NOT EXISTS idx_differences_severity ON reconciliation_differences(severity);
+CREATE INDEX IF NOT EXISTS idx_differences_status ON reconciliation_differences(status);
 
 COMMENT ON TABLE reconciliation_differences IS 'Detailed log of differences found during reconciliation';
 
@@ -205,13 +222,13 @@ CREATE TABLE IF NOT EXISTS cash_bank_audit_trail (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_audit_cash_bank ON cash_bank_audit_trail(cash_bank_id);
-CREATE INDEX idx_audit_transaction ON cash_bank_audit_trail(transaction_id);
-CREATE INDEX idx_audit_entity ON cash_bank_audit_trail(entity_type, entity_id);
-CREATE INDEX idx_audit_action ON cash_bank_audit_trail(action);
-CREATE INDEX idx_audit_user ON cash_bank_audit_trail(user_id);
-CREATE INDEX idx_audit_date ON cash_bank_audit_trail(created_at);
-CREATE INDEX idx_audit_approval ON cash_bank_audit_trail(requires_approval, approval_status);
+CREATE INDEX IF NOT EXISTS idx_audit_cash_bank ON cash_bank_audit_trail(cash_bank_id);
+CREATE INDEX IF NOT EXISTS idx_audit_transaction ON cash_bank_audit_trail(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON cash_bank_audit_trail(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON cash_bank_audit_trail(action);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON cash_bank_audit_trail(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_date ON cash_bank_audit_trail(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_approval ON cash_bank_audit_trail(requires_approval, approval_status);
 
 COMMENT ON TABLE cash_bank_audit_trail IS 'Complete audit trail of all cash and bank changes';
 COMMENT ON COLUMN cash_bank_audit_trail.requires_approval IS 'Flags changes that need manager approval (e.g., backdated transactions)';

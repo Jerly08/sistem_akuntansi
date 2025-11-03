@@ -33,27 +33,15 @@ func RunAutoMigrations(db *gorm.DB) error {
 		// Don't fail completely, just warn
 	}
 	
-	// Verify and fix invoice types system (handles PC differences)
-	log.Println("============================================")
-	log.Println("🔍 VERIFYING INVOICE TYPES SYSTEM")
-	log.Println("============================================")
+	// Silently verify invoice types system
 	if err := ensureInvoiceTypesSystem(db); err != nil {
 		log.Printf("⚠️  Invoice types system verification failed: %v", err)
-	} else {
-		log.Println("✅ Invoice types system verified and ready")
 	}
-	log.Println("============================================")
 	
-	// Ensure tax account settings table exists (handles PC differences)
-	log.Println("============================================")
-	log.Println("📈 VERIFYING TAX ACCOUNT SETTINGS TABLE")
-	log.Println("============================================")
+	// Silently verify tax account settings table
 	if err := ensureTaxAccountSettingsTable(db); err != nil {
 		log.Printf("⚠️  Tax account settings table verification failed: %v", err)
-	} else {
-		log.Println("✅ Tax account settings table verified and ready")
 	}
-	log.Println("============================================")
 
 	// Get migration files
 	migrationFiles, err := getMigrationFiles()
@@ -76,34 +64,18 @@ func RunAutoMigrations(db *gorm.DB) error {
 		successCount++
 	}
 	
-	// Print migration summary
-	log.Println("")
-	log.Println("============================================")
-	log.Println("📊 MIGRATION EXECUTION SUMMARY")
-	log.Println("============================================")
-	log.Printf("Total migrations: %d", len(migrationFiles))
-	log.Printf("✅ Successful: %d", successCount)
-	log.Printf("❌ Failed: %d", failedCount)
-	
-	idempotentSkips := atomic.LoadInt64(&idempotentSkipCount)
-	if idempotentSkips > 0 {
-		log.Printf("🔄 Idempotent skips: %d objects", idempotentSkips)
-		log.Println("")
-		log.Println("ℹ️  NOTE: Idempotent skips are NORMAL, not errors!")
-		log.Println("   These indicate database objects already exist from")
-		log.Println("   previous migration runs. This is the expected behavior")
-		log.Println("   that allows migrations to be safely re-run.")
-	}
-	
+	// Print concise migration summary
 	if failedCount > 0 {
-		log.Printf("")
-		log.Printf("⚠️  %d migration(s) failed. Check logs for details.", failedCount)
-	} else {
 		log.Println("")
-		log.Println("🎉 All migrations completed successfully!")
+		log.Println("============================================")
+		log.Printf("⚠️  %d migration(s) failed. Check logs above for details.", failedCount)
+		log.Println("============================================")
+	} else {
+		// Only show summary if there were actual new migrations
+		if successCount > 0 {
+			log.Printf("✅ Database migrations: %d completed successfully", successCount)
+		}
 	}
-	log.Println("============================================")
-	log.Println("")
 	
 	// Check and create Standard Purchase Approval workflow (smart skip)
 	if err := ensureStandardPurchaseApprovalWorkflow(db); err != nil {
@@ -314,12 +286,12 @@ func runMigration(db *gorm.DB, filename string) error {
 	var lastStatus string
 	statusErr := db.Raw("SELECT status FROM migration_logs WHERE migration_name = ? ORDER BY executed_at DESC LIMIT 1", filename).Scan(&lastStatus).Error
 	if statusErr == nil && strings.EqualFold(lastStatus, "SUCCESS") {
-		log.Printf("⏭️  Migration already ran successfully: %s", filename)
+		// Silently skip successful migrations
 		return nil
 	}
 
 	startTime := time.Now()
-	log.Printf("🔄 Running migration: %s", filename)
+	log.Printf("🔄 Running: %s", filename)
 
 // Read migration file
 	migrationDir, dirErr := findMigrationDir()
@@ -389,7 +361,7 @@ GOT_CONTENT:
 			// Gracefully handle idempotent scenarios
 			if isAlreadyExistsError(err) {
 				atomic.AddInt64(&idempotentSkipCount, 1)
-				log.Printf("✅ Object already exists (idempotent) - skipping: %s", getObjectNameFromError(err))
+				// Silently skip - don't log every idempotent object
 				continue
 			}
 			executionTime := int(time.Since(startTime).Milliseconds())
@@ -427,7 +399,10 @@ func runComplexMigration(db *gorm.DB, filename, content string, startTime time.T
 			continue
 		}
 
-		log.Printf("🔧 Executing statement %d/%d...", i+1, len(statements))
+		// Only log every 10th statement to reduce noise
+		if i == 0 || i%10 == 0 || i == len(statements)-1 {
+			log.Printf("🔧 Progress: %d/%d statements...", i+1, len(statements))
+		}
 
 		upper := strings.ToUpper(strings.TrimSpace(strings.TrimSuffix(stmt, ";")))
 		if upper == "BEGIN" || strings.HasPrefix(upper, "BEGIN TRANSACTION") {
@@ -482,8 +457,7 @@ func runComplexMigration(db *gorm.DB, filename, content string, startTime time.T
 			// Allow idempotent reruns: skip 'already exists' type errors
 			if isAlreadyExistsError(err) {
 				atomic.AddInt64(&idempotentSkipCount, 1)
-				log.Printf("✅ [%s] Object already exists (statement %d) - this is normal for idempotent migrations: %s",
-					filename, i+1, getObjectNameFromError(err))
+				// Silently skip - don't log every idempotent object
 				continue
 			}
 			// If the file opened a transaction, try to rollback to clear aborted state before logging
@@ -637,9 +611,7 @@ func parseComplexSQL(content string) []string {
 // ensureSSOTSyncFunctions creates or replaces required SSOT sync functions in a parser-safe way
 // This is idempotent and safe to run on every startup across environments
 func ensureSSOTSyncFunctions(db *gorm.DB) error {
-	log.Println("🔍 Ensuring SSOT sync functions (sync_account_balance_from_ssot) exist...")
-
-	// Check existing variants
+	// Check existing variants (silently)
 	var cntBigint, cntInteger int64
 	checkBigint := `SELECT COUNT(*) FROM pg_proc WHERE proname='sync_account_balance_from_ssot' AND pg_get_function_identity_arguments(oid) ILIKE '%bigint%'`
 	checkInteger := `SELECT COUNT(*) FROM pg_proc WHERE proname='sync_account_balance_from_ssot' AND pg_get_function_identity_arguments(oid) ILIKE '%integer%'`
@@ -651,7 +623,6 @@ func ensureSSOTSyncFunctions(db *gorm.DB) error {
 	}
 	alreadyBigint := cntBigint > 0
 	alreadyInteger := cntInteger > 0
-	log.Printf("   • Existing variants -> BIGINT: %v, INTEGER: %v", alreadyBigint, alreadyInteger)
 
 	bigintFn := `
 CREATE OR REPLACE FUNCTION sync_account_balance_from_ssot(account_id_param BIGINT)
@@ -695,23 +666,16 @@ $$;`
 		return err
 	}
 
-	// Re-check to confirm
+	// Re-check to confirm (silently)
 	cntBigint, cntInteger = 0, 0
 	_ = db.Raw(checkBigint).Scan(&cntBigint).Error
 	_ = db.Raw(checkInteger).Scan(&cntInteger).Error
 	nowBigint := cntBigint > 0
 	nowInteger := cntInteger > 0
 
+	// Only log if we actually installed something new
 	if !alreadyBigint && nowBigint {
-		log.Println("   ✓ Installed BIGINT variant of sync_account_balance_from_ssot")
-	} else if alreadyBigint && nowBigint {
-		log.Println("   ↺ BIGINT variant already present (ensured)")
-	}
-
-	if !alreadyInteger && nowInteger {
-		log.Println("   ✓ Installed INTEGER wrapper for sync_account_balance_from_ssot")
-	} else if alreadyInteger && nowInteger {
-		log.Println("   ↺ INTEGER wrapper already present (ensured)")
+		log.Println("✅ Installed SSOT sync functions")
 	}
 
 return nil
@@ -889,32 +853,28 @@ type ApprovalStep struct {
 
 // ensureStandardPurchaseApprovalWorkflow checks and creates Standard Purchase Approval workflow if it doesn't exist
 func ensureStandardPurchaseApprovalWorkflow(db *gorm.DB) error {
-	log.Println("🔍 Checking Standard Purchase Approval workflow...")
-	
 	// Check if Standard Purchase Approval workflow exists
 	var existingWorkflow ApprovalWorkflow
 	result := db.Where("name = ? AND module = ?", "Standard Purchase Approval", "PURCHASE").First(&existingWorkflow)
 	
 	if result.Error == nil {
-		log.Println("✅ Standard Purchase Approval workflow found")
-		
 		// Check if workflow has steps
 		var stepCount int64
 		db.Model(&ApprovalStep{}).Where("workflow_id = ?", existingWorkflow.ID).Count(&stepCount)
 		
 		if stepCount == 0 {
-			log.Println("⚠️  Workflow exists but has no steps - creating steps...")
+			log.Println("🔧 Creating workflow steps...")
 			// Create steps for existing workflow
 			return createWorkflowSteps(db, existingWorkflow.ID)
 		} else {
-			log.Printf("✅ Workflow has %d steps - no action needed", stepCount)
+			// Silently skip if everything exists
 			return nil
 		}
 	}
 	
 	// If not found, create it
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		log.Println("📝 Creating Standard Purchase Approval workflow...")
+		log.Println("🔧 Creating Standard Purchase Approval workflow...")
 		
 		// Create workflow
 		workflow := ApprovalWorkflow{
@@ -931,12 +891,8 @@ func ensureStandardPurchaseApprovalWorkflow(db *gorm.DB) error {
 			return fmt.Errorf("failed to create Standard Purchase Approval workflow: %v", err)
 		}
 		
-		log.Printf("✅ Created Standard Purchase Approval workflow with ID: %d", workflow.ID)
-		
 		// Create workflow steps
 		return createWorkflowSteps(db, workflow.ID)
-		
-		return nil
 	}
 	
 	// Other database errors
@@ -978,8 +934,7 @@ func createWorkflowSteps(db *gorm.DB, workflowID uint) error {
 		}
 	}
 	
-	log.Printf("✅ Created %d workflow steps for Standard Purchase Approval", len(steps))
-	log.Println("🎯 Standard Purchase Approval workflow setup completed!")
+	log.Println("✅ Standard Purchase Approval workflow created")
 	
 	return nil
 }
@@ -1217,17 +1172,12 @@ func ensureBalanceSyncSystem(db *gorm.DB) error {
 	functionStatus, _ := checkBalanceSyncFunctions(db)
 	
 	if triggerStatus && functionStatus {
-		// System is already complete, skip all noisy operations
-		log.Println("✅ Balance sync system verified (triggers + functions present)")
+		// System is already complete, skip silently
 		return nil
 	}
 	
-	// Incomplete: show details
-	log.Println("🔍 Checking balance sync system status...")
-	log.Printf("📊 Current status -> Triggers: %v, Functions: %v", triggerStatus, functionStatus)
-	
-	// Install/update
-	log.Println("🔧 Installing/updating balance sync system...")
+	// Install/update (show message only when actually installing)
+	log.Println("🔧 Installing balance sync system...")
 	if err := installBalanceSyncSystem(db); err != nil {
 		return fmt.Errorf("failed to install balance sync system: %w", err)
 	}
@@ -1241,7 +1191,7 @@ func ensureBalanceSyncSystem(db *gorm.DB) error {
 		log.Printf("⚠️  Warning: Initial balance sync failed: %v", err)
 	}
 	
-	log.Println("✅ Balance sync system setup completed successfully")
+	log.Println("✅ Balance sync system installed successfully")
 	return nil
 }
 
@@ -1307,7 +1257,6 @@ func checkBalanceSyncFunctions(db *gorm.DB) (bool, error) {
 
 // installBalanceSyncSystem installs or updates the balance sync system
 func installBalanceSyncSystem(db *gorm.DB) error {
-	log.Println("📦 Installing comprehensive balance sync system...")
 	
 	// Read the comprehensive balance sync migration content
 	migrationPath := "20250930_comprehensive_auto_balance_sync.sql"
@@ -1440,7 +1389,6 @@ func performInitialBalanceSync(db *gorm.DB) error {
 // ensureInvoiceTypesSystem ensures invoice types system is properly installed
 // This handles cases where PC differences cause missing tables or inconsistent migration logs
 func ensureInvoiceTypesSystem(db *gorm.DB) error {
-	log.Println("🧾 Checking invoice types system...")
 	
 	// Step 1: Check if invoice_types table exists
 	var invoiceTypesExists bool
@@ -1468,69 +1416,53 @@ func ensureInvoiceTypesSystem(db *gorm.DB) error {
 		return fmt.Errorf("failed to check sales.invoice_type_id column: %w", err)
 	}
 	
-	log.Printf("   📊 System status:")
-	log.Printf("      - invoice_types table: %t", invoiceTypesExists)
-	log.Printf("      - invoice_counters table: %t", invoiceCountersExists)
-	log.Printf("      - sales.invoice_type_id column: %t", salesInvoiceTypeExists)
+	// Silently check system status
 	
 	// Step 4: If invoice_types exists but invoice_counters doesn't, create it
 	if invoiceTypesExists && !invoiceCountersExists {
-		log.Println("🔧 Creating missing invoice_counters table...")
+		log.Println("🔧 Creating invoice_counters table...")
 		if err := createInvoiceCountersTable(db); err != nil {
 			return fmt.Errorf("failed to create invoice_counters table: %w", err)
 		}
-		log.Println("✅ Created invoice_counters table successfully")
+		log.Println("✅ Invoice_counters table created")
 	}
 	
 	// Step 5: If invoice_types doesn't exist but we have migration logs, run the migration
 	if !invoiceTypesExists {
-		log.Println("🔧 Invoice types table missing - checking migration status...")
 		
 		// Check if we have 037 migration file
 		migrationDir, err := findMigrationDir()
-		if err != nil {
-			log.Printf("⚠️  Could not find migration directory: %v", err)
-		} else {
+		if err == nil {
 			migration037Path := filepath.Join(migrationDir, "037_add_invoice_types_system.sql")
 			if _, err := os.Stat(migration037Path); err == nil {
-				log.Println("🔄 Running 037 migration to create invoice types system...")
+				log.Println("🔧 Creating invoice types system...")
 				if err := runMigration(db, "037_add_invoice_types_system.sql"); err != nil {
 					log.Printf("⚠️  Failed to run 037 migration: %v", err)
 				} else {
-					log.Println("✅ Invoice types system created via migration")
+					log.Println("✅ Invoice types system created")
 				}
-			} else {
-				log.Println("⚠️  037 migration file not found")
 			}
 		}
 	}
 	
-	// Step 6: Verify helper functions exist
+	// Step 6: Verify helper functions exist (silently)
 	if invoiceTypesExists && invoiceCountersExists {
-		log.Println("🔧 Ensuring helper functions exist...")
 		if err := ensureInvoiceNumberFunctions(db); err != nil {
 			log.Printf("⚠️  Failed to create helper functions: %v", err)
-		} else {
-			log.Println("✅ Helper functions verified")
 		}
 	}
 	
-	// Step 7: Clean up failed migration logs that might cause issues
-	log.Println("🧹 Cleaning up failed migration logs...")
+	// Step 7: Clean up failed migration logs that might cause issues (silently)
 	result := db.Exec(`
 		DELETE FROM migration_logs 
 		WHERE migration_name LIKE '%037%' AND status = 'FAILED'
 	`)
 	if result.Error != nil {
 		log.Printf("⚠️  Could not clean up failed migrations: %v", result.Error)
-	} else if result.RowsAffected > 0 {
-		log.Printf("✅ Cleaned up %d failed migration logs", result.RowsAffected)
 	}
 	
-	// Step 8: Ensure success migration log exists if system is working
+	// Step 8: Ensure success migration log exists if system is working (silently)
 	if invoiceTypesExists && invoiceCountersExists && salesInvoiceTypeExists {
-		log.Println("🔧 Ensuring migration success status...")
-		
 		var successExists bool
 		err = db.Raw(`
 			SELECT EXISTS (
@@ -1554,20 +1486,15 @@ func ensureInvoiceTypesSystem(db *gorm.DB) error {
 			
 			if err != nil {
 				log.Printf("⚠️  Could not insert success record: %v", err)
-			} else {
-				log.Println("✅ Marked 037 migration as SUCCESS")
 			}
 		}
 	}
 	
-	log.Println("✅ Invoice types system verification completed")
 	return nil
 }
 
 // ensureTaxAccountSettingsTable ensures tax_account_settings table exists (PostgreSQL compatible)
 func ensureTaxAccountSettingsTable(db *gorm.DB) error {
-	log.Println("📊 Checking tax account settings table...")
-	
 	// Check if table exists
 	var tableExists bool
 	err := db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tax_account_settings')").Scan(&tableExists).Error
@@ -1576,7 +1503,7 @@ func ensureTaxAccountSettingsTable(db *gorm.DB) error {
 	}
 	
 	if tableExists {
-		log.Println("✅ Tax account settings table already exists")
+		// Silently skip if exists
 		return nil
 	}
 	
@@ -1686,11 +1613,9 @@ func ensureTaxAccountSettingsTable(db *gorm.DB) error {
 	result := db.Exec(defaultConfigSQL)
 	if result.Error != nil {
 		log.Printf("⚠️  Failed to insert default config: %v", result.Error)
-	} else {
-		log.Printf("✅ Inserted %d default tax account configuration", result.RowsAffected)
 	}
 	
-	log.Println("✅ Tax account settings table created successfully")
+	log.Println("✅ Tax account settings table created")
 	return nil
 }
 
