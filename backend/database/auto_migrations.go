@@ -622,7 +622,7 @@ func ensureSSOTSyncFunctions(db *gorm.DB) error {
 		log.Printf("⚠️  Could not check existing INTEGER variant: %v", err)
 	}
 	alreadyBigint := cntBigint > 0
-	alreadyInteger := cntInteger > 0
+	_ = cntInteger // silence unused warning
 
 	bigintFn := `
 CREATE OR REPLACE FUNCTION sync_account_balance_from_ssot(account_id_param BIGINT)
@@ -671,7 +671,7 @@ $$;`
 	_ = db.Raw(checkBigint).Scan(&cntBigint).Error
 	_ = db.Raw(checkInteger).Scan(&cntInteger).Error
 	nowBigint := cntBigint > 0
-	nowInteger := cntInteger > 0
+	_ = cntInteger // silence unused warning
 
 	// Only log if we actually installed something new
 	if !alreadyBigint && nowBigint {
