@@ -428,8 +428,9 @@ const handlePageChange = (page: number) => {
   }));
 };
 
-// Handle search
+// Handle search - immediate trigger like Sales
 const handleSearch = (searchTerm: string) => {
+  setFilters(prev => ({ ...prev, search: searchTerm }));
   loadPayments({ search: searchTerm, page: 1 } as any);
 };
 
@@ -464,7 +465,8 @@ const resetFilters = () => {
   setEndDate('');
   setFilters({
     page: 1,
-    limit: ITEMS_PER_PAGE
+    limit: ITEMS_PER_PAGE,
+    search: ''
   });
   loadPayments({ page: 1 });
 };
@@ -800,6 +802,7 @@ const resetFilters = () => {
                 </InputLeftElement>
                 <Input 
                   placeholder="Search by payment code or contact..."
+                  value={filters.search || ''}
                   onChange={(e) => handleSearch(e.target.value)}
                   bg={inputBg}
                   borderColor={borderColor}
