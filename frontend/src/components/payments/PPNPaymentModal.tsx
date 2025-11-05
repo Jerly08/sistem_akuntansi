@@ -74,6 +74,16 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
   const { token } = useAuth();
   const toast = useToast();
   
+  // Helper to format currency without decimals
+  const formatRupiah = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+  
   const [loading, setLoading] = useState(false);
   const [cashBanks, setCashBanks] = useState<CashBank[]>([]);
   const [ppnBalanceInfo, setPPNBalanceInfo] = useState<PPNBalanceInfo | null>(null);
@@ -425,7 +435,7 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                       <Box>
                         <HStack justify="space-between" mb={1}>
                           <Text fontSize="sm" fontWeight="medium">PPN Keluaran (dari Penjualan):</Text>
-                          <Text fontSize="sm" fontWeight="bold">Rp {ppnBalanceInfo.ppn_keluaran.toLocaleString('id-ID')}</Text>
+                          <Text fontSize="sm" fontWeight="bold">{formatRupiah(ppnBalanceInfo.ppn_keluaran)}</Text>
                         </HStack>
                         <Text fontSize="xs" color={mutedColor} pl={2}>
                           PPN yang dipungut dari customer
@@ -443,7 +453,7 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                       <Box>
                         <HStack justify="space-between" mb={1}>
                           <Text fontSize="sm" fontWeight="medium">PPN Masukan (dari Pembelian):</Text>
-                          <Text fontSize="sm" fontWeight="bold">Rp {ppnBalanceInfo.ppn_masukan.toLocaleString('id-ID')}</Text>
+                          <Text fontSize="sm" fontWeight="bold">{formatRupiah(ppnBalanceInfo.ppn_masukan)}</Text>
                         </HStack>
                         <Text fontSize="xs" color={mutedColor} pl={2}>
                           PPN yang dibayar ke vendor (kredit pajak)
@@ -464,7 +474,7 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                             PPN Terutang:
                           </Text>
                           <Text fontSize="xl" fontWeight="bold" color={ppnBalanceInfo.ppn_terutang > 0 ? 'red.600' : 'green.600'}>
-                            Rp {Math.abs(ppnBalanceInfo.ppn_terutang).toLocaleString('id-ID')}
+                            {formatRupiah(Math.abs(ppnBalanceInfo.ppn_terutang))}
                           </Text>
                         </HStack>
                         <Badge 
@@ -530,7 +540,7 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                     validate: {
                       notExceed: (value) => {
                         if (ppnBalanceInfo && ppnBalanceInfo.ppn_terutang > 0 && value > ppnBalanceInfo.ppn_terutang) {
-                          return `Jumlah tidak boleh melebihi PPN Terutang: Rp ${ppnBalanceInfo.ppn_terutang.toLocaleString('id-ID')}`;
+                          return `Jumlah tidak boleh melebihi PPN Terutang: ${formatRupiah(ppnBalanceInfo.ppn_terutang)}`;
                         }
                         return true;
                       }
@@ -545,9 +555,9 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                     >
                       <NumberInputField 
                         placeholder={ppnBalanceInfo && ppnBalanceInfo.ppn_terutang > 0
-                          ? `Rp ${ppnBalanceInfo.ppn_terutang.toLocaleString('id-ID')} (otomatis jika kosong)` 
+                          ? `${formatRupiah(ppnBalanceInfo.ppn_terutang)} (otomatis jika kosong)` 
                           : "Masukkan jumlah pembayaran PPN"
-                        } 
+                        }
                       />
                     </NumberInput>
                   )}
@@ -555,11 +565,11 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                 <FormErrorMessage>{errors.amount?.message}</FormErrorMessage>
                 {amount > 0 ? (
                   <Text fontSize="sm" color={mutedColor} mt={1}>
-                    Rp {amount.toLocaleString('id-ID')}
+                    {formatRupiah(amount)}
                   </Text>
                 ) : ppnBalanceInfo && ppnBalanceInfo.ppn_terutang > 0 && (
                   <Text fontSize="sm" color="blue.500" mt={1} fontWeight="medium">
-                    💡 Akan menggunakan PPN Terutang: Rp {ppnBalanceInfo.ppn_terutang.toLocaleString('id-ID')}
+                    💡 Akan menggunakan PPN Terutang: {formatRupiah(ppnBalanceInfo.ppn_terutang)}
                   </Text>
                 )}
               </FormControl>
@@ -586,7 +596,7 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                     >
                       {cashBanks.map((cashBank) => (
                         <option key={cashBank.id} value={cashBank.id}>
-                          {cashBank.name} - Saldo: Rp {cashBank.balance.toLocaleString('id-ID')}
+                          {cashBank.name} - Saldo: {formatRupiah(cashBank.balance)}
                         </option>
                       ))}
                     </Select>
@@ -603,7 +613,7 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                     <Alert status="warning" borderRadius="md">
                       <AlertIcon />
                       <Text fontSize="sm">
-                        Saldo kas/bank tidak mencukupi. Saldo: Rp {selectedCB.balance.toLocaleString('id-ID')}
+                        Saldo kas/bank tidak mencukupi. Saldo: {formatRupiah(selectedCB.balance)}
                       </Text>
                     </Alert>
                   );
@@ -665,7 +675,7 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                       <HStack justify="space-between">
                         <Text fontSize="sm">Jumlah Pembayaran:</Text>
                         <Text fontSize="sm" fontWeight="bold">
-                          Rp {amount.toLocaleString('id-ID')}
+                          {formatRupiah(amount)}
                         </Text>
                       </HStack>
                       <HStack justify="space-between">
