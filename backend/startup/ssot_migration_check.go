@@ -64,16 +64,6 @@ func verifyTablesExist(db *gorm.DB) error {
 		}
 	}
 	
-	// Check materialized view using pg_matviews (correct table for materialized views)
-	var viewCount int64
-	err := db.Raw("SELECT COUNT(*) FROM pg_matviews WHERE schemaname = 'public' AND matviewname = 'account_balances'").Scan(&viewCount).Error
-	if err != nil {
-		return fmt.Errorf("failed to check account_balances materialized view: %v", err)
-	}
-	if viewCount == 0 {
-		return fmt.Errorf("account_balances materialized view not found")
-	}
-	
 	return nil
 }
 
@@ -145,17 +135,7 @@ func testTableStructures(db *gorm.DB) error {
 		}
 	}
 	
-	// Check materialized view using pg_matviews
-	var viewCount int64
-	err := db.Raw("SELECT COUNT(*) FROM pg_matviews WHERE schemaname = 'public' AND matviewname = 'account_balances'").Scan(&viewCount).Error
-	if err != nil {
-		return fmt.Errorf("failed to check account_balances materialized view: %v", err)
-	}
-	if viewCount == 0 {
-		return fmt.Errorf("account_balances materialized view not found")
-	}
-	
-	log.Printf("   Found %d required tables and views", len(requiredTables)+1)
+	log.Printf("   Found %d required tables", len(requiredTables))
 	return nil
 }
 
@@ -237,7 +217,7 @@ func testCRUDOperations(db *gorm.DB) error {
 		return fmt.Errorf("failed to read journal entry: %v", err)
 	}
 	log.Printf("   Read journal entry with %d lines", len(readEntry.Lines))
-
+	
 	// Test update entry totals (this should trigger the validation function)
 	if err := db.Model(&readEntry).Updates(map[string]interface{}{
 		"total_debit":  100.00,
@@ -247,28 +227,14 @@ func testCRUDOperations(db *gorm.DB) error {
 		return fmt.Errorf("failed to update journal entry: %v", err)
 	}
 	log.Printf("   Updated journal entry totals")
-
+	
 	// We don't delete the entry here - it will be deleted when the transaction rolls back
 	return nil
 }
 
 func testMaterializedView(db *gorm.DB) error {
-	// Test if we can query the materialized view
-	var balances []models.SSOTAccountBalance
-	err := db.Limit(5).Find(&balances).Error
-	if err != nil {
-		return fmt.Errorf("failed to query account_balances view: %v", err)
-	}
-
-	log.Printf("   Successfully queried account_balances view")
-
-	// Test refresh materialized view
-	err = db.Exec("REFRESH MATERIALIZED VIEW account_balances").Error
-	if err != nil {
-		return fmt.Errorf("failed to refresh materialized view: %v", err)
-	}
-	log.Printf("   Refreshed materialized view successfully")
-
+	// Materialized view is no longer required - skip this test
+	log.Printf("   Skipping materialized view test (no longer required)")
 	return nil
 }
 

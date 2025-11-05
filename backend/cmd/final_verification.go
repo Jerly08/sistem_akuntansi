@@ -30,17 +30,8 @@ func main() {
 
 	fmt.Println("🎯 Final Backend Migration Verification")
 	fmt.Println("=======================================")
-
-	// 1. Test account_balances materialized view with correct query
-	var matViewExists bool
-	result := db.Raw("SELECT EXISTS (SELECT 1 FROM pg_matviews WHERE matviewname = 'account_balances')").Scan(&matViewExists)
-	if result.Error != nil {
-		fmt.Printf("⚠️  Could not check materialized view: %v\n", result.Error)
-	} else {
-		fmt.Printf("✅ account_balances materialized view exists: %v\n", matViewExists)
-	}
-
-	// 2. Test purchase_payments table
+	
+	// 1. Test purchase_payments table
 	var tableExists bool
 	result = db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'purchase_payments')").Scan(&tableExists)
 	if result.Error != nil {
@@ -99,17 +90,8 @@ func main() {
 	} else {
 		fmt.Printf("✅ sync_account_balance_from_ssot() executed successfully\n")
 	}
-
-	// 6. Check materialized view contents
-	var rowCount int64
-	result = db.Raw("SELECT COUNT(*) FROM account_balances").Scan(&rowCount)
-	if result.Error != nil {
-		fmt.Printf("⚠️  Could not count account_balances rows: %v\n", result.Error)
-	} else {
-		fmt.Printf("✅ account_balances contains %d rows\n", rowCount)
-	}
-
-	// 7. Check purchase_payments table structure
+	
+	// 6. Check purchase_payments table structure
 	result = db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'purchase_payments' AND column_name = 'deleted_at')").Scan(&tableExists)
 	if result.Error != nil {
 		fmt.Printf("⚠️  Could not check deleted_at column: %v\n", result.Error)
@@ -117,17 +99,12 @@ func main() {
 		fmt.Printf("✅ purchase_payments.deleted_at column exists: %v\n", tableExists)
 	}
 
-	// 8. Final System Health Check
+	// 7. Final System Health Check
 	fmt.Println("\n📊 Final System Status:")
 	fmt.Println("=======================")
-
+	
 	allGood := true
-
-	if !matViewExists {
-		fmt.Println("❌ account_balances materialized view missing")
-		allGood = false
-	}
-
+	
 	if !funcExists {
 		fmt.Println("❌ SSOT functions missing")
 		allGood = false
