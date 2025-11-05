@@ -665,7 +665,7 @@ const EnhancedPLReportPage: React.FC = () => {
                     </StatNumber>
                     <StatHelpText>
                       <StatArrow type={plData.financialMetrics.grossProfitMargin >= 0 ? 'increase' : 'decrease'} />
-                      {plData.financialMetrics.grossProfitMargin.toFixed(2)}%
+                      {plData.financialMetrics.grossProfitMargin.toFixed(3)}%
                     </StatHelpText>
                   </Stat>
                 </CardBody>
@@ -681,7 +681,7 @@ const EnhancedPLReportPage: React.FC = () => {
                     </StatNumber>
                     <StatHelpText>
                       <StatArrow type={plData.financialMetrics.operatingMargin >= 0 ? 'increase' : 'decrease'} />
-                      {plData.financialMetrics.operatingMargin.toFixed(2)}%
+                      {plData.financialMetrics.operatingMargin.toFixed(3)}%
                     </StatHelpText>
                   </Stat>
                 </CardBody>
@@ -697,7 +697,7 @@ const EnhancedPLReportPage: React.FC = () => {
                     </StatNumber>
                     <StatHelpText>
                       <StatArrow type={plData.financialMetrics.ebitdaMargin >= 0 ? 'increase' : 'decrease'} />
-                      {plData.financialMetrics.ebitdaMargin.toFixed(2)}%
+                      {plData.financialMetrics.ebitdaMargin.toFixed(3)}%
                     </StatHelpText>
                   </Stat>
                 </CardBody>
@@ -713,7 +713,7 @@ const EnhancedPLReportPage: React.FC = () => {
                     </StatNumber>
                     <StatHelpText>
                       <StatArrow type={plData.financialMetrics.netIncomeMargin >= 0 ? 'increase' : 'decrease'} />
-                      {plData.financialMetrics.netIncomeMargin.toFixed(2)}%
+                      {plData.financialMetrics.netIncomeMargin.toFixed(3)}%
                     </StatHelpText>
                   </Stat>
                 </CardBody>

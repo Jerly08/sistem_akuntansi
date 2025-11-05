@@ -4569,7 +4569,7 @@ func (p *PDFService) renderSSOTFinancialSections(pdf *gofpdf.Fpdf, data map[stri
 	gpm := get([]string{"gross_profit_margin"}, []string{"GrossProfitMargin"})
 	if gpm > 0 {
 		pdf.SetFont("Arial", "", 9)
-		pdf.Cell(190, 5, fmt.Sprintf("Gross Profit Margin: %.2f%%", gpm))
+		pdf.Cell(190, 5, fmt.Sprintf("Gross Profit Margin: %.3f%%", gpm))
 		pdf.Ln(8)
 	}
 	
@@ -4813,7 +4813,7 @@ func (p *PDFService) addFinancialRatiosSummary(pdf *gofpdf.Fpdf, data map[string
 	// Second row of ratios
 	if ebitdaMargin, exists := data["EBITDAMargin"]; exists {
 		if em, ok := ebitdaMargin.(float64); ok && em > 0 {
-			pdf.Cell(95, 5, fmt.Sprintf("EBITDA Margin: %.2f%%", em))
+			pdf.Cell(95, 5, fmt.Sprintf("EBITDA Margin: %.3f%%", em))
 		} else {
 			pdf.Cell(95, 5, "EBITDA Margin: N/A")
 		}
@@ -4823,7 +4823,7 @@ func (p *PDFService) addFinancialRatiosSummary(pdf *gofpdf.Fpdf, data map[string
 	
 	if netMargin, exists := data["NetIncomeMargin"]; exists {
 		if nm, ok := netMargin.(float64); ok && nm > 0 {
-			pdf.Cell(95, 5, fmt.Sprintf("Net Income Margin: %.2f%%", nm))
+			pdf.Cell(95, 5, fmt.Sprintf("Net Income Margin: %.3f%%", nm))
 		} else {
 			pdf.Cell(95, 5, "Net Income Margin: N/A")
 		}

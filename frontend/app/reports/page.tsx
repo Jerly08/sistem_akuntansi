@@ -1748,11 +1748,11 @@ const ReportsPage: React.FC = () => {
         if ((payload as any).financialMetrics) {
           csvLines.push('FINANCIAL METRICS,');
           csvLines.push(`Gross Profit,${formatCurrencyForCSV(payload.financialMetrics.grossProfit)}`);
-          csvLines.push(`Gross Margin,${Number((payload.financialMetrics.grossProfitMargin || 0).toFixed(3))}%`);
+          csvLines.push(`Gross Margin,${(payload.financialMetrics.grossProfitMargin || 0).toFixed(3)}%`);
           csvLines.push(`Operating Income,${formatCurrencyForCSV(payload.financialMetrics.operatingIncome)}`);
-          csvLines.push(`Operating Margin,${Number((payload.financialMetrics.operatingMargin || 0).toFixed(3))}%`);
+          csvLines.push(`Operating Margin,${(payload.financialMetrics.operatingMargin || 0).toFixed(3)}%`);
           csvLines.push(`Net Income,${formatCurrencyForCSV(payload.financialMetrics.netIncome)}`);
-          csvLines.push(`Net Margin,${Number((payload.financialMetrics.netIncomeMargin || 0).toFixed(3))}%`);
+          csvLines.push(`Net Margin,${(payload.financialMetrics.netIncomeMargin || 0).toFixed(3)}%`);
         }
       }
       // Balance Sheet
@@ -2609,7 +2609,7 @@ leftIcon={<FiTrendingUp />}
                         <HStack justify="space-between" w="full">
                           <Text fontSize="sm" color="green.700">Gross Margin:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
-                            {Number((ssotPLData.financialMetrics.grossProfitMargin || 0).toFixed(3))}%
+                            {(ssotPLData.financialMetrics.grossProfitMargin || 0).toFixed(3)}%
                           </Text>
                         </HStack>
                         <HStack justify="space-between" w="full">
@@ -2623,7 +2623,7 @@ leftIcon={<FiTrendingUp />}
                         <HStack justify="space-between" w="full">
                           <Text fontSize="sm" color="green.700">Operating Margin:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
-                            {Number((ssotPLData.financialMetrics.operatingMargin || 0).toFixed(3))}%
+                            {(ssotPLData.financialMetrics.operatingMargin || 0).toFixed(3)}%
                           </Text>
                         </HStack>
                         <HStack justify="space-between" w="full">
@@ -2635,7 +2635,7 @@ leftIcon={<FiTrendingUp />}
                         <HStack justify="space-between" w="full">
                           <Text fontSize="sm" color="green.700">Net Margin:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
-                            {Number((ssotPLData.financialMetrics.netIncomeMargin || 0).toFixed(3))}%
+                            {(ssotPLData.financialMetrics.netIncomeMargin || 0).toFixed(3)}%
                           </Text>
                         </HStack>
                       </VStack>

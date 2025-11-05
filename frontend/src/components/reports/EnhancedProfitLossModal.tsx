@@ -124,7 +124,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type={metrics.grossProfitMargin >= 0 ? 'increase' : 'decrease'} />
-                  {metrics.grossProfitMargin.toFixed(2)}%
+                  {metrics.grossProfitMargin.toFixed(3)}%
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -152,7 +152,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type={metrics.operatingMargin >= 0 ? 'increase' : 'decrease'} />
-                  {metrics.operatingMargin.toFixed(2)}%
+                  {metrics.operatingMargin.toFixed(3)}%
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -180,7 +180,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type={metrics.ebitdaMargin >= 0 ? 'increase' : 'decrease'} />
-                  {metrics.ebitdaMargin.toFixed(2)}%
+                  {metrics.ebitdaMargin.toFixed(3)}%
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -208,7 +208,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type={metrics.netIncomeMargin >= 0 ? 'increase' : 'decrease'} />
-                  {metrics.netIncomeMargin.toFixed(2)}%
+                  {metrics.netIncomeMargin.toFixed(3)}%
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -313,7 +313,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                             )}
                           </HStack>
                           <Text fontSize="sm" fontWeight="medium">
-                            {item.isPercentage ? `${item.amount.toFixed(2)}%` : formatCurrency(item.amount)}
+                            {item.isPercentage ? `${item.amount.toFixed(3)}%` : formatCurrency(item.amount)}
                           </Text>
                         </HStack>
                       ))}
@@ -337,9 +337,9 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                       />
                     )}
                   </HStack>
-                  <Text fontWeight={isCalculated ? "bold" : "medium"}>
-                    {item.isPercentage ? `${item.amount.toFixed(2)}%` : formatCurrency(item.amount)}
-                  </Text>
+                          <Text fontWeight={isCalculated ? "bold" : "medium"}>
+                            {item.isPercentage ? `${item.amount.toFixed(3)}%` : formatCurrency(item.amount)}
+                          </Text>
                 </HStack>
               ))}
             </VStack>
@@ -382,7 +382,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 <Tr>
                   <Td>Gross Profit</Td>
                   <Td isNumeric>{formatCurrency(metrics.grossProfit)}</Td>
-                  <Td isNumeric>{metrics.grossProfitMargin.toFixed(2)}%</Td>
+                  <Td isNumeric>{metrics.grossProfitMargin.toFixed(3)}%</Td>
                   <Td>
                     <Badge colorScheme={metrics.grossProfitMargin > 20 ? 'green' : metrics.grossProfitMargin > 10 ? 'yellow' : 'red'}>
                       {metrics.grossProfitMargin > 20 ? 'Excellent' : metrics.grossProfitMargin > 10 ? 'Good' : 'Needs Improvement'}
@@ -392,7 +392,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 <Tr>
                   <Td>Operating Income</Td>
                   <Td isNumeric>{formatCurrency(metrics.operatingIncome)}</Td>
-                  <Td isNumeric>{metrics.operatingMargin.toFixed(2)}%</Td>
+                  <Td isNumeric>{metrics.operatingMargin.toFixed(3)}%</Td>
                   <Td>
                     <Badge colorScheme={metrics.operatingMargin > 15 ? 'green' : metrics.operatingMargin > 5 ? 'yellow' : 'red'}>
                       {metrics.operatingMargin > 15 ? 'Strong' : metrics.operatingMargin > 5 ? 'Moderate' : 'Weak'}
@@ -402,7 +402,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 <Tr>
                   <Td>EBITDA</Td>
                   <Td isNumeric>{formatCurrency(metrics.ebitda)}</Td>
-                  <Td isNumeric>{metrics.ebitdaMargin.toFixed(2)}%</Td>
+                  <Td isNumeric>{metrics.ebitdaMargin.toFixed(3)}%</Td>
                   <Td>
                     <Badge colorScheme={metrics.ebitdaMargin > 20 ? 'green' : metrics.ebitdaMargin > 10 ? 'yellow' : 'red'}>
                       {metrics.ebitdaMargin > 20 ? 'Excellent' : metrics.ebitdaMargin > 10 ? 'Good' : 'Poor'}
@@ -412,7 +412,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 <Tr>
                   <Td>Net Income</Td>
                   <Td isNumeric>{formatCurrency(metrics.netIncome)}</Td>
-                  <Td isNumeric>{metrics.netIncomeMargin.toFixed(2)}%</Td>
+                  <Td isNumeric>{metrics.netIncomeMargin.toFixed(3)}%</Td>
                   <Td>
                     <Badge colorScheme={metrics.netIncomeMargin > 10 ? 'green' : metrics.netIncomeMargin > 3 ? 'yellow' : 'red'}>
                       {metrics.netIncomeMargin > 10 ? 'Profitable' : metrics.netIncomeMargin > 3 ? 'Marginal' : 'Unprofitable'}
