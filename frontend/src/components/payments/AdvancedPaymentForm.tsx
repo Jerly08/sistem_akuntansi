@@ -348,9 +348,9 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
   
   const toast = useToast();
   
-  // Check if user has permission to create payments (ADMIN cannot create)
+  // Check if user has permission to create payments
   const userRole = normalizeRole(user?.role);
-  const canCreatePayments = userRole === 'finance' || userRole === 'director';
+  const canCreatePayments = userRole === 'admin' || userRole === 'finance' || userRole === 'director';
   
   // If modal is opened but user doesn't have permission, close it and show error
   useEffect(() => {

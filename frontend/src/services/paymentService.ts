@@ -17,6 +17,7 @@ export interface Payment {
   method: string;
   reference: string;
   status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  payment_type?: string; // REGULAR, TAX_PPN, TAX_PPN_INPUT, TAX_PPN_OUTPUT
   notes: string;
   created_at: string;
   updated_at: string;

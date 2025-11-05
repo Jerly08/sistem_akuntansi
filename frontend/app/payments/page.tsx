@@ -195,6 +195,34 @@ const PaymentsPage: React.FC = () => {
   
   // Edit Payment handler
   const handleEditPayment = (payment: Payment) => {
+    // Check if PPN payment - cannot be edited
+    if (payment.payment_type?.startsWith('TAX_PPN') || payment.code?.startsWith('SETOR-PPN')) {
+      toast({
+        title: 'Cannot Edit PPN Payment',
+        description: 'PPN payments cannot be edited. Please delete and create new if needed.',
+        status: 'warning',
+        duration: 5000,
+      });
+      return;
+    }
+    
+    // Detect payment type from contact type or code
+    let type: 'receivable' | 'payable' = 'receivable';
+    
+    // Check contact type first (most reliable)
+    if (payment.contact?.type === 'VENDOR') {
+      type = 'payable';
+    } else if (payment.contact?.type === 'CUSTOMER') {
+      type = 'receivable';
+    } 
+    // Fallback to code prefix
+    else if (payment.code?.startsWith('PAY')) {
+      type = 'payable';
+    } else if (payment.code?.startsWith('RCV')) {
+      type = 'receivable';
+    }
+    
+    setPaymentType(type);
     setSelectedPayment(payment);
     setShowPaymentForm(true);
   };
