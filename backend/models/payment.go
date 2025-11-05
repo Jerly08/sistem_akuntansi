@@ -62,8 +62,26 @@ const (
 
 // Payment Type Constants
 const (
-    PaymentTypeRegular        = "REGULAR"
-    PaymentTypeTaxPPN         = "TAX_PPN"
-    PaymentTypeTaxPPNInput    = "TAX_PPN_INPUT"
-    PaymentTypeTaxPPNOutput   = "TAX_PPN_OUTPUT"
+	PaymentTypeRegular        = "REGULAR"
+	PaymentTypeTaxPPN         = "TAX_PPN"
+	PaymentTypeTaxPPNInput    = "TAX_PPN_INPUT"
+	PaymentTypeTaxPPNOutput   = "TAX_PPN_OUTPUT"
 )
+
+// GetPayeeName returns the payee name for display (e.g., in PDF)
+// For PPN tax payments, it returns "Negara" instead of contact name
+func (p *Payment) GetPayeeName() string {
+	// For PPN tax payments, payee is always "Negara" (Government)
+	if p.PaymentType == PaymentTypeTaxPPN || 
+	   p.PaymentType == PaymentTypeTaxPPNInput || 
+	   p.PaymentType == PaymentTypeTaxPPNOutput {
+		return "Negara"
+	}
+	
+	// For regular payments, return contact name if available
+	if p.Contact.Name != "" {
+		return p.Contact.Name
+	}
+	
+	return "Unknown"
+}

@@ -2192,7 +2192,16 @@ func (p *PDFService) GeneratePaymentReportPDF(data interface{}) ([]byte, error) 
 		// Payment data
 		date := payment.Date.Format("02/01/06")
 		contactName := "N/A"
-		if payment.Contact.ID != 0 {
+		
+		// Check if this is a PPN tax payment
+		isPPNPayment := payment.PaymentType == models.PaymentTypeTaxPPN || 
+			payment.PaymentType == models.PaymentTypeTaxPPNInput || 
+			payment.PaymentType == models.PaymentTypeTaxPPNOutput ||
+			strings.HasPrefix(payment.Code, "SETOR-PPN")
+		
+		if isPPNPayment {
+			contactName = "Negara"
+		} else if payment.Contact.ID != 0 {
 			contactName = payment.Contact.Name
 			// Truncate if too long
 			if len(contactName) > 25 {
@@ -2395,7 +2404,23 @@ func (p *PDFService) GeneratePaymentDetailPDF(data interface{}) ([]byte, error) 
 	pdf.Ln(7)
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(102, 102, 102)
-	if payment.Contact.ID != 0 {
+	
+	// Check if this is a PPN tax payment
+	isPPNPayment := payment.PaymentType == models.PaymentTypeTaxPPN || 
+		payment.PaymentType == models.PaymentTypeTaxPPNInput || 
+		payment.PaymentType == models.PaymentTypeTaxPPNOutput ||
+		strings.HasPrefix(payment.Code, "SETOR-PPN")
+	
+	if isPPNPayment {
+		// For PPN payments, display "Negara" (Government)
+		pdf.Cell(contentW, 4, "Negara")
+		pdf.Ln(5)
+		pdf.Cell(contentW, 4, "Direktorat Jenderal Pajak (DJP)")
+		pdf.Ln(5)
+		pdf.Cell(contentW, 4, "Kementerian Keuangan Republik Indonesia")
+		pdf.Ln(5)
+	} else if payment.Contact.ID != 0 {
+		// Regular payment - show contact info
 		pdf.Cell(contentW, 4, payment.Contact.Name)
 		pdf.Ln(5)
 		if strings.TrimSpace(payment.Contact.Address) != "" {
@@ -2443,7 +2468,19 @@ func (p *PDFService) GeneratePaymentDetailPDF(data interface{}) ([]byte, error) 
 		// Single line fallback
 		pdf.CellFormat(numW, 6, "1", "1", 0, "C", false, 0, "")
 		desc := "Payment transaction"
-		if strings.ToUpper(payment.Contact.Type) == "CUSTOMER" { desc = "Payment received" } else { desc = "Payment made" }
+		
+		// Check if this is a PPN payment
+		if payment.PaymentType == models.PaymentTypeTaxPPN || 
+			payment.PaymentType == models.PaymentTypeTaxPPNInput || 
+			payment.PaymentType == models.PaymentTypeTaxPPNOutput ||
+			strings.HasPrefix(payment.Code, "SETOR-PPN") {
+			desc = "Setor PPN ke Negara (Tax Remittance to Government)"
+		} else if strings.ToUpper(payment.Contact.Type) == "CUSTOMER" {
+			desc = "Payment received"
+		} else {
+			desc = "Payment made"
+		}
+		
 		pdf.CellFormat(descW, 6, desc, "1", 0, "L", false, 0, "")
 		pdf.CellFormat(amtW, 6, p.formatRupiah(payment.Amount), "1", 0, "R", false, 0, "")
 		pdf.Ln(6)

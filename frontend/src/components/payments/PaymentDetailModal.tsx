@@ -106,9 +106,24 @@ const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
                       <Td fontWeight="medium">Contact:</Td>
                       <Td>
                         <Flex direction="column">
-                          <Text>{payment.contact?.name || 'Unknown Contact'}</Text>
+                          <Text>
+                            {/* For PPN tax payments, show "Negara" instead of contact name */}
+                            {(payment.payment_type === 'TAX_PPN' || 
+                              payment.payment_type === 'TAX_PPN_INPUT' || 
+                              payment.payment_type === 'TAX_PPN_OUTPUT' ||
+                              payment.code?.startsWith('SETOR-PPN')) 
+                              ? 'Negara' 
+                              : (payment.contact?.name || 'Unknown Contact')
+                            }
+                          </Text>
                           <Text fontSize="sm" color={textSecondary}>
-                            {payment.contact?.type || 'N/A'}
+                            {(payment.payment_type === 'TAX_PPN' || 
+                              payment.payment_type === 'TAX_PPN_INPUT' || 
+                              payment.payment_type === 'TAX_PPN_OUTPUT' ||
+                              payment.code?.startsWith('SETOR-PPN'))
+                              ? 'Pemerintah / Tax Authority'
+                              : (payment.contact?.type || 'N/A')
+                            }
                           </Text>
                         </Flex>
                       </Td>

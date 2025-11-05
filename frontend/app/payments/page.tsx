@@ -248,7 +248,16 @@ const PaymentsPage: React.FC = () => {
   },
   { 
     header: 'Contact',
-    accessor: (row: Payment) => row.contact?.name || '-'
+    accessor: (row: Payment) => {
+      // For PPN tax payments, show "Negara" instead of contact name
+      if (row.payment_type === 'TAX_PPN' || 
+          row.payment_type === 'TAX_PPN_INPUT' || 
+          row.payment_type === 'TAX_PPN_OUTPUT' ||
+          row.code?.startsWith('SETOR-PPN')) {
+        return 'Negara';
+      }
+      return row.contact?.name || '-';
+    }
   },
   {
     header: 'Date',
