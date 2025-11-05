@@ -225,12 +225,7 @@ func (je *JournalEntry) ValidateBusinessRules(tx *gorm.DB) error {
 		return err
 	}
 	
-	// 5. Period validation
-	if err := je.validatePeriodOpen(tx); err != nil {
-		return err
-	}
-	
-	// 6. Required fields validation
+	// 5. Required fields validation
 	if strings.TrimSpace(je.Description) == "" {
 		return errors.New("description is required")
 	}
@@ -277,27 +272,6 @@ func (je *JournalEntry) validateAccountCompatibility(tx *gorm.DB) error {
 	return nil
 }
 
-// validatePeriodOpen checks if accounting period is open for posting
-func (je *JournalEntry) validatePeriodOpen(tx *gorm.DB) error {
-	// Check if accounting period is closed
-	year := je.EntryDate.Year()
-	month := je.EntryDate.Month()
-	
-	var periodStatus AccountingPeriod
-	err := tx.Where("year = ? AND month = ?", year, int(month)).First(&periodStatus).Error
-	
-	if err == nil && periodStatus.IsClosed {
-		return fmt.Errorf("cannot post to closed accounting period: %04d-%02d", year, month)
-	}
-	
-	// Check if period is too old (e.g., more than 2 years ago)
-	twoYearsAgo := time.Now().AddDate(-2, 0, 0)
-	if je.EntryDate.Before(twoYearsAgo) {
-		return errors.New("cannot post entries more than 2 years old without special approval")
-	}
-	
-	return nil
-}
 
 // GORM Hooks
 func (je *JournalEntry) BeforeCreate(tx *gorm.DB) error {

@@ -193,13 +193,16 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Initialize WarehouseLocationController
 	warehouseLocationController := controllers.NewWarehouseLocationController(db)
 	
-	// Initialize Accounting Period Service and Controller
-	accountingPeriodService := services.NewAccountingPeriodService(db)
-	accountingPeriodController := controllers.NewAccountingPeriodController(accountingPeriodService)
-	
-	// Initialize Fiscal Year Closing Service and Controller
+	// Initialize Fiscal Year Closing Service and Controller (Legacy - will be replaced by Period Closing)
 	fiscalYearClosingService := services.NewFiscalYearClosingService(db)
 	fiscalYearClosingController := controllers.NewFiscalYearClosingController(fiscalYearClosingService)
+	
+	// Initialize Period Closing Service and Controller (Flexible Period Closing)
+	periodClosingService := services.NewPeriodClosingService(db)
+	periodClosingController := controllers.NewPeriodClosingController(periodClosingService)
+	
+	// Initialize Period Validation Middleware
+	periodValidationMiddleware := middleware.NewPeriodValidationMiddleware(periodClosingService)
 	
 	// Initialize SSOT Unified Journal Service first (needed by purchase service)
 	unifiedJournalService := services.NewUnifiedJournalService(db)
@@ -271,10 +274,6 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	
 	// Initialize Permission Middleware
 	permMiddleware := middleware.NewPermissionMiddleware(db)
-	
-	// 📅 Initialize Period Validation Middleware
-	periodValidation := middleware.NewPeriodValidationMiddleware(db, accountingPeriodService)
-	
 	// 🔒 Initialize Enhanced Security Middleware
 	enhancedSecurity := middleware.NewEnhancedSecurityMiddleware(db)
 	
@@ -354,8 +353,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 		unifiedJournals := v1.Group("/journals")
 		unifiedJournals.Use(jwtManager.AuthRequired())
 		{
-			// Main CRUD operations with period validation
-			unifiedJournals.POST("", permMiddleware.CanCreate("reports"), periodValidation.ValidateEntryDate(), unifiedJournalController.CreateJournalEntry)
+			// Main CRUD operations
+			unifiedJournals.POST("", permMiddleware.CanCreate("reports"), periodValidationMiddleware.ValidateTransactionPeriod(), unifiedJournalController.CreateJournalEntry)
 			unifiedJournals.GET("", permMiddleware.CanView("reports"), unifiedJournalController.GetJournalEntries)
 			unifiedJournals.GET("/:id", permMiddleware.CanView("reports"), unifiedJournalController.GetJournalEntry)
 			
@@ -463,7 +462,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 				products.DELETE("/:id", permMiddleware.CanDelete("products"), productController.DeleteProduct)
 				
 				// 📊 Critical inventory operations dengan extra monitoring
-				products.POST("/adjust-stock", permMiddleware.CanEdit("products"), periodValidation.ValidateEntryDate(), enhancedSecurity.RequestMonitoring(), productController.AdjustStock)
+				products.POST("/adjust-stock", permMiddleware.CanEdit("products"), enhancedSecurity.RequestMonitoring(), productController.AdjustStock)
 				products.POST("/opname", permMiddleware.CanEdit("products"), enhancedSecurity.RequestMonitoring(), productController.Opname)
 				products.POST("/upload-image", permMiddleware.CanEdit("products"), productController.UploadProductImage)
 			}
@@ -647,8 +646,8 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				sales.GET("/:id", permMiddleware.CanView("sales"), salesController.GetSale)
 				// Validate stock for sales create form
 				sales.POST("/validate-stock", permMiddleware.CanCreate("sales"), salesController.ValidateSaleStock)
-				sales.POST("", permMiddleware.CanCreate("sales"), periodValidation.ValidateEntryDate(), salesController.CreateSale)
-				sales.PUT("/:id", permMiddleware.CanEdit("sales"), salesController.UpdateSale)
+				sales.POST("", permMiddleware.CanCreate("sales"), periodValidationMiddleware.ValidateTransactionPeriod(), salesController.CreateSale)
+				sales.PUT("/:id", permMiddleware.CanEdit("sales"), periodValidationMiddleware.ValidateTransactionPeriod(), salesController.UpdateSale)
 				sales.DELETE("/:id", permMiddleware.CanDelete("sales"), salesController.DeleteSale)
 
 				// Status management
@@ -658,11 +657,11 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 
 				// Payment management
 				sales.GET("/:id/payments", middleware.RoleRequired("admin", "finance", "director", "employee"), salesController.GetSalePayments)
-				sales.POST("/:id/payments", middleware.RoleRequired("admin", "finance", "director"), periodValidation.ValidateEntryDate(), salesController.CreateSalePayment)
+				sales.POST("/:id/payments", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateSalePayment)
 				
 				// Integrated Payment Management routes
 				sales.GET("/:id/for-payment", middleware.RoleRequired("admin", "finance", "director"), salesController.GetSaleForPayment)
-				sales.POST("/:id/integrated-payment", middleware.RoleRequired("admin", "finance", "director"), periodValidation.ValidateEntryDate(), salesController.CreateIntegratedPayment)
+				sales.POST("/:id/integrated-payment", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateIntegratedPayment)
 
 				// Returns management
 				sales.POST("/:id/returns", middleware.RoleRequired("admin", "finance", "director"), salesController.CreateSaleReturn)
@@ -792,8 +791,8 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				// Approval statistics (must be defined before parameterized "/:id" route)
 				purchases.GET("/approval-stats", permMiddleware.CanApprove("purchases"), purchaseApprovalHandler.GetApprovalStats)
 				purchases.GET("/:id", permMiddleware.CanView("purchases"), purchaseController.GetPurchase)
-				purchases.POST("", permMiddleware.CanCreate("purchases"), periodValidation.ValidateEntryDate(), purchaseController.CreatePurchase)
-				purchases.PUT("/:id", permMiddleware.CanEdit("purchases"), purchaseController.UpdatePurchase)
+				purchases.POST("", permMiddleware.CanCreate("purchases"), periodValidationMiddleware.ValidateTransactionPeriod(), purchaseController.CreatePurchase)
+				purchases.PUT("/:id", permMiddleware.CanEdit("purchases"), periodValidationMiddleware.ValidateTransactionPeriod(), purchaseController.UpdatePurchase)
 				purchases.DELETE("/:id", permMiddleware.CanDelete("purchases"), purchaseController.DeletePurchase)
 				
 				// Approval operations dengan permission checks
@@ -830,11 +829,11 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				
 				// Payment management (similar to sales payment management)
 				purchases.GET("/:id/payments", middleware.RoleRequired("admin", "finance", "director", "employee"), purchaseController.GetPurchasePayments)
-				purchases.POST("/:id/payments", middleware.RoleRequired("admin", "finance", "director"), periodValidation.ValidateEntryDate(), purchaseController.CreatePurchasePayment)
+				purchases.POST("/:id/payments", middleware.RoleRequired("admin", "finance", "director"), purchaseController.CreatePurchasePayment)
 				
 				// Integrated Payment Management routes  
 				purchases.GET("/:id/for-payment", middleware.RoleRequired("admin", "finance", "director"), purchaseController.GetPurchaseForPayment)
-				purchases.POST("/:id/integrated-payment", middleware.RoleRequired("admin", "finance", "director"), periodValidation.ValidateEntryDate(), purchaseController.CreateIntegratedPayment)
+				purchases.POST("/:id/integrated-payment", middleware.RoleRequired("admin", "finance", "director"), purchaseController.CreateIntegratedPayment)
 				
 				// Three-way matching dengan permission checks
 				purchases.GET("/:id/matching", permMiddleware.CanView("purchases"), purchaseController.GetPurchaseMatching)
@@ -859,7 +858,7 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				assets.POST("/upload-image", permMiddleware.CanEdit("assets"), assetController.UploadAssetImage)
 				
 				// Manual capitalization endpoint
-				assets.POST("/:id/capitalize", permMiddleware.CanEdit("assets"), periodValidation.ValidateEntryDate(), assetController.CapitalizeAsset)
+				assets.POST("/:id/capitalize", permMiddleware.CanEdit("assets"), assetController.CapitalizeAsset)
 				
 				// Asset categories management
 				assets.GET("/categories", permMiddleware.CanView("assets"), assetController.GetAssetCategories)
@@ -916,18 +915,7 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 			// Setup Settings routes
 			SetupSettingsRoutes(protected, db)
 			
-			// 📅 Accounting Period routes (finance, admin, director only)
-			periods := protected.Group("/periods")
-			periods.Use(middleware.RoleRequired("finance", "admin", "director"))
-			{
-				periods.GET("", accountingPeriodController.ListPeriods)
-				periods.GET("/current", accountingPeriodController.GetCurrentPeriod)
-				periods.GET("/summary", accountingPeriodController.GetPeriodSummary)
-				periods.POST("/:year/:month/close", accountingPeriodController.ClosePeriod)
-				periods.POST("/:year/:month/reopen", accountingPeriodController.ReopenPeriod)
-			}
-			
-			// 🏁 Fiscal Year-End Closing routes (admin, director, finance only - high risk)
+			// 🏁 Fiscal Year-End Closing routes (LEGACY - admin, director, finance only - high risk)
 			fiscalClosing := protected.Group("/fiscal-closing")
 			fiscalClosing.Use(middleware.RoleRequired("admin", "director", "finance")) // Finance can execute year-end closing
 			{
@@ -935,6 +923,18 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				fiscalClosing.POST("/execute", fiscalYearClosingController.ExecuteClosing)
 				fiscalClosing.GET("/history", fiscalYearClosingController.GetClosingHistory)
 			}
+			
+		// 📅 Period Closing routes (Flexible Period Closing - admin, director, finance only)
+		periodClosing := protected.Group("/period-closing")
+		periodClosing.Use(middleware.RoleRequired("admin", "director", "finance"))
+		{
+			periodClosing.GET("/last-info", periodClosingController.GetLastClosingInfo)        // Get last closing info
+			periodClosing.GET("/preview", periodClosingController.PreviewClosing)              // Preview period closing
+			periodClosing.POST("/execute", periodClosingController.ExecuteClosing)             // Execute period closing
+			periodClosing.POST("/reopen", periodClosingController.ReopenPeriod)                // Reopen closed period
+			periodClosing.GET("/history", periodClosingController.GetClosingHistory)           // Get closing history
+			periodClosing.GET("/check-date", periodClosingController.CheckDateInClosedPeriod) // Check if date is closed
+		}
 			
 			// ✅ CONSOLIDATED ROUTES: Use only Enhanced Report Routes - UNDER V1
 			RegisterEnhancedReportRoutes(v1, enhancedReportController, jwtManager)
@@ -944,9 +944,6 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 
 			// 📋 CONTACT HISTORY REPORTS: Customer and Vendor transaction history reports
 			RegisterContactHistoryRoutes(r, db, pdfService)
-
-			// ⚡ OPTIMIZED FINANCIAL REPORTS: Ultra-fast reports using materialized view
-			SetupOptimizedReportsRoutes(r, db)
 			
 			// 🔧 COMPATIBILITY ROUTES: Add root-level aliases for SSOT reports
 			// This provides backward compatibility for frontend requests to /ssot-reports/*

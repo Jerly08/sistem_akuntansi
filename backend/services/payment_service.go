@@ -459,10 +459,10 @@ func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, user
 			allocatedAmount = remainingAmount
 		}
 		
-		// Calculate outstanding (simplified - would need proper tracking)
-		outstandingAmount := purchase.TotalAmount // This should be tracked properly
-		if allocatedAmount > outstandingAmount {
-			allocatedAmount = outstandingAmount
+		// Calculate outstanding using OutstandingAmount field (proper tracking)
+		if allocatedAmount > purchase.OutstandingAmount {
+			allocatedAmount = purchase.OutstandingAmount
+			log.Printf("⚠️ Adjusting allocated amount to outstanding: %.2f -> %.2f", allocation.Amount, allocatedAmount)
 		}
 		
 		// Create payment allocation
@@ -476,6 +476,31 @@ func (s *PaymentService) CreatePayablePayment(request PaymentCreateRequest, user
 			tx.Rollback()
 			return nil, err
 		}
+		
+		// 🔥 FIX: Update purchase paid amount and outstanding amount (same as receivable payment logic)
+		log.Printf("📝 Updating purchase amounts: PaidAmount %.2f -> %.2f, Outstanding %.2f -> %.2f", 
+			purchase.PaidAmount, purchase.PaidAmount + allocatedAmount,
+			purchase.OutstandingAmount, purchase.OutstandingAmount - allocatedAmount)
+			
+		purchase.PaidAmount += allocatedAmount
+		purchase.OutstandingAmount -= allocatedAmount
+		
+		// Update status if fully paid
+		if purchase.OutstandingAmount <= 0 {
+			purchase.MatchingStatus = models.PurchaseMatchingMatched
+			log.Printf("✅ Purchase fully paid, status updated to MATCHED")
+		} else {
+			purchase.MatchingStatus = models.PurchaseMatchingPartial
+			log.Printf("✅ Purchase partially paid (Outstanding: %.2f)", purchase.OutstandingAmount)
+		}
+		
+		// Save purchase changes
+		if err := tx.Save(&purchase).Error; err != nil {
+			log.Printf("❌ Failed to save purchase: %v", err)
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to update purchase: %v", err)
+		}
+		log.Printf("✅ Purchase updated successfully")
 		
 		remainingAmount -= allocatedAmount
 	}
@@ -1208,22 +1233,30 @@ func (s *PaymentService) GetUnpaidInvoices(customerID uint) ([]OutstandingInvoic
 // GetUnpaidBills gets outstanding bills for a vendor
 func (s *PaymentService) GetUnpaidBills(vendorID uint) ([]OutstandingBill, error) {
 	// Get purchases from purchase repository where vendor_id = vendorID and outstanding_amount > 0
+	// Filter by APPROVED status and outstanding_amount > 0 to only show bills that need payment
 	var purchases []models.Purchase
-	err := s.db.Where("vendor_id = ? AND status IN (?, ?)", vendorID, "APPROVED", "RECEIVED").Find(&purchases).Error
+	err := s.db.Where("vendor_id = ? AND status = ? AND outstanding_amount > ?", vendorID, "APPROVED", 0).Find(&purchases).Error
 	if err != nil {
 		return nil, err
 	}
 	
+	log.Printf("GetUnpaidBills - Found %d purchases for vendor %d", len(purchases), vendorID)
+	
 	// Convert to OutstandingBill format
 	var bills []OutstandingBill
 	for _, purchase := range purchases {
+		// Use the actual outstanding_amount from the purchase record
+		// This reflects total_amount - paid_amount (managed by payment allocations)
 		bill := OutstandingBill{
 			ID:               purchase.ID,
 			Code:             purchase.Code,
 			Date:             purchase.Date.Format("2006-01-02"),
 			TotalAmount:      purchase.TotalAmount,
-			OutstandingAmount: purchase.TotalAmount, // For now, assume full amount is outstanding
+			OutstandingAmount: purchase.OutstandingAmount, // Use actual outstanding amount from DB
 		}
+		
+		log.Printf("  - Purchase %s: Total=%.2f, Outstanding=%.2f, Paid=%.2f", 
+			purchase.Code, purchase.TotalAmount, purchase.OutstandingAmount, purchase.PaidAmount)
 		
 		// Add due date if available
 		// For purchases, we can use the DueDate field

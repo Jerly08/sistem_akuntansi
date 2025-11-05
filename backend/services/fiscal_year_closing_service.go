@@ -321,38 +321,6 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 			return fmt.Errorf("failed to update retained earnings (permanent account): %v", err)
 		}
 
-		// Mark the fiscal year end period as locked
-		year := fiscalYearEnd.Year()
-		month := int(fiscalYearEnd.Month())
-
-		var period models.AccountingPeriod
-		err := tx.Where("year = ? AND month = ?", year, month).First(&period).Error
-		if err == gorm.ErrRecordNotFound {
-			// Create the period if it doesn't exist
-			period = models.AccountingPeriod{
-				Year:  year,
-				Month: month,
-				Notes: fmt.Sprintf("Fiscal year-end closing - Net Income: %.2f", netIncome),
-			}
-			if err := tx.Create(&period).Error; err != nil {
-				return fmt.Errorf("failed to create closing period: %v", err)
-			}
-		}
-
-		// Lock the period (hard lock)
-		now := time.Now()
-		period.IsClosed = true
-		period.IsLocked = true
-		period.ClosedBy = &userID
-		period.ClosedAt = &now
-		period.LockedBy = &userID
-		period.LockedAt = &now
-		period.Notes = fmt.Sprintf("Fiscal year-end closing - Net Income: %.2f - Journal Entry: %s", netIncome, closingJournalCode)
-
-		if err := tx.Save(&period).Error; err != nil {
-			return fmt.Errorf("failed to lock period: %v", err)
-		}
-
 		// Log the closing activity
 		fycs.logger.LogProcessingInfo(ctx, "Fiscal Year-End Closing Completed", map[string]interface{}{
 			"fiscal_year_end":     fiscalYearEnd,

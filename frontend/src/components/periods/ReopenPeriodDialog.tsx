@@ -1,161 +1,171 @@
 import React, { useState } from 'react';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
   Button,
-  TextField,
-  Typography,
-  Box,
+  FormControl,
+  FormLabel,
+  Textarea,
+  Text,
   Alert,
-  CircularProgress,
-} from '@mui/material';
-import { Lock, LockOpen, Warning } from '@mui/icons-material';
+  AlertIcon,
+  AlertDescription,
+  VStack,
+  HStack,
+  Box,
+  Icon,
+} from '@chakra-ui/react';
+import { FiCalendar, FiUnlock, FiAlertCircle } from 'react-icons/fi';
+import api from '@/services/api';
+import { useToast } from '@chakra-ui/react';
 
-export interface ReopenPeriodDialogProps {
-  open: boolean;
-  period: string; // Format: "2025-01"
-  year: number;
-  month: number;
+interface ReopenPeriodDialogProps {
+  isOpen: boolean;
   onClose: () => void;
-  onReopen: (year: number, month: number, reason: string) => Promise<boolean>;
-  isLoading?: boolean;
+  startDate: string;
+  endDate: string;
+  onSuccess?: () => void;
 }
 
 export const ReopenPeriodDialog: React.FC<ReopenPeriodDialogProps> = ({
-  open,
-  period,
-  year,
-  month,
+  isOpen,
   onClose,
-  onReopen,
-  isLoading = false,
+  startDate,
+  endDate,
+  onSuccess,
 }) => {
   const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
 
   const handleReopen = async () => {
     if (!reason.trim()) {
-      setError('Alasan pembukaan kembali wajib diisi');
+      toast({
+        title: 'Reason Required',
+        description: 'Please provide a reason for reopening this period',
+        status: 'warning',
+        duration: 3000,
+      });
       return;
     }
 
-    if (reason.trim().length < 10) {
-      setError('Alasan minimal 10 karakter');
-      return;
-    }
+    setLoading(true);
+    try {
+      const response = await api.post('/api/v1/period-closing/reopen', {
+        start_date: startDate,
+        end_date: endDate,
+        reason: reason.trim(),
+      });
 
-    const success = await onReopen(year, month, reason.trim());
-    
-    if (success) {
-      // Reset form
-      setReason('');
-      setError('');
+      if (response.data.success) {
+        toast({
+          title: 'Period Reopened Successfully',
+          description: `Period ${startDate} to ${endDate} has been reopened`,
+          status: 'success',
+          duration: 5000,
+        });
+        
+        if (onSuccess) {
+          onSuccess();
+        }
+        
+        onClose();
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.details || 
+                          error.response?.data?.error || 
+                          'Failed to reopen period';
+      
+      toast({
+        title: 'Failed to Reopen Period',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
     }
   };
-
-  const handleClose = () => {
-    if (!isLoading) {
-      setReason('');
-      setError('');
-      onClose();
-    }
-  };
-
-  const monthNames = [
-    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-  ];
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={handleClose}
-      maxWidth="sm"
-      fullWidth
-      disableEscapeKeyDown={isLoading}
-    >
-      <DialogTitle>
-        <Box display="flex" alignItems="center" gap={1}>
-          <LockOpen color="warning" />
-          <span>Buka Kembali Periode</span>
-        </Box>
-      </DialogTitle>
+    <Modal isOpen={isOpen} onClose={onClose} size="lg">
+      <ModalOverlay />
+      <ModalContent>
+        <ModalHeader>
+          <HStack spacing={2}>
+            <Icon as={FiUnlock} color="orange.500" />
+            <Text>Reopen Closed Period</Text>
+          </HStack>
+        </ModalHeader>
+        <ModalCloseButton />
+        
+        <ModalBody>
+          <VStack spacing={4} alignItems="stretch">
+            <Alert status="warning" borderRadius="md">
+              <AlertIcon />
+              <Box>
+                <AlertDescription>
+                  <strong>Warning:</strong> Reopening this period will:
+                  <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
+                    <li>Reverse all closing journal entries</li>
+                    <li>Restore revenue and expense account balances</li>
+                    <li>Allow new transactions in this period</li>
+                  </ul>
+                </AlertDescription>
+              </Box>
+            </Alert>
 
-      <DialogContent>
-        <Box sx={{ mb: 3 }}>
-          <Alert severity="warning" icon={<Warning />}>
-            <Typography variant="body2">
-              <strong>Perhatian:</strong> Anda akan membuka kembali periode yang sudah ditutup.
-            </Typography>
-          </Alert>
-        </Box>
+            <Box p={3} bg="gray.50" borderRadius="md">
+              <HStack spacing={2} mb={2}>
+                <Icon as={FiCalendar} color="gray.600" />
+                <Text fontWeight="semibold">Period to Reopen:</Text>
+              </HStack>
+              <Text fontSize="lg" color="blue.600">
+                {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}
+              </Text>
+            </Box>
 
-        <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Periode:
-          </Typography>
-          <Typography variant="h6" color="primary">
-            {monthNames[month - 1]} {year}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            ({period})
-          </Typography>
-        </Box>
+            <FormControl isRequired>
+              <FormLabel>Reason for Reopening</FormLabel>
+              <Textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Explain why this period needs to be reopened (e.g., correction needed, missing transactions, etc.)"
+                rows={4}
+                resize="vertical"
+              />
+            </FormControl>
 
-        <Typography variant="body2" color="text.secondary" paragraph>
-          Setelah dibuka kembali, transaksi dapat ditambahkan ke periode ini. 
-          Pastikan untuk menutup kembali periode setelah selesai melakukan koreksi.
-        </Typography>
+            <Alert status="info" size="sm" borderRadius="md">
+              <AlertIcon />
+              <AlertDescription fontSize="sm">
+                <Icon as={FiAlertCircle} /> Note: You cannot reopen a period if newer periods have been closed after it.
+              </AlertDescription>
+            </Alert>
+          </VStack>
+        </ModalBody>
 
-        <TextField
-          fullWidth
-          multiline
-          rows={4}
-          label="Alasan Pembukaan Kembali *"
-          placeholder="Contoh: Perlu menambahkan koreksi jurnal untuk invoice yang terlewat"
-          value={reason}
-          onChange={(e) => {
-            setReason(e.target.value);
-            setError('');
-          }}
-          error={!!error}
-          helperText={error || 'Minimal 10 karakter. Alasan ini akan dicatat dalam audit log.'}
-          disabled={isLoading}
-          sx={{ mt: 2 }}
-        />
-
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'info.light', borderRadius: 1, border: '1px solid', borderColor: 'info.main' }}>
-          <Typography variant="caption" display="block" gutterBottom>
-            <strong>Tips:</strong>
-          </Typography>
-          <Typography variant="caption" component="div">
-            • Jelaskan secara spesifik alasan pembukaan kembali<br />
-            • Sebutkan transaksi atau dokumen yang perlu ditambahkan<br />
-            • Dokumentasi ini penting untuk audit trail
-          </Typography>
-        </Box>
-      </DialogContent>
-
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button 
-          onClick={handleClose} 
-          disabled={isLoading}
-          color="inherit"
-        >
-          Batal
-        </Button>
-        <Button
-          onClick={handleReopen}
-          variant="contained"
-          color="warning"
-          disabled={isLoading || !reason.trim()}
-          startIcon={isLoading ? <CircularProgress size={20} /> : <LockOpen />}
-        >
-          {isLoading ? 'Membuka...' : 'Buka Periode'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+        <ModalFooter>
+          <Button variant="ghost" mr={3} onClick={onClose} isDisabled={loading}>
+            Cancel
+          </Button>
+          <Button
+            colorScheme="orange"
+            onClick={handleReopen}
+            isLoading={loading}
+            loadingText="Reopening..."
+            isDisabled={!reason.trim() || loading}
+          >
+            Reopen Period
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
   );
 };

@@ -14,10 +14,6 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 	// Initialize permission middleware
 	permissionMiddleware := middleware.NewPermissionMiddleware(db)
 	
-	// Initialize period validation middleware
-	accountingPeriodService := services.NewAccountingPeriodService(db)
-	periodValidation := middleware.NewPeriodValidationMiddleware(db, accountingPeriodService)
-	
 	// Initialize CashBank validation middleware and services for Phase 1 sync
 	accountingService := services.NewCashBankAccountingService(db)
 	validationService := services.NewCashBankValidationService(db, accountingService)
@@ -40,12 +36,12 @@ func SetupPaymentRoutes(router *gin.RouterGroup, paymentController *controllers.
 		// Optionally keep detail endpoint if frontend needs it (still read-only)
 		// payment.GET("/:id", permissionMiddleware.CanView("payments"), paymentController.GetPaymentByID)
 		// Deprecated: POST endpoints replaced by SSOT routes
-		payment.POST("/:id/cancel", permissionMiddleware.CanEdit("payments"), periodValidation.ValidateEntryDate(), paymentController.CancelPayment)
+		payment.POST("/:id/cancel", permissionMiddleware.CanEdit("payments"), paymentController.CancelPayment)
 		payment.DELETE("/:id", middleware.RoleRequired("admin"), paymentController.DeletePayment)
 		payment.GET("/analytics", permissionMiddleware.CanView("payments"), paymentController.GetPaymentAnalytics)
 		
 		// Sales integration routes
-		payment.POST("/sales", permissionMiddleware.CanCreate("payments"), periodValidation.ValidateEntryDate(), paymentController.CreateSalesPayment)
+		payment.POST("/sales", permissionMiddleware.CanCreate("payments"), paymentController.CreateSalesPayment)
 		payment.GET("/sales/unpaid-invoices/:customer_id", permissionMiddleware.CanView("payments"), paymentController.GetSalesUnpaidInvoices)
 		
 		// Debug routes removed - deprecated debug endpoints
@@ -77,9 +73,9 @@ cashbank.POST("/accounts", permissionMiddleware.CanCreate("cash_bank"), cashBank
 cashbank.PUT("/accounts/:id", permissionMiddleware.CanEdit("cash_bank"), cashBankController.UpdateAccount)
 		
 		// Transactions
-		cashbank.POST("/transfer", permissionMiddleware.CanCreate("cash_bank"), periodValidation.ValidateEntryDate(), cashBankController.ProcessTransfer)
-		cashbank.POST("/deposit", permissionMiddleware.CanCreate("cash_bank"), periodValidation.ValidateEntryDate(), cashBankController.ProcessDeposit)
-		cashbank.POST("/withdrawal", permissionMiddleware.CanCreate("cash_bank"), periodValidation.ValidateEntryDate(), cashBankController.ProcessWithdrawal)
+		cashbank.POST("/transfer", permissionMiddleware.CanCreate("cash_bank"), cashBankController.ProcessTransfer)
+		cashbank.POST("/deposit", permissionMiddleware.CanCreate("cash_bank"), cashBankController.ProcessDeposit)
+		cashbank.POST("/withdrawal", permissionMiddleware.CanCreate("cash_bank"), cashBankController.ProcessWithdrawal)
 		cashbank.GET("/accounts/:id/transactions", permissionMiddleware.CanView("cash_bank"), cashBankController.GetTransactions)
 		
 		// Reports

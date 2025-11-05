@@ -26,10 +26,7 @@ func RunMissingColumnsFix(db *gorm.DB) {
 	// Step 1: Fix inventory transaction_type issue (rename column references)
 	fixInventoryTransactionType(db)
 
-	// Step 2: Fix accounting period is_open issue (add computed status logic)
-	fixAccountingPeriodStatus(db)
-
-	// Step 3: Fix financial ratio calculation_date issue (use calculated_at)
+	// Step 2: Fix financial ratio calculation_date issue (use calculated_at)
 	fixFinancialRatioDate(db)
 
 	// Step 4: Fix user full_name issue (add computed full name)
@@ -41,7 +38,7 @@ func RunMissingColumnsFix(db *gorm.DB) {
 	// Record this migration as completed
 	migrationRecord := models.MigrationRecord{
 		MigrationID: migrationID,
-		Description: "Fix missing columns and constraint issues - inventory transaction_type, accounting period is_open, financial ratio calculation_date, user full_name, audit log constraints",
+		Description: "Fix missing columns and constraint issues - inventory transaction_type, financial ratio calculation_date, user full_name, audit log constraints",
 		Version:     "2024.1",
 		AppliedAt:   time.Now(),
 	}
@@ -71,34 +68,6 @@ func fixInventoryTransactionType(db *gorm.DB) {
 	log.Println("✅ Inventory transaction_type references fixed")
 }
 
-// fixAccountingPeriodStatus fixes accounting period status references
-func fixAccountingPeriodStatus(db *gorm.DB) {
-	log.Println("Fixing accounting period status references...")
-
-	// Drop problematic index
-	db.Exec(`DROP INDEX IF EXISTS idx_accounting_periods_status`)
-
-	// Create indexes using actual column names
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounting_periods_closed ON accounting_periods(is_closed, is_locked)`)
-	db.Exec(`CREATE INDEX IF NOT EXISTS idx_accounting_periods_status_computed ON accounting_periods(is_closed, is_locked, year, month)`)
-
-	// Create a view for easier status queries (if needed)
-	db.Exec(`
-		CREATE OR REPLACE VIEW accounting_periods_with_status AS
-		SELECT 
-			*,
-			CASE 
-				WHEN is_locked = true THEN 'LOCKED'
-				WHEN is_closed = true THEN 'CLOSED'
-				ELSE 'OPEN'
-			END as status,
-			(NOT is_closed AND NOT is_locked) as is_open
-		FROM accounting_periods
-		WHERE deleted_at IS NULL
-	`)
-
-	log.Println("✅ Accounting period status references fixed")
-}
 
 // fixFinancialRatioDate fixes financial ratio date references
 func fixFinancialRatioDate(db *gorm.DB) {
@@ -238,7 +207,6 @@ func RunIndexCleanupAndOptimization(db *gorm.DB) {
 	// Clean up all problematic indexes first
 	problematicIndexes := []string{
 		"idx_inventory_product_type",
-		"idx_accounting_periods_status", 
 		"idx_financial_ratios_date",
 		"idx_cash_bank_transactions_flow", // This one references non-existent transaction_type too
 	}
@@ -252,7 +220,6 @@ func RunIndexCleanupAndOptimization(db *gorm.DB) {
 	optimizedIndexes := map[string]string{
 		"idx_inventory_product_type_fixed":          "CREATE INDEX IF NOT EXISTS idx_inventory_product_type_fixed ON inventories(product_id, type)",
 		"idx_inventory_reference":                   "CREATE INDEX IF NOT EXISTS idx_inventory_reference ON inventories(reference_type, reference_id)",
-		"idx_accounting_periods_status_fixed":      "CREATE INDEX IF NOT EXISTS idx_accounting_periods_status_fixed ON accounting_periods(is_closed, is_locked)",
 		"idx_financial_ratios_calc_date":           "CREATE INDEX IF NOT EXISTS idx_financial_ratios_calc_date ON financial_ratios(calculated_at)",
 		"idx_cash_bank_transactions_flow_fixed":    "CREATE INDEX IF NOT EXISTS idx_cash_bank_transactions_flow_fixed ON cash_bank_transactions(transaction_date, amount)",
 		"idx_users_name_search":                    "CREATE INDEX IF NOT EXISTS idx_users_name_search ON users(first_name, last_name)",

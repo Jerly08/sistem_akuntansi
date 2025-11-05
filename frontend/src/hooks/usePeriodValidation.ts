@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { AxiosError } from 'axios';
-import { toast } from 'react-toastify';
+import type { UseToastOptions } from '@chakra-ui/react';
 
 export interface PeriodValidationError {
   success: false;
@@ -21,13 +21,15 @@ export interface UsePeriodValidationOptions {
   onReopenSuccess?: (period: string) => void;
   onReopenError?: (error: any) => void;
   showToast?: boolean;
+  toast?: (options: UseToastOptions) => void;
 }
 
 export function usePeriodValidation(options: UsePeriodValidationOptions = {}) {
   const { 
     onReopenSuccess, 
     onReopenError,
-    showToast = true 
+    showToast = true,
+    toast 
   } = options;
 
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
@@ -108,17 +110,19 @@ export function usePeriodValidation(options: UsePeriodValidationOptions = {}) {
     const errorMessage = getErrorMessage(errorData);
     const actionMessage = getActionMessage(errorData);
 
-    if (showToast) {
-      toast.error(
-        <div>
-          <strong>{errorMessage}</strong>
-          {actionMessage && <p className="mt-2 text-sm">{actionMessage}</p>}
-        </div>,
-        {
-          autoClose: 8000,
-          position: 'top-center',
-        }
-      );
+    if (showToast && toast) {
+      const fullMessage = actionMessage 
+        ? `${errorMessage}\n\n${actionMessage}`
+        : errorMessage;
+      
+      toast({
+        title: 'Period Validation Error',
+        description: fullMessage,
+        status: 'error',
+        duration: 8000,
+        isClosable: true,
+        position: 'top',
+      });
     }
 
     // If period is CLOSED (not LOCKED), offer to reopen
@@ -152,8 +156,15 @@ export function usePeriodValidation(options: UsePeriodValidationOptions = {}) {
     try {
       await apiClient.post(`/periods/${year}/${month}/reopen`, { reason });
       
-      if (showToast) {
-        toast.success(`Periode ${year}-${String(month).padStart(2, '0')} berhasil dibuka kembali.`);
+      if (showToast && toast) {
+        toast({
+          title: 'Success',
+          description: `Periode ${year}-${String(month).padStart(2, '0')} berhasil dibuka kembali.`,
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+          position: 'top',
+        });
       }
 
       if (onReopenSuccess) {
@@ -167,8 +178,15 @@ export function usePeriodValidation(options: UsePeriodValidationOptions = {}) {
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || 'Gagal membuka periode';
       
-      if (showToast) {
-        toast.error(`Gagal membuka periode: ${errorMessage}`);
+      if (showToast && toast) {
+        toast({
+          title: 'Error',
+          description: `Gagal membuka periode: ${errorMessage}`,
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+          position: 'top',
+        });
       }
 
       if (onReopenError) {

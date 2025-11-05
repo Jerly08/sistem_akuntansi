@@ -42,6 +42,11 @@ func RunAutoMigrations(db *gorm.DB) error {
 	if err := ensureTaxAccountSettingsTable(db); err != nil {
 		log.Printf("⚠️  Tax account settings table verification failed: %v", err)
 	}
+	
+	// Silently verify settings history table
+	if err := ensureSettingsHistoryTable(db); err != nil {
+		log.Printf("⚠️  Settings history table verification failed: %v", err)
+	}
 
 	// Get migration files
 	migrationFiles, err := getMigrationFiles()
@@ -327,13 +332,26 @@ func runMigration(db *gorm.DB, filename string) error {
 GOT_CONTENT:
 	content := string(contentBytes)
 
-	// Use complex parser for any file that defines PL/pgSQL functions or dollar-quoted blocks
+	// Use complex parser for any file that defines PL/pgSQL functions, dollar-quoted blocks, or explicit transactions
 	lowerContent := strings.ToLower(content)
+	// Check if file uses explicit transaction management (BEGIN/COMMIT)
+	hasExplicitTransaction := false
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		upper := strings.ToUpper(trimmed)
+		if (upper == "BEGIN;" || upper == "COMMIT;") && !strings.HasPrefix(trimmed, "--") {
+			hasExplicitTransaction = true
+			break
+		}
+	}
+	
 	if strings.Contains(filename, "unified_journal_ssot") ||
 	   strings.Contains(lowerContent, "language plpgsql") ||
 	   strings.Contains(lowerContent, "create function") ||
 	   strings.Contains(lowerContent, "create or replace function") ||
-	   strings.Contains(lowerContent, "$$") {
+	   strings.Contains(lowerContent, "$$") ||
+	   hasExplicitTransaction {
 		return runComplexMigration(db, filename, content, startTime)
 	}
 
@@ -365,8 +383,11 @@ GOT_CONTENT:
 				continue
 			}
 			executionTime := int(time.Since(startTime).Milliseconds())
+			// Enhanced error message with context
+			errorMsg := fmt.Sprintf("SQL error: %v\n\nFailed statement:\n%s\n\nFile: %s", err, stmt, filename)
+			log.Printf("❌ Error details:\n%s", errorMsg)
 			logMigrationResult(db, filename, "FAILED", fmt.Sprintf("SQL error: %v", err), executionTime)
-			return err
+			return fmt.Errorf("%v\n\nHint: If this file uses BEGIN/COMMIT, the parser may need adjustment", err)
 		}
 
 		if err := tx.Commit().Error; err != nil {
@@ -955,11 +976,8 @@ func runPreMigrationFixes(db *gorm.DB) error {
 		// Don't fail completely, just warn
 	}
 	
-	// Fix 3: Ensure materialized view account_balances exists
-	if err := ensureAccountBalancesMaterializedView(db); err != nil {
-		log.Printf("⚠️  Warning: Failed to ensure materialized view: %v", err)
-		// Don't fail completely, just warn
-	}
+	// NOTE: Materialized view account_balances has been removed - using SSOT direct query instead
+	// All reports now use /api/v1/ssot-reports/* endpoints with real-time query to unified_journal_lines
 	
 	log.Println("✅ Pre-migration compatibility fixes completed")
 	return nil
@@ -1069,98 +1087,6 @@ func markProblematicMigrationsAsSuccess(db *gorm.DB) error {
 	}
 	
 	log.Printf("📊 Updated %d problematic migrations to SUCCESS status", updatedCount)
-	return nil
-}
-
-// ensureAccountBalancesMaterializedView creates the materialized view if it doesn't exist
-func ensureAccountBalancesMaterializedView(db *gorm.DB) error {
-	// Check if materialized view exists
-	var viewExists bool
-	err := db.Raw(`
-		SELECT EXISTS (
-			SELECT 1 FROM pg_matviews 
-			WHERE matviewname = 'account_balances'
-		);
-	`).Scan(&viewExists).Error
-	
-	if err != nil {
-		return fmt.Errorf("failed to check materialized view: %v", err)
-	}
-	
-	if !viewExists {
-		log.Println("🏗️  Creating account_balances materialized view...")
-		
-		// Create the materialized view
-		createViewSQL := `
-		CREATE MATERIALIZED VIEW account_balances AS
-		SELECT 
-		    a.id as account_id,
-		    a.code as account_code,
-		    a.name as account_name,
-		    a.type as account_type,
-		    a.category as account_category,
-		    a.balance as current_balance,
-		    CASE 
-		        WHEN EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'unified_journal_lines') THEN
-		            COALESCE((
-		                SELECT 
-		                    CASE 
-		                        WHEN a.type IN ('ASSET', 'EXPENSE') THEN 
-		                            SUM(ujl.debit_amount) - SUM(ujl.credit_amount)
-		                        ELSE 
-		                            SUM(ujl.credit_amount) - SUM(ujl.debit_amount)
-		                    END
-		                FROM unified_journal_lines ujl
-		                JOIN unified_journal_ledger ujd ON ujl.journal_id = ujd.id
-		                WHERE ujl.account_id = a.id 
-		                  AND ujd.status = 'POSTED'
-		                  AND ujd.deleted_at IS NULL
-		            ), 0)
-		        ELSE 
-		            COALESCE((
-		                SELECT 
-		                    CASE 
-		                        WHEN a.type IN ('ASSET', 'EXPENSE') THEN 
-		                            SUM(jl.debit_amount) - SUM(jl.credit_amount)
-		                        ELSE 
-		                            SUM(jl.credit_amount) - SUM(jl.debit_amount)
-		                    END
-		                FROM journal_lines jl
-		                JOIN journal_entries je ON jl.journal_entry_id = je.id
-		                WHERE jl.account_id = a.id 
-		                  AND je.status = 'POSTED'
-		                  AND je.deleted_at IS NULL
-		            ), 0)
-		    END as calculated_balance,
-		    a.is_active,
-		    a.created_at,
-		    a.updated_at,
-		    NOW() as last_refresh
-		FROM accounts a
-		WHERE a.deleted_at IS NULL;
-		`
-		
-		err = db.Exec(createViewSQL).Error
-		if err != nil {
-			return fmt.Errorf("failed to create materialized view: %v", err)
-		}
-		
-		log.Println("✅ Created materialized view 'account_balances'")
-		
-		// Create indexes
-		err = db.Exec(`
-			CREATE INDEX IF NOT EXISTS idx_account_balances_account_id ON account_balances(account_id);
-			CREATE INDEX IF NOT EXISTS idx_account_balances_account_type ON account_balances(account_type);
-		`).Error
-		if err != nil {
-			log.Printf("⚠️  Failed to create indexes on materialized view: %v", err)
-		} else {
-			log.Println("✅ Created indexes on materialized view")
-		}
-	} else {
-		log.Println("ℹ️  Materialized view 'account_balances' already exists")
-	}
-	
 	return nil
 }
 
@@ -1957,5 +1883,76 @@ if columnExists(db, "journal_entries", "account_code") && columnExists(db, "jour
 	}
 
 	log.Println("[AUTO-FIX] Revenue duplication fix completed!")
+	return nil
+}
+
+// ensureSettingsHistoryTable ensures settings_history table exists (PostgreSQL compatible)
+func ensureSettingsHistoryTable(db *gorm.DB) error {
+	// Check if table exists
+	var tableExists bool
+	err := db.Raw("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'settings_history')").Scan(&tableExists).Error
+	if err != nil {
+		return fmt.Errorf("failed to check settings_history table: %w", err)
+	}
+	
+	if tableExists {
+		// Silently skip if exists
+		return nil
+	}
+	
+	log.Println("🔧 Creating settings_history table...")
+	
+	// Create table with PostgreSQL syntax
+	createTableSQL := `
+		CREATE TABLE IF NOT EXISTS settings_history (
+			id BIGSERIAL PRIMARY KEY,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			deleted_at TIMESTAMP NULL DEFAULT NULL,
+			
+			-- Reference to settings
+			settings_id BIGINT NOT NULL,
+			
+			-- Change tracking
+			field VARCHAR(255) NOT NULL,
+			old_value TEXT,
+			new_value TEXT,
+			action VARCHAR(50) DEFAULT 'UPDATE',
+			
+			-- User tracking
+			changed_by BIGINT NOT NULL,
+			
+			-- Additional context
+			ip_address VARCHAR(255),
+			user_agent TEXT,
+			reason TEXT,
+			
+			-- Foreign keys
+			CONSTRAINT fk_settings_history_settings 
+				FOREIGN KEY (settings_id) REFERENCES settings(id) ON DELETE CASCADE
+		)
+	`
+	
+	err = db.Exec(createTableSQL).Error
+	if err != nil {
+		return fmt.Errorf("failed to create settings_history table: %w", err)
+	}
+	
+	// Create indexes
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_settings_history_settings_id ON settings_history(settings_id)",
+		"CREATE INDEX IF NOT EXISTS idx_settings_history_changed_by ON settings_history(changed_by)",
+		"CREATE INDEX IF NOT EXISTS idx_settings_history_field ON settings_history(field)",
+		"CREATE INDEX IF NOT EXISTS idx_settings_history_created_at ON settings_history(created_at)",
+		"CREATE INDEX IF NOT EXISTS idx_settings_history_deleted_at ON settings_history(deleted_at)",
+	}
+	
+	for _, indexSQL := range indexes {
+		if err := db.Exec(indexSQL).Error; err != nil {
+			log.Printf("⚠️  Failed to create index: %v", err)
+		}
+	}
+	
+	log.Println("✅ Settings history table created")
 	return nil
 }

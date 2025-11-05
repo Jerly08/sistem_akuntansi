@@ -147,7 +147,7 @@ class PaymentService {
   // Create receivable payment (from customer)
   async createReceivablePayment(data: PaymentCreateRequest): Promise<Payment> {
     try {
-      // Convert to SSOT format
+      // Convert to SSOT format with proper array-based allocations
       const ssotData = {
         contact_id: data.contact_id,
         cash_bank_id: data.cash_bank_id,
@@ -158,9 +158,9 @@ class PaymentService {
         notes: data.notes || '',
         auto_create_journal: true,
         preview_journal: false,
-        // Add allocations if provided
+        // 🔥 FIX: Send full invoice_allocations array, not just single target_invoice_id
         ...(data.allocations && data.allocations.length > 0 && {
-          target_invoice_id: data.allocations[0].invoice_id
+          invoice_allocations: data.allocations
         })
       };
       
@@ -208,7 +208,7 @@ class PaymentService {
   // Create payable payment (to vendor)
   async createPayablePayment(data: PaymentCreateRequest): Promise<Payment> {
     try {
-      // Convert to SSOT format
+      // Convert to SSOT format with proper array-based allocations
       const ssotData = {
         contact_id: data.contact_id,
         cash_bank_id: data.cash_bank_id,
@@ -219,9 +219,9 @@ class PaymentService {
         notes: data.notes || '',
         auto_create_journal: true,
         preview_journal: false,
-        // Add allocations if provided
+        // 🔥 FIX: Send full bill_allocations array, not just single target_bill_id
         ...(data.bill_allocations && data.bill_allocations.length > 0 && {
-          target_bill_id: data.bill_allocations[0].bill_id
+          bill_allocations: data.bill_allocations
         })
       };
       
@@ -427,7 +427,9 @@ class PaymentService {
   // Get unpaid invoices for customer
   async getUnpaidInvoices(customerId: number): Promise<any[]> {
     try {
-      const response = await api.get(API_ENDPOINTS.PAYMENTS.UNPAID_INVOICES(customerId));
+      // Add cache busting parameter to ensure fresh data
+      const timestamp = new Date().getTime();
+      const response = await api.get(`${API_ENDPOINTS.PAYMENTS.UNPAID_INVOICES(customerId)}?_t=${timestamp}`);
       const d = response.data;
       if (Array.isArray(d)) return d;
       if (Array.isArray(d?.invoices)) return d.invoices;
@@ -442,7 +444,9 @@ class PaymentService {
   // Get unpaid bills for vendor
   async getUnpaidBills(vendorId: number): Promise<any[]> {
     try {
-      const response = await api.get(API_ENDPOINTS.PAYMENTS.UNPAID_BILLS(vendorId));
+      // Add cache busting parameter to ensure fresh data
+      const timestamp = new Date().getTime();
+      const response = await api.get(`${API_ENDPOINTS.PAYMENTS.UNPAID_BILLS(vendorId)}?_t=${timestamp}`);
       const d = response.data;
       if (Array.isArray(d)) return d;
       if (Array.isArray(d?.bills)) return d.bills;

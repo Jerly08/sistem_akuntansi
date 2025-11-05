@@ -724,9 +724,6 @@ func AutoMigrate(db *gorm.DB) {
 		// Settings model
 		&models.Settings{},
 		
-		// Accounting Period model for period management
-		&models.AccountingPeriod{},
-		
 		// Security models
 		&models.SecurityIncident{},
 		&models.SystemAlert{},
@@ -750,12 +747,7 @@ func AutoMigrate(db *gorm.DB) {
 	if err := db.AutoMigrate(&models.SimpleSSOTJournal{}, &models.SimpleSSOTJournalItem{}); err != nil {
 		log.Printf("⚠️  Failed to migrate Simple SSOT journal tables: %v", err)
 	} else {
-		log.Println("✅ Simple SSOT journal tables migrated successfully")
-	}
-	
-	// Ensure account_balances materialized view exists and is up to date
-	if err := EnsureAccountBalancesMaterializedView(db); err != nil {
-		log.Printf("Warning: Failed to ensure account_balances materialized view: %v", err)
+	log.Println("✅ Simple SSOT journal tables migrated successfully")
 	}
 	
 	// Migrate approval models separately to debug any issues
@@ -2850,10 +2842,7 @@ func RunDatabaseEnhancements(db *gorm.DB) {
 	// Step 3: Create validation constraints
 	createValidationConstraints(db)
 	
-	// Step 4: Initialize default accounting periods
-	initializeDefaultAccountingPeriods(db)
-	
-	// Step 5: Create audit trail enhancements
+	// Step 4: Create audit trail enhancements
 	createAuditTrailEnhancements(db)
 	
 	// Step 6: Optimize existing data
@@ -2978,77 +2967,6 @@ func createValidationConstraints(db *gorm.DB) {
 	log.Println("✅ Validation constraints created successfully")
 }
 
-// initializeDefaultAccountingPeriods creates default accounting periods for the current and next year
-func initializeDefaultAccountingPeriods(db *gorm.DB) {
-	log.Println("Initializing default accounting periods...")
-	
-	// Check if accounting periods table exists
-	var tableExists bool
-	db.Raw(`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'accounting_periods')`).Scan(&tableExists)
-	
-	if !tableExists {
-		log.Println("Accounting periods table does not exist yet, skipping period initialization")
-		return
-	}
-	
-	// Check if we already have periods defined
-	var existingCount int64
-	db.Model(&models.AccountingPeriod{}).Count(&existingCount)
-	
-	if existingCount > 0 {
-		log.Printf("Found %d existing accounting periods, skipping initialization", existingCount)
-		return
-	}
-	
-	currentYear := time.Now().Year()
-	
-	// Create periods for current year
-	for month := 1; month <= 12; month++ {
-		startDate := time.Date(currentYear, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
-		endDate := startDate.AddDate(0, 1, -1) // Last day of the month
-		
-		period := models.AccountingPeriod{
-			Year:        currentYear,
-			Month:       month,
-			PeriodName:  fmt.Sprintf("%04d-%02d", currentYear, month),
-			StartDate:   startDate,
-			EndDate:     endDate,
-			IsClosed:    false,
-			IsLocked:    false,
-		}
-		
-		if err := db.Create(&period).Error; err != nil {
-			log.Printf("Warning: Failed to create period %s: %v", period.PeriodName, err)
-		} else {
-			log.Printf("Created accounting period: %s", period.PeriodName)
-		}
-	}
-	
-	// Create periods for next year
-	nextYear := currentYear + 1
-	for month := 1; month <= 12; month++ {
-		startDate := time.Date(nextYear, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
-		endDate := startDate.AddDate(0, 1, -1)
-		
-		period := models.AccountingPeriod{
-			Year:        nextYear,
-			Month:       month,
-			PeriodName:  fmt.Sprintf("%04d-%02d", nextYear, month),
-			StartDate:   startDate,
-			EndDate:     endDate,
-			IsClosed:    false,
-			IsLocked:    false,
-		}
-		
-		if err := db.Create(&period).Error; err != nil {
-			log.Printf("Warning: Failed to create period %s: %v", period.PeriodName, err)
-		} else {
-			log.Printf("Created accounting period: %s", period.PeriodName)
-		}
-	}
-	
-	log.Println("✅ Default accounting periods initialized successfully")
-}
 
 // createAuditTrailEnhancements creates enhanced audit trail functionality
 func createAuditTrailEnhancements(db *gorm.DB) {

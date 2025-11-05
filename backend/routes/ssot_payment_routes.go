@@ -41,10 +41,6 @@ func SetupSSOTPaymentRoutes(router *gin.RouterGroup, db *gorm.DB, jwtManager *mi
 
 	// Initialize permission middleware
 	permissionMiddleware := middleware.NewPermissionMiddleware(db)
-	
-	// Initialize period validation middleware
-	accountingPeriodService := services.NewAccountingPeriodService(db)
-	periodValidation := middleware.NewPeriodValidationMiddleware(db, accountingPeriodService)
 
 		// SSOT Payment routes - replaces legacy payment routes
 		ssotPayments := router.Group("/payments/ssot")
@@ -54,10 +50,10 @@ func SetupSSOTPaymentRoutes(router *gin.RouterGroup, db *gorm.DB, jwtManager *mi
 		}
 		{
 			// SSOT Payment CRUD operations with journal integration
-			ssotPayments.POST("/receivable", permissionMiddleware.CanCreate("payments"), periodValidation.ValidateEntryDate(), ssotPaymentController.CreateReceivablePayment)
-			ssotPayments.POST("/payable", permissionMiddleware.CanCreate("payments"), periodValidation.ValidateEntryDate(), ssotPaymentController.CreatePayablePayment)
+			ssotPayments.POST("/receivable", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreateReceivablePayment)
+			ssotPayments.POST("/payable", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreatePayablePayment)
 			ssotPayments.GET("/:id", permissionMiddleware.CanView("payments"), ssotPaymentController.GetPaymentWithJournal)
-			ssotPayments.POST("/:id/reverse", permissionMiddleware.CanEdit("payments"), periodValidation.ValidateEntryDate(), ssotPaymentController.ReversePayment)
+			ssotPayments.POST("/:id/reverse", permissionMiddleware.CanEdit("payments"), ssotPaymentController.ReversePayment)
 		
 			// Journal integration endpoints
 			ssotPayments.POST("/preview-journal", permissionMiddleware.CanView("payments"), ssotPaymentController.PreviewPaymentJournal)
@@ -75,7 +71,7 @@ func SetupSSOTPaymentRoutes(router *gin.RouterGroup, db *gorm.DB, jwtManager *mi
 		}
 		{
 			// PPN Payment CRUD operations with journal integration
-			taxPayments.POST("/ppn", permissionMiddleware.CanCreate("payments"), periodValidation.ValidateEntryDate(), taxPaymentController.CreatePPNPayment)
+			taxPayments.POST("/ppn", permissionMiddleware.CanCreate("payments"), taxPaymentController.CreatePPNPayment)
 			taxPayments.GET("/ppn", permissionMiddleware.CanView("payments"), taxPaymentController.GetPPNPayments)
 			taxPayments.GET("/ppn/summary", permissionMiddleware.CanView("payments"), taxPaymentController.GetPPNPaymentSummary)
 			taxPayments.GET("/ppn/masukan", permissionMiddleware.CanView("payments"), taxPaymentController.GetPPNMasukanPayments)

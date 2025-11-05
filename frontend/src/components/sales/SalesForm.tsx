@@ -63,6 +63,8 @@ import salesService, {
 import invoiceTypeService, { InvoiceType } from '@/services/invoiceTypeService';
 import ErrorHandler, { ParsedValidationError } from '@/utils/errorHandler';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePeriodValidation } from '@/hooks/usePeriodValidation';
+import { ReopenPeriodDialog } from '@/components/periods/ReopenPeriodDialog';
 
 interface SalesFormProps {
   isOpen: boolean;
@@ -135,6 +137,17 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const toast = useToast();
   const { user, token } = useAuth();
   const modalBodyRef = useRef<HTMLDivElement>(null);
+  
+  // Period validation hook
+  const { 
+    handlePeriodError, 
+    reopenDialogOpen, 
+    periodToReopen, 
+    closeReopenDialog 
+  } = usePeriodValidation({ 
+    showToast: true,
+    toast
+  });
   
   // Color mode values for dark mode support
   const modalBg = useColorModeValue('white', 'gray.800');
@@ -850,6 +863,13 @@ const SalesForm: React.FC<SalesFormProps> = ({
     } catch (error: any) {
       console.error('SalesForm submission error:', error);
       
+      // Check if it's a period validation error
+      if (handlePeriodError(error, () => handleSubmit(onSubmit)())) {
+        // Period error was handled, show reopen dialog if needed
+        setLoading(false);
+        return;
+      }
+      
       // Log detailed error information for debugging
       if (error.response) {
         console.error('Error response:', {
@@ -918,7 +938,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
   };
 
   return (
-    <Modal 
+    <>
+    <Modal
       isOpen={isOpen} 
       onClose={handleClose} 
       size="6xl" 
@@ -1919,6 +1940,21 @@ const SalesForm: React.FC<SalesFormProps> = ({
         </form>
       </ModalContent>
     </Modal>
+    
+    {/* Period Reopen Dialog */}
+    {periodToReopen && (
+      <ReopenPeriodDialog
+        isOpen={reopenDialogOpen}
+        onClose={closeReopenDialog}
+        startDate={periodToReopen.period.split(' to ')[0] || ''}
+        endDate={periodToReopen.period.split(' to ')[1] || ''}
+        onSuccess={() => {
+          // After successful reopen, retry the form submission
+          handleSubmit(onSubmit)();
+        }}
+      />
+    )}
+    </>
   );
 };
 

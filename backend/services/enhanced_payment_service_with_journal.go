@@ -69,12 +69,23 @@ type PaymentWithJournalRequest struct {
 	AutoCreateJournal bool      `json:"auto_create_journal" default:"true"`
 	PreviewJournal    bool      `json:"preview_journal" default:"false"`
 	
-	// Allocation options
+	// Allocation options (single target - legacy)
 	TargetInvoiceID   *uint     `json:"target_invoice_id,omitempty"`
 	TargetBillID      *uint     `json:"target_bill_id,omitempty"`
 	
+	// Allocation arrays (multiple targets - preferred)
+	InvoiceAllocations []AllocationItem `json:"invoice_allocations,omitempty"`
+	BillAllocations    []AllocationItem `json:"bill_allocations,omitempty"`
+	
 	// User context
 	UserID            uint      `json:"user_id"`
+}
+
+// AllocationItem represents a single allocation to an invoice or bill
+type AllocationItem struct {
+	InvoiceID *uint   `json:"invoice_id,omitempty"`
+	BillID    *uint   `json:"bill_id,omitempty"`
+	Amount    float64 `json:"amount" binding:"required,min=0.01"`
 }
 
 // PaymentWithJournalResponse extends payment response with journal information
@@ -103,6 +114,25 @@ type PaymentProcessingSummary struct {
 // CreatePaymentWithJournal creates a payment with automatic journal entry creation
 func (eps *EnhancedPaymentServiceWithJournal) CreatePaymentWithJournal(req *PaymentWithJournalRequest) (*PaymentWithJournalResponse, error) {
 	startTime := time.Now()
+
+	// 🔍 DEBUG: Log received request
+	log.Printf("🔍 DEBUG CreatePaymentWithJournal request:")
+	log.Printf("  - ContactID: %d", req.ContactID)
+	log.Printf("  - Amount: %.2f", req.Amount)
+	log.Printf("  - Method: %s", req.Method)
+	log.Printf("  - TargetBillID: %v", req.TargetBillID)
+	log.Printf("  - BillAllocations count: %d", len(req.BillAllocations))
+	if len(req.BillAllocations) > 0 {
+		for i, alloc := range req.BillAllocations {
+			log.Printf("    [%d] BillID=%v, Amount=%.2f", i, alloc.BillID, alloc.Amount)
+		}
+	}
+	log.Printf("  - InvoiceAllocations count: %d", len(req.InvoiceAllocations))
+	if len(req.InvoiceAllocations) > 0 {
+		for i, alloc := range req.InvoiceAllocations {
+			log.Printf("    [%d] InvoiceID=%v, Amount=%.2f", i, alloc.InvoiceID, alloc.Amount)
+		}
+	}
 
 	// Validate request
 	if err := eps.validatePaymentRequest(req); err != nil {
@@ -453,56 +483,178 @@ func (eps *EnhancedPaymentServiceWithJournal) createPaymentAllocations(
 ) ([]models.PaymentAllocation, error) {
 	var allocations []models.PaymentAllocation
 
-	if contactType == "CUSTOMER" && req.TargetInvoiceID != nil {
-		// 🔒 CRITICAL: Validate invoice status before allocation (consistent with SalesJournalServiceV2)
-		var sale models.Sale
-		if err := tx.First(&sale, *req.TargetInvoiceID).Error; err != nil {
-			return nil, fmt.Errorf("invoice not found: %w", err)
+	// 🔥 FIX: Handle array-based allocations (preferred method)
+	if contactType == "CUSTOMER" {
+		// Handle multiple invoice allocations
+		if len(req.InvoiceAllocations) > 0 {
+			log.Printf("📝 Processing %d invoice allocations", len(req.InvoiceAllocations))
+			remainingAmount := payment.Amount
+			
+			for i, alloc := range req.InvoiceAllocations {
+				if alloc.InvoiceID == nil {
+					log.Printf("⚠️ Skipping allocation %d: no invoice ID", i)
+					continue
+				}
+				
+				if remainingAmount <= 0 {
+					log.Printf("⚠️ No remaining amount for allocation %d", i)
+					break
+				}
+				
+				// Validate invoice
+				var sale models.Sale
+				if err := tx.First(&sale, *alloc.InvoiceID).Error; err != nil {
+					return nil, fmt.Errorf("invoice %d not found: %w", *alloc.InvoiceID, err)
+				}
+				
+				// Validate status
+				if err := eps.statusValidator.ValidatePaymentAllocation(sale.Status, *alloc.InvoiceID); err != nil {
+					log.Printf("❌ Payment allocation blocked: %v", err)
+					return nil, err
+				}
+				
+				// Calculate allocated amount
+				allocatedAmount := alloc.Amount
+				if allocatedAmount > remainingAmount {
+					allocatedAmount = remainingAmount
+					log.Printf("⚠️ Adjusting amount to remaining: %.2f -> %.2f", alloc.Amount, allocatedAmount)
+				}
+				if allocatedAmount > sale.OutstandingAmount {
+					allocatedAmount = sale.OutstandingAmount
+					log.Printf("⚠️ Adjusting amount to outstanding: %.2f -> %.2f", allocatedAmount, sale.OutstandingAmount)
+				}
+				
+				// Create allocation
+				allocation := models.PaymentAllocation{
+					PaymentID:       uint64(payment.ID),
+					InvoiceID:       alloc.InvoiceID,
+					AllocatedAmount: allocatedAmount,
+				}
+				
+				if err := tx.Create(&allocation).Error; err != nil {
+					return nil, fmt.Errorf("failed to create invoice allocation: %w", err)
+				}
+				
+				allocations = append(allocations, allocation)
+				
+				// Update sale outstanding
+				if err := eps.updateSaleOutstanding(tx, *alloc.InvoiceID, allocatedAmount); err != nil {
+					log.Printf("⚠️ Warning: Failed to update sale outstanding: %v", err)
+				}
+				
+				remainingAmount -= allocatedAmount
+				log.Printf("✅ Invoice allocation %d complete. Remaining: %.2f", i+1, remainingAmount)
+			}
+		} else if req.TargetInvoiceID != nil {
+			// Legacy: single invoice allocation
+			log.Printf("📝 Processing single invoice allocation (legacy)")
+			var sale models.Sale
+			if err := tx.First(&sale, *req.TargetInvoiceID).Error; err != nil {
+				return nil, fmt.Errorf("invoice not found: %w", err)
+			}
+			
+			if err := eps.statusValidator.ValidatePaymentAllocation(sale.Status, *req.TargetInvoiceID); err != nil {
+				log.Printf("❌ Payment allocation blocked: %v", err)
+				return nil, err
+			}
+			
+			allocation := models.PaymentAllocation{
+				PaymentID:       uint64(payment.ID),
+				InvoiceID:       req.TargetInvoiceID,
+				AllocatedAmount: payment.Amount,
+			}
+			
+			if err := tx.Create(&allocation).Error; err != nil {
+				return nil, fmt.Errorf("failed to create invoice allocation: %w", err)
+			}
+			
+			allocations = append(allocations, allocation)
+			
+			if err := eps.updateSaleOutstanding(tx, *req.TargetInvoiceID, payment.Amount); err != nil {
+				log.Printf("⚠️ Warning: Failed to update sale outstanding: %v", err)
+			}
 		}
-		
-		// Use StatusValidationHelper for consistency with SalesJournalServiceV2.ShouldPostToJournal
-		if err := eps.statusValidator.ValidatePaymentAllocation(sale.Status, *req.TargetInvoiceID); err != nil {
-			log.Printf("❌ Payment allocation blocked: %v", err)
-			return nil, err
-		}
-		
-		log.Printf("✅ Invoice #%d status '%s' is valid for payment allocation", *req.TargetInvoiceID, sale.Status)
-		
-		// Allocate to specific invoice
-		allocation := models.PaymentAllocation{
-			PaymentID:       uint64(payment.ID),
-			InvoiceID:       req.TargetInvoiceID,
-			AllocatedAmount: payment.Amount,
-		}
-
-		if err := tx.Create(&allocation).Error; err != nil {
-			return nil, fmt.Errorf("failed to create invoice allocation: %w", err)
-		}
-
-		allocations = append(allocations, allocation)
-
-		// Update sale outstanding amount
-		if err := eps.updateSaleOutstanding(tx, *req.TargetInvoiceID, payment.Amount); err != nil {
-			log.Printf("⚠️ Warning: Failed to update sale outstanding: %v", err)
-		}
-
-	} else if contactType == "VENDOR" && req.TargetBillID != nil {
-		// Allocate to specific bill
-		allocation := models.PaymentAllocation{
-			PaymentID:       uint64(payment.ID),
-			BillID:          req.TargetBillID,
-			AllocatedAmount: payment.Amount,
-		}
-
-		if err := tx.Create(&allocation).Error; err != nil {
-			return nil, fmt.Errorf("failed to create bill allocation: %w", err)
-		}
-
-		allocations = append(allocations, allocation)
-
-		// Update purchase outstanding amount
-		if err := eps.updatePurchaseOutstanding(tx, *req.TargetBillID, payment.Amount); err != nil {
-			log.Printf("⚠️ Warning: Failed to update purchase outstanding: %v", err)
+	} else if contactType == "VENDOR" {
+		// Handle multiple bill allocations
+		if len(req.BillAllocations) > 0 {
+			log.Printf("📝 Processing %d bill allocations", len(req.BillAllocations))
+			remainingAmount := payment.Amount
+			
+			for i, alloc := range req.BillAllocations {
+				if alloc.BillID == nil {
+					log.Printf("⚠️ Skipping allocation %d: no bill ID", i)
+					continue
+				}
+				
+				if remainingAmount <= 0 {
+					log.Printf("⚠️ No remaining amount for allocation %d", i)
+					break
+				}
+				
+				// Validate purchase
+				var purchase models.Purchase
+				if err := tx.First(&purchase, *alloc.BillID).Error; err != nil {
+					return nil, fmt.Errorf("bill %d not found: %w", *alloc.BillID, err)
+				}
+				
+				// Validate ownership
+				if purchase.VendorID != req.ContactID {
+					return nil, fmt.Errorf("bill %d does not belong to this vendor", *alloc.BillID)
+				}
+				
+				// Calculate allocated amount
+				allocatedAmount := alloc.Amount
+				if allocatedAmount > remainingAmount {
+					allocatedAmount = remainingAmount
+					log.Printf("⚠️ Adjusting amount to remaining: %.2f -> %.2f", alloc.Amount, allocatedAmount)
+				}
+				if allocatedAmount > purchase.OutstandingAmount {
+					allocatedAmount = purchase.OutstandingAmount
+					log.Printf("⚠️ Adjusting amount to outstanding: %.2f -> %.2f", allocatedAmount, purchase.OutstandingAmount)
+				}
+				
+				// Create allocation
+				allocation := models.PaymentAllocation{
+					PaymentID:       uint64(payment.ID),
+					BillID:          alloc.BillID,
+					AllocatedAmount: allocatedAmount,
+				}
+				
+				if err := tx.Create(&allocation).Error; err != nil {
+					return nil, fmt.Errorf("failed to create bill allocation: %w", err)
+				}
+				
+				allocations = append(allocations, allocation)
+				
+				// 🔥 FIX: Update purchase outstanding
+				if err := eps.updatePurchaseOutstanding(tx, *alloc.BillID, allocatedAmount); err != nil {
+					log.Printf("❌ CRITICAL: Failed to update purchase outstanding: %v", err)
+					return nil, fmt.Errorf("failed to update purchase outstanding: %w", err)
+				}
+				log.Printf("✅ Purchase outstanding updated for bill %d", *alloc.BillID)
+				
+				remainingAmount -= allocatedAmount
+				log.Printf("✅ Bill allocation %d complete. Remaining: %.2f", i+1, remainingAmount)
+			}
+		} else if req.TargetBillID != nil {
+			// Legacy: single bill allocation
+			log.Printf("📝 Processing single bill allocation (legacy)")
+			allocation := models.PaymentAllocation{
+				PaymentID:       uint64(payment.ID),
+				BillID:          req.TargetBillID,
+				AllocatedAmount: payment.Amount,
+			}
+			
+			if err := tx.Create(&allocation).Error; err != nil {
+				return nil, fmt.Errorf("failed to create bill allocation: %w", err)
+			}
+			
+			allocations = append(allocations, allocation)
+			
+			if err := eps.updatePurchaseOutstanding(tx, *req.TargetBillID, payment.Amount); err != nil {
+				log.Printf("❌ CRITICAL: Failed to update purchase outstanding: %v", err)
+				return nil, fmt.Errorf("failed to update purchase outstanding: %w", err)
+			}
 		}
 	}
 
@@ -536,17 +688,31 @@ func (eps *EnhancedPaymentServiceWithJournal) updatePurchaseOutstanding(tx *gorm
 		return fmt.Errorf("purchase not found: %w", err)
 	}
 
+	log.Printf("📝 Updating purchase amounts: PaidAmount %.2f -> %.2f, Outstanding %.2f -> %.2f", 
+		purchase.PaidAmount, purchase.PaidAmount + paidAmount,
+		purchase.OutstandingAmount, purchase.OutstandingAmount - paidAmount)
+
 	// Update amounts
 	purchase.PaidAmount += paidAmount
 	purchase.OutstandingAmount -= paidAmount
 
-	// Update status if fully paid
+	// Update matching status if fully paid
 	if purchase.OutstandingAmount <= 0.01 { // Allow small rounding differences
-		purchase.Status = "PAID"
+		purchase.MatchingStatus = models.PurchaseMatchingMatched
 		purchase.OutstandingAmount = 0 // Ensure exact zero
+		log.Printf("✅ Purchase fully paid, matching status updated to MATCHED")
+	} else {
+		purchase.MatchingStatus = models.PurchaseMatchingPartial
+		log.Printf("✅ Purchase partially paid (Outstanding: %.2f)", purchase.OutstandingAmount)
 	}
 
-	return tx.Save(&purchase).Error
+	if err := tx.Save(&purchase).Error; err != nil {
+		log.Printf("❌ Failed to save purchase: %v", err)
+		return err
+	}
+	log.Printf("✅ Purchase updated successfully")
+
+	return nil
 }
 
 // validatePaymentRequest validates the payment request

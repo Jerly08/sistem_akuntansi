@@ -53,7 +53,7 @@ import {
   ModalCloseButton,
   Tooltip
 } from '@chakra-ui/react';
-import { FiHome, FiSettings, FiGlobe, FiCalendar, FiDollarSign, FiSave, FiX, FiCreditCard, FiTrendingUp, FiLock, FiUnlock, FiCheckCircle, FiInfo } from 'react-icons/fi';
+import { FiHome, FiSettings, FiGlobe, FiCalendar, FiDollarSign, FiSave, FiX, FiCreditCard, FiTrendingUp, FiCheckCircle, FiInfo } from 'react-icons/fi';
 import Link from 'next/link';
 
 // Helper for converting fiscal year formats between backend and date input
@@ -151,18 +151,6 @@ interface TaxAccountSettings {
   updated_at?: string;
 }
 
-interface AccountingPeriod {
-  id: number;
-  year: number;
-  month: number;
-  period_name: string;
-  is_closed: boolean;
-  is_locked: boolean;
-  closed_by?: number;
-  closed_at?: string;
-  start_date: string;
-  end_date: string;
-}
 
 interface FiscalClosingPreview {
   fiscal_year_end: string;
@@ -228,26 +216,19 @@ const SettingsPage: React.FC = () => {
   const [taxAccountSettings, setTaxAccountSettings] = useState<TaxAccountSettings | null>(null);
   const [loadingTaxAccounts, setLoadingTaxAccounts] = useState(false);
   
-  // Accounting periods
-  const [periods, setPeriods] = useState<AccountingPeriod[]>([]);
-  const [loadingPeriods, setLoadingPeriods] = useState(false);
-  const [closingPeriod, setClosingPeriod] = useState<{year: number; month: number} | null>(null);
-  const [reopenPeriod, setReopenPeriod] = useState<{year: number; month: number} | null>(null);
-  const [reopenReason, setReopenReason] = useState('');
-  
-  // Fiscal year closing
-  const [fiscalYearEnd, setFiscalYearEnd] = useState('');
-  const [fiscalClosingPreview, setFiscalClosingPreview] = useState<FiscalClosingPreview | null>(null);
-  const [loadingFiscalPreview, setLoadingFiscalPreview] = useState(false);
-  const [showFiscalClosingModal, setShowFiscalClosingModal] = useState(false);
-  const [executingFiscalClosing, setExecutingFiscalClosing] = useState(false);
+  // Period closing (flexible period closing)
+  const [periodStartDate, setPeriodStartDate] = useState('');
+  const [periodEndDate, setPeriodEndDate] = useState('');
+  const [periodClosingPreview, setPeriodClosingPreview] = useState<any | null>(null);
+  const [loadingPeriodPreview, setLoadingPeriodPreview] = useState(false);
+  const [showPeriodClosingModal, setShowPeriodClosingModal] = useState(false);
+  const [executingPeriodClosing, setExecutingPeriodClosing] = useState(false);
+  const [lastClosingInfo, setLastClosingInfo] = useState<any | null>(null);
   
   // Move useColorModeValue to top level to fix hooks order
   const blueColor = useColorModeValue('blue.500', 'blue.300');
   const greenColor = useColorModeValue('green.500', 'green.300');
-  const purpleColor = useColorModeValue('purple.500', 'purple.300');
   const orangeColor = useColorModeValue('orange.500', 'orange.300');
-  const periodBgColor = useColorModeValue('gray.50', 'gray.700');
 
   const fetchTaxAccountSettings = async () => {
     setLoadingTaxAccounts(true);
@@ -264,105 +245,49 @@ const SettingsPage: React.FC = () => {
     }
   };
   
-  const fetchPeriods = async () => {
-    setLoadingPeriods(true);
+  // Fetch last closing info to auto-populate start date
+  const fetchLastClosingInfo = async () => {
     try {
-      const response = await api.get('/api/v1/periods?limit=6');
-      if (response.data.success) {
-        setPeriods(response.data.data || []);
+      const response = await api.get('/api/v1/period-closing/last-info');
+      if (response.data.success && response.data.data) {
+        const info = response.data.data;
+        setLastClosingInfo(info);
+        
+        // Auto-populate start date only if there's valid data
+        if (info.has_previous_closing && info.next_start_date) {
+          // Has previous closing - use next start date
+          setPeriodStartDate(info.next_start_date.split('T')[0]);
+        } else if (!info.has_previous_closing && info.period_start_date) {
+          // First closing - use earliest transaction date
+          setPeriodStartDate(info.period_start_date.split('T')[0]);
+        }
+        // else: no data available, let user input manually
       }
-    } catch (err: any) {
-      console.error('Error fetching periods:', err);
-    } finally {
-      setLoadingPeriods(false);
+    } catch (err) {
+      console.error('Failed to fetch last closing info:', err);
+      // On error, just let user input dates manually
     }
   };
   
-  const handleClosePeriod = async (year: number, month: number) => {
-    try {
-      const response = await api.post(`/api/v1/periods/${year}/${month}/close`, {
-        notes: 'Closed from settings'
-      });
-      if (response.data.success) {
-        toast({
-          title: 'Period Closed',
-          description: `${MONTHS[month - 1]} ${year} has been closed successfully`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-        setClosingPeriod(null);
-        fetchPeriods();
-      }
-    } catch (err: any) {
+  const handlePreviewPeriodClosing = async () => {
+    if (!periodStartDate || !periodEndDate) {
       toast({
-        title: 'Failed to close period',
-        description: err.response?.data?.details || err.message,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-  
-  const handleReopenPeriod = async () => {
-    if (!reopenPeriod || !reopenReason.trim()) {
-      toast({
-        title: 'Reason required',
-        description: 'Please provide a reason to reopen the period',
+        title: 'Dates required',
+        description: 'Please select both start and end dates',
         status: 'warning',
         duration: 3000,
       });
       return;
     }
     
-    try {
-      const response = await api.post(
-        `/api/v1/periods/${reopenPeriod.year}/${reopenPeriod.month}/reopen`,
-        { reason: reopenReason }
-      );
-      if (response.data.success) {
-        toast({
-          title: 'Period Reopened',
-          description: `${MONTHS[reopenPeriod.month - 1]} ${reopenPeriod.year} has been reopened`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-        setReopenPeriod(null);
-        setReopenReason('');
-        fetchPeriods();
-      }
-    } catch (err: any) {
-      toast({
-        title: 'Failed to reopen period',
-        description: err.response?.data?.details || err.message,
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
-  
-  const handlePreviewFiscalClosing = async () => {
-    if (!fiscalYearEnd) {
-      toast({
-        title: 'Date required',
-        description: 'Please select fiscal year end date',
-        status: 'warning',
-        duration: 3000,
-      });
-      return;
-    }
-    
-    setLoadingFiscalPreview(true);
+    setLoadingPeriodPreview(true);
     try {
       const response = await api.get(
-        `/api/v1/fiscal-closing/preview?fiscal_year_end=${fiscalYearEnd}`
+        `/api/v1/period-closing/preview?start_date=${periodStartDate}&end_date=${periodEndDate}`
       );
       if (response.data.success) {
-        setFiscalClosingPreview(response.data.data);
-        setShowFiscalClosingModal(true);
+        setPeriodClosingPreview(response.data.data);
+        setShowPeriodClosingModal(true);
       }
     } catch (err: any) {
       toast({
@@ -373,42 +298,44 @@ const SettingsPage: React.FC = () => {
         isClosable: true,
       });
     } finally {
-      setLoadingFiscalPreview(false);
+      setLoadingPeriodPreview(false);
     }
   };
   
-  const handleExecuteFiscalClosing = async () => {
-    if (!fiscalClosingPreview) return;
+  const handleExecutePeriodClosing = async () => {
+    if (!periodClosingPreview) return;
     
-    setExecutingFiscalClosing(true);
+    setExecutingPeriodClosing(true);
     try {
-      const response = await api.post('/api/v1/fiscal-closing/execute', {
-        fiscal_year_end: fiscalYearEnd,
-        notes: 'Year-end closing executed from settings'
+      const response = await api.post('/api/v1/period-closing/execute', {
+        start_date: periodStartDate,
+        end_date: periodEndDate,
+        description: `Period closing from ${periodStartDate} to ${periodEndDate}`,
+        notes: 'Period closing executed from settings'
       });
       if (response.data.success) {
         toast({
-          title: 'Fiscal Year Closed!',
+          title: 'Period Closed Successfully!',
           description: 'All revenue and expense accounts have been reset and transferred to retained earnings',
           status: 'success',
           duration: 5000,
           isClosable: true,
         });
-        setShowFiscalClosingModal(false);
-        setFiscalClosingPreview(null);
-        setFiscalYearEnd('');
-        fetchPeriods();
+        setShowPeriodClosingModal(false);
+        setPeriodClosingPreview(null);
+        // Refresh last closing info
+        fetchLastClosingInfo();
       }
     } catch (err: any) {
       toast({
-        title: 'Failed to close fiscal year',
+        title: 'Failed to close period',
         description: err.response?.data?.details || err.message,
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
     } finally {
-      setExecutingFiscalClosing(false);
+      setExecutingPeriodClosing(false);
     }
   };
 
@@ -438,7 +365,7 @@ const SettingsPage: React.FC = () => {
   useEffect(() => {
     fetchSettings();
     fetchTaxAccountSettings();
-    fetchPeriods();
+    fetchLastClosingInfo();
   }, []);
 
   // Keep ISO date in sync when settings are populated later
@@ -854,179 +781,29 @@ const SettingsPage: React.FC = () => {
               </CardBody>
             </Card>
             
-            {/* Period Closing Management Card */}
-            <Card border="1px" borderColor="gray.200" boxShadow="md">
-              <CardHeader>
-                <HStack spacing={3} justify="space-between" width="full">
-                  <HStack spacing={3}>
-                    <Icon as={FiCalendar} boxSize={6} color={purpleColor} />
-                    <Heading size="md">Period Closing</Heading>
-                  </HStack>
-                  <Tooltip
-                    label={
-                      <Box p={2}>
-                        <Text fontSize="xs" fontWeight="bold" mb={1}>📅 Monthly Period Closing</Text>
-                        <Text fontSize="xs" mb={2}>
-                          Lock periode bulanan untuk menjaga integritas data.
-                        </Text>
-                        <Text fontSize="xs" fontWeight="semibold" mb={1}>Yang Terjadi:</Text>
-                        <Text fontSize="xs">• Periode di-lock untuk user biasa</Text>
-                        <Text fontSize="xs">• Saldo Revenue/Expense TETAP (tidak direset)</Text>
-                        <Text fontSize="xs">• Tidak ada closing entries</Text>
-                        <Text fontSize="xs">• Bisa di-reopen dengan reason</Text>
-                        <Text fontSize="xs" mt={2} fontStyle="italic">
-                          Gunakan ini setiap akhir bulan untuk lock transaksi.
-                        </Text>
-                      </Box>
-                    }
-                    placement="left"
-                    hasArrow
-                    bg="purple.600"
-                  >
-                    <Box cursor="help">
-                      <Icon as={FiInfo} boxSize={4} color="gray.500" _hover={{ color: purpleColor }} />
-                    </Box>
-                  </Tooltip>
-                </HStack>
-              </CardHeader>
-              <CardBody>
-                <VStack spacing={4} alignItems="start">
-                  <Text fontSize="sm" color="gray.600" mb={2}>
-                    Manage monthly period closing to lock transactions and maintain data integrity.
-                  </Text>
-                  
-                  {loadingPeriods ? (
-                    <HStack width="full" justify="center" py={4}>
-                      <Spinner size="sm" color="blue.500" />
-                      <Text fontSize="xs" color="gray.500">Loading periods...</Text>
-                    </HStack>
-                  ) : periods.length > 0 ? (
-                    <VStack spacing={2} width="full" alignItems="start">
-                      {periods.slice(0, 4).map((period) => (
-                        <HStack
-                          key={period.id}
-                          justify="space-between"
-                          width="full"
-                          p={2}
-                          bg={periodBgColor}
-                          borderRadius="md"
-                        >
-                          <HStack spacing={2}>
-                            <Tooltip
-                              label={
-                                period.is_locked
-                                  ? "🔒 Hard Locked - Fiscal year-end closed. Cannot reopen easily."
-                                  : period.is_closed
-                                  ? "🟠 Soft Locked - Monthly closed. Can reopen with reason."
-                                  : "🟢 Open - Transactions allowed"
-                              }
-                              placement="top"
-                              hasArrow
-                            >
-                              <Icon
-                                as={period.is_locked ? FiLock : period.is_closed ? FiLock : FiUnlock}
-                                color={period.is_locked ? 'red.700' : period.is_closed ? 'red.500' : 'green.500'}
-                                boxSize={4}
-                                cursor="help"
-                              />
-                            </Tooltip>
-                            <Text fontSize="sm" fontWeight="medium">
-                              {MONTHS[period.month - 1]} {period.year}
-                            </Text>
-                            <Tooltip
-                              label={
-                                <Box p={1}>
-                                  {period.is_locked ? (
-                                    <>
-                                      <Text fontSize="xs" fontWeight="bold">Hard Locked 🔒</Text>
-                                      <Text fontSize="xs">Fiscal year-end closed</Text>
-                                      <Text fontSize="xs">Revenue/Expense reset to 0</Text>
-                                    </>
-                                  ) : period.is_closed ? (
-                                    <>
-                                      <Text fontSize="xs" fontWeight="bold">Soft Closed 🟠</Text>
-                                      <Text fontSize="xs">Monthly closing</Text>
-                                      <Text fontSize="xs">Can reopen with approval</Text>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Text fontSize="xs" fontWeight="bold">Open 🟢</Text>
-                                      <Text fontSize="xs">Transactions allowed</Text>
-                                      <Text fontSize="xs">Can close anytime</Text>
-                                    </>
-                                  )}
-                                </Box>
-                              }
-                              placement="top"
-                              hasArrow
-                            >
-                              <Text
-                                fontSize="xs"
-                                px={2}
-                                py={1}
-                                borderRadius="full"
-                                bg={period.is_locked ? 'red.200' : period.is_closed ? 'red.100' : 'green.100'}
-                                color={period.is_locked ? 'red.900' : period.is_closed ? 'red.700' : 'green.700'}
-                                fontWeight="semibold"
-                                cursor="help"
-                              >
-                                {period.is_locked ? 'Locked' : period.is_closed ? 'Closed' : 'Open'}
-                              </Text>
-                            </Tooltip>
-                          </HStack>
-                          
-                          {!period.is_locked && (
-                            <Button
-                              size="xs"
-                              colorScheme={period.is_closed ? 'blue' : 'red'}
-                              variant="outline"
-                              onClick={() =>
-                                period.is_closed
-                                  ? setReopenPeriod({ year: period.year, month: period.month })
-                                  : setClosingPeriod({ year: period.year, month: period.month })
-                              }
-                            >
-                              {period.is_closed ? 'Reopen' : 'Close'}
-                            </Button>
-                          )}
-                        </HStack>
-                      ))}
-                    </VStack>
-                  ) : (
-                    <Text fontSize="xs" color="gray.500">
-                      No periods available
-                    </Text>
-                  )}
-                </VStack>
-              </CardBody>
-            </Card>
-            
-            {/* Fiscal Year-End Closing Card */}
+            {/* Flexible Period Closing Card */}
             <Card border="1px" borderColor="gray.200" boxShadow="md">
               <CardHeader>
                 <HStack spacing={3} justify="space-between" width="full">
                   <HStack spacing={3}>
                     <Icon as={FiCheckCircle} boxSize={6} color="red.500" />
-                    <Heading size="md">Fiscal Year-End Closing</Heading>
+                    <Heading size="md">Tutup Buku (Period Closing)</Heading>
                   </HStack>
                   <Tooltip
                     label={
                       <Box p={2}>
-                        <Text fontSize="xs" fontWeight="bold" mb={1}>🏁 Fiscal Year-End Closing</Text>
+                        <Text fontSize="xs" fontWeight="bold" mb={1}>📘 Tutup Buku Fleksibel</Text>
                         <Text fontSize="xs" mb={2}>
-                          Tutup buku akhir tahun dengan automated closing entries.
+                          Tutup periode akuntansi dengan fleksibilitas penuh: bulanan, triwulan, semester, atau tahunan.
                         </Text>
                         <Text fontSize="xs" fontWeight="semibold" mb={1}>Yang Terjadi:</Text>
                         <Text fontSize="xs" color="green.200">• Revenue → RESET ke 0</Text>
                         <Text fontSize="xs" color="red.200">• Expense → RESET ke 0</Text>
                         <Text fontSize="xs" color="blue.200">• Retained Earnings → BERTAMBAH (Net Income)</Text>
                         <Text fontSize="xs">• Generate closing journal entries</Text>
-                        <Text fontSize="xs">• Period HARD LOCK (sulit di-reopen)</Text>
+                        <Text fontSize="xs">• Period LOCK (transaksi tidak bisa diedit)</Text>
                         <Text fontSize="xs" mt={2} fontWeight="semibold" color="orange.200">
                           ⚠️ PERMANENT ACTION!
-                        </Text>
-                        <Text fontSize="xs" fontStyle="italic" mt={1}>
-                          Hanya dilakukan sekali setahun di akhir fiscal year.
                         </Text>
                       </Box>
                     }
@@ -1053,81 +830,83 @@ const SettingsPage: React.FC = () => {
                     </Box>
                   </Alert>
                   
+                  {lastClosingInfo?.has_previous_closing && lastClosingInfo?.last_closing_date && (
+                    <Alert status="info" borderRadius="md" size="sm">
+                      <AlertIcon />
+                      <Box>
+                        <AlertTitle fontSize="sm">📅 Last Closing</AlertTitle>
+                        <AlertDescription fontSize="xs">
+                          Last closed: {new Date(lastClosingInfo.last_closing_date).toLocaleDateString()}
+                        </AlertDescription>
+                      </Box>
+                    </Alert>
+                  )}
+                  
+                  {lastClosingInfo && !lastClosingInfo.has_previous_closing && (
+                    <Alert status="warning" borderRadius="md" size="sm">
+                      <AlertIcon />
+                      <Box>
+                        <AlertTitle fontSize="sm">⚠️ First Time Closing</AlertTitle>
+                        <AlertDescription fontSize="xs">
+                          No previous closing found. This will be your first period closing.
+                        </AlertDescription>
+                      </Box>
+                    </Alert>
+                  )}
+                  
                   <Text fontSize="sm" color="gray.600">
-                    Close fiscal year and generate automated closing entries.
+                    Close accounting period and generate automated closing entries.
                   </Text>
                   
                   <FormControl>
-                    <HStack spacing={2}>
-                      <FormLabel fontSize="sm" fontWeight="semibold" mb={0}>
-                        Fiscal Year End Date
-                      </FormLabel>
-                      <Tooltip
-                        label={
-                          <Box p={2}>
-                            <Text fontSize="xs" mb={1}>
-                              Pilih tanggal akhir tahun fiscal Anda.
-                            </Text>
-                            <Text fontSize="xs">Contoh:</Text>
-                            <Text fontSize="xs">• 31 Desember (calendar year)</Text>
-                            <Text fontSize="xs">• 31 Maret (fiscal year Apr-Mar)</Text>
-                            <Text fontSize="xs">• 30 Juni (fiscal year Jul-Jun)</Text>
-                          </Box>
-                        }
-                        placement="top"
-                        hasArrow
-                      >
-                        <Box cursor="help" display="inline-block">
-                          <Icon as={FiInfo} boxSize={3} color="gray.400" />
-                        </Box>
-                      </Tooltip>
-                    </HStack>
+                    <FormLabel fontSize="sm" fontWeight="semibold">
+                      Dari Tanggal (Start Date)
+                    </FormLabel>
                     <Input
                       type="date"
-                      value={fiscalYearEnd}
-                      onChange={(e) => setFiscalYearEnd(e.target.value)}
+                      value={periodStartDate}
+                      onChange={(e) => setPeriodStartDate(e.target.value)}
+                      variant="filled"
+                      _hover={{ bg: 'gray.100' }}
+                      _focus={{ bg: 'white', borderColor: 'blue.500' }}
+                      isReadOnly={lastClosingInfo?.has_previous_closing === true}
+                      placeholder="Select start date"
+                    />
+                    <FormHelperText fontSize="xs">
+                      {lastClosingInfo?.has_previous_closing 
+                        ? '🔒 Auto-filled from last closing date (locked)' 
+                        : '📅 Select the start date of the period to close'}
+                    </FormHelperText>
+                  </FormControl>
+                  
+                  <FormControl>
+                    <FormLabel fontSize="sm" fontWeight="semibold">
+                      Sampai Tanggal (End Date)
+                    </FormLabel>
+                    <Input
+                      type="date"
+                      value={periodEndDate}
+                      onChange={(e) => setPeriodEndDate(e.target.value)}
                       variant="filled"
                       _hover={{ bg: 'gray.100' }}
                       _focus={{ bg: 'white', borderColor: 'blue.500' }}
                     />
                     <FormHelperText fontSize="xs">
-                      Typically December 31 or end of your fiscal year
+                      End date of the period to close
                     </FormHelperText>
                   </FormControl>
                   
-                  <Tooltip
-                    label={
-                      <Box p={2}>
-                        <Text fontSize="xs" fontWeight="bold" mb={1}>🔍 Preview Proses Closing</Text>
-                        <Text fontSize="xs" mb={2}>
-                          Lihat detail lengkap sebelum execute:
-                        </Text>
-                        <Text fontSize="xs">• Total Revenue yang akan direset</Text>
-                        <Text fontSize="xs">• Total Expense yang akan direset</Text>
-                        <Text fontSize="xs">• Net Income yang akan ditransfer</Text>
-                        <Text fontSize="xs">• Preview closing journal entries</Text>
-                        <Text fontSize="xs">• Validation checks</Text>
-                        <Text fontSize="xs" mt={2} fontStyle="italic">
-                          ⚠️ Execute hanya bisa dilakukan setelah preview!
-                        </Text>
-                      </Box>
-                    }
-                    placement="top"
-                    hasArrow
-                    isDisabled={!fiscalYearEnd}
+                  <Button
+                    colorScheme="red"
+                    variant="solid"
+                    width="full"
+                    onClick={handlePreviewPeriodClosing}
+                    isLoading={loadingPeriodPreview}
+                    loadingText="Loading Preview..."
+                    isDisabled={!periodStartDate || !periodEndDate}
                   >
-                    <Button
-                      colorScheme="red"
-                      variant="solid"
-                      width="full"
-                      onClick={handlePreviewFiscalClosing}
-                      isLoading={loadingFiscalPreview}
-                      loadingText="Loading Preview..."
-                      isDisabled={!fiscalYearEnd}
-                    >
-                      Preview Year-End Closing
-                    </Button>
-                  </Tooltip>
+                    Preview Period Closing
+                  </Button>
                 </VStack>
               </CardBody>
             </Card>
@@ -1261,115 +1040,31 @@ const SettingsPage: React.FC = () => {
         </VStack>
       </Box>
       
-      {/* Close Period Confirmation Modal */}
-      <Modal isOpen={!!closingPeriod} onClose={() => setClosingPeriod(null)}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Close Period</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={4} alignItems="start">
-              <Text>
-                Are you sure you want to close{' '}
-                <strong>
-                  {closingPeriod && MONTHS[closingPeriod.month - 1]} {closingPeriod?.year}
-                </strong>
-                ?
-              </Text>
-              <Alert status="warning" borderRadius="md">
-                <AlertIcon />
-                <Box>
-                  <AlertTitle fontSize="sm">After closing:</AlertTitle>
-                  <AlertDescription fontSize="xs">
-                    • Regular users cannot post new transactions
-                    <br />
-                    • Period will be locked for data entry
-                    <br />
-                    • You can reopen if needed
-                  </AlertDescription>
-                </Box>
-              </Alert>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={() => setClosingPeriod(null)}>
-              Cancel
-            </Button>
-            <Button
-              colorScheme="red"
-              onClick={() =>
-                closingPeriod && handleClosePeriod(closingPeriod.year, closingPeriod.month)
-              }
-            >
-              Close Period
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-      
-      {/* Reopen Period Modal */}
-      <Modal isOpen={!!reopenPeriod} onClose={() => { setReopenPeriod(null); setReopenReason(''); }}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Reopen Period</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <VStack spacing={4} alignItems="start">
-              <Text>
-                Reopen{' '}
-                <strong>
-                  {reopenPeriod && MONTHS[reopenPeriod.month - 1]} {reopenPeriod?.year}
-                </strong>
-                ?
-              </Text>
-              <FormControl isRequired>
-                <FormLabel fontSize="sm">Reason for reopening</FormLabel>
-                <Textarea
-                  value={reopenReason}
-                  onChange={(e) => setReopenReason(e.target.value)}
-                  placeholder="Enter reason for reopening this period..."
-                  rows={3}
-                />
-              </FormControl>
-            </VStack>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="ghost"
-              mr={3}
-              onClick={() => {
-                setReopenPeriod(null);
-                setReopenReason('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              colorScheme="blue"
-              onClick={handleReopenPeriod}
-              isDisabled={!reopenReason.trim()}
-            >
-              Reopen Period
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-      
-      {/* Fiscal Year-End Closing Preview Modal */}
+      {/* Period Closing Preview Modal */}
       <Modal
-        isOpen={showFiscalClosingModal}
-        onClose={() => setShowFiscalClosingModal(false)}
+        isOpen={showPeriodClosingModal}
+        onClose={() => setShowPeriodClosingModal(false)}
         size="xl"
       >
         <ModalOverlay />
         <ModalContent maxW="800px">
           <ModalHeader bg="red.500" color="white">
-            🏁 Fiscal Year-End Closing Preview
+            📅 Period Closing Preview
           </ModalHeader>
           <ModalCloseButton color="white" />
           <ModalBody py={6}>
-            {fiscalClosingPreview && (
+            {periodClosingPreview && (
               <VStack spacing={4} alignItems="start">
+                {/* Period Info */}
+                <Box width="full" p={3} bg="blue.50" borderRadius="md">
+                  <Text fontSize="sm" fontWeight="bold" mb={1}>
+                    Period: {new Date(periodClosingPreview.start_date).toLocaleDateString()} - {new Date(periodClosingPreview.end_date).toLocaleDateString()}
+                  </Text>
+                  <Text fontSize="xs" color="gray.600">
+                    {periodClosingPreview.period_days} days | {periodClosingPreview.transaction_count} transactions
+                  </Text>
+                </Box>
+                
                 {/* Summary */}
                 <Box width="full" p={4} bg="gray.50" borderRadius="md">
                   <Text fontSize="lg" fontWeight="bold" mb={2}>
@@ -1379,33 +1074,33 @@ const SettingsPage: React.FC = () => {
                     <Box>
                       <Text fontSize="xs" color="gray.600">Total Revenue</Text>
                       <Text fontSize="lg" fontWeight="bold" color="green.600">
-                        Rp {fiscalClosingPreview.total_revenue.toLocaleString('id-ID')}
+                        Rp {periodClosingPreview.total_revenue.toLocaleString('id-ID')}
                       </Text>
                     </Box>
                     <Box>
                       <Text fontSize="xs" color="gray.600">Total Expense</Text>
                       <Text fontSize="lg" fontWeight="bold" color="red.600">
-                        Rp {fiscalClosingPreview.total_expense.toLocaleString('id-ID')}
+                        Rp {periodClosingPreview.total_expense.toLocaleString('id-ID')}
                       </Text>
                     </Box>
                     <Box>
                       <Text fontSize="xs" color="gray.600">Net Income</Text>
                       <Text fontSize="lg" fontWeight="bold" color="blue.600">
-                        Rp {fiscalClosingPreview.net_income.toLocaleString('id-ID')}
+                        Rp {periodClosingPreview.net_income.toLocaleString('id-ID')}
                       </Text>
                     </Box>
                   </SimpleGrid>
                 </Box>
                 
                 {/* Validation Messages */}
-                {fiscalClosingPreview.validation_messages.length > 0 && (
-                  <Alert status={fiscalClosingPreview.can_close ? 'warning' : 'error'} borderRadius="md">
+                {periodClosingPreview.validation_messages && periodClosingPreview.validation_messages.length > 0 && (
+                  <Alert status={periodClosingPreview.can_close ? 'info' : 'error'} borderRadius="md">
                     <AlertIcon />
                     <Box>
-                      <AlertTitle fontSize="sm">Validation Issues</AlertTitle>
+                      <AlertTitle fontSize="sm">{periodClosingPreview.can_close ? 'Validation' : 'Validation Issues'}</AlertTitle>
                       <AlertDescription fontSize="xs">
-                        {fiscalClosingPreview.validation_messages.map((msg, i) => (
-                          <Text key={i}>• {msg}</Text>
+                        {periodClosingPreview.validation_messages.map((msg: string, i: number) => (
+                          <Text key={i}>{msg}</Text>
                         ))}
                       </AlertDescription>
                     </Box>
@@ -1413,17 +1108,17 @@ const SettingsPage: React.FC = () => {
                 )}
                 
                 {/* What Will Happen */}
-                {fiscalClosingPreview.can_close && (
-                  <Alert status="info" borderRadius="md">
+                {periodClosingPreview.can_close && (
+                  <Alert status="warning" borderRadius="md">
                     <AlertIcon />
                     <Box>
-                      <AlertTitle fontSize="sm">What will happen:</AlertTitle>
+                      <AlertTitle fontSize="sm">⚠️ What will happen:</AlertTitle>
                       <AlertDescription fontSize="xs">
-                        • {fiscalClosingPreview.revenue_accounts.length} Revenue accounts → Reset to 0
+                        • {periodClosingPreview.revenue_accounts?.length || 0} Revenue accounts → Reset to 0
                         <br />
-                        • {fiscalClosingPreview.expense_accounts.length} Expense accounts → Reset to 0
+                        • {periodClosingPreview.expense_accounts?.length || 0} Expense accounts → Reset to 0
                         <br />
-                        • Retained Earnings → Increased by Rp {fiscalClosingPreview.net_income.toLocaleString('id-ID')}
+                        • Retained Earnings → Increased by Rp {periodClosingPreview.net_income.toLocaleString('id-ID')}
                         <br />
                         • Automated journal entry created
                         <br />
@@ -1434,13 +1129,13 @@ const SettingsPage: React.FC = () => {
                 )}
                 
                 {/* Closing Entries Preview */}
-                {fiscalClosingPreview.closing_entries && fiscalClosingPreview.closing_entries.length > 0 && (
+                {periodClosingPreview.closing_entries && periodClosingPreview.closing_entries.length > 0 && (
                   <Box width="full">
                     <Text fontSize="sm" fontWeight="bold" mb={2}>
                       Closing Journal Entries:
                     </Text>
                     <VStack spacing={2} width="full" alignItems="start">
-                      {fiscalClosingPreview.closing_entries.map((entry, i) => (
+                      {periodClosingPreview.closing_entries.map((entry: any, i: number) => (
                         <Box
                           key={i}
                           width="full"
@@ -1473,19 +1168,19 @@ const SettingsPage: React.FC = () => {
             <Button
               variant="ghost"
               mr={3}
-              onClick={() => setShowFiscalClosingModal(false)}
-              isDisabled={executingFiscalClosing}
+              onClick={() => setShowPeriodClosingModal(false)}
+              isDisabled={executingPeriodClosing}
             >
               Cancel
             </Button>
             <Button
               colorScheme="red"
-              onClick={handleExecuteFiscalClosing}
-              isLoading={executingFiscalClosing}
+              onClick={handleExecutePeriodClosing}
+              isLoading={executingPeriodClosing}
               loadingText="Closing..."
-              isDisabled={!fiscalClosingPreview?.can_close || executingFiscalClosing}
+              isDisabled={!periodClosingPreview?.can_close || executingPeriodClosing}
             >
-              Execute Year-End Closing
+              Execute Period Closing
             </Button>
           </ModalFooter>
         </ModalContent>

@@ -392,31 +392,53 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
   const watchedAutoAllocate = useWatch({ control, name: 'auto_allocate' });
   const watchedCashBankId = useWatch({ control, name: 'cash_bank_id' });
 
-  // Load initial data
+  // Load initial data and force refresh on modal open
   useEffect(() => {
     if (isOpen) {
+      console.log('AdvancedPaymentForm - Modal opened');
       loadContacts();
       loadCashBankAccounts();
       
+      // Clear previous data first
+      setOutstandingItems([]);
+      setAllocations([]);
+      
       if (preSelectedContact) {
+        console.log('AdvancedPaymentForm - Setting preselected contact:', preSelectedContact.id, preSelectedContact.name);
         setValue('contact_id', preSelectedContact.id);
+        // Force refresh outstanding items immediately with preselected contact
+        // Use setTimeout to ensure setValue has completed
+        setTimeout(() => {
+          console.log('AdvancedPaymentForm - Loading outstanding items for preselected contact:', preSelectedContact.id);
+          loadOutstandingItems(preSelectedContact.id);
+        }, 0);
       }
+    } else {
+      // Reset state when modal closes
+      console.log('AdvancedPaymentForm - Modal closed, clearing state');
+      setOutstandingItems([]);
+      setAllocations([]);
+      reset(); // Reset form values
     }
-  }, [isOpen, preSelectedContact, setValue]);
+  }, [isOpen, preSelectedContact?.id, setValue, reset]);
 
-  // Load outstanding items when contact changes
+  // Load outstanding items when contact changes (user selection)
   useEffect(() => {
-    if (watchedContactId && watchedContactId > 0) {
+    if (watchedContactId && watchedContactId > 0 && isOpen) {
+      console.log('AdvancedPaymentForm - Contact changed, loading outstanding items:', watchedContactId);
       loadOutstandingItems(watchedContactId);
     }
-  }, [watchedContactId]);
+  }, [watchedContactId, isOpen]);
 
-  // Auto allocate when amount or auto_allocate changes
+  // Auto allocate when amount changes (always enabled)
   useEffect(() => {
-    if (watchedAutoAllocate && watchedAmount > 0 && outstandingItems.length > 0) {
+    if (watchedAmount > 0 && outstandingItems.length > 0) {
       autoAllocatePayment();
+    } else if (!watchedAmount || watchedAmount === 0) {
+      // Clear allocations when amount is 0
+      setAllocations([]);
     }
-  }, [watchedAmount, watchedAutoAllocate, outstandingItems]);
+  }, [watchedAmount, outstandingItems]);
 
   const loadContacts = async () => {
     try {
@@ -439,18 +461,29 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
   };
 
   const loadOutstandingItems = async (contactId: number) => {
+    console.log(`AdvancedPaymentForm - loadOutstandingItems called for contactId: ${contactId}, type: ${type}`);
     try {
       setLoadingItems(true);
       
+      let items: any[] = [];
       if (type === 'receivable') {
-        const invoices = await paymentService.getUnpaidInvoices(contactId);
-        setOutstandingItems(invoices);
+        console.log('AdvancedPaymentForm - Fetching unpaid invoices...');
+        items = await paymentService.getUnpaidInvoices(contactId);
+        console.log('AdvancedPaymentForm - Received invoices:', items.length, items);
+        setOutstandingItems(items);
       } else {
-        const bills = await paymentService.getUnpaidBills(contactId);
-        setOutstandingItems(bills);
+        console.log('AdvancedPaymentForm - Fetching unpaid bills...');
+        items = await paymentService.getUnpaidBills(contactId);
+        console.log('AdvancedPaymentForm - Received bills:', items.length, items);
+        setOutstandingItems(items);
       }
+      
+      // Log the outstanding amounts
+      items.forEach((item: any) => {
+        console.log(`  - ${item.code}: Outstanding = ${item.outstanding_amount}`);
+      });
     } catch (error) {
-      console.error('Error loading outstanding items:', error);
+      console.error('AdvancedPaymentForm - Error loading outstanding items:', error);
       toast({
         title: 'Error',
         description: 'Failed to load outstanding items',

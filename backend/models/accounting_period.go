@@ -1,157 +1,98 @@
 package models
 
 import (
-	"fmt"
 	"time"
 	"gorm.io/gorm"
 )
 
-// AccountingPeriod represents accounting period management
+// AccountingPeriod represents a closed accounting period
 type AccountingPeriod struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	Year        int            `json:"year" gorm:"not null;index"`
-	Month       int            `json:"month" gorm:"not null;index"`
-	PeriodName  string         `json:"period_name" gorm:"size:20"` // e.g., "2024-01"
-	StartDate   time.Time      `json:"start_date"`
-	EndDate     time.Time      `json:"end_date"`
+	StartDate   time.Time      `json:"start_date" gorm:"not null;index"`
+	EndDate     time.Time      `json:"end_date" gorm:"not null;index"`
+	Description string         `json:"description" gorm:"type:text"`
 	IsClosed    bool           `json:"is_closed" gorm:"default:false"`
-	IsLocked    bool           `json:"is_locked" gorm:"default:false"`
+	IsLocked    bool           `json:"is_locked" gorm:"default:false"` // Hard lock - cannot be reopened easily
 	ClosedBy    *uint          `json:"closed_by" gorm:"index"`
 	ClosedAt    *time.Time     `json:"closed_at"`
-	LockedBy    *uint          `json:"locked_by" gorm:"index"`
-	LockedAt    *time.Time     `json:"locked_at"`
-	Notes       string         `json:"notes" gorm:"type:text"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `json:"-" gorm:"index"`
-
+	
+	// Closing summary
+	TotalRevenue      float64 `json:"total_revenue" gorm:"type:decimal(20,2);default:0"`
+	TotalExpense      float64 `json:"total_expense" gorm:"type:decimal(20,2);default:0"`
+	NetIncome         float64 `json:"net_income" gorm:"type:decimal(20,2);default:0"`
+	ClosingJournalID  *uint   `json:"closing_journal_id" gorm:"index"` // Reference to closing journal entry
+	
+	Notes     string         `json:"notes" gorm:"type:text"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
+	
 	// Relations
-	ClosedByUser *User `json:"closed_by_user,omitempty" gorm:"foreignKey:ClosedBy"`
-	LockedByUser *User `json:"locked_by_user,omitempty" gorm:"foreignKey:LockedBy"`
+	ClosedByUser    *User         `json:"closed_by_user,omitempty" gorm:"foreignKey:ClosedBy"`
+	ClosingJournal  *JournalEntry `json:"closing_journal,omitempty" gorm:"foreignKey:ClosingJournalID"`
 }
 
-// AccountingPeriodStatus constants
-const (
-	PeriodStatusOpen   = "OPEN"
-	PeriodStatusClosed = "CLOSED"
-	PeriodStatusLocked = "LOCKED"
-)
-
-// BeforeCreate hook to set period name
-func (ap *AccountingPeriod) BeforeCreate(tx *gorm.DB) error {
-	if ap.PeriodName == "" {
-		ap.PeriodName = fmt.Sprintf("%04d-%02d", ap.Year, ap.Month)
-	}
-	
-	// Set start and end dates if not provided
-	if ap.StartDate.IsZero() {
-		ap.StartDate = time.Date(ap.Year, time.Month(ap.Month), 1, 0, 0, 0, 0, time.UTC)
-	}
-	
-	if ap.EndDate.IsZero() {
-		// Last day of the month
-		nextMonth := ap.StartDate.AddDate(0, 1, 0)
-		ap.EndDate = nextMonth.Add(-time.Second)
-	}
-	
-	return nil
+// TableName specifies the table name for AccountingPeriod
+func (AccountingPeriod) TableName() string {
+	return "accounting_periods"
 }
 
-// GetStatus returns the current status of the period
-func (ap *AccountingPeriod) GetStatus() string {
-	if ap.IsLocked {
-		return PeriodStatusLocked
-	}
-	if ap.IsClosed {
-		return PeriodStatusClosed
-	}
-	return PeriodStatusOpen
+// PeriodClosingPreview contains preview data for period closing
+type PeriodClosingPreview struct {
+	StartDate          time.Time                `json:"start_date"`
+	EndDate            time.Time                `json:"end_date"`
+	TotalRevenue       float64                  `json:"total_revenue"`
+	TotalExpense       float64                  `json:"total_expense"`
+	NetIncome          float64                  `json:"net_income"`
+	RetainedEarningsID uint                     `json:"retained_earnings_id"`
+	RevenueAccounts    []PeriodAccountBalance   `json:"revenue_accounts"`
+	ExpenseAccounts    []PeriodAccountBalance   `json:"expense_accounts"`
+	ClosingEntries     []ClosingEntryPreview    `json:"closing_entries"`
+	CanClose           bool                     `json:"can_close"`
+	ValidationMessages []string                 `json:"validation_messages"`
+	
+	// Additional info
+	TransactionCount   int64     `json:"transaction_count"`
+	LastClosingDate    *time.Time `json:"last_closing_date,omitempty"`
+	PeriodDays         int        `json:"period_days"`
 }
 
-// CanPost checks if journal entries can be posted to this period
-func (ap *AccountingPeriod) CanPost() bool {
-	return !ap.IsClosed && !ap.IsLocked
+// PeriodAccountBalance represents account balance for period closing
+type PeriodAccountBalance struct {
+	ID      uint    `json:"id"`
+	Code    string  `json:"code"`
+	Name    string  `json:"name"`
+	Balance float64 `json:"balance"`
+	Type    string  `json:"type"`
 }
 
-// Close closes the accounting period
-func (ap *AccountingPeriod) Close(userID uint) error {
-	if ap.IsClosed {
-		return fmt.Errorf("period %s is already closed", ap.PeriodName)
-	}
-	
-	if ap.IsLocked {
-		return fmt.Errorf("period %s is locked and cannot be closed", ap.PeriodName)
-	}
-	
-	now := time.Now()
-	ap.IsClosed = true
-	ap.ClosedBy = &userID
-	ap.ClosedAt = &now
-	
-	return nil
+// ClosingEntryPreview represents a preview of closing journal entry
+type ClosingEntryPreview struct {
+	Description   string  `json:"description"`
+	DebitAccount  string  `json:"debit_account"`
+	CreditAccount string  `json:"credit_account"`
+	Amount        float64 `json:"amount"`
 }
 
-// Lock locks the accounting period (prevents any modifications)
-func (ap *AccountingPeriod) Lock(userID uint) error {
-	if !ap.IsClosed {
-		return fmt.Errorf("period %s must be closed before it can be locked", ap.PeriodName)
-	}
-	
-	if ap.IsLocked {
-		return fmt.Errorf("period %s is already locked", ap.PeriodName)
-	}
-	
-	now := time.Now()
-	ap.IsLocked = true
-	ap.LockedBy = &userID
-	ap.LockedAt = &now
-	
-	return nil
+// PeriodClosingRequest represents the request to close a period
+type PeriodClosingRequest struct {
+	StartDate   string `json:"start_date" binding:"required"` // YYYY-MM-DD
+	EndDate     string `json:"end_date" binding:"required"`   // YYYY-MM-DD
+	Description string `json:"description"`
+	Notes       string `json:"notes"`
 }
 
-// Reopen reopens a closed period (only if not locked)
-func (ap *AccountingPeriod) Reopen() error {
-	if ap.IsLocked {
-		return fmt.Errorf("period %s is locked and cannot be reopened", ap.PeriodName)
-	}
-	
-	if !ap.IsClosed {
-		return fmt.Errorf("period %s is already open", ap.PeriodName)
-	}
-	
-	ap.IsClosed = false
-	ap.ClosedBy = nil
-	ap.ClosedAt = nil
-	
-	return nil
+// LastClosingInfo contains info about the last closed period
+type LastClosingInfo struct {
+	HasPreviousClosing bool       `json:"has_previous_closing"`
+	LastClosingDate    *time.Time `json:"last_closing_date"`
+	NextStartDate      *time.Time `json:"next_start_date"`
+	PeriodStartDate    *time.Time `json:"period_start_date"` // Earliest transaction date if no previous closing
 }
 
-// Request DTOs
-type AccountingPeriodRequest struct {
-	Year  int    `json:"year" binding:"required,min=2020,max=2030"`
-	Month int    `json:"month" binding:"required,min=1,max=12"`
-	Notes string `json:"notes"`
-}
-
-type AccountingPeriodCloseRequest struct {
-	Notes string `json:"notes"`
-}
-
-type AccountingPeriodFilter struct {
-	Year     *int   `json:"year"`
-	Month    *int   `json:"month"`
-	Status   string `json:"status"` // OPEN, CLOSED, LOCKED
-	IsClosed *bool  `json:"is_closed"`
-	IsLocked *bool  `json:"is_locked"`
-	Page     int    `json:"page"`
-	Limit    int    `json:"limit"`
-}
-
-// Response DTOs
-type AccountingPeriodSummary struct {
-	TotalPeriods   int64 `json:"total_periods"`
-	OpenPeriods    int64 `json:"open_periods"`
-	ClosedPeriods  int64 `json:"closed_periods"`
-	LockedPeriods  int64 `json:"locked_periods"`
-	CurrentPeriod  *AccountingPeriod `json:"current_period"`
+// PeriodReopenRequest represents the request to reopen a closed period
+type PeriodReopenRequest struct {
+	StartDate string `json:"start_date" binding:"required"` // YYYY-MM-DD
+	EndDate   string `json:"end_date" binding:"required"`   // YYYY-MM-DD
+	Reason    string `json:"reason" binding:"required"`     // Reason for reopening
 }

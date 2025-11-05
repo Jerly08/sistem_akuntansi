@@ -135,20 +135,25 @@ BEGIN
     END IF;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_reconciliations_cash_bank ON bank_reconciliations(cash_bank_id);
-
--- Create index on period only if column exists
+-- Create indexes after table is fully created
 DO $$
 BEGIN
+    -- Create all indexes only if reconciliation_number column exists
     IF EXISTS (SELECT 1 FROM information_schema.columns 
-               WHERE table_name = 'bank_reconciliations' AND column_name = 'period') THEN
-        CREATE INDEX IF NOT EXISTS idx_reconciliations_period ON bank_reconciliations(period);
+               WHERE table_name = 'bank_reconciliations' AND column_name = 'reconciliation_number') THEN
+        CREATE INDEX IF NOT EXISTS idx_reconciliations_cash_bank ON bank_reconciliations(cash_bank_id);
+        CREATE INDEX IF NOT EXISTS idx_reconciliations_status ON bank_reconciliations(status);
+        CREATE INDEX IF NOT EXISTS idx_reconciliations_number ON bank_reconciliations(reconciliation_number);
+        CREATE INDEX IF NOT EXISTS idx_reconciliations_date ON bank_reconciliations(reconciliation_date);
+        CREATE INDEX IF NOT EXISTS idx_reconciliations_deleted ON bank_reconciliations(deleted_at);
+        
+        -- Create index on period only if column exists
+        IF EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'bank_reconciliations' AND column_name = 'period') THEN
+            CREATE INDEX IF NOT EXISTS idx_reconciliations_period ON bank_reconciliations(period);
+        END IF;
     END IF;
 END $$;
-CREATE INDEX IF NOT EXISTS idx_reconciliations_status ON bank_reconciliations(status);
-CREATE INDEX IF NOT EXISTS idx_reconciliations_number ON bank_reconciliations(reconciliation_number);
-CREATE INDEX IF NOT EXISTS idx_reconciliations_date ON bank_reconciliations(reconciliation_date);
-CREATE INDEX IF NOT EXISTS idx_reconciliations_deleted ON bank_reconciliations(deleted_at);
 
 COMMENT ON TABLE bank_reconciliations IS 'Records of bank reconciliation processes comparing snapshots';
 
