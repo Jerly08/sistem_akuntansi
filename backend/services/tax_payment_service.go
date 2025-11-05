@@ -191,29 +191,36 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 	log.Printf("📋 Journal Entry breakdown: PPN Keluaran Debit=%.2f, PPN Masukan Credit=%.2f, Cash Credit=%.2f",
 		ppnKeluaranDebit, kompensasiAmount, paymentAmount)
 	
-	journalLines := []JournalLineRequest{
-		// Debit PPN Keluaran (liability berkurang)
-		{
+	// Build journal lines (only include non-zero amounts)
+	journalLines := []JournalLineRequest{}
+	
+	// Debit PPN Keluaran (liability berkurang) - always include if > 0
+	if ppnKeluaranDebit > 0 {
+		journalLines = append(journalLines, JournalLineRequest{
 			AccountID:    uint64(settings.SalesOutputVATAccountID),
 			Description:  fmt.Sprintf("Setor PPN - %s", payment.Code),
 			DebitAmount:  decimal.NewFromFloat(ppnKeluaranDebit),
 			CreditAmount: decimal.Zero,
-		},
-		// Credit PPN Masukan (asset berkurang - kompensasi)
-		{
+		})
+	}
+	
+	// Credit PPN Masukan (asset berkurang - kompensasi) - only if > 0
+	if kompensasiAmount > 0 {
+		journalLines = append(journalLines, JournalLineRequest{
 			AccountID:    uint64(settings.PurchaseInputVATAccountID),
 			Description:  fmt.Sprintf("Setor PPN - Kompensasi - %s", payment.Code),
 			DebitAmount:  decimal.Zero,
 			CreditAmount: decimal.NewFromFloat(kompensasiAmount),
-		},
-		// Credit Cash/Bank (pembayaran neto)
-		{
-			AccountID:    uint64(cashBank.AccountID),
-			Description:  fmt.Sprintf("Setor PPN - Pembayaran Neto - %s", payment.Code),
-			DebitAmount:  decimal.Zero,
-			CreditAmount: decimal.NewFromFloat(paymentAmount),
-		},
+		})
 	}
+	
+	// Credit Cash/Bank (pembayaran neto) - always include
+	journalLines = append(journalLines, JournalLineRequest{
+		AccountID:    uint64(cashBank.AccountID),
+		Description:  fmt.Sprintf("Setor PPN - Pembayaran Neto - %s", payment.Code),
+		DebitAmount:  decimal.Zero,
+		CreditAmount: decimal.NewFromFloat(paymentAmount),
+	})
 
 	// Create SSOT journal entry
 	journalRequest := &JournalEntryRequest{
