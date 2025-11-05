@@ -190,13 +190,13 @@ func (s *SSOTPurchaseReportService) getPurchaseSummary(ctx context.Context, star
 		SELECT 
 			COUNT(DISTINCT p.id) as total_count,
 			COUNT(DISTINCT CASE WHEN ujl.status = 'POSTED' OR p.status = 'COMPLETED' THEN p.id END) as completed_count,
-			COALESCE(SUM(p.total), 0) as total_amount,
+			COALESCE(SUM(p.total_amount), 0) as total_amount,
 			-- Calculate total_paid from actual payments or cash transactions
 			COALESCE(SUM(CASE 
 				WHEN p.payment_method = 'CASH' OR p.payment_method = 'BANK_TRANSFER'
-				THEN p.total  -- Cash/Bank: fully paid immediately
+				THEN p.total_amount  -- Cash/Bank: fully paid immediately
 				WHEN ujl.description ILIKE '%cash%' OR ujl.description ILIKE '%kas%'
-				THEN COALESCE(ujl.total_debit, p.total)  -- From journal if exists
+				THEN COALESCE(ujl.total_debit, p.total_amount)  -- From journal if exists
 				ELSE 0  -- Credit: not paid yet
 			END), 0) as total_paid
 		FROM purchases p
@@ -223,13 +223,13 @@ func (s *SSOTPurchaseReportService) getPurchasesByVendor(ctx context.Context, st
 			p.vendor_id as vendor_id,
 			COALESCE(c.name, 'Unknown Vendor') as vendor_name,
 			COUNT(DISTINCT p.id) as total_purchases,
-			COALESCE(SUM(p.total), 0) as total_amount,
+			COALESCE(SUM(p.total_amount), 0) as total_amount,
 			-- Calculate total_paid from payment method or actual payments
 			COALESCE(SUM(CASE 
 				WHEN p.payment_method IN ('CASH', 'BANK_TRANSFER')
-				THEN p.total  -- Cash/Bank = fully paid
+				THEN p.total_amount  -- Cash/Bank = fully paid
 				WHEN ujl.description ILIKE '%cash%' OR ujl.description ILIKE '%kas%'
-				THEN COALESCE(ujl.total_debit, p.total)
+				THEN COALESCE(ujl.total_debit, p.total_amount)
 				ELSE 0  -- Credit = check actual payments
 			END), 0) as total_paid,
 			MAX(p.date) as last_purchase_date,
@@ -369,10 +369,10 @@ func (s *SSOTPurchaseReportService) getPurchasesByMonth(ctx context.Context, sta
 			EXTRACT(YEAR FROM p.date) as year,
 			EXTRACT(MONTH FROM p.date) as month,
 			COUNT(DISTINCT p.id) as total_purchases,
-			COALESCE(SUM(p.total), 0) as total_amount,
+			COALESCE(SUM(p.total_amount), 0) as total_amount,
 			COALESCE(SUM(CASE 
 				WHEN p.payment_method IN ('CASH', 'BANK_TRANSFER')
-				THEN p.total
+				THEN p.total_amount
 				ELSE 0 
 			END), 0) as total_paid
 		FROM purchases p
@@ -441,7 +441,7 @@ func (s *SSOTPurchaseReportService) getPurchasesByCategory(ctx context.Context, 
 			COUNT(DISTINCT p.id) as total_purchases,
 			COALESCE(SUM(CASE 
 				WHEN sjl.debit_amount > 0 THEN sjl.debit_amount
-				ELSE p.subtotal  -- Fallback to purchase subtotal if no journal
+				ELSE p.net_before_tax  -- Fallback to purchase net_before_tax if no journal
 			END), 0) as total_amount
 		FROM purchases p
 		LEFT JOIN unified_journal_ledger sje ON sje.source_id = p.id AND sje.source_type = 'PURCHASE' AND sje.deleted_at IS NULL
@@ -509,15 +509,15 @@ func (s *SSOTPurchaseReportService) getPaymentAnalysis(ctx context.Context, star
 				THEN 1 END) as credit_purchases,
 			COALESCE(SUM(CASE 
 				WHEN p.payment_method IN ('CASH', 'BANK_TRANSFER')
-				THEN p.total
+				THEN p.total_amount
 				ELSE 0 
 			END), 0) as cash_amount,
 			COALESCE(SUM(CASE 
 				WHEN p.payment_method NOT IN ('CASH', 'BANK_TRANSFER') OR p.payment_method IS NULL
-				THEN p.total
+				THEN p.total_amount
 				ELSE 0 
 			END), 0) as credit_amount,
-			COALESCE(AVG(p.total), 0) as average_order_value
+			COALESCE(AVG(p.total_amount), 0) as average_order_value
 		FROM purchases p
 		WHERE p.date BETWEEN ? AND ?
 		  AND p.deleted_at IS NULL
@@ -562,8 +562,8 @@ func (s *SSOTPurchaseReportService) getTaxAnalysis(ctx context.Context, startDat
 	// FIX: Get tax from purchases table tax field, fallback to journal if needed
 	taxQuery := `
 		SELECT 
-			COALESCE(SUM(p.subtotal), 0) as total_taxable_amount,
-			COALESCE(SUM(p.tax), 0) as total_tax_amount
+			COALESCE(SUM(p.net_before_tax), 0) as total_taxable_amount,
+			COALESCE(SUM(p.tax_amount), 0) as total_tax_amount
 		FROM purchases p
 		WHERE p.date BETWEEN ? AND ?
 		  AND p.deleted_at IS NULL
@@ -590,7 +590,7 @@ func (s *SSOTPurchaseReportService) getTaxAnalysis(ctx context.Context, startDat
 		SELECT 
 			EXTRACT(YEAR FROM p.date) as year,
 			EXTRACT(MONTH FROM p.date) as month,
-			COALESCE(SUM(p.tax), 0) as tax_amount
+			COALESCE(SUM(p.tax_amount), 0) as tax_amount
 		FROM purchases p
 		WHERE p.date BETWEEN ? AND ?
 		  AND p.deleted_at IS NULL
