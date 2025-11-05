@@ -7,7 +7,7 @@ import (
 
 type Payment struct {
     ID              uint           `json:"id" gorm:"primaryKey"`
-    Code            string         `json:"code" gorm:"unique;not null;size:20"`
+    Code            string         `json:"code" gorm:"unique;not null;size:30"`
     ContactID       uint           `json:"contact_id" gorm:"not null;index"`
     UserID          uint           `json:"user_id" gorm:"not null;index"`
     Date            time.Time      `json:"date"`
