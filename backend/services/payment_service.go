@@ -280,9 +280,12 @@ func (s *PaymentService) CreateReceivablePaymentFixed(request PaymentCreateReque
 	log.Printf("✅ All allocations processed. Total allocated: %.2f (%.2fms)", totalAllocatedAmount, float64(time.Since(stepStart).Nanoseconds())/1000000)
 	
 	// Step 5: Update Cash/Bank balance and record transaction (IN flow)
-	if request.CashBankID > 0 && totalAllocatedAmount > 0 {
-		log.Printf("🏦 Updating cash/bank balance for receivable payment: amount=%.2f, cashBankID=%d", totalAllocatedAmount, request.CashBankID)
-		if err := s.updateCashBankBalance(tx, request.CashBankID, totalAllocatedAmount, "IN", payment.ID, userID); err != nil {
+	// 🔥 FIX: Use request.Amount (full payment amount) instead of totalAllocatedAmount
+	// Payment record should always reflect the full amount received from customer
+	// Allocation amount is for invoice tracking only, not for cash/bank balance
+	if request.CashBankID > 0 && request.Amount > 0 {
+		log.Printf("🏦 Updating cash/bank balance for receivable payment: amount=%.2f, cashBankID=%d", request.Amount, request.CashBankID)
+		if err := s.updateCashBankBalance(tx, request.CashBankID, request.Amount, "IN", payment.ID, userID); err != nil {
 			log.Printf("❌ Cash/Bank balance update failed: %v", err)
 			return nil, fmt.Errorf("cash/bank balance update failed: %v", err)
 		}
@@ -291,8 +294,8 @@ func (s *PaymentService) CreateReceivablePaymentFixed(request PaymentCreateReque
 		if request.CashBankID == 0 {
 			log.Printf("⚠️ CashBankID not provided; skipping Cash/Bank balance update")
 		}
-		if totalAllocatedAmount <= 0 {
-			log.Printf("⚠️ No allocated amount to record in Cash/Bank; skipping")
+		if request.Amount <= 0 {
+			log.Printf("⚠️ No payment amount to record in Cash/Bank; skipping")
 		}
 	}
 	
