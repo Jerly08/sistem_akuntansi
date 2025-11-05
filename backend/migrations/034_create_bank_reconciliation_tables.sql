@@ -338,6 +338,7 @@ BEGIN
             LEFT JOIN users ru ON r.reviewed_by = ru.id
             WHERE r.deleted_at IS NULL
         ';
+        EXECUTE 'COMMENT ON VIEW v_reconciliation_summary IS ''Summary of all reconciliations with related information''';
     END IF;
 END $$;
 
@@ -359,7 +360,6 @@ LEFT JOIN users au ON a.approved_by = au.id;
 -- =====================================================
 
 COMMENT ON VIEW v_latest_snapshots IS 'Shows the most recent snapshot for each account-period combination';
-COMMENT ON VIEW v_reconciliation_summary IS 'Summary of all reconciliations with related information';
 COMMENT ON VIEW v_audit_trail_summary IS 'Complete audit trail with user and account details';
 
 -- Grant permissions (adjust as needed)
