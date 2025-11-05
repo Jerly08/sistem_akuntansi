@@ -329,6 +329,11 @@ const loadPayments = async (newFilters?: Partial<PaymentFilters>) => {
       limit: currentFilters.limit
     };
     
+    // Add search filter if provided
+    if (currentFilters.search) {
+      apiFilters.search = currentFilters.search;
+    }
+    
     // Add status filter if selected
     if (statusFilter !== 'ALL') {
       apiFilters.status = statusFilter;
@@ -856,6 +861,15 @@ const resetFilters = () => {
                 bg={inputBg}
                 borderColor={borderColor}
               />
+              
+              <Button
+                leftIcon={<FiFilter />}
+                variant="outline"
+                onClick={resetFilters}
+                colorScheme="gray"
+              >
+                Clear Filters
+              </Button>
             </HStack>
           </CardBody>
         </Card>
