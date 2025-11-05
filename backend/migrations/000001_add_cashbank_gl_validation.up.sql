@@ -9,9 +9,9 @@ BEGIN;
 
 -- Add unique constraint to prevent multiple cash/banks sharing same GL
 -- This enforces 1:1 mapping between cash_banks and GL accounts
-ALTER TABLE cash_banks 
-ADD CONSTRAINT unique_cash_bank_account_id 
-UNIQUE(account_id) 
+-- Note: PostgreSQL doesn't support WHERE in UNIQUE constraint, use partial index instead
+CREATE UNIQUE INDEX IF NOT EXISTS unique_cash_bank_account_id 
+ON cash_banks(account_id) 
 WHERE deleted_at IS NULL;
 
 -- Add index for better performance on account_id lookups
@@ -20,7 +20,7 @@ ON cash_banks(account_id)
 WHERE deleted_at IS NULL AND is_active = true;
 
 -- Add comment for documentation
-COMMENT ON CONSTRAINT unique_cash_bank_account_id ON cash_banks IS 
+COMMENT ON INDEX unique_cash_bank_account_id IS 
 'Ensures each cash/bank account has its own unique GL account for proper balance tracking';
 
 -- Log migration

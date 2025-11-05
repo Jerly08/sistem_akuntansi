@@ -266,6 +266,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_set_reconciliation_number ON bank_reconciliations;
 CREATE TRIGGER trigger_set_reconciliation_number
 BEFORE INSERT ON bank_reconciliations
 FOR EACH ROW
@@ -280,16 +281,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_update_snapshot_timestamp ON bank_reconciliation_snapshots;
 CREATE TRIGGER trigger_update_snapshot_timestamp
 BEFORE UPDATE ON bank_reconciliation_snapshots
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trigger_update_reconciliation_timestamp ON bank_reconciliations;
 CREATE TRIGGER trigger_update_reconciliation_timestamp
 BEFORE UPDATE ON bank_reconciliations
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trigger_update_difference_timestamp ON reconciliation_differences;
 CREATE TRIGGER trigger_update_difference_timestamp
 BEFORE UPDATE ON reconciliation_differences
 FOR EACH ROW
@@ -314,19 +318,28 @@ WHERE s.deleted_at IS NULL
 ORDER BY cash_bank_id, period, snapshot_date DESC;
 
 -- View: Reconciliation summary
-CREATE OR REPLACE VIEW v_reconciliation_summary AS
-SELECT 
-    r.*,
-    cb.name as cash_bank_name,
-    cb.code as cash_bank_code,
-    u.username as reconciliation_by_username,
-    ru.username as reviewed_by_username,
-    (SELECT COUNT(*) FROM reconciliation_differences WHERE reconciliation_id = r.id AND status = 'PENDING') as pending_differences
-FROM bank_reconciliations r
-JOIN cash_banks cb ON r.cash_bank_id = cb.id
-JOIN users u ON r.reconciliation_by = u.id
-LEFT JOIN users ru ON r.reviewed_by = ru.id
-WHERE r.deleted_at IS NULL;
+-- Only create if reconciliation_by column exists
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_name = 'bank_reconciliations' AND column_name = 'reconciliation_by') THEN
+        EXECUTE '
+            CREATE OR REPLACE VIEW v_reconciliation_summary AS
+            SELECT 
+                r.*,
+                cb.name as cash_bank_name,
+                cb.code as cash_bank_code,
+                u.username as reconciliation_by_username,
+                ru.username as reviewed_by_username,
+                (SELECT COUNT(*) FROM reconciliation_differences WHERE reconciliation_id = r.id AND status = ''PENDING'') as pending_differences
+            FROM bank_reconciliations r
+            JOIN cash_banks cb ON r.cash_bank_id = cb.id
+            JOIN users u ON r.reconciliation_by = u.id
+            LEFT JOIN users ru ON r.reviewed_by = ru.id
+            WHERE r.deleted_at IS NULL
+        ';
+    END IF;
+END $$;
 
 -- View: Audit trail summary
 CREATE OR REPLACE VIEW v_audit_trail_summary AS
