@@ -3,6 +3,8 @@ package services
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"app-sistem-akuntansi/models"
@@ -277,13 +279,22 @@ func (s *TaxPaymentService) generatePaymentCode(prefix string, tx *gorm.DB) stri
 	err := tx.Where("code LIKE ?", pattern).Order("code DESC").First(&lastPayment).Error
 	
 	sequence := 1
-	if err == nil {
-		// Extract sequence from last code
-		var lastSeq int
-		fmt.Sscanf(lastPayment.Code, prefix+"-%s-%d", &yearMonth, &lastSeq)
-		sequence = lastSeq + 1
+	if err == nil && lastPayment.Code != "" {
+		// Extract sequence from last code more reliably
+		// Expected format: PREFIX-YYMM-NNNN
+		// Example: SETOR-PPN-2511-0001
+		parts := strings.Split(lastPayment.Code, "-")
+		if len(parts) >= 3 {
+			// Last part should be the sequence number
+			lastPart := parts[len(parts)-1]
+			if lastSeq, err := strconv.Atoi(lastPart); err == nil {
+				sequence = lastSeq + 1
+			}
+		}
 	}
 
+	// Format: PREFIX-YYMM-NNNN (max 30 chars)
+	// Example: SETOR-PPN-2511-0001 (20 chars for SETOR-PPN)
 	return fmt.Sprintf("%s-%s-%04d", prefix, yearMonth, sequence)
 }
 
