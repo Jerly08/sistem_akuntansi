@@ -47,11 +47,11 @@ interface PPNPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
-  ppnType: 'REMIT'; // Changed to REMIT for PPN remittance (Setor PPN)
+  ppnType: 'INPUT' | 'OUTPUT'; // INPUT for PPN Masukan, OUTPUT for PPN Keluaran
 }
 
 interface PPNPaymentFormData {
-  ppn_type: 'REMIT';
+  ppn_type: 'INPUT' | 'OUTPUT';
   amount: number;
   date: string;
   cash_bank_id: number;

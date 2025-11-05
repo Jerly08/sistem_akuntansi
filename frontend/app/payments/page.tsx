@@ -171,7 +171,7 @@ const PaymentsPage: React.FC = () => {
   const [showPaymentDetail, setShowPaymentDetail] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [showPPNPayment, setShowPPNPayment] = useState(false);
-  const [ppnPaymentType, setPPNPaymentType] = useState<'REMIT'>('REMIT');
+  const [ppnPaymentType, setPPNPaymentType] = useState<'INPUT' | 'OUTPUT'>('OUTPUT');
 
   // Permission checks - Normalize role comparison for case-insensitive check
   const userRole = user?.role?.toLowerCase();
@@ -189,7 +189,7 @@ const PaymentsPage: React.FC = () => {
   
   // PPN Payment handler
   const handlePPNPayment = () => {
-    setPPNPaymentType('REMIT');
+    setPPNPaymentType('OUTPUT');
     setShowPPNPayment(true);
   };
   
