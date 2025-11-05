@@ -74,10 +74,7 @@ func SeedAccountsImproved(db *gorm.DB) error {
 			{Code: "4101", Name: strings.ToUpper("PENDAPATAN PENJUALAN"), Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "4102", Name: strings.ToUpper("PENDAPATAN JASA/ONGKIR"), Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 			{Code: "4201", Name: strings.ToUpper("PENDAPATAN LAIN-LAIN"), Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			{Code: "4900", Name: strings.ToUpper("OTHER INCOME"), Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
-			
-			// Specific revenue accounts for sales
-			{Code: "293", Name: strings.ToUpper("PENDAPATAN ONGKIR (SHIPPING)"), Type: models.AccountTypeRevenue, Category: models.CategoryOperatingRevenue, Level: 3, IsHeader: false, IsActive: true, Balance: 0},
+		{Code: "4900", Name: strings.ToUpper("OTHER INCOME"), Type: models.AccountTypeRevenue, Category: models.CategoryOtherIncome, Level: 2, IsHeader: false, IsActive: true, Balance: 0},
 
 			// EXPENSES (5xxx)
 			{Code: "5000", Name: strings.ToUpper("EXPENSES"), Type: models.AccountTypeExpense, Category: models.CategoryOperatingExpense, Level: 1, IsHeader: true, IsActive: true},
@@ -263,7 +260,6 @@ func setParentRelationships(tx *gorm.DB, accountMap map[string]uint) error {
 		"4102": "4000", // Pendapatan Jasa/Ongkir -> REVENUE
 		"4201": "4000", // Pendapatan Lain-lain -> REVENUE
 		"4900": "4000", // Other Income -> REVENUE
-		"293":  "4102", // Pendapatan Ongkir (Shipping) -> Pendapatan Jasa/Ongkir
 		"5101": "5000", // Harga Pokok Penjualan -> EXPENSES
 		"5201": "5000", // Beban Gaji -> EXPENSES
 		"5202": "5000", // Beban Listrik -> EXPENSES
