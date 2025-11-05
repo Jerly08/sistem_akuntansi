@@ -415,12 +415,37 @@ func (s *SSOTCashFlowService) categorizeCashFlowTransaction(cfData *SSOTCashFlow
 		}
 		cfData.OperatingActivities.WorkingCapitalChanges.Items = append(cfData.OperatingActivities.WorkingCapitalChanges.Items, item)
 		
-	case strings.HasPrefix(code, "210"): // Accounts Payable
+	case strings.HasPrefix(code, "124"): // PPN Masukan (Tax Prepaid/Input VAT - 1240)
+		// PPN Masukan adalah asset. Penurunan = kas keluar untuk kompensasi pajak
+		// Diperlakukan seperti prepaid: kenaikan = kas keluar, penurunan = kas masuk
+		cfData.OperatingActivities.WorkingCapitalChanges.OtherWorkingCapitalChange += amount * -1
+		item.Amount = amount * -1
+		item.AccountName = item.AccountName + " (PPN Masukan)"
+		if amount > 0 {
+			item.Type = "decrease" // Asset increase = cash outflow
+		} else {
+			item.Type = "increase" // Asset decrease = cash inflow (kompensasi)
+		}
+		cfData.OperatingActivities.WorkingCapitalChanges.Items = append(cfData.OperatingActivities.WorkingCapitalChanges.Items, item)
+		
+	case strings.HasPrefix(code, "210") && !strings.HasPrefix(code, "2103"): // Accounts Payable (exclude PPN Keluaran)
 		cfData.OperatingActivities.WorkingCapitalChanges.AccountsPayableChange += amount // Increase in A/P is cash inflow
 		if amount > 0 {
 			item.Type = "increase"
 		} else {
 			item.Type = "decrease"
+		}
+		cfData.OperatingActivities.WorkingCapitalChanges.Items = append(cfData.OperatingActivities.WorkingCapitalChanges.Items, item)
+		
+	case strings.HasPrefix(code, "2103"): // PPN Keluaran (Output VAT Payable - 2103)
+		// PPN Keluaran adalah liability. Penurunan = kas keluar (bayar pajak ke negara)
+		// Increase in liability = cash inflow (belum bayar), decrease = cash outflow (sudah bayar)
+		cfData.OperatingActivities.WorkingCapitalChanges.OtherWorkingCapitalChange += amount
+		item.AccountName = item.AccountName + " (PPN Keluaran)"
+		if amount > 0 {
+			item.Type = "increase" // Liability increase = cash inflow (defer payment)
+		} else {
+			item.Type = "decrease" // Liability decrease = cash outflow (paid tax)
 		}
 		cfData.OperatingActivities.WorkingCapitalChanges.Items = append(cfData.OperatingActivities.WorkingCapitalChanges.Items, item)
 		
