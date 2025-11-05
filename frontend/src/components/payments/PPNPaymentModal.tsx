@@ -290,7 +290,39 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Gagal membuat pembayaran PPN');
+        
+        // Check if it's a validation error (PPN already paid, insufficient balance, etc)
+        const errorMsg = errorData.error || 'Gagal membuat pembayaran PPN';
+        const isValidationError = errorData.type === 'validation_error' || 
+                                   response.status === 400;
+        
+        // Special handling for "PPN sudah lunas"
+        if (errorMsg.includes('tidak ada PPN yang harus dibayar') || 
+            errorMsg.includes('PPN Terutang: 0')) {
+          toast({
+            title: '✅ PPN Sudah Lunas',
+            description: 'Tidak ada PPN yang harus dibayar saat ini. Semua kewajiban PPN sudah diselesaikan.',
+            status: 'success',
+            duration: 5000,
+          });
+          reset();
+          onClose();
+          return;
+        }
+        
+        // For other validation errors, show as warning
+        if (isValidationError) {
+          toast({
+            title: 'Validasi Gagal',
+            description: errorMsg,
+            status: 'warning',
+            duration: 5000,
+          });
+          return;
+        }
+        
+        // For server errors, throw
+        throw new Error(errorMsg);
       }
 
       const result = await response.json();
@@ -366,15 +398,14 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                 </Alert>
               )}
               
-              {/* Error Loading Balance - Show Manual Input */}
+              {/* PPN Already Paid / No Outstanding */}
               {!loadingBalance && ppnBalanceInfo !== null && ppnBalanceInfo.ppn_terutang === 0 && (
-                <Alert status="warning" borderRadius="md">
+                <Alert status="success" borderRadius="md">
                   <AlertIcon />
                   <Box fontSize="sm">
-                    <Text fontWeight="bold">Balance PPN Tidak Tersedia</Text>
+                    <Text fontWeight="bold">✅ PPN Sudah Lunas</Text>
                     <Text mt={1}>
-                      Silakan masukkan jumlah pembayaran secara manual di bawah.
-                      Pastikan Tax Settings sudah dikonfigurasi dengan benar.
+                      Tidak ada PPN yang harus dibayar saat ini. Semua kewajiban PPN sudah diselesaikan.
                     </Text>
                   </Box>
                 </Alert>
@@ -665,8 +696,12 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
               type="submit"
               isLoading={loading}
               loadingText="Memproses..."
+              isDisabled={ppnBalanceInfo !== null && ppnBalanceInfo.ppn_terutang === 0}
             >
-              Bayar PPN
+              {ppnBalanceInfo !== null && ppnBalanceInfo.ppn_terutang === 0 
+                ? '✅ Sudah Lunas' 
+                : 'Bayar PPN'
+              }
             </Button>
           </ModalFooter>
         </form>

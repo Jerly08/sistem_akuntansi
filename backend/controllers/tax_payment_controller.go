@@ -3,11 +3,17 @@ package controllers
 import (
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"app-sistem-akuntansi/services"
 	"github.com/gin-gonic/gin"
 )
+
+// Helper function to check if string contains substring (case-insensitive)
+func contains(s, substr string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+}
 
 // TaxPaymentController handles PPN payment operations
 type TaxPaymentController struct {
@@ -60,6 +66,22 @@ func (c *TaxPaymentController) CreatePPNPayment(ctx *gin.Context) {
 	payment, err := c.taxPaymentService.CreatePPNPayment(req, userID.(uint))
 	if err != nil {
 		log.Printf("❌ Failed to create PPN payment: %v", err)
+		
+		// Check if it's a validation error (user-friendly errors)
+		errMsg := err.Error()
+		if contains(errMsg, "tidak ada PPN yang harus dibayar") || 
+		   contains(errMsg, "PPN Terutang: 0") ||
+		   contains(errMsg, "cannot exceed PPN Terutang") ||
+		   contains(errMsg, "insufficient cash/bank balance") {
+			// Return 400 for validation errors (not server errors)
+			ctx.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+				"type": "validation_error",
+			})
+			return
+		}
+		
+		// Return 500 for actual server errors
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
