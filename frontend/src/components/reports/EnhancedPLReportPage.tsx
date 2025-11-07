@@ -665,7 +665,7 @@ const EnhancedPLReportPage: React.FC = () => {
                     </StatNumber>
                     <StatHelpText>
                       <StatArrow type={plData.financialMetrics.grossProfitMargin >= 0 ? 'increase' : 'decrease'} />
-                      {plData.financialMetrics.grossProfitMargin.toFixed(3)}%
+                      {plData.financialMetrics.grossProfitMargin.toFixed(1)}%
                     </StatHelpText>
                   </Stat>
                 </CardBody>
@@ -681,7 +681,7 @@ const EnhancedPLReportPage: React.FC = () => {
                     </StatNumber>
                     <StatHelpText>
                       <StatArrow type={plData.financialMetrics.operatingMargin >= 0 ? 'increase' : 'decrease'} />
-                      {plData.financialMetrics.operatingMargin.toFixed(3)}%
+                      {plData.financialMetrics.operatingMargin.toFixed(1)}%
                     </StatHelpText>
                   </Stat>
                 </CardBody>
@@ -697,7 +697,7 @@ const EnhancedPLReportPage: React.FC = () => {
                     </StatNumber>
                     <StatHelpText>
                       <StatArrow type={plData.financialMetrics.ebitdaMargin >= 0 ? 'increase' : 'decrease'} />
-                      {plData.financialMetrics.ebitdaMargin.toFixed(3)}%
+                      {plData.financialMetrics.ebitdaMargin.toFixed(1)}%
                     </StatHelpText>
                   </Stat>
                 </CardBody>
@@ -713,7 +713,7 @@ const EnhancedPLReportPage: React.FC = () => {
                     </StatNumber>
                     <StatHelpText>
                       <StatArrow type={plData.financialMetrics.netIncomeMargin >= 0 ? 'increase' : 'decrease'} />
-                      {plData.financialMetrics.netIncomeMargin.toFixed(3)}%
+                      {plData.financialMetrics.netIncomeMargin.toFixed(1)}%
                     </StatHelpText>
                   </Stat>
                 </CardBody>
@@ -823,7 +823,7 @@ const EnhancedPLReportPage: React.FC = () => {
                         <HStack justify="space-between">
                           <Text fontSize="sm">Completeness:</Text>
                           <Badge colorScheme={cogsHealth.completeness_percentage >= 95 ? 'green' : 'red'}>
-                            {cogsHealth.completeness_percentage.toFixed(2)}%
+                            {cogsHealth.completeness_percentage.toFixed(1)}%
                           </Badge>
                         </HStack>
                       </VStack>
