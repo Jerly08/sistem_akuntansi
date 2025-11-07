@@ -253,18 +253,24 @@ const SettingsPage: React.FC = () => {
         const info = response.data.data;
         setLastClosingInfo(info);
         
-        // Auto-populate start date only if there's valid data
+        // Auto-populate start date based on last closing
         if (info.has_previous_closing && info.next_start_date) {
-          // Has previous closing - use next start date
-          setPeriodStartDate(info.next_start_date.split('T')[0]);
+          // Has previous closing - MUST use next start date (day after last closing)
+          const nextStart = info.next_start_date.split('T')[0];
+          setPeriodStartDate(nextStart);
+          console.log('✅ Period start date set from last closing:', nextStart);
         } else if (!info.has_previous_closing && info.period_start_date) {
           // First closing - use earliest transaction date
-          setPeriodStartDate(info.period_start_date.split('T')[0]);
+          const firstDate = info.period_start_date.split('T')[0];
+          setPeriodStartDate(firstDate);
+          console.log('✅ Period start date set from earliest transaction:', firstDate);
+        } else {
+          // No data available - let user input manually
+          console.log('⚠️ No closing info available, user must input start date manually');
         }
-        // else: no data available, let user input manually
       }
     } catch (err) {
-      console.error('Failed to fetch last closing info:', err);
+      console.error('❌ Failed to fetch last closing info:', err);
       // On error, just let user input dates manually
     }
   };
@@ -861,21 +867,28 @@ const SettingsPage: React.FC = () => {
                   <FormControl>
                     <FormLabel fontSize="sm" fontWeight="semibold">
                       Dari Tanggal (Start Date)
+                      {lastClosingInfo?.has_previous_closing && (
+                        <Text as="span" fontSize="xs" fontWeight="normal" color="blue.600" ml={2}>
+                          🔒 Locked - Auto-filled
+                        </Text>
+                      )}
                     </FormLabel>
                     <Input
                       type="date"
                       value={periodStartDate}
                       onChange={(e) => setPeriodStartDate(e.target.value)}
                       variant="filled"
-                      _hover={{ bg: 'gray.100' }}
+                      bg={lastClosingInfo?.has_previous_closing ? 'blue.50' : undefined}
+                      _hover={{ bg: lastClosingInfo?.has_previous_closing ? 'blue.50' : 'gray.100' }}
                       _focus={{ bg: 'white', borderColor: 'blue.500' }}
                       isReadOnly={lastClosingInfo?.has_previous_closing === true}
+                      cursor={lastClosingInfo?.has_previous_closing ? 'not-allowed' : 'text'}
                       placeholder="Select start date"
                     />
-                    <FormHelperText fontSize="xs">
+                    <FormHelperText fontSize="xs" color={lastClosingInfo?.has_previous_closing ? 'blue.600' : 'gray.600'}>
                       {lastClosingInfo?.has_previous_closing 
-                        ? '🔒 Auto-filled from last closing date (locked)' 
-                        : '📅 Select the start date of the period to close'}
+                        ? `🔒 Otomatis diisi dari tutup buku terakhir (${lastClosingInfo.last_closing_date ? new Date(lastClosingInfo.last_closing_date).toLocaleDateString('id-ID') : 'N/A'}). Tanggal mulai harus 1 hari setelahnya.` 
+                        : '📅 Pilih tanggal awal periode yang akan ditutup (first closing - gunakan tanggal transaksi pertama)'}
                     </FormHelperText>
                   </FormControl>
                   
