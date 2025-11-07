@@ -428,17 +428,42 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 			return fmt.Errorf("failed to create accounting period record: %v", err)
 		}
 
+		// Auto-update fiscal year start in settings to next period start date
+		// This ensures fiscal year is always synchronized with the active accounting period
+		nextPeriodStart := endDate.AddDate(0, 0, 1)
+		newFiscalYearStart := formatFiscalYearStart(nextPeriodStart)
+		
+		log.Printf("[PERIOD CLOSING] Auto-updating fiscal_year_start to: %s (from %s)", newFiscalYearStart, nextPeriodStart.Format("2006-01-02"))
+		
+		var settings models.Settings
+		if err := tx.First(&settings).Error; err != nil {
+			log.Printf("[PERIOD CLOSING] Warning: failed to get settings for fiscal year update: %v", err)
+			// Don't fail the entire closing if settings update fails
+		} else {
+			oldFiscalYearStart := settings.FiscalYearStart
+			settings.FiscalYearStart = newFiscalYearStart
+			settings.UpdatedBy = userID
+			
+			if err := tx.Save(&settings).Error; err != nil {
+				log.Printf("[PERIOD CLOSING] Warning: failed to update fiscal_year_start: %v", err)
+				// Don't fail the entire closing if settings update fails
+			} else {
+				log.Printf("[PERIOD CLOSING] ✅ Fiscal year start updated: %s → %s", oldFiscalYearStart, newFiscalYearStart)
+			}
+		}
+
 		// Log the closing activity
 		pcs.logger.LogProcessingInfo(ctx, "Period Closing Completed", map[string]interface{}{
-			"start_date":          startDate,
-			"end_date":            endDate,
-			"net_income":          netIncome,
-			"total_revenue":       preview.TotalRevenue,
-			"total_expense":       preview.TotalExpense,
-			"journal_entry_code":  closingJournalCode,
-			"journal_entry_id":    closingJournal.ID,
+			"start_date":           startDate,
+			"end_date":             endDate,
+			"net_income":           netIncome,
+			"total_revenue":        preview.TotalRevenue,
+			"total_expense":        preview.TotalExpense,
+			"journal_entry_code":   closingJournalCode,
+			"journal_entry_id":     closingJournal.ID,
 			"accounting_period_id": accountingPeriod.ID,
-			"user_id":             userID,
+			"user_id":              userID,
+			"new_fiscal_year_start": newFiscalYearStart,
 		})
 
 	return nil
@@ -549,6 +574,17 @@ func (pcs *PeriodClosingService) GetPeriodInfoForDate(ctx context.Context, date 
 		period.EndDate.Format("2006-01-02"))
 }
 
+// formatFiscalYearStart converts a date to fiscal year start format (e.g., "January 1")
+func formatFiscalYearStart(date time.Time) string {
+	months := []string{
+		"January", "February", "March", "April", "May", "June",
+		"July", "August", "September", "October", "November", "December",
+	}
+	month := months[date.Month()-1]
+	day := date.Day()
+	return fmt.Sprintf("%s %d", month, day)
+}
+
 // ReopenPeriod reopens a closed period (if not locked)
 func (pcs *PeriodClosingService) ReopenPeriod(ctx context.Context, startDate, endDate time.Time, reason string) error {
 	// Extract user ID from context
@@ -628,8 +664,25 @@ func (pcs *PeriodClosingService) ReopenPeriod(ctx context.Context, startDate, en
 					}
 					tx.Create(&reversalLine)
 
-					// Update account balance
-					balanceChange := line.CreditAmount - line.DebitAmount
+					// Get account type to determine correct balance calculation
+					var account models.Account
+					if err := tx.Select("id, code, name, type").First(&account, line.AccountID).Error; err != nil {
+						return fmt.Errorf("failed to get account details for reversal: %v", err)
+					}
+					
+					// Calculate balance change for REVERSAL based on account type
+					// Since we're reversing: debit becomes credit, credit becomes debit
+					var balanceChange float64
+					if account.Type == models.AccountTypeAsset || account.Type == models.AccountTypeExpense {
+						// Debit normal accounts: debit increases, credit decreases
+						// For reversal: swap the original amounts
+						balanceChange = line.CreditAmount - line.DebitAmount
+					} else {
+						// Credit normal accounts (LIABILITY, EQUITY, REVENUE): credit increases, debit decreases
+						// For reversal: swap the original amounts
+						balanceChange = line.DebitAmount - line.CreditAmount
+					}
+					
 					tx.Model(&models.Account{}).
 						Where("id = ?", line.AccountID).
 						Update("balance", gorm.Expr("balance + ?", balanceChange))

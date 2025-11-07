@@ -61,7 +61,7 @@ const MONTHS = [
   'January','February','March','April','May','June','July','August','September','October','November','December'
 ];
 
-function monthDayStringToISO(src: string): string {
+function monthDayStringToISO(src: string, useNextYear?: boolean): string {
   if (!src) return '';
   const lower = src.trim().toLowerCase();
   // Month name + day (e.g., "january 1")
@@ -69,7 +69,19 @@ function monthDayStringToISO(src: string): string {
   if (monthIdx >= 0) {
     const dayMatch = lower.match(/(\d{1,2})/);
     const day = Math.min(Math.max(parseInt(dayMatch?.[1] || '1', 10), 1), 31);
-    const year = new Date().getFullYear();
+    
+    // Smart year selection: use next year if specified OR if date is in the past
+    let year = new Date().getFullYear();
+    if (useNextYear) {
+      year += 1;
+    } else {
+      // If the date would be in the past (before today), use next year
+      const testDate = new Date(year, monthIdx, day);
+      if (testDate < new Date()) {
+        year += 1;
+      }
+    }
+    
     const mm = String(monthIdx + 1).padStart(2, '0');
     const dd = String(day).padStart(2, '0');
     return `${year}-${mm}-${dd}`;
@@ -329,8 +341,15 @@ const SettingsPage: React.FC = () => {
         });
         setShowPeriodClosingModal(false);
         setPeriodClosingPreview(null);
+        
+        // Refresh settings to update fiscal year start (auto-updated by backend)
+        console.log('🔄 Refreshing settings to get updated fiscal_year_start...');
+        await fetchSettings();
+        
         // Refresh last closing info
-        fetchLastClosingInfo();
+        await fetchLastClosingInfo();
+        
+        console.log('✅ Settings and closing info refreshed');
       }
     } catch (err: any) {
       toast({
@@ -350,10 +369,17 @@ const SettingsPage: React.FC = () => {
     try {
       const response = await api.get(API_ENDPOINTS.SETTINGS);
       if (response.data.success) {
+        const fiscalYearStart = response.data.data?.fiscal_year_start;
+        const fiscalISO = monthDayStringToISO(fiscalYearStart);
+        
+        console.log('📅 Settings loaded:');
+        console.log('  - fiscal_year_start (DB):', fiscalYearStart);
+        console.log('  - fiscalStartISO (UI):', fiscalISO);
+        
         setSettings(response.data.data);
         setFormData(response.data.data);
         // derive ISO date for UI
-        setFiscalStartISO(monthDayStringToISO(response.data.data?.fiscal_year_start));
+        setFiscalStartISO(fiscalISO);
         setHasChanges(false);
         // Sync language from settings
         if (response.data.data.language && response.data.data.language !== language) {
@@ -727,13 +753,24 @@ const SettingsPage: React.FC = () => {
                         : 'Only day and month are used. The year is determined automatically for the fiscal period.'}
                     </FormHelperText>
                     {(() => {
+                      if (!fiscalStartISO) return null;
+                      
                       const fmt = formData?.date_format || settings?.date_format || 'YYYY-MM-DD';
                       const range = computeFiscalRange(fiscalStartISO);
                       if (!range) return null;
+                      
+                      // Show actual ISO date being used and computed range
                       return (
-                        <Text mt={1} fontSize="xs" color="gray.700">
-                          {language === 'id' ? 'Periode fiskal saat ini:' : 'Current fiscal period:'} {formatDateISO(range.startISO, fmt)} — {formatDateISO(range.endISO, fmt)}
-                        </Text>
+                        <Box mt={1}>
+                          <Text fontSize="xs" color="gray.700">
+                            {language === 'id' ? 'Periode fiskal saat ini:' : 'Current fiscal period:'} {formatDateISO(range.startISO, fmt)} — {formatDateISO(range.endISO, fmt)}
+                          </Text>
+                          {lastClosingInfo?.has_previous_closing && (
+                            <Text fontSize="xs" color="green.600" fontWeight="medium" mt={1}>
+                              ✅ Updated from last closing on {new Date(lastClosingInfo.last_closing_date).toLocaleDateString('id-ID')}
+                            </Text>
+                          )}
+                        </Box>
                       );
                     })()}
                   </FormControl>
@@ -859,6 +896,17 @@ const SettingsPage: React.FC = () => {
                       </Box>
                     </Alert>
                   )}
+                  
+                  <Alert status="success" borderRadius="md" size="sm" variant="left-accent">
+                    <AlertIcon />
+                    <Box>
+                      <AlertTitle fontSize="sm">🔄 Auto-Update Fiscal Year</AlertTitle>
+                      <AlertDescription fontSize="xs">
+                        After closing, <strong>Fiscal Year Start</strong> will be automatically updated to the next period start date. 
+                        This keeps your fiscal period in sync with closed periods.
+                      </AlertDescription>
+                    </Box>
+                  </Alert>
                   
                   <Text fontSize="sm" color="gray.600">
                     Close accounting period and generate automated closing entries.
