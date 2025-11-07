@@ -81,21 +81,57 @@ func (pvm *PeriodValidationMiddleware) ValidateTransactionPeriod() gin.HandlerFu
 			return
 		}
 
-		if isClosed {
-			// Find the period details for better error message
-			periodInfo := pvm.periodService.GetPeriodInfoForDate(c.Request.Context(), *transactionDate)
+	if isClosed {
+		// Find the period details for better error message
+		periodInfo := pvm.periodService.GetPeriodInfoForDate(c.Request.Context(), *transactionDate)
+		
+		// Format date for display
+		transactionDateStr := transactionDate.Format("02 January 2006")
+		
+		// Build user-friendly error message
+		errorTitle := "Periode Akuntansi Sudah Ditutup"
+		errorMessage := "Tidak dapat membuat atau mengubah transaksi pada periode yang sudah ditutup buku."
+		
+		// Build helpful details
+		var periodRange string
+		var actionRequired string
+		
+		if periodInfo != nil {
+			if startDate, ok := periodInfo["start_date"].(time.Time); ok {
+				if endDate, ok := periodInfo["end_date"].(time.Time); ok {
+					periodRange = startDate.Format("02 Jan 2006") + " - " + endDate.Format("02 Jan 2006")
+				}
+			}
 			
-			c.JSON(http.StatusForbidden, gin.H{
-				"success": false,
-				"error":   "Cannot create or modify transaction in closed period",
-				"code":    "PERIOD_CLOSED",
-				"details": "The selected date falls within a closed accounting period",
-				"period":  periodInfo,
-				"date":    transactionDate.Format("2006-01-02"),
-			})
-			c.Abort()
-			return
+			// Check if user has permission to reopen
+			if closedBy, ok := periodInfo["closed_by"].(string); ok && closedBy != "" {
+				actionRequired = "Hubungi administrator atau finance manager untuk membuka kembali periode ini jika diperlukan."
+			} else {
+				actionRequired = "Hubungi administrator untuk membuka kembali periode ini."
+			}
+		} else {
+			actionRequired = "Pilih tanggal transaksi yang berada pada periode yang masih terbuka."
 		}
+		
+		// Return 400 Bad Request (validation error), not 403 Forbidden (authorization error)
+		// This is a business rule validation, not a permission check
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   errorTitle,
+			"message": errorMessage,
+			"code":    "PERIOD_CLOSED",
+			"details": map[string]interface{}{
+				"transaction_date": transactionDateStr,
+				"closed_period":    periodRange,
+				"action_required":  actionRequired,
+				"iso_date":         transactionDate.Format("2006-01-02"),
+			},
+			"period": periodInfo,
+			"help":   "Periode akuntansi yang sudah ditutup tidak dapat dimodifikasi untuk menjaga integritas laporan keuangan. Gunakan fitur 'Buka Kembali Periode' pada menu Period Closing jika perlu melakukan koreksi.",
+		})
+		c.Abort()
+		return
+	}
 
 		c.Next()
 	}
