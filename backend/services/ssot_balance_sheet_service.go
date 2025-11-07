@@ -437,9 +437,34 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 	bsData.Equity.Items = []BSAccountItem{}
 	bsData.AccountDetails = balances
 	
-	// After period closing, Revenue/Expense accounts are already 0 and Net Income is in Retained Earnings
-	// Only calculate Net Income from Revenue/Expense accounts if they still have balances (before closing)
-	netIncome := s.calculateNetIncome(asOf.Format("2006-01-02"))
+	// CRITICAL FIX: Check if period has been closed BEFORE calculating Net Income
+	// After period closing: Revenue/Expense accounts should have balance=0 in accounts table
+	// We should NOT recalculate Net Income from journal lines as it causes double counting
+	
+	// Strategy: Check accounts.balance (not journal lines) to determine if period closed
+	var hasActiveRevenueExpense bool
+	var totalRevenueBalance, totalExpenseBalance float64
+	
+	for _, balance := range balances {
+		accountType := strings.ToUpper(balance.AccountType)
+		if accountType == "REVENUE" && balance.NetBalance != 0 {
+			hasActiveRevenueExpense = true
+			totalRevenueBalance += balance.NetBalance
+		} else if accountType == "EXPENSE" && balance.NetBalance != 0 {
+			hasActiveRevenueExpense = true
+			totalExpenseBalance += balance.NetBalance
+		}
+	}
+	
+	// Calculate Net Income only if period NOT closed (temp accounts still have balances)
+	var netIncome float64
+	if hasActiveRevenueExpense {
+		netIncome = totalRevenueBalance - totalExpenseBalance
+		fmt.Printf("[DEBUG] Period NOT closed - calculating Net Income from account balances: Revenue=%.2f, Expense=%.2f, Net=%.2f\n",
+			totalRevenueBalance, totalExpenseBalance, netIncome)
+	} else {
+		fmt.Printf("[DEBUG] Period CLOSED - Revenue/Expense accounts are zero. Net Income already in Retained Earnings.\n")
+	}
 	
 	// Process each account balance
 	for _, balance := range balances {
@@ -519,25 +544,10 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 	// Remove individual PPN accounts from display to avoid confusion
 	s.removePPNAccountsFromDisplay(bsData)
 	
-	// IMPORTANT: Check if we need to add Net Income separately
-	// After period closing: Revenue/Expense are zeroed via closing journal, and Net Income is transferred to Retained Earnings
-	// We should NOT add netIncome again as it would cause double counting
-	// 
-	// Strategy: Check if there are any active Revenue/Expense accounts with balances
-	// If Revenue/Expense accounts have been zeroed (all balances are 0), period has been closed
-	var hasActiveRevenueExpense bool
-	for _, balance := range balances {
-		accountType := strings.ToUpper(balance.AccountType)
-		if (accountType == "REVENUE" || accountType == "EXPENSE") && balance.NetBalance != 0 {
-			hasActiveRevenueExpense = true
-			break
-		}
-	}
-	
-	// Only add Net Income if period has NOT been closed (Revenue/Expense still have balances)
+	// Add Net Income to Equity ONLY if period has NOT been closed
+	// hasActiveRevenueExpense was already determined earlier in this function
 	if netIncome != 0 && hasActiveRevenueExpense {
-		// Add Net Income to Retained Earnings and show as separate line
-		// This only happens BEFORE period closing
+		// Period NOT closed: Show Net Income as separate line in Equity
 		bsData.Equity.RetainedEarnings += netIncome
 		netIncomeItem := BSAccountItem{
 			AccountCode: "NET_INCOME",
@@ -545,10 +555,9 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 			Amount:      netIncome,
 		}
 		bsData.Equity.Items = append(bsData.Equity.Items, netIncomeItem)
-		fmt.Printf("[DEBUG] Added Net Income to Equity (before period closing): %.2f\n", netIncome)
+		fmt.Printf("[DEBUG] ✅ Added Net Income to Equity (period NOT closed): %.2f\n", netIncome)
 	} else if !hasActiveRevenueExpense {
-		fmt.Printf("[DEBUG] Period has been closed - Revenue/Expense accounts are zeroed. Net Income should already be in Retained Earnings account (3201).\n")
-		fmt.Printf("[DEBUG] If Retained Earnings is 0, check if closing journal properly updated account.balance.\n")
+		fmt.Printf("[DEBUG] ✅ Period CLOSED - Revenue/Expense balances are zero. Net Income already in Retained Earnings (3201).\n")
 	}
 	
 	// Calculate totals and check balance

@@ -560,18 +560,31 @@ func (pcs *PeriodClosingService) IsDateInClosedPeriod(ctx context.Context, date 
 }
 
 // GetPeriodInfoForDate returns period information for a specific date
-func (pcs *PeriodClosingService) GetPeriodInfoForDate(ctx context.Context, date time.Time) string {
+func (pcs *PeriodClosingService) GetPeriodInfoForDate(ctx context.Context, date time.Time) map[string]interface{} {
 	var period models.AccountingPeriod
-	err := pcs.db.Where("? BETWEEN start_date AND end_date AND is_closed = ?", date, true).
+	err := pcs.db.Preload("ClosedByUser").Where("? BETWEEN start_date AND end_date AND is_closed = ?", date, true).
 		First(&period).Error
 	
 	if err != nil {
-		return fmt.Sprintf("%s", date.Format("2006-01"))
+		return nil
 	}
 	
-	return fmt.Sprintf("%s to %s", 
-		period.StartDate.Format("2006-01-02"), 
-		period.EndDate.Format("2006-01-02"))
+	info := map[string]interface{}{
+		"start_date":  period.StartDate,
+		"end_date":    period.EndDate,
+		"description": period.Description,
+		"is_locked":   period.IsLocked,
+	}
+	
+	if period.ClosedBy != nil {
+		info["closed_by"] = *period.ClosedBy
+	}
+	
+	if period.ClosedByUser.ID != 0 {
+		info["closed_by_name"] = period.ClosedByUser.GetDisplayName()
+	}
+	
+	return info
 }
 
 // formatFiscalYearStart converts a date to fiscal year start format (e.g., "January 1")

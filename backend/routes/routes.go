@@ -1124,7 +1124,7 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				
 			}
 			
-			// 🔧 Admin CashBank GL Links routes (admin only)
+	// 🔧 Admin CashBank GL Links routes (admin only)
 			adminRoutes := protected.Group("/admin")
 			adminRoutes.Use(middleware.RoleRequired("admin")) // Only admins can access admin routes
 			adminRoutes.Use(enhancedSecurity.RequestMonitoring()) // Enhanced monitoring for admin routes
@@ -1132,6 +1132,11 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 				// CashBank GL account links management
 				adminRoutes.GET("/check-cashbank-gl-links", fixCashBankController.CheckCashBankGLLinks)
 				adminRoutes.POST("/fix-cashbank-gl-links", fixCashBankController.FixCashBankGLLinks)
+				
+				// 🔧 Database Migration Management (Admin only)
+				adminMigrationController := controllers.NewAdminMigrationController(db)
+				adminRoutes.GET("/migrations/constraint-info", adminMigrationController.GetConstraintInfo)
+				adminRoutes.POST("/migrations/fix-date-constraint", adminMigrationController.ForceRunDateConstraintFix)
 				
 				// 📝 Activity Logs Management (Admin only)
 				adminRoutes.GET("/activity-logs", activityLogController.GetActivityLogs)

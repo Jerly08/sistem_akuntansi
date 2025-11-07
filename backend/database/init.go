@@ -63,6 +63,12 @@ func InitializeDatabase(db *gorm.DB) {
 		log.Printf("⚠️  Accounting period structure fix warning: %v", err)
 	}
 	
+	// Fix journal entry date constraint for period closing
+	FixJournalEntryDateConstraintMigration(db)
+	
+	// UNCOMMENT BELOW IF YOU NEED TO FORCE RE-RUN THE DATE CONSTRAINT FIX
+	ForceRunDateConstraintFix(db)
+	
 	log.Println("Database initialization completed")
 }
 

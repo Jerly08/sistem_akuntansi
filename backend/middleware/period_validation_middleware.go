@@ -103,8 +103,8 @@ func (pvm *PeriodValidationMiddleware) ValidateTransactionPeriod() gin.HandlerFu
 				}
 			}
 			
-			// Check if user has permission to reopen
-			if closedBy, ok := periodInfo["closed_by"].(string); ok && closedBy != "" {
+			// Check if period has closed_by info
+			if _, ok := periodInfo["closed_by"].(uint); ok {
 				actionRequired = "Hubungi administrator atau finance manager untuk membuka kembali periode ini jika diperlukan."
 			} else {
 				actionRequired = "Hubungi administrator untuk membuka kembali periode ini."

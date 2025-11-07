@@ -186,8 +186,9 @@ func (je *JournalEntry) ValidateComplete() error {
 		return fmt.Errorf("journal entry date is required")
 	}
 	
-	// 5. Future date validation (allow max 7 days in future)
-	if je.EntryDate.After(time.Now().AddDate(0, 0, 7)) {
+	// Future date validation (allow max 7 days in future)
+	// Exception: Skip validation for period closing entries which may have future dates
+	if je.ReferenceType != JournalRefClosing && je.EntryDate.After(time.Now().AddDate(0, 0, 7)) {
 		return fmt.Errorf("journal entry date cannot be more than 7 days in the future")
 	}
 	
@@ -216,7 +217,8 @@ func (je *JournalEntry) ValidateBusinessRules(tx *gorm.DB) error {
 	}
 	
 	// Future date validation (allow max 7 days in future)
-	if je.EntryDate.After(time.Now().AddDate(0, 0, 7)) {
+	// Exception: Skip validation for period closing entries which may have future dates
+	if je.ReferenceType != JournalRefClosing && je.EntryDate.After(time.Now().AddDate(0, 0, 7)) {
 		return errors.New("entry date cannot be more than 7 days in the future")
 	}
 	

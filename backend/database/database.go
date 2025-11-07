@@ -2961,12 +2961,12 @@ func createValidationConstraints(db *gorm.DB) {
 		CHECK (debit_amount >= 0 AND credit_amount >= 0 AND (debit_amount > 0 OR credit_amount > 0))
 	`)
 	
-	// Date validation constraints
+	// Date validation constraints - Relaxed to allow future period closing
 	db.Exec(`
 		ALTER TABLE journal_entries
 		DROP CONSTRAINT IF EXISTS chk_journal_entries_date_valid,
 		ADD CONSTRAINT chk_journal_entries_date_valid 
-		CHECK (entry_date >= '2000-01-01' AND entry_date <= CURRENT_DATE + INTERVAL '1 year')
+		CHECK (entry_date >= '2000-01-01' AND entry_date <= '2099-12-31')
 	`)
 	
 	// Status validation constraints

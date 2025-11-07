@@ -65,11 +65,11 @@ DROP CONSTRAINT IF EXISTS chk_journal_lines_amount_positive,
 ADD CONSTRAINT chk_journal_lines_amount_positive 
 CHECK (debit_amount >= 0 AND credit_amount >= 0 AND (debit_amount > 0 OR credit_amount > 0));
 
--- Date validation constraints
+-- Date validation constraints - Relaxed to allow future period closing
 ALTER TABLE journal_entries
 DROP CONSTRAINT IF EXISTS chk_journal_entries_date_valid,
 ADD CONSTRAINT chk_journal_entries_date_valid 
-CHECK (entry_date >= '2000-01-01' AND entry_date <= CURRENT_DATE + INTERVAL '1 year');
+CHECK (entry_date >= '2000-01-01' AND entry_date <= '2099-12-31');
 
 -- Status validation constraints
 ALTER TABLE journal_entries
