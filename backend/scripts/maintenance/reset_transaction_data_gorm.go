@@ -22,6 +22,7 @@ fmt.Println("Pilih mode operasi yang diinginkan:")
 	fmt.Println("  2) Soft Delete SEMUA data — menandai semua record (deleted_at)")
 	fmt.Println("  3) RECOVERY — kembalikan semua soft deleted data")
 fmt.Println("  4) RESET SALDO MASTER — Reset balance COA & Cash Bank (tanpa hapus akun)")
+	fmt.Println("  5) HAPUS PERIODE CLOSING — Hapus semua periode closing yang sudah pernah di-close")
 	fmt.Println("")
 	mode := askResetMode()
 
@@ -49,6 +50,12 @@ if mode == 1 {
 		fmt.Println("   - Menghapus SEMUA transaksi & jurnal (sama seperti Mode 1)")
 		fmt.Println("   - Menetapkan saldo accounts.balance & cash_banks.balance = 0 (TANPA TRUNCATE akun)")
 		fmt.Println("   - Gunakan hanya di DEV/TEST! Pastikan sudah mem-backup bila perlu")
+	} else if mode == 5 {
+		fmt.Println("🗑️  MODE HAPUS PERIODE CLOSING: Hapus semua periode closing yang sudah pernah di-close")
+		fmt.Println("   - Menghapus SEMUA data di tabel accounting_periods (periode closing)")
+		fmt.Println("   - Termasuk periode yang sudah di-close sebelumnya")
+		fmt.Println("   - TIDAK menghapus transaksi atau jurnal, hanya data periode closing saja")
+		fmt.Println("   - Gunakan jika ingin reset fitur period closing dari awal")
 	} else {
 		fmt.Println("🔄 MODE RECOVERY: Akan mengembalikan semua soft deleted data")
 		fmt.Println("   - Set kolom 'deleted_at = NULL' untuk semua record yang soft deleted")
@@ -82,6 +89,8 @@ if mode == 1 {
 	fmt.Println("\n📊 STEP 2: Summary data saat ini...")
 	if mode == 3 {
 		showSoftDeletedDataSummary(db)
+	} else if mode == 5 {
+		showPeriodClosingSummary(db)
 	} else {
 		showCurrentDataSummary(db)
 	}
@@ -117,6 +126,12 @@ if mode == 1 {
 		log.Printf("❌ Gagal reset saldo master: %v", err)
 		return
 	}
+} else if mode == 5 {
+	fmt.Println("\n🗑️  STEP 3: Menghapus semua periode closing...")
+	if err := executeDeletePeriodClosingWithGORM(db); err != nil {
+		log.Printf("❌ Gagal hapus periode closing: %v", err)
+		return
+	}
 } else {
 	fmt.Println("\n🔄 STEP 3: Mengeksekusi RECOVERY soft deleted data...")
 	if err := executeRecoveryAllWithGORM(db); err != nil {
@@ -142,6 +157,11 @@ showPostResetSummary(db)
 		fmt.Println("\n🎉 RESET SALDO MASTER SELESAI!")
 		fmt.Println("Saldo COA & Cash Bank telah direset ke 0 dan semua transaksi/jurnal telah dibersihkan.")
 		fmt.Println("Akun COA & Cash Bank tetap ada (tidak dihapus).")
+	} else if mode == 5 {
+		fmt.Println("\n🎉 HAPUS PERIODE CLOSING SELESAI!")
+		fmt.Println("Semua data periode closing telah dihapus dari tabel accounting_periods.")
+		fmt.Println("Anda dapat memulai period closing dari awal.")
+		fmt.Println("CATATAN: Transaksi dan jurnal TIDAK terpengaruh, hanya data periode closing yang dihapus.")
 	} else {
 		fmt.Println("\n🎉 RECOVERY SELESAI!")
 		fmt.Println("Semua data yang soft deleted telah dipulihkan (deleted_at = NULL).")
@@ -151,7 +171,7 @@ showPostResetSummary(db)
 
 func askResetMode() int {
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Masukkan pilihan [1/2/3/4] (default 1): ")
+	fmt.Print("Masukkan pilihan [1/2/3/4/5] (default 1): ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
 	if input == "2" {
@@ -160,6 +180,8 @@ func askResetMode() int {
 		return 3
 	} else if input == "4" {
 		return 4
+	} else if input == "5" {
+		return 5
 	}
 	return 1
 }
@@ -909,4 +931,97 @@ func showBackupInfo(db *gorm.DB) {
 			fmt.Printf("   - %s: %d records\n", tableName, count)
 		}
 	}
+}
+
+// showPeriodClosingSummary menampilkan summary data periode closing
+func showPeriodClosingSummary(db *gorm.DB) {
+	var totalPeriods int64
+	var closedPeriods int64
+	var lockedPeriods int64
+	
+	db.Model(&models.AccountingPeriod{}).Count(&totalPeriods)
+	db.Model(&models.AccountingPeriod{}).Where("is_closed = ?", true).Count(&closedPeriods)
+	db.Model(&models.AccountingPeriod{}).Where("is_locked = ?", true).Count(&lockedPeriods)
+	
+	fmt.Printf("📊 Data Periode Closing saat ini:\n")
+	fmt.Printf("   Total Periode: %d\n", totalPeriods)
+	fmt.Printf("   Periode yang sudah di-close: %d\n", closedPeriods)
+	fmt.Printf("   Periode yang di-lock: %d\n", lockedPeriods)
+	
+	if totalPeriods > 0 {
+		fmt.Println("\n📋 Detail periode closing:")
+		var periods []models.AccountingPeriod
+		db.Order("start_date DESC").Limit(10).Find(&periods)
+		
+		for _, period := range periods {
+			status := "Open"
+			if period.IsClosed {
+				status = "Closed"
+			}
+			if period.IsLocked {
+				status = "Locked"
+			}
+			fmt.Printf("   - ID %d: %s s/d %s [%s] - %s\n", 
+				period.ID,
+				period.StartDate.Format("2006-01-02"),
+				period.EndDate.Format("2006-01-02"),
+				status,
+				period.Description)
+		}
+		
+		if totalPeriods > 10 {
+			fmt.Printf("   ... dan %d periode lainnya\n", totalPeriods-10)
+		}
+	}
+}
+
+// executeDeletePeriodClosingWithGORM menghapus semua data periode closing
+func executeDeletePeriodClosingWithGORM(db *gorm.DB) error {
+	start := time.Now()
+	fmt.Printf("⏳ Menghapus semua data periode closing... (dimulai: %s)\n", start.Format("15:04:05"))
+	
+	tx := db.Session(&gorm.Session{SkipHooks: true}).Begin()
+	
+	// Count dulu sebelum dihapus
+	var countBefore int64
+	tx.Model(&models.AccountingPeriod{}).Count(&countBefore)
+	fmt.Printf("   📊 Total periode closing yang akan dihapus: %d\n", countBefore)
+	
+	// Hapus dengan Unscoped (hard delete)
+	if err := tx.Unscoped().Where("1 = 1").Delete(&models.AccountingPeriod{}).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal hapus accounting_periods: %v", err)
+	}
+	
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("gagal commit hapus periode closing: %v", err)
+	}
+	
+	// Reset sequence
+	fmt.Println("   🔢 Reset sequence accounting_periods...")
+	var exists bool
+	db.Raw("SELECT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'accounting_periods_id_seq' AND relkind = 'S')").Scan(&exists)
+	
+	if exists {
+		if err := db.Exec("ALTER SEQUENCE accounting_periods_id_seq RESTART WITH 1").Error; err != nil {
+			fmt.Printf("   ⚠️  Warning: Gagal reset sequence accounting_periods_id_seq: %v\n", err)
+		}
+	}
+	
+	duration := time.Since(start)
+	fmt.Printf("✅ Hapus periode closing selesai dalam waktu: %s\n", duration.String())
+	fmt.Printf("   📊 Jumlah periode yang dihapus: %d\n", countBefore)
+	
+	// Verify
+	var countAfter int64
+	db.Model(&models.AccountingPeriod{}).Count(&countAfter)
+	if countAfter == 0 {
+		fmt.Println("   ✅ Verifikasi: Tabel accounting_periods sudah bersih")
+	} else {
+		fmt.Printf("   ⚠️  Warning: Masih ada %d periode tersisa\n", countAfter)
+	}
+	
+	return nil
 }
