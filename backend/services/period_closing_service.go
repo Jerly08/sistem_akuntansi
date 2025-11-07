@@ -337,13 +337,6 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 					LineNumber:   lineNumber,
 				})
 				lineNumber++
-
-				// Reset temporary account balance to zero
-				if err := tx.Model(&models.Account{}).
-					Where("id = ?", revAccount.ID).
-					Update("balance", 0).Error; err != nil {
-					return fmt.Errorf("failed to reset revenue account %s: %v", revAccount.Code, err)
-				}
 			}
 		}
 
@@ -383,13 +376,6 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 					LineNumber:   lineNumber,
 				})
 				lineNumber++
-
-				// Reset temporary account balance to zero
-				if err := tx.Model(&models.Account{}).
-					Where("id = ?", expAccount.ID).
-					Update("balance", 0).Error; err != nil {
-					return fmt.Errorf("failed to reset expense account %s: %v", expAccount.Code, err)
-				}
 			}
 		}
 
@@ -402,7 +388,7 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 			return fmt.Errorf("failed to create closing journal entry: %v", err)
 		}
 
-		// Create journal lines
+		// Create journal lines and associate with journal entry
 		for i := range journalLines {
 			journalLines[i].JournalEntryID = closingJournal.ID
 			if err := tx.Create(&journalLines[i]).Error; err != nil {
@@ -410,13 +396,16 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 			}
 		}
 
-		// Update Retained Earnings balance
-		netIncome := preview.TotalRevenue - preview.TotalExpense
-		if err := tx.Model(&models.Account{}).
-			Where("id = ?", retainedEarningsAccount.ID).
-			Update("balance", gorm.Expr("balance + ?", netIncome)).Error; err != nil {
-			return fmt.Errorf("failed to update retained earnings: %v", err)
+		// Attach lines to journal entry for balance update
+		closingJournal.JournalLines = journalLines
+
+		// Update account balances based on journal lines
+		// This will properly update Revenue/Expense accounts to 0 and update Retained Earnings
+		if err := pcs.updateAccountBalancesInTx(tx, &closingJournal); err != nil {
+			return fmt.Errorf("failed to update account balances: %v", err)
 		}
+
+		netIncome := preview.TotalRevenue - preview.TotalExpense
 
 		// Create AccountingPeriod record
 		accountingPeriod := models.AccountingPeriod{
@@ -451,8 +440,50 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 			"user_id":             userID,
 		})
 
-		return nil
+	return nil
 	})
+}
+
+// updateAccountBalancesInTx updates account balances based on journal lines
+// This mirrors the logic in journal_entry_repository.go
+func (pcs *PeriodClosingService) updateAccountBalancesInTx(tx *gorm.DB, entry *models.JournalEntry) error {
+	// Process journal lines
+	for _, line := range entry.JournalLines {
+		if line.AccountID == 0 {
+			return fmt.Errorf("invalid account ID in journal line")
+		}
+
+		// Get account details to determine normal balance type
+		var account models.Account
+		if err := tx.Select("id, code, name, type, balance").First(&account, line.AccountID).Error; err != nil {
+			return fmt.Errorf("failed to get account %d details: %v", line.AccountID, err)
+		}
+
+		// Calculate balance change based on account type (normal balance)
+		var balanceChange float64
+		if account.Type == models.AccountTypeAsset || account.Type == models.AccountTypeExpense {
+			// Debit normal accounts: debit increases, credit decreases
+			balanceChange = line.DebitAmount - line.CreditAmount
+		} else {
+			// Credit normal accounts (LIABILITY, EQUITY, REVENUE): credit increases, debit decreases
+			balanceChange = line.CreditAmount - line.DebitAmount
+		}
+
+		// Update account balance atomically
+		result := tx.Model(&models.Account{}).
+			Where("id = ? AND deleted_at IS NULL", line.AccountID).
+			Update("balance", gorm.Expr("balance + ?", balanceChange))
+
+		if result.Error != nil {
+			return fmt.Errorf("failed to update balance for account %d: %v", line.AccountID, result.Error)
+		}
+
+		if result.RowsAffected == 0 {
+			return fmt.Errorf("account %d not found or inactive", line.AccountID)
+		}
+	}
+
+	return nil
 }
 
 // GetClosingHistory returns history of period closings

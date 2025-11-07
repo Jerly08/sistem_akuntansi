@@ -158,6 +158,7 @@ const (
 type PurchaseFilter struct {
 	Status           string `json:"status"`
 	VendorID         string `json:"vendor_id"`
+	UserID           uint   `json:"user_id"` // Filter by requester user ID (for employee-only access)
 	StartDate        string `json:"start_date"`
 	EndDate          string `json:"end_date"`
 	Search           string `json:"search"`

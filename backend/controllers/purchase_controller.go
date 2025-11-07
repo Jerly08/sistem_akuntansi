@@ -68,6 +68,10 @@ func (pc *PurchaseController) GetPurchases(c *gin.Context) {
 		requiresApproval = &val
 	}
 
+	// Get user role and ID from context
+	userRole, _ := c.Get("role")
+	userID, _ := c.Get("user_id")
+	
 	filter := models.PurchaseFilter{
 		Status:           status,
 		VendorID:         vendorID,
@@ -78,6 +82,13 @@ func (pc *PurchaseController) GetPurchases(c *gin.Context) {
 		RequiresApproval: requiresApproval,
 		Page:             page,
 		Limit:            limit,
+	}
+	
+	// RBAC: Employee role can only see their own purchases
+	if userRole != nil && userRole.(string) == models.RoleEmployee {
+		if userID != nil {
+			filter.UserID = userID.(uint)
+		}
 	}
 
 	result, err := pc.purchaseService.GetPurchases(filter)
@@ -112,6 +123,19 @@ func (pc *PurchaseController) GetPurchase(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Purchase not found"})
 		return
+	}
+
+	// RBAC: Employee role can only view their own purchases
+	userRole, _ := c.Get("role")
+	userID, _ := c.Get("user_id")
+	if userRole != nil && userRole.(string) == models.RoleEmployee {
+		if userID != nil && purchase.UserID != userID.(uint) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "Access denied: You can only view your own purchase requests",
+				"code":  "INSUFFICIENT_PERMISSION",
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, purchase)
@@ -173,13 +197,29 @@ func (pc *PurchaseController) UpdatePurchase(c *gin.Context) {
 		return
 	}
 
+	// RBAC: Employee role can only update their own purchases
+	userRole, _ := c.Get("role")
+	userID := c.MustGet("user_id").(uint)
+	if userRole != nil && userRole.(string) == models.RoleEmployee {
+		purchase, err := pc.purchaseService.GetPurchaseByID(uint(id))
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Purchase not found"})
+			return
+		}
+		if purchase.UserID != userID {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "Access denied: You can only update your own purchase requests",
+				"code":  "INSUFFICIENT_PERMISSION",
+			})
+			return
+		}
+	}
+
 	var request models.PurchaseUpdateRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	userID := c.MustGet("user_id").(uint)
 
 	purchase, err := pc.purchaseService.UpdatePurchase(uint(id), request, userID)
 	if err != nil {
@@ -211,13 +251,23 @@ func (pc *PurchaseController) DeletePurchase(c *gin.Context) {
 		return
 	}
 
-	// Get user role from context
+	// Get user role and ID from context
 	userRole := c.MustGet("user_role").(string)
+	userID := c.MustGet("user_id").(uint)
 	
 	// Check if purchase exists and get its status
 	purchase, err := pc.purchaseService.GetPurchaseByID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Purchase not found"})
+		return
+	}
+	
+	// RBAC: Employee role can only delete their own purchases
+	if userRole == models.RoleEmployee && purchase.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Access denied: You can only delete your own purchase requests",
+			"code":  "INSUFFICIENT_PERMISSION",
+		})
 		return
 	}
 	

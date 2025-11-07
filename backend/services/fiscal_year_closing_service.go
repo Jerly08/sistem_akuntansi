@@ -235,13 +235,6 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 					LineNumber:   lineNumber,
 				})
 				lineNumber++
-
-				// Reset temporary account balance to zero
-				if err := tx.Model(&models.Account{}).
-					Where("id = ?", revAccount.ID).
-					Update("balance", 0).Error; err != nil {
-					return fmt.Errorf("failed to reset temporary revenue account %s: %v", revAccount.Code, err)
-				}
 			}
 		}
 
@@ -283,13 +276,6 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 					LineNumber:   lineNumber,
 				})
 				lineNumber++
-
-				// Reset temporary account balance to zero
-				if err := tx.Model(&models.Account{}).
-					Where("id = ?", expAccount.ID).
-					Update("balance", 0).Error; err != nil {
-					return fmt.Errorf("failed to reset temporary expense account %s: %v", expAccount.Code, err)
-				}
 			}
 		}
 
@@ -302,7 +288,7 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 			return fmt.Errorf("failed to create closing journal entry: %v", err)
 		}
 
-		// Create journal lines
+		// Create journal lines and associate with journal entry
 		for i := range journalLines {
 			journalLines[i].JournalEntryID = closingJournal.ID
 			if err := tx.Create(&journalLines[i]).Error; err != nil {
@@ -310,16 +296,16 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 			}
 		}
 
-		// Update Retained Earnings balance (PERMANENT ACCOUNT)
-		// This is the key step: Net Income flows into Retained Earnings
-		// Retained Earnings accumulates year after year (permanent account)
-		// While Revenue and Expense accounts reset to zero (temporary accounts)
-		netIncome := preview.TotalRevenue - preview.TotalExpense
-		if err := tx.Model(&models.Account{}).
-			Where("id = ?", retainedEarningsAccount.ID).
-			Update("balance", gorm.Expr("balance + ?", netIncome)).Error; err != nil {
-			return fmt.Errorf("failed to update retained earnings (permanent account): %v", err)
+		// Attach lines to journal entry for balance update
+		closingJournal.JournalLines = journalLines
+
+		// Update account balances based on journal lines
+		// This will properly update Revenue/Expense accounts to 0 and update Retained Earnings
+		if err := fycs.updateAccountBalancesInTx(tx, &closingJournal); err != nil {
+			return fmt.Errorf("failed to update account balances: %v", err)
 		}
+
+		netIncome := preview.TotalRevenue - preview.TotalExpense
 
 		// Log the closing activity
 		fycs.logger.LogProcessingInfo(ctx, "Fiscal Year-End Closing Completed", map[string]interface{}{
@@ -363,4 +349,46 @@ func (fycs *FiscalYearClosingService) GetFiscalYearClosingHistory(ctx context.Co
 	}
 
 	return history, nil
+}
+
+// updateAccountBalancesInTx updates account balances based on journal lines
+// This mirrors the logic in journal_entry_repository.go
+func (fycs *FiscalYearClosingService) updateAccountBalancesInTx(tx *gorm.DB, entry *models.JournalEntry) error {
+	// Process journal lines
+	for _, line := range entry.JournalLines {
+		if line.AccountID == 0 {
+			return fmt.Errorf("invalid account ID in journal line")
+		}
+
+		// Get account details to determine normal balance type
+		var account models.Account
+		if err := tx.Select("id, code, name, type, balance").First(&account, line.AccountID).Error; err != nil {
+			return fmt.Errorf("failed to get account %d details: %v", line.AccountID, err)
+		}
+
+		// Calculate balance change based on account type (normal balance)
+		var balanceChange float64
+		if account.Type == models.AccountTypeAsset || account.Type == models.AccountTypeExpense {
+			// Debit normal accounts: debit increases, credit decreases
+			balanceChange = line.DebitAmount - line.CreditAmount
+		} else {
+			// Credit normal accounts (LIABILITY, EQUITY, REVENUE): credit increases, debit decreases
+			balanceChange = line.CreditAmount - line.DebitAmount
+		}
+
+		// Update account balance atomically
+		result := tx.Model(&models.Account{}).
+			Where("id = ? AND deleted_at IS NULL", line.AccountID).
+			Update("balance", gorm.Expr("balance + ?", balanceChange))
+
+		if result.Error != nil {
+			return fmt.Errorf("failed to update balance for account %d: %v", line.AccountID, result.Error)
+		}
+
+		if result.RowsAffected == 0 {
+			return fmt.Errorf("account %d not found or inactive", line.AccountID)
+		}
+	}
+
+	return nil
 }

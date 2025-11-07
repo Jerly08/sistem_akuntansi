@@ -143,8 +143,10 @@ const PaymentsPage: React.FC = () => {
   };
 
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [allPayments, setAllPayments] = useState<Payment[]>([]); // Store all payments for client-side filtering
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState(''); // Local search state for client-side filtering
   const [showFilters, setShowFilters] = useState(false);
   const [pagination, setPagination] = useState({
     current: 1,
@@ -356,8 +358,12 @@ const loadPayments = async (newFilters?: Partial<PaymentFilters>) => {
     // Make API call
     const result = await paymentService.getPayments(apiFilters);
     
+    // Store all payments for client-side filtering
+    const paymentData = result?.data || [];
+    setAllPayments(paymentData);
+    
     // Update state with results
-    setPayments(result?.data || []);
+    setPayments(paymentData);
     setFilters({ ...currentFilters, page: result?.page || currentFilters.page });
     setPagination({
       current: result?.page || 1,
@@ -411,6 +417,13 @@ useEffect(() => {
   }
 }, [token]);
 
+// Apply client-side search when allPayments changes
+useEffect(() => {
+  if (searchInput) {
+    handleSearch(searchInput);
+  }
+}, [allPayments]);
+
 // Update summary when payments change
 useEffect(() => {
   if (payments.length > 0) {
@@ -433,10 +446,36 @@ const handlePageChange = (page: number) => {
   }));
 };
 
-// Handle search - immediate trigger like Sales
-const handleSearch = (searchTerm: string) => {
-  setFilters(prev => ({ ...prev, search: searchTerm }));
-  loadPayments({ search: searchTerm, page: 1 } as any);
+// Client-side search handler (instant, no API call)
+const handleSearch = (value: string) => {
+  setSearchInput(value);
+  
+  // Client-side filtering - no API call
+  if (!value.trim()) {
+    // If search is empty, show all payments
+    setPayments(allPayments);
+    return;
+  }
+  
+  // Filter payments based on search term
+  const searchTerm = value.toLowerCase();
+  const filtered = allPayments.filter(payment => {
+    // Search in payment code
+    if (payment.code?.toLowerCase().includes(searchTerm)) return true;
+    
+    // Search in contact name
+    if (payment.contact?.name?.toLowerCase().includes(searchTerm)) return true;
+    
+    // Search in payment reference
+    if (payment.reference?.toLowerCase().includes(searchTerm)) return true;
+    
+    // Search in notes
+    if (payment.notes?.toLowerCase().includes(searchTerm)) return true;
+    
+    return false;
+  });
+  
+  setPayments(filtered);
 };
 
 // Handle filter change
@@ -468,6 +507,8 @@ const resetFilters = () => {
   setMethodFilter('ALL');
   setStartDate('');
   setEndDate('');
+  setSearchInput(''); // Clear search input
+  setPayments(allPayments); // Reset to show all payments
   setFilters({
     page: 1,
     limit: ITEMS_PER_PAGE,
@@ -807,7 +848,7 @@ const resetFilters = () => {
                 </InputLeftElement>
                 <Input 
                   placeholder="Search by payment code or contact..."
-                  value={filters.search || ''}
+                  value={searchInput}
                   onChange={(e) => handleSearch(e.target.value)}
                   bg={inputBg}
                   borderColor={borderColor}

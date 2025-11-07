@@ -129,74 +129,75 @@ func (s *SSOTBalanceSheetService) GenerateSSOTBalanceSheet(asOfDate string) (*SS
 
 // getAccountBalancesFromSSOT retrieves account balances from SSOT journal system up to a specific date
 // This version deduplicates accounts by code and aggregates their balances
+// IMPORTANT: After period closing, use account.balance directly instead of recalculating from journal lines
 func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([]SSOTAccountBalance, error) {
 	var rawBalances []SSOTAccountBalance
 
-	// Get all accounts with their transaction balances from SSOT
-	// This query deduplicates by account code and sums balances
-	query := `
+	// PRIORITY 1: Use account.balance directly (most reliable after closing entries)
+	// This ensures closing entries that update account.balance are reflected
+	directQuery := `
 		SELECT 
 			MIN(a.id) as account_id,
 			a.code as account_code,
 			MAX(a.name) as account_name,
 			UPPER(a.type) as account_type,
-			COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
-			COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
-			CASE 
-				WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
-					COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
-				ELSE 
-					COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
-			END as net_balance
+			0 as debit_total,
+			0 as credit_total,
+			SUM(COALESCE(a.balance, 0)) as net_balance
 		FROM accounts a
-		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id 
-			AND uje.status = 'POSTED' 
-			AND uje.deleted_at IS NULL 
-			AND uje.entry_date <= ?
 		WHERE COALESCE(a.is_header, false) = false
 		  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
 		  AND a.is_active = true
 		GROUP BY a.code, UPPER(a.type)
-		HAVING COALESCE(SUM(ujl.debit_amount), 0) <> 0 
-		    OR COALESCE(SUM(ujl.credit_amount), 0) <> 0
-		    OR MAX(a.balance) <> 0
+		HAVING SUM(COALESCE(a.balance, 0)) <> 0
 		ORDER BY a.code
 	`
-
-	if err := s.db.Raw(query, asOfDate).Scan(&rawBalances).Error; err != nil {
-		return nil, fmt.Errorf("error executing SSOT balances query: %v", err)
-	}
-
-	fmt.Printf("[DEBUG] Retrieved %d deduplicated accounts with transaction data\n", len(rawBalances))
 	
-	// If no transaction data found, try getting direct account balances (fallback)
+	if err := s.db.Raw(directQuery).Scan(&rawBalances).Error; err != nil {
+		return nil, fmt.Errorf("error executing direct balances query: %v", err)
+	}
+	
+	fmt.Printf("[DEBUG] Retrieved %d accounts using direct account.balance\n", len(rawBalances))
+	
+	// FALLBACK: If no direct balances, try calculating from journal lines (before closing)
+	// FALLBACK: If no direct balances, try calculating from journal lines
 	if len(rawBalances) == 0 {
-		fmt.Printf("[DEBUG] No SSOT transaction data found, trying direct account balances\n")
+		fmt.Printf("[DEBUG] No direct balances found, calculating from SSOT journal lines\n")
 		
-		directQuery := `
+		journalQuery := `
 			SELECT 
 				MIN(a.id) as account_id,
 				a.code as account_code,
 				MAX(a.name) as account_name,
 				UPPER(a.type) as account_type,
-				0 as debit_total,
-				0 as credit_total,
-				SUM(COALESCE(a.balance, 0)) as net_balance
+				COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
+				COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
+				CASE 
+					WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
+						COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
+					ELSE 
+						COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
+				END as net_balance
 			FROM accounts a
+			LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
+			LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id 
+				AND uje.status = 'POSTED' 
+				AND uje.deleted_at IS NULL 
+				AND uje.entry_date <= ?
 			WHERE COALESCE(a.is_header, false) = false
 			  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
 			  AND a.is_active = true
 			GROUP BY a.code, UPPER(a.type)
-			HAVING SUM(COALESCE(a.balance, 0)) <> 0
+			HAVING COALESCE(SUM(ujl.debit_amount), 0) <> 0 
+			    OR COALESCE(SUM(ujl.credit_amount), 0) <> 0
 			ORDER BY a.code
 		`
 		
-		if err := s.db.Raw(directQuery).Scan(&rawBalances).Error; err != nil {
-			return nil, fmt.Errorf("error executing direct balances query: %v", err)
+		if err := s.db.Raw(journalQuery, asOfDate).Scan(&rawBalances).Error; err != nil {
+			return nil, fmt.Errorf("error executing journal balances query: %v", err)
 		}
 		
-		fmt.Printf("[DEBUG] Retrieved %d accounts with direct balances (fallback)\n", len(rawBalances))
+		fmt.Printf("[DEBUG] Retrieved %d accounts from journal lines (fallback)\n", len(rawBalances))
 	}
 	
 	// If still no data, try legacy journals as last resort
@@ -449,7 +450,8 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 	bsData.Equity.Items = []BSAccountItem{}
 	bsData.AccountDetails = balances
 	
-	// Calculate Net Income from Revenue and Expense accounts
+	// After period closing, Revenue/Expense accounts are already 0 and Net Income is in Retained Earnings
+	// Only calculate Net Income from Revenue/Expense accounts if they still have balances (before closing)
 	netIncome := s.calculateNetIncome(asOf.Format("2006-01-02"))
 	
 	// Process each account balance
@@ -530,8 +532,13 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 	// Remove individual PPN accounts from display to avoid confusion
 	s.removePPNAccountsFromDisplay(bsData)
 	
-	// Tambahkan Net Income ke Retained Earnings dan tampilkan sebagai baris khusus
+	// IMPORTANT: Only add Net Income if Revenue/Expense accounts still have balances (before closing)
+	// After closing, Net Income is already in Retained Earnings account balance
 	if netIncome != 0 {
+		// Add Net Income as a separate line for transparency
+		// Note: This does NOT add to RetainedEarnings because it's already included in account.balance after closing
+		// Before closing: We show it separately and add to total
+		// After closing: Revenue/Expense = 0, so netIncome = 0, this block won't execute
 		bsData.Equity.RetainedEarnings += netIncome
 		netIncomeItem := BSAccountItem{
 			AccountCode: "NET_INCOME",

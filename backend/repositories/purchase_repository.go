@@ -92,6 +92,11 @@ func (r *PurchaseRepository) FindWithFilter(filter models.PurchaseFilter) ([]mod
 		query = query.Where("vendor_id = ?", filter.VendorID)
 	}
 
+	// Filter by user_id (for employee role - restrict to their own purchases)
+	if filter.UserID != 0 {
+		query = query.Where("user_id = ?", filter.UserID)
+	}
+
 	if filter.StartDate != "" {
 		query = query.Where("date >= ?", filter.StartDate)
 	}

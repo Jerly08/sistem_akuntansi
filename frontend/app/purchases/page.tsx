@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import SimpleLayout from '@/components/layout/SimpleLayout';
@@ -408,6 +408,7 @@ const PurchasesPage: React.FC = () => {
 
   // State management
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [allPurchases, setAllPurchases] = useState<Purchase[]>([]); // Store all purchases for client-side filtering
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
@@ -428,6 +429,9 @@ const PurchasesPage: React.FC = () => {
     page: 1,
     limit: 10,
   });
+  
+  // Local search state (client-side, no debouncing needed)
+  const [searchInput, setSearchInput] = useState('');
   
   // Statistics state
   const [stats, setStats] = useState({
@@ -842,6 +846,8 @@ const PurchasesPage: React.FC = () => {
       // Ensure response data is an array
       const purchaseData = Array.isArray(response?.data) ? response.data : [];
       
+      // Store all purchases for client-side filtering
+      setAllPurchases(purchaseData);
       setPurchases(purchaseData);
       setPagination({
         page: response?.page || 1,
@@ -951,12 +957,51 @@ const PurchasesPage: React.FC = () => {
     fetchVendors(); // Load vendors for filter
   }, [token]);
 
-  // Handle filter changes
+  // Handle filter changes (immediate for non-search filters)
   const handleFilterChange = (newFilters: Partial<PurchaseFilterParams>) => {
     const updatedFilters = { ...filters, ...newFilters, page: 1 };
     setFilters(updatedFilters);
     fetchPurchases(updatedFilters);
   };
+  
+  // Client-side search handler (instant, no API call)
+  const handleSearchChange = (value: string) => {
+    setSearchInput(value);
+    
+    // Client-side filtering - no API call
+    if (!value.trim()) {
+      // If search is empty, show all purchases
+      setPurchases(allPurchases);
+      return;
+    }
+    
+    // Filter purchases based on search term
+    const searchTerm = value.toLowerCase();
+    const filtered = allPurchases.filter(purchase => {
+      // Search in purchase code
+      if (purchase.code?.toLowerCase().includes(searchTerm)) return true;
+      
+      // Search in vendor name
+      if (purchase.vendor?.name?.toLowerCase().includes(searchTerm)) return true;
+      
+      // Search in notes
+      if (purchase.notes?.toLowerCase().includes(searchTerm)) return true;
+      
+      // Search in payment reference
+      if (purchase.payment_reference?.toLowerCase().includes(searchTerm)) return true;
+      
+      return false;
+    });
+    
+    setPurchases(filtered);
+  };
+  
+  // Apply client-side search when allPurchases changes
+  useEffect(() => {
+    if (searchInput) {
+      handleSearchChange(searchInput);
+    }
+  }, [allPurchases]);
 
   // Handle page change
   const handlePageChange = (page: number) => {
@@ -2990,8 +3035,8 @@ const handleCreate = async () => {
                   </InputLeftElement>
                   <Input
                     placeholder={t('purchases.searchPlaceholder')}
-                    value={filters.search || ''}
-                    onChange={(e) => handleFilterChange({ search: e.target.value })}
+                    value={searchInput}
+                    onChange={(e) => handleSearchChange(e.target.value)}
                     bg={cardBg}
                   />
                 </InputGroup>
@@ -3079,6 +3124,11 @@ const handleCreate = async () => {
                 leftIcon={<FiFilter />}
                 variant="outline"
                 onClick={() => {
+                  // Clear search input state
+                  setSearchInput('');
+                  // Reset purchases to show all
+                  setPurchases(allPurchases);
+                  // Reset filters
                   setFilters({ 
                     page: 1, 
                     limit: 10, 
