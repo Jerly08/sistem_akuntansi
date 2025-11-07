@@ -60,6 +60,7 @@ func (c *PaymentController) GetPayments(ctx *gin.Context) {
 		EndDate:    endDate,
 		Status:     ctx.Query("status"),
 		Method:     ctx.Query("method"),
+		Search:     ctx.Query("search"),
 		Page:       page,
 		Limit:      limit,
 	}

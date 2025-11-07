@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"app-sistem-akuntansi/models"
@@ -447,6 +448,8 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 // updateAccountBalancesInTx updates account balances based on journal lines
 // This mirrors the logic in journal_entry_repository.go
 func (pcs *PeriodClosingService) updateAccountBalancesInTx(tx *gorm.DB, entry *models.JournalEntry) error {
+	log.Printf("[PERIOD CLOSING] Updating account balances for %d journal lines", len(entry.JournalLines))
+	
 	// Process journal lines
 	for _, line := range entry.JournalLines {
 		if line.AccountID == 0 {
@@ -459,6 +462,9 @@ func (pcs *PeriodClosingService) updateAccountBalancesInTx(tx *gorm.DB, entry *m
 			return fmt.Errorf("failed to get account %d details: %v", line.AccountID, err)
 		}
 
+		log.Printf("[PERIOD CLOSING] Processing %s (%s) - Type: %s, Current Balance: %.2f", 
+			account.Code, account.Name, account.Type, account.Balance)
+
 		// Calculate balance change based on account type (normal balance)
 		var balanceChange float64
 		if account.Type == models.AccountTypeAsset || account.Type == models.AccountTypeExpense {
@@ -468,6 +474,9 @@ func (pcs *PeriodClosingService) updateAccountBalancesInTx(tx *gorm.DB, entry *m
 			// Credit normal accounts (LIABILITY, EQUITY, REVENUE): credit increases, debit decreases
 			balanceChange = line.CreditAmount - line.DebitAmount
 		}
+
+		log.Printf("[PERIOD CLOSING] Line: Debit=%.2f, Credit=%.2f, Balance Change=%.2f", 
+			line.DebitAmount, line.CreditAmount, balanceChange)
 
 		// Update account balance atomically
 		result := tx.Model(&models.Account{}).
@@ -481,8 +490,11 @@ func (pcs *PeriodClosingService) updateAccountBalancesInTx(tx *gorm.DB, entry *m
 		if result.RowsAffected == 0 {
 			return fmt.Errorf("account %d not found or inactive", line.AccountID)
 		}
+		
+		log.Printf("[PERIOD CLOSING] ✅ Updated %s - Rows affected: %d", account.Code, result.RowsAffected)
 	}
 
+	log.Println("[PERIOD CLOSING] All account balances updated successfully")
 	return nil
 }
 

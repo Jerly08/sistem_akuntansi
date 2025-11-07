@@ -295,20 +295,22 @@ func reverse(s string) string {
 // formatNotesAmount formats numbers in notes text by rounding and removing decimals
 // Example: "Setor PPN - Terutang: 64033,20" -> "Setor PPN - Terutang: 64033"
 // Example: "Setor PPN - Terutang: 64033.20" -> "Setor PPN - Terutang: 64033"
+// Example: "Setor PPN - Terutang: 1.234.567,89" -> "Setor PPN - Terutang: 1234568"
 func (p *PDFService) formatNotesAmount(notes string) string {
-	// Pattern to match numbers with decimal separator (comma or dot)
-	// Captures: whole number part and decimal part
-	re := regexp.MustCompile(`(\d+(?:[\.,]\d{3})*)[\.,](\d+)`)
+	// Simplified pattern to match numbers with decimal separator (comma or dot)
+	// This matches: digits (with optional dots as thousand separators) followed by comma/dot and more digits
+	// Examples: 64033.20, 64033,20, 1.234.567,89, 1,234,567.89
+	re := regexp.MustCompile(`\d+(?:[\.,]\d+)*[\.,]\d+`)
 
 	// Replace with rounded integer (remove decimal part)
 	formatted := re.ReplaceAllStringFunc(notes, func(match string) string {
-		// Remove thousand separators (dots) and replace comma with dot for parsing
+		// Remove all dots (thousand separators) and replace comma with dot for parsing
 		numStr := strings.ReplaceAll(match, ".", "")
 		numStr = strings.ReplaceAll(numStr, ",", ".")
 
 		// Parse as float
 		if val, err := strconv.ParseFloat(numStr, 64); err == nil {
-			// Round and return as integer string
+			// Round and return as integer string without decimals
 			return fmt.Sprintf("%.0f", val)
 		}
 		return match // Return original if parsing fails

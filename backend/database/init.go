@@ -53,6 +53,16 @@ func InitializeDatabase(db *gorm.DB) {
 	// Clean up duplicate notifications
 	CleanupDuplicateNotificationsMigration(db)
 	
+	// Add description column to accounting_periods table
+	if err := AddAccountingPeriodDescription(db); err != nil {
+		log.Printf("⚠️  Accounting period description migration warning: %v", err)
+	}
+	
+	// Fix accounting_periods table structure (make year/month nullable)
+	if err := FixAccountingPeriodsStructure(db); err != nil {
+		log.Printf("⚠️  Accounting period structure fix warning: %v", err)
+	}
+	
 	log.Println("Database initialization completed")
 }
 

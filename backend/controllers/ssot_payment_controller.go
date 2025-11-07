@@ -238,6 +238,9 @@ func (ctrl *SSOTPaymentController) GetPayments(c *gin.Context) {
 	if method := c.Query("method"); method != "" {
 		filter.Method = method
 	}
+	if search := c.Query("search"); search != "" {
+		filter.Search = search
+	}
 	if startDateStr := c.Query("start_date"); startDateStr != "" {
 		if t, err := time.Parse("2006-01-02", startDateStr); err == nil {
 			filter.StartDate = t

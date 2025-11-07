@@ -63,6 +63,14 @@ func (r *PaymentRepository) FindWithFilter(filter PaymentFilter) (*PaymentResult
 		query = query.Where("reference_type = ?", filter.Type)
 	}
 	
+	// Apply search filter - search in code, contact name, reference, notes
+	if filter.Search != "" {
+		searchTerm := "%" + filter.Search + "%"
+		query = query.Joins("LEFT JOIN contacts ON contacts.id = payments.contact_id").
+			Where("payments.code ILIKE ? OR contacts.name ILIKE ? OR payments.reference ILIKE ? OR payments.notes ILIKE ?",
+				searchTerm, searchTerm, searchTerm, searchTerm)
+	}
+	
 	// Count total records
 	var total int64
 	query.Count(&total)
@@ -268,6 +276,7 @@ type PaymentFilter struct {
 	Status     string    `json:"status"`
 	Method     string    `json:"method"`
 	Type       string    `json:"type"`
+	Search     string    `json:"search"` // Search query for code, contact name, reference, notes
 	Page       int       `json:"page"`
 	Limit      int       `json:"limit"`
 }

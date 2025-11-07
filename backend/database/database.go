@@ -724,6 +724,9 @@ func AutoMigrate(db *gorm.DB) {
 		// Settings model
 		&models.Settings{},
 		
+		// Accounting Period model
+		&models.AccountingPeriod{},
+		
 		// Security models
 		&models.SecurityIncident{},
 		&models.SystemAlert{},
@@ -800,6 +803,16 @@ func AutoMigrate(db *gorm.DB) {
 
 	// Run cleanup duplicate notifications migration
 	CleanupDuplicateNotificationsMigration(db)
+	
+	// Add description column to accounting_periods table
+	if err := AddAccountingPeriodDescription(db); err != nil {
+		log.Printf("⚠️  Accounting period description migration warning: %v", err)
+	}
+	
+	// Fix accounting_periods table structure (make year/month nullable)
+	if err := FixAccountingPeriodsStructure(db); err != nil {
+		log.Printf("⚠️  Accounting period structure fix warning: %v", err)
+	}
 
 	// Create indexes for better performance
 	createIndexes(db)

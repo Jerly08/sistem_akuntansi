@@ -143,7 +143,6 @@ const PaymentsPage: React.FC = () => {
   };
 
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [allPayments, setAllPayments] = useState<Payment[]>([]); // Store all payments for client-side filtering
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState(''); // Local search state for client-side filtering
@@ -331,9 +330,9 @@ const loadPayments = async (newFilters?: Partial<PaymentFilters>) => {
       limit: currentFilters.limit
     };
     
-    // Add search filter if provided
-    if (currentFilters.search) {
-      apiFilters.search = currentFilters.search;
+    // Add search filter if provided (use searchInput instead of currentFilters.search)
+    if (searchInput && searchInput.trim()) {
+      apiFilters.search = searchInput.trim();
     }
     
     // Add status filter if selected
@@ -358,11 +357,8 @@ const loadPayments = async (newFilters?: Partial<PaymentFilters>) => {
     // Make API call
     const result = await paymentService.getPayments(apiFilters);
     
-    // Store all payments for client-side filtering
+    // Update state with results (no need for allPayments anymore since filtering is on server-side)
     const paymentData = result?.data || [];
-    setAllPayments(paymentData);
-    
-    // Update state with results
     setPayments(paymentData);
     setFilters({ ...currentFilters, page: result?.page || currentFilters.page });
     setPagination({
@@ -417,13 +413,6 @@ useEffect(() => {
   }
 }, [token]);
 
-// Apply client-side search when allPayments changes
-useEffect(() => {
-  if (searchInput) {
-    handleSearch(searchInput);
-  }
-}, [allPayments]);
-
 // Update summary when payments change
 useEffect(() => {
   if (payments.length > 0) {
@@ -431,12 +420,24 @@ useEffect(() => {
   }
 }, [payments]);
 
-// Handle filters change
+// Handle filters change - trigger API call
 useEffect(() => {
   if (token) {
-    loadPayments();
+    loadPayments({ page: 1 });
   }
 }, [statusFilter, methodFilter, startDate, endDate]);
+
+// Handle search with debounce - trigger API call after 500ms of inactivity
+useEffect(() => {
+  if (!token) return;
+  
+  // Debounce search to avoid too many API calls
+  const debounceTimer = setTimeout(() => {
+    loadPayments({ page: 1 });
+  }, 500);
+  
+  return () => clearTimeout(debounceTimer);
+}, [searchInput]);
 
 // Handle page change
 const handlePageChange = (page: number) => {
@@ -446,36 +447,10 @@ const handlePageChange = (page: number) => {
   }));
 };
 
-// Client-side search handler (instant, no API call)
+// Server-side search handler with API call (debounced via useEffect)
 const handleSearch = (value: string) => {
   setSearchInput(value);
-  
-  // Client-side filtering - no API call
-  if (!value.trim()) {
-    // If search is empty, show all payments
-    setPayments(allPayments);
-    return;
-  }
-  
-  // Filter payments based on search term
-  const searchTerm = value.toLowerCase();
-  const filtered = allPayments.filter(payment => {
-    // Search in payment code
-    if (payment.code?.toLowerCase().includes(searchTerm)) return true;
-    
-    // Search in contact name
-    if (payment.contact?.name?.toLowerCase().includes(searchTerm)) return true;
-    
-    // Search in payment reference
-    if (payment.reference?.toLowerCase().includes(searchTerm)) return true;
-    
-    // Search in notes
-    if (payment.notes?.toLowerCase().includes(searchTerm)) return true;
-    
-    return false;
-  });
-  
-  setPayments(filtered);
+  // API call will be triggered by useEffect with 500ms debounce
 };
 
 // Handle filter change
@@ -508,13 +483,11 @@ const resetFilters = () => {
   setStartDate('');
   setEndDate('');
   setSearchInput(''); // Clear search input
-  setPayments(allPayments); // Reset to show all payments
   setFilters({
     page: 1,
-    limit: ITEMS_PER_PAGE,
-    search: ''
+    limit: ITEMS_PER_PAGE
   });
-  loadPayments({ page: 1 });
+  // loadPayments will be triggered by useEffect when searchInput changes
 };
 
   // Handle delete payment

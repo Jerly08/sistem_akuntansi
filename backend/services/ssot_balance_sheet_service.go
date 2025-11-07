@@ -129,76 +129,58 @@ func (s *SSOTBalanceSheetService) GenerateSSOTBalanceSheet(asOfDate string) (*SS
 
 // getAccountBalancesFromSSOT retrieves account balances from SSOT journal system up to a specific date
 // This version deduplicates accounts by code and aggregates their balances
-// IMPORTANT: After period closing, use account.balance directly instead of recalculating from journal lines
+// IMPORTANT: Always calculate from journal lines with date filter to ensure accuracy for historical dates
 func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([]SSOTAccountBalance, error) {
 	var rawBalances []SSOTAccountBalance
 
-	// PRIORITY 1: Use account.balance directly (most reliable after closing entries)
-	// This ensures closing entries that update account.balance are reflected
-	directQuery := `
+	// ALWAYS use journal-based calculation with date filter
+	// This ensures we get accurate balances for any point in time, not just current balance
+	fmt.Printf("[DEBUG] Calculating balances from SSOT journal lines up to %s\n", asOfDate)
+	
+	journalQuery := `
 		SELECT 
 			MIN(a.id) as account_id,
 			a.code as account_code,
 			MAX(a.name) as account_name,
 			UPPER(a.type) as account_type,
-			0 as debit_total,
-			0 as credit_total,
-			SUM(COALESCE(a.balance, 0)) as net_balance
+			COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
+			COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
+			CASE 
+				-- If account has journal entries, use journal-based calculation
+				-- Otherwise, fall back to account.balance (for manually adjusted accounts like Retained Earnings)
+				WHEN COUNT(ujl.id) > 0 THEN
+					CASE 
+						WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
+							COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
+						ELSE 
+							COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
+					END
+				ELSE
+					-- Use account.balance for accounts without journal entries
+					COALESCE(MAX(a.balance), 0)
+			END as net_balance
 		FROM accounts a
-		WHERE COALESCE(a.is_header, false) = false
-		  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
-		  AND a.is_active = true
-		GROUP BY a.code, UPPER(a.type)
-		HAVING SUM(COALESCE(a.balance, 0)) <> 0
+		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
+		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id 
+			AND uje.status = 'POSTED' 
+			AND uje.deleted_at IS NULL 
+			AND uje.entry_date <= ?
+	WHERE COALESCE(a.is_header, false) = false
+	  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
+	  AND a.is_active = true
+	  AND a.deleted_at IS NULL
+	GROUP BY a.code, UPPER(a.type)
+		HAVING COALESCE(SUM(ujl.debit_amount), 0) <> 0 
+		    OR COALESCE(SUM(ujl.credit_amount), 0) <> 0
+		    OR COALESCE(MAX(a.balance), 0) <> 0
 		ORDER BY a.code
 	`
 	
-	if err := s.db.Raw(directQuery).Scan(&rawBalances).Error; err != nil {
-		return nil, fmt.Errorf("error executing direct balances query: %v", err)
+	if err := s.db.Raw(journalQuery, asOfDate).Scan(&rawBalances).Error; err != nil {
+		return nil, fmt.Errorf("error executing journal balances query: %v", err)
 	}
 	
-	fmt.Printf("[DEBUG] Retrieved %d accounts using direct account.balance\n", len(rawBalances))
-	
-	// FALLBACK: If no direct balances, try calculating from journal lines (before closing)
-	// FALLBACK: If no direct balances, try calculating from journal lines
-	if len(rawBalances) == 0 {
-		fmt.Printf("[DEBUG] No direct balances found, calculating from SSOT journal lines\n")
-		
-		journalQuery := `
-			SELECT 
-				MIN(a.id) as account_id,
-				a.code as account_code,
-				MAX(a.name) as account_name,
-				UPPER(a.type) as account_type,
-				COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
-				COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
-				CASE 
-					WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
-						COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
-					ELSE 
-						COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
-				END as net_balance
-			FROM accounts a
-			LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-			LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id 
-				AND uje.status = 'POSTED' 
-				AND uje.deleted_at IS NULL 
-				AND uje.entry_date <= ?
-			WHERE COALESCE(a.is_header, false) = false
-			  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
-			  AND a.is_active = true
-			GROUP BY a.code, UPPER(a.type)
-			HAVING COALESCE(SUM(ujl.debit_amount), 0) <> 0 
-			    OR COALESCE(SUM(ujl.credit_amount), 0) <> 0
-			ORDER BY a.code
-		`
-		
-		if err := s.db.Raw(journalQuery, asOfDate).Scan(&rawBalances).Error; err != nil {
-			return nil, fmt.Errorf("error executing journal balances query: %v", err)
-		}
-		
-		fmt.Printf("[DEBUG] Retrieved %d accounts from journal lines (fallback)\n", len(rawBalances))
-	}
+	fmt.Printf("[DEBUG] Retrieved %d accounts from journal lines up to %s\n", len(rawBalances), asOfDate)
 	
 	// If still no data, try legacy journals as last resort
 	if len(rawBalances) == 0 {
@@ -246,11 +228,12 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromAccountTable() ([]SSOTAc
 			0 as debit_total,
 			0 as credit_total,
 			SUM(COALESCE(a.balance, 0)) as net_balance
-		FROM accounts a
-		WHERE UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
-		  AND COALESCE(a.is_header, false) = false
-		  AND a.is_active = true
-		GROUP BY a.code, UPPER(a.type)
+	FROM accounts a
+	WHERE UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
+	  AND COALESCE(a.is_header, false) = false
+	  AND a.is_active = true
+	  AND a.deleted_at IS NULL
+	GROUP BY a.code, UPPER(a.type)
 		HAVING SUM(COALESCE(a.balance, 0)) <> 0
 		ORDER BY a.code
 	`
@@ -296,11 +279,12 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromLegacy(asOfDate string) 
 			AND je.status = 'POSTED' 
 			AND je.deleted_at IS NULL
 			AND je.entry_date <= ?
-		WHERE COALESCE(a.is_header, false) = false
-		  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
-		  AND a.is_active = true
-		GROUP BY a.code, UPPER(a.type)
-		HAVING COALESCE(SUM(jl.debit_amount), 0) <> 0 
+	WHERE COALESCE(a.is_header, false) = false
+	  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
+	  AND a.is_active = true
+	  AND a.deleted_at IS NULL
+	GROUP BY a.code, UPPER(a.type)
+	HAVING COALESCE(SUM(jl.debit_amount), 0) <> 0
 		    OR COALESCE(SUM(jl.credit_amount), 0) <> 0
 		    OR MAX(a.balance) <> 0
 		ORDER BY a.code
@@ -322,12 +306,13 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromLegacy(asOfDate string) 
 				0 as debit_total,
 				0 as credit_total,
 				SUM(COALESCE(a.balance, 0)) as net_balance
-			FROM accounts a
-			WHERE COALESCE(a.is_header, false) = false
-			  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
-			  AND a.is_active = true
-			GROUP BY a.code, UPPER(a.type)
-			HAVING SUM(COALESCE(a.balance, 0)) <> 0
+		FROM accounts a
+		WHERE COALESCE(a.is_header, false) = false
+		  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
+		  AND a.is_active = true
+		  AND a.deleted_at IS NULL
+		GROUP BY a.code, UPPER(a.type)
+		HAVING SUM(COALESCE(a.balance, 0)) <> 0
 			ORDER BY a.code
 		`
 		if err := s.db.Raw(allAccountsQuery).Scan(&balances).Error; err != nil {
@@ -362,8 +347,9 @@ func (s *SSOTBalanceSheetService) calculateNetIncome(asOfDate string) float64 {
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
 		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id AND uje.status = 'POSTED' AND uje.deleted_at IS NULL
 		WHERE (uje.entry_date <= ? OR uje.entry_date IS NULL)
-		AND UPPER(a.type) IN ('REVENUE', 'EXPENSE')
-		AND COALESCE(a.is_header, false) = false
+	AND UPPER(a.type) IN ('REVENUE', 'EXPENSE')
+	AND COALESCE(a.is_header, false) = false
+	AND a.deleted_at IS NULL
 	`
 
 	if err := s.db.Raw(query, asOfDate).Scan(&row).Error; err == nil {
@@ -392,15 +378,16 @@ func (s *SSOTBalanceSheetService) calculateNetIncome(asOfDate string) float64 {
 			LEFT JOIN journal_entries je ON je.id = jl.journal_entry_id AND je.status = 'POSTED' AND je.deleted_at IS NULL
 			WHERE (je.entry_date <= ? OR je.entry_date IS NULL)
 			AND UPPER(a.type) IN ('REVENUE', 'EXPENSE')
-			AND COALESCE(a.is_header, false) = false`
+			AND COALESCE(a.is_header, false) = false
+			AND a.deleted_at IS NULL`
 		if err := s.db.Raw(legacyQuery, asOfDate).Scan(&legacy).Error; err == nil {
 			netIncome = legacy.NetIncome
 			fmt.Printf("[DEBUG] Net Income from legacy journals: %.2f\n", netIncome)
 		} else {
 			// Fallback to accounts table balances as last resort
 			var revenue, expense float64
-			s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'REVENUE'`).Scan(&revenue)
-			s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'EXPENSE'`).Scan(&expense)
+			s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'REVENUE' AND deleted_at IS NULL`).Scan(&revenue)
+			s.db.Raw(`SELECT COALESCE(SUM(balance), 0) FROM accounts WHERE UPPER(type) = 'EXPENSE' AND deleted_at IS NULL`).Scan(&expense)
 			netIncome = revenue - expense
 			fmt.Printf("[DEBUG] Net Income from fallback - Revenue: %.2f, Expense: %.2f, Net: %.2f\n", revenue, expense, netIncome)
 		}
@@ -532,13 +519,25 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 	// Remove individual PPN accounts from display to avoid confusion
 	s.removePPNAccountsFromDisplay(bsData)
 	
-	// IMPORTANT: Only add Net Income if Revenue/Expense accounts still have balances (before closing)
-	// After closing, Net Income is already in Retained Earnings account balance
-	if netIncome != 0 {
-		// Add Net Income as a separate line for transparency
-		// Note: This does NOT add to RetainedEarnings because it's already included in account.balance after closing
-		// Before closing: We show it separately and add to total
-		// After closing: Revenue/Expense = 0, so netIncome = 0, this block won't execute
+	// IMPORTANT: Check if we need to add Net Income separately
+	// After period closing: Revenue/Expense are zeroed via closing journal, and Net Income is transferred to Retained Earnings
+	// We should NOT add netIncome again as it would cause double counting
+	// 
+	// Strategy: Check if there are any active Revenue/Expense accounts with balances
+	// If Revenue/Expense accounts have been zeroed (all balances are 0), period has been closed
+	var hasActiveRevenueExpense bool
+	for _, balance := range balances {
+		accountType := strings.ToUpper(balance.AccountType)
+		if (accountType == "REVENUE" || accountType == "EXPENSE") && balance.NetBalance != 0 {
+			hasActiveRevenueExpense = true
+			break
+		}
+	}
+	
+	// Only add Net Income if period has NOT been closed (Revenue/Expense still have balances)
+	if netIncome != 0 && hasActiveRevenueExpense {
+		// Add Net Income to Retained Earnings and show as separate line
+		// This only happens BEFORE period closing
 		bsData.Equity.RetainedEarnings += netIncome
 		netIncomeItem := BSAccountItem{
 			AccountCode: "NET_INCOME",
@@ -546,6 +545,10 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 			Amount:      netIncome,
 		}
 		bsData.Equity.Items = append(bsData.Equity.Items, netIncomeItem)
+		fmt.Printf("[DEBUG] Added Net Income to Equity (before period closing): %.2f\n", netIncome)
+	} else if !hasActiveRevenueExpense {
+		fmt.Printf("[DEBUG] Period has been closed - Revenue/Expense accounts are zeroed. Net Income should already be in Retained Earnings account (3201).\n")
+		fmt.Printf("[DEBUG] If Retained Earnings is 0, check if closing journal properly updated account.balance.\n")
 	}
 	
 	// Calculate totals and check balance

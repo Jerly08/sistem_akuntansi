@@ -37,43 +37,45 @@ func fixPPNAccountStructure(db *gorm.DB) {
 		return
 	}
 
-	// Move PPN Masukan (should be PPN Keluaran/Output VAT) to liabilities
+	// FIX: Account 2102 was incorrectly created with wrong type
+	// Deactivate any existing 2102 account (it should not exist in seed)
 	err = db.Exec(`
 		UPDATE accounts 
-		SET parent_id = ?, type = 'LIABILITY', name = 'PPN Keluaran'
+		SET is_active = false, deleted_at = NOW()
 		WHERE code = '2102' AND deleted_at IS NULL
-	`, currentLiabilitiesID).Error
+	`).Error
 
 	if err != nil {
-		log.Printf("Warning: Failed to fix PPN account structure: %v", err)
+		log.Printf("Warning: Failed to deactivate incorrect account 2102: %v", err)
 	} else {
-		log.Println("    ✅ Fixed PPN account hierarchy")
+		log.Println("    ✅ Deactivated incorrect account 2102 (PPN Masukan with liability code)")
 	}
 
-	// Ensure we have a proper PPN Masukan (Input VAT) account under assets if needed
-	var ppnMasukanExists bool
-	err = db.Raw(`SELECT EXISTS(SELECT 1 FROM accounts WHERE code = '2103' AND name = 'PPN Masukan')`).Scan(&ppnMasukanExists).Error
+	// Ensure correct PPN accounts exist:
+	// - 1240: PPN MASUKAN (Asset - Input VAT)
+	// - 2103: PPN KELUARAN (Liability - Output VAT)
 	
-	if err == nil && !ppnMasukanExists {
-		// Find Current Assets parent
-		var currentAssetsID uint
-		db.Raw(`SELECT id FROM accounts WHERE code = '1100' AND name = 'CURRENT ASSETS'`).Scan(&currentAssetsID)
-		
-		// Create PPN Masukan account under assets
-		ppnMasukanAccount := &models.Account{
-			Code:     "2103",
-			Name:     "PPN Masukan",
-			Type:     "ASSET",
-			ParentID: &currentAssetsID,
-			Balance:  0,
-			IsHeader: false,
-			IsActive: true,
-		}
-		
-		err = db.Create(ppnMasukanAccount).Error
-		if err == nil {
-			log.Println("    ✅ Created PPN Masukan account under assets")
-		}
+	// Check if we need to fix any misnamed PPN accounts
+	var wrongPPNAccounts []struct {
+		ID   uint
+		Code string
+		Name string
+		Type string
+	}
+	
+	db.Raw(`
+		SELECT id, code, name, type 
+		FROM accounts 
+		WHERE deleted_at IS NULL
+		  AND (
+			  (code LIKE '2%' AND UPPER(name) LIKE '%PPN MASUKAN%') OR
+			  (code LIKE '1%' AND UPPER(name) LIKE '%PPN KELUARAN%')
+		  )
+	`).Scan(&wrongPPNAccounts)
+	
+	for _, acc := range wrongPPNAccounts {
+		log.Printf("    ⚠️  Found misplaced PPN account: %s - %s (Type: %s)", acc.Code, acc.Name, acc.Type)
+		log.Printf("       Please review and fix manually if needed")
 	}
 }
 
@@ -90,10 +92,11 @@ func fixAccountTypes(db *gorm.DB) {
 		{"1200", "ASSET"},   // ACCOUNTS RECEIVABLE header
 		{"1201", "ASSET"},   // Piutang Usaha
 		{"1500", "ASSET"},   // FIXED ASSETS header
+		{"1240", "ASSET"},   // PPN MASUKAN (Input VAT)
 		{"2000", "LIABILITY"}, // LIABILITIES header
 		{"2100", "LIABILITY"}, // CURRENT LIABILITIES header  
 		{"2101", "LIABILITY"}, // Utang Usaha
-		{"2102", "LIABILITY"}, // PPN Keluaran
+		{"2103", "LIABILITY"}, // PPN KELUARAN (Output VAT)
 		{"3000", "EQUITY"},    // EQUITY header
 		{"3101", "EQUITY"},    // Modal Pemilik
 		{"3201", "EQUITY"},    // Laba Ditahan
