@@ -150,17 +150,18 @@ func (pcs *PeriodClosingService) PreviewPeriodClosing(ctx context.Context, start
 		Where("entry_date BETWEEN ? AND ? AND status = ?", startDate, endDate, models.JournalStatusPosted).
 		Count(&preview.TransactionCount)
 
-	// Get all revenue accounts with current balances (not period-specific)
-	// Period closing resets ALL temporary accounts, not just transactions in the period
+	// IMPORTANT: Only get accounts with NON-ZERO balances
+	// This prevents double-closing accounts that were already closed in previous periods
+	// Period closing should ONLY close accounts with actual balances
 	var revenueAccounts []models.Account
-	if err := pcs.db.Where("type = ? AND balance != 0 AND is_active = true AND is_header = false", models.AccountTypeRevenue).
+	if err := pcs.db.Where("type = ? AND ABS(balance) > 0.01 AND is_active = true AND is_header = false", models.AccountTypeRevenue).
 		Find(&revenueAccounts).Error; err != nil {
 		return nil, fmt.Errorf("failed to get revenue accounts: %v", err)
 	}
 
-	// Get all expense accounts with current balances
+	// Get all expense accounts with NON-ZERO balances
 	var expenseAccounts []models.Account
-	if err := pcs.db.Where("type = ? AND balance != 0 AND is_active = true AND is_header = false", models.AccountTypeExpense).
+	if err := pcs.db.Where("type = ? AND ABS(balance) > 0.01 AND is_active = true AND is_header = false", models.AccountTypeExpense).
 		Find(&expenseAccounts).Error; err != nil {
 		return nil, fmt.Errorf("failed to get expense accounts: %v", err)
 	}
@@ -327,8 +328,9 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 		lineNumber := 1
 
 		// Close Revenue Accounts (TEMPORARY)
+		// IMPORTANT: Only close accounts with actual balances (> 0.01)
 		for _, revAccount := range preview.RevenueAccounts {
-			if revAccount.Balance > 0 {
+			if revAccount.Balance > 0.01 {
 				// Debit Revenue Account (to zero it out)
 				journalLines = append(journalLines, models.JournalLine{
 					AccountID:    revAccount.ID,
@@ -366,8 +368,9 @@ func (pcs *PeriodClosingService) ExecutePeriodClosing(ctx context.Context, req m
 		}
 
 		// Close Expense Accounts (TEMPORARY)
+		// IMPORTANT: Only close accounts with actual balances (> 0.01)
 		for _, expAccount := range preview.ExpenseAccounts {
-			if expAccount.Balance > 0 {
+			if expAccount.Balance > 0.01 {
 				// Credit Expense Account (to zero it out)
 				journalLines = append(journalLines, models.JournalLine{
 					AccountID:    expAccount.ID,

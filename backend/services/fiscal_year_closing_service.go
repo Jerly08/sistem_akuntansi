@@ -92,16 +92,17 @@ func (fycs *FiscalYearClosingService) PreviewFiscalYearClosing(ctx context.Conte
 	// Get all TEMPORARY accounts (Revenue & Expense) with balances
 	// These are the only accounts that should be reset to zero at year-end
 	
-	// Get all revenue accounts with balances (TEMPORARY accounts)
+	// Get all revenue accounts with NON-ZERO balances (TEMPORARY accounts)
+	// IMPORTANT: Use ABS(balance) > 0.01 to avoid double-closing already closed accounts
 	var revenueAccounts []models.Account
-	if err := fycs.db.Where("type = ? AND balance != 0 AND is_active = true AND is_header = false", models.AccountTypeRevenue).
+	if err := fycs.db.Where("type = ? AND ABS(balance) > 0.01 AND is_active = true AND is_header = false", models.AccountTypeRevenue).
 		Find(&revenueAccounts).Error; err != nil {
 		return nil, fmt.Errorf("failed to get revenue accounts: %v", err)
 	}
 
-	// Get all expense accounts with balances (TEMPORARY accounts)
+	// Get all expense accounts with NON-ZERO balances (TEMPORARY accounts)
 	var expenseAccounts []models.Account
-	if err := fycs.db.Where("type = ? AND balance != 0 AND is_active = true AND is_header = false", models.AccountTypeExpense).
+	if err := fycs.db.Where("type = ? AND ABS(balance) > 0.01 AND is_active = true AND is_header = false", models.AccountTypeExpense).
 		Find(&expenseAccounts).Error; err != nil {
 		return nil, fmt.Errorf("failed to get expense accounts: %v", err)
 	}
@@ -224,8 +225,9 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 
 		// Close TEMPORARY ACCOUNTS - Revenue Accounts
 		// Revenue accounts are temporary and must be reset to zero each fiscal year
+		// IMPORTANT: Only close accounts with actual balances (> 0.01) to prevent double posting
 		for _, revAccount := range preview.RevenueAccounts {
-			if revAccount.Balance > 0 {
+			if revAccount.Balance > 0.01 {
 				// Debit Revenue Account (to zero it out - normal balance is credit)
 				journalLines = append(journalLines, models.JournalLine{
 					AccountID:    revAccount.ID,
@@ -265,19 +267,20 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 			lineNumber++
 		}
 
-		for _, expAccount := range preview.ExpenseAccounts {
-			if expAccount.Balance > 0 {
-				// Credit Expense Account (to zero it out - normal balance is debit)
-				journalLines = append(journalLines, models.JournalLine{
-					AccountID:    expAccount.ID,
-					Description:  fmt.Sprintf("Close temporary account: %s to retained earnings", expAccount.Name),
-					DebitAmount:  0,
-					CreditAmount: expAccount.Balance,
-					LineNumber:   lineNumber,
-				})
-				lineNumber++
-			}
+	// IMPORTANT: Only close accounts with actual balances (> 0.01) to prevent double posting
+	for _, expAccount := range preview.ExpenseAccounts {
+		if expAccount.Balance > 0.01 {
+			// Credit Expense Account (to zero it out - normal balance is debit)
+			journalLines = append(journalLines, models.JournalLine{
+				AccountID:    expAccount.ID,
+				Description:  fmt.Sprintf("Close temporary account: %s to retained earnings", expAccount.Name),
+				DebitAmount:  0,
+				CreditAmount: expAccount.Balance,
+				LineNumber:   lineNumber,
+			})
+			lineNumber++
 		}
+	}
 
 		// Calculate totals for journal entry
 		closingJournal.TotalDebit = preview.TotalRevenue + preview.TotalExpense

@@ -197,15 +197,15 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	fiscalYearClosingService := services.NewFiscalYearClosingService(db)
 	fiscalYearClosingController := controllers.NewFiscalYearClosingController(fiscalYearClosingService)
 	
-	// Initialize Period Closing Service and Controller (Flexible Period Closing)
-	periodClosingService := services.NewPeriodClosingService(db)
-	periodClosingController := controllers.NewPeriodClosingController(periodClosingService)
+	// Initialize SSOT Unified Journal Service first (needed by period closing)
+	unifiedJournalService := services.NewUnifiedJournalService(db)
+	
+	// Initialize Period Closing Service and Controller (Unified Journal-based)
+	unifiedPeriodClosingService := services.NewUnifiedPeriodClosingService(db)
+	periodClosingController := controllers.NewPeriodClosingController(unifiedPeriodClosingService)
 	
 	// Initialize Period Validation Middleware
-	periodValidationMiddleware := middleware.NewPeriodValidationMiddleware(periodClosingService)
-	
-	// Initialize SSOT Unified Journal Service first (needed by purchase service)
-	unifiedJournalService := services.NewUnifiedJournalService(db)
+	periodValidationMiddleware := middleware.NewPeriodValidationMiddleware(unifiedPeriodClosingService)
 	
 	// Purchase repositories, services and controllers
 	purchaseRepo := repositories.NewPurchaseRepository(db)

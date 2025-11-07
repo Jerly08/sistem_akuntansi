@@ -64,6 +64,16 @@ func main() {
 		log.Println("✅ SSOT Journal System is ready and verified!")
 	}
 	
+	// Migrate to Unified Journals (if old journal_entries exist)
+	log.Println("⚡ Checking migration to Unified Journals...")
+	if err := startup.MigrateToUnifiedJournals(db); err != nil {
+		log.Printf("❌ Migration to Unified Journals failed: %v", err)
+		log.Printf("⚠️  Backend will continue to run, but data may be inconsistent")
+		log.Printf("💡 Please check the migration logs and database state")
+	} else {
+		log.Println("✅ Unified Journals migration check completed!")
+	}
+	
 	// Migrate permissions table
 	if err := database.MigratePermissions(db); err != nil {
 		log.Printf("Error migrating permissions: %v", err)

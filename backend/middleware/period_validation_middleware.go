@@ -11,11 +11,11 @@ import (
 
 // PeriodValidationMiddleware checks if transaction date is in closed period
 type PeriodValidationMiddleware struct {
-	periodService *services.PeriodClosingService
+	periodService *services.UnifiedPeriodClosingService
 }
 
 // NewPeriodValidationMiddleware creates a new period validation middleware
-func NewPeriodValidationMiddleware(periodService *services.PeriodClosingService) *PeriodValidationMiddleware {
+func NewPeriodValidationMiddleware(periodService *services.UnifiedPeriodClosingService) *PeriodValidationMiddleware {
 	return &PeriodValidationMiddleware{
 		periodService: periodService,
 	}

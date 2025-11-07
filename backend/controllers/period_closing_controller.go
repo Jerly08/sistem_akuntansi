@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"app-sistem-akuntansi/models"
@@ -12,11 +11,11 @@ import (
 
 // PeriodClosingController handles flexible period closing operations
 type PeriodClosingController struct {
-	service *services.PeriodClosingService
+	service *services.UnifiedPeriodClosingService
 }
 
 // NewPeriodClosingController creates a new period closing controller
-func NewPeriodClosingController(service *services.PeriodClosingService) *PeriodClosingController {
+func NewPeriodClosingController(service *services.UnifiedPeriodClosingService) *PeriodClosingController {
 	return &PeriodClosingController{
 		service: service,
 	}
@@ -126,8 +125,58 @@ func (pcc *PeriodClosingController) ExecuteClosing(c *gin.Context) {
 		return
 	}
 
-	// Pass Gin context to preserve user_id
-	err := pcc.service.ExecutePeriodClosing(c, req)
+	// Parse dates
+	startDate, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid start_date format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	endDate, err := time.Parse("2006-01-02", req.EndDate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "Invalid end_date format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"success": false,
+			"error":   "User not authenticated",
+		})
+		return
+	}
+
+	// Convert user_id to uint64 (context stores as uint)
+	var userIDUint64 uint64
+	switch v := userID.(type) {
+	case uint:
+		userIDUint64 = uint64(v)
+	case uint64:
+		userIDUint64 = v
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   "Invalid user_id type",
+		})
+		return
+	}
+
+	description := req.Description
+	if description == "" {
+		description = "Period Closing: " + req.StartDate + " to " + req.EndDate
+	}
+
+	err = pcc.service.ExecutePeriodClosing(c.Request.Context(), startDate, endDate, description, userIDUint64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"success": false,
@@ -153,25 +202,10 @@ func (pcc *PeriodClosingController) ExecuteClosing(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/period-closing/history [get]
 func (pcc *PeriodClosingController) GetClosingHistory(c *gin.Context) {
-	limitStr := c.DefaultQuery("limit", "20")
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil {
-		limit = 20
-	}
-
-	history, err := pcc.service.GetClosingHistory(c.Request.Context(), limit)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Failed to get closing history",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    history,
+	// TODO: Implement GetClosingHistory in UnifiedPeriodClosingService
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"success": false,
+		"error":   "This feature is temporarily unavailable during migration to unified journal system",
 	})
 }
 
@@ -231,51 +265,9 @@ func (pcc *PeriodClosingController) CheckDateInClosedPeriod(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /api/v1/period-closing/reopen [post]
 func (pcc *PeriodClosingController) ReopenPeriod(c *gin.Context) {
-	var req models.PeriodReopenRequest
-	
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid request body",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	// Parse dates
-	startDate, err := time.Parse("2006-01-02", req.StartDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid start date format. Use YYYY-MM-DD",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	endDate, err := time.Parse("2006-01-02", req.EndDate)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Invalid end date format. Use YYYY-MM-DD",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	// Pass Gin context to preserve user_id
-	err = pcc.service.ReopenPeriod(c, startDate, endDate, req.Reason)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"success": false,
-			"error":   "Failed to reopen period",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Period reopened successfully. All closing entries have been reversed.",
+	// TODO: Implement ReopenPeriod in UnifiedPeriodClosingService
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"success": false,
+		"error":   "This feature is temporarily unavailable during migration to unified journal system",
 	})
 }
