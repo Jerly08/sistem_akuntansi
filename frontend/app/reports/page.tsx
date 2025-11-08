@@ -64,7 +64,9 @@ import {
   FiChevronDown,
   FiDollarSign,
   FiUsers,
-  FiTruck
+  FiTruck,
+  FiCalendar,
+  FiClock
 } from 'react-icons/fi';
 // Legacy reportService removed - now using SSOT services only
 import { ssotBalanceSheetReportService, SSOTBalanceSheetData } from '../../src/services/ssotBalanceSheetReportService';
@@ -80,6 +82,8 @@ import { API_ENDPOINTS } from '@/config/api';
 import { ssotPurchaseReportService, SSOTPurchaseReportData } from '../../src/services/ssotPurchaseReportService';
 // Import Cash Flow Export Service
 import cashFlowExportService from '../../src/services/cashFlowExportService';
+// Import Closing History Modal
+import ClosingHistoryModal from '../../src/components/reports/ClosingHistoryModal';
 
 // Define reports data matching the UI design
 const getAvailableReports = (t: any) => [
@@ -268,6 +272,10 @@ const ReportsPage: React.FC = () => {
   const [vendorHistoryEndDate, setVendorHistoryEndDate] = useState('');
   const [vendorHistoryVendorId, setVendorHistoryVendorId] = useState<string>('');
   const [vendors, setVendors] = useState<any[]>([]);
+
+  // State untuk Closing History Modal
+  const [closingHistoryOpen, setClosingHistoryOpen] = useState(false);
+  const [closingHistoryReportType, setClosingHistoryReportType] = useState<string>('');
 
   // Modal and report generation states
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -2379,16 +2387,30 @@ const ReportsPage: React.FC = () => {
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
           <ModalHeader>
-            <HStack>
-              <Icon as={FiTrendingUp} color="green.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  SSOT Profit & Loss Statement
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  Real-time integration with SSOT Journal System
-                </Text>
-              </VStack>
+            <HStack justify="space-between" width="full">
+              <HStack>
+                <Icon as={FiTrendingUp} color="purple.500" />
+                <VStack align="start" spacing={0}>
+                  <Text fontSize="lg" fontWeight="bold">
+                    SSOT Profit & Loss Statement
+                  </Text>
+                  <Text fontSize="sm" color={previewPeriodTextColor}>
+                    Enhanced Revenue Analysis with Real-time SSOT Integration
+                  </Text>
+                </VStack>
+              </HStack>
+              <Button
+                size="sm"
+                variant="ghost"
+                leftIcon={<FiClock />}
+                onClick={() => {
+                  setClosingHistoryReportType('Profit & Loss');
+                  setClosingHistoryOpen(true);
+                }}
+                title="View closing period history"
+              >
+                History
+              </Button>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
@@ -2740,16 +2762,30 @@ leftIcon={<FiTrendingUp />}
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
           <ModalHeader>
-            <HStack>
-              <Icon as={FiBarChart} color="blue.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  SSOT Balance Sheet
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  Real-time integration with SSOT Journal System
-                </Text>
-              </VStack>
+            <HStack justify="space-between" width="full">
+              <HStack>
+                <Icon as={FiBarChart} color="blue.500" />
+                <VStack align="start" spacing={0}>
+                  <Text fontSize="lg" fontWeight="bold">
+                    SSOT Balance Sheet
+                  </Text>
+                  <Text fontSize="sm" color={previewPeriodTextColor}>
+                    Real-time integration with SSOT Journal System
+                  </Text>
+                </VStack>
+              </HStack>
+              <Button
+                size="sm"
+                variant="ghost"
+                leftIcon={<FiClock />}
+                onClick={() => {
+                  setClosingHistoryReportType('Balance Sheet');
+                  setClosingHistoryOpen(true);
+                }}
+                title="View closing period history"
+              >
+                History
+              </Button>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
@@ -3000,16 +3036,30 @@ leftIcon={<FiBarChart />}
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
           <ModalHeader>
-            <HStack>
-              <Icon as={FiActivity} color="blue.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  SSOT Cash Flow Statement
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  {ssotCFStartDate} - {ssotCFEndDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
+            <HStack justify="space-between" width="full">
+              <HStack>
+                <Icon as={FiActivity} color="blue.500" />
+                <VStack align="start" spacing={0}>
+                  <Text fontSize="lg" fontWeight="bold">
+                    SSOT Cash Flow Statement
+                  </Text>
+                  <Text fontSize="sm" color={previewPeriodTextColor}>
+                    {ssotCFStartDate} - {ssotCFEndDate} | SSOT Journal Integration
+                  </Text>
+                </VStack>
+              </HStack>
+              <Button
+                size="sm"
+                variant="ghost"
+                leftIcon={<FiClock />}
+                onClick={() => {
+                  setClosingHistoryReportType('Cash Flow');
+                  setClosingHistoryOpen(true);
+                }}
+                title="View closing period history"
+              >
+                History
+              </Button>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
@@ -3516,16 +3566,30 @@ leftIcon={<FiActivity />}
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
           <ModalHeader>
-            <HStack>
-              <Icon as={FiBook} color="blue.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  Trial Balance (SSOT)
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
+            <HStack justify="space-between" width="full">
+              <HStack>
+                <Icon as={FiBook} color="blue.500" />
+                <VStack align="start" spacing={0}>
+                  <Text fontSize="lg" fontWeight="bold">
+                    Trial Balance (SSOT)
+                  </Text>
+                  <Text fontSize="sm" color={previewPeriodTextColor}>
 As of {ssotTBAsOfDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
+                  </Text>
+                </VStack>
+              </HStack>
+              <Button
+                size="sm"
+                variant="ghost"
+                leftIcon={<FiClock />}
+                onClick={() => {
+                  setClosingHistoryReportType('Trial Balance');
+                  setClosingHistoryOpen(true);
+                }}
+                title="View closing period history"
+              >
+                History
+              </Button>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
@@ -4308,16 +4372,30 @@ As of: {ssotTBAsOfDate}
         <ModalOverlay />
         <ModalContent bg={modalContentBg} maxW="95vw" m={4}>
           <ModalHeader>
-            <HStack>
-              <Icon as={FiBook} color="green.500" />
-              <VStack align="start" spacing={0}>
-                <Text fontSize="lg" fontWeight="bold">
-                  General Ledger (SSOT)
-                </Text>
-                <Text fontSize="sm" color={previewPeriodTextColor}>
-                  {ssotGLStartDate} - {ssotGLEndDate} | SSOT Journal Integration
-                </Text>
-              </VStack>
+            <HStack justify="space-between" width="full">
+              <HStack>
+                <Icon as={FiBook} color="green.500" />
+                <VStack align="start" spacing={0}>
+                  <Text fontSize="lg" fontWeight="bold">
+                    General Ledger (SSOT)
+                  </Text>
+                  <Text fontSize="sm" color={previewPeriodTextColor}>
+                    {ssotGLStartDate} - {ssotGLEndDate} | SSOT Journal Integration
+                  </Text>
+                </VStack>
+              </HStack>
+              <Button
+                size="sm"
+                variant="ghost"
+                leftIcon={<FiClock />}
+                onClick={() => {
+                  setClosingHistoryReportType('General Ledger');
+                  setClosingHistoryOpen(true);
+                }}
+                title="View closing period history"
+              >
+                History
+              </Button>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
@@ -4668,6 +4746,16 @@ As of: {ssotTBAsOfDate}
         </ModalContent>
       </Modal>
 
+      {/* Closing History Modal */}
+      <ClosingHistoryModal
+        isOpen={closingHistoryOpen}
+        onClose={() => setClosingHistoryOpen(false)}
+        reportType={closingHistoryReportType}
+        currentPeriod={{
+          start: ssotStartDate || ssotCFStartDate || ssotSSStartDate,
+          end: ssotEndDate || ssotCFEndDate || ssotSSEndDate
+        }}
+      />
       
     </SimpleLayout>
   );

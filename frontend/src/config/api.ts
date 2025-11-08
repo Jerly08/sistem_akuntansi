@@ -469,6 +469,23 @@ export const API_ENDPOINTS = {
   SETTINGS: '/api/v1/settings',
   SETTINGS_UPDATE: '/api/v1/settings',
   
+  // Fiscal Year Closing (with /api/v1 prefix)
+  FISCAL_CLOSING: {
+    PREVIEW: '/api/v1/fiscal-closing/preview',
+    EXECUTE: '/api/v1/fiscal-closing/execute',
+    HISTORY: '/api/v1/fiscal-closing/history',
+  },
+  
+  // Period Closing (with /api/v1 prefix)
+  PERIOD_CLOSING: {
+    LAST_INFO: '/api/v1/period-closing/last-info',
+    PREVIEW: '/api/v1/period-closing/preview',
+    EXECUTE: '/api/v1/period-closing/execute',
+    REOPEN: '/api/v1/period-closing/reopen',
+    HISTORY: '/api/v1/period-closing/history',
+    CHECK_DATE: '/api/v1/period-closing/check-date',
+  },
+  
   // Health Check
   HEALTH: '/api/v1/health',
 };
