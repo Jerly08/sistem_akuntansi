@@ -59,16 +59,17 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 		}
 
 		// 4. Calculate totals
-		// IMPORTANT: Revenue accounts have NEGATIVE balances (credit normal)
-		// Expense accounts have POSITIVE balances (debit normal)
+		// IMPORTANT: In this system, Revenue accounts have POSITIVE balances (credit side)
+		// Expense accounts can be POSITIVE (debit side) or NEGATIVE depending on data
 		var totalRevenue, totalExpense decimal.Decimal
 		for _, acc := range revenueAccounts {
-			// Revenue balance is negative, so negate to get positive amount
-			totalRevenue = totalRevenue.Add(decimal.NewFromFloat(-acc.Balance))
+			// Revenue balance is stored as positive value in this system
+			// Take absolute value to ensure positive
+			totalRevenue = totalRevenue.Add(decimal.NewFromFloat(acc.Balance).Abs())
 		}
 		for _, acc := range expenseAccounts {
-			// Expense balance is positive
-			totalExpense = totalExpense.Add(decimal.NewFromFloat(acc.Balance))
+			// Expense balance - take absolute value to ensure positive
+			totalExpense = totalExpense.Add(decimal.NewFromFloat(acc.Balance).Abs())
 		}
 
 		netIncome := totalRevenue.Sub(totalExpense)
@@ -81,14 +82,17 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 		lineNum := 1
 
 		// Close Revenue accounts (Debit Revenue, Credit Retained Earnings)
-		// Revenue has NEGATIVE balance, we debit it to make it zero
+		// In this system, Revenue accounts have POSITIVE balances
+		// To close them: Debit Revenue (decrease credit side) to make balance 0
 		for _, acc := range revenueAccounts {
-			if acc.Balance < -0.01 { // Revenue balance is negative
+			if acc.Balance > 0.01 || acc.Balance < -0.01 { // Check for any non-zero balance
+				// Take absolute value of balance for debit amount
+				amount := decimal.NewFromFloat(acc.Balance).Abs()
 				journalLines = append(journalLines, models.SSOTJournalLine{
 					AccountID:    uint64(acc.ID),
 					LineNumber:   lineNum,
 					Description:  fmt.Sprintf("Close revenue account: %s", acc.Name),
-					DebitAmount:  decimal.NewFromFloat(-acc.Balance), // Negate to get positive debit
+					DebitAmount:  amount,
 					CreditAmount: decimal.Zero,
 				})
 				lineNum++
@@ -119,15 +123,17 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			lineNum++
 		}
 
-		// Close Expense accounts (Debit Retained Earnings, Credit Expense)
+		// Close Expense accounts (Credit Expense to make balance 0, Debit Retained Earnings)
 		for _, acc := range expenseAccounts {
-			if acc.Balance > 0.01 {
+			if acc.Balance > 0.01 || acc.Balance < -0.01 { // Check for any non-zero balance
+				// Take absolute value of balance for credit amount
+				amount := decimal.NewFromFloat(acc.Balance).Abs()
 				journalLines = append(journalLines, models.SSOTJournalLine{
 					AccountID:    uint64(acc.ID),
 					LineNumber:   lineNum,
 					Description:  fmt.Sprintf("Close expense account: %s", acc.Name),
 					DebitAmount:  decimal.Zero,
-					CreditAmount: decimal.NewFromFloat(acc.Balance),
+					CreditAmount: amount,
 				})
 				lineNum++
 			}
@@ -159,9 +165,10 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 		log.Printf("[UNIFIED CLOSING] Created unified journal entry ID: %d with %d lines", closingEntry.ID, len(journalLines))
 
 		// 7. Update account balances based on the journal entry
-		// Revenue accounts: balance becomes 0 (debited by their balance)
-		// Expense accounts: balance becomes 0 (credited by their balance)
-		// Retained Earnings: increases by net income
+		// This implementation works with the actual balance sign convention in the database:
+		// - Revenue accounts: POSITIVE balance (credit side) - Debit DECREASES
+		// - Expense accounts: can be POSITIVE or NEGATIVE - Credit DECREASES positive, Debit DECREASES negative
+		// - Retained Earnings (EQUITY): POSITIVE balance (credit side) - Credit INCREASES
 		for _, line := range journalLines {
 			var account models.Account
 			if err := tx.First(&account, line.AccountID).Error; err != nil {
@@ -169,11 +176,23 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			}
 
 			var balanceChange float64
-			if account.Type == "ASSET" || account.Type == "EXPENSE" {
-				// Debit normal: debit increases, credit decreases
+			
+			// For closing entries:
+			// Revenue (credit balance): Debit to close → DECREASES balance
+			// Expense (debit balance): Credit to close → DECREASES balance
+			// Retained Earnings: Receive net income → INCREASES balance
+			
+			if account.Type == "REVENUE" || account.Type == "EQUITY" {
+				// Credit normal accounts: stored as positive balance
+				// Debit DECREASES, Credit INCREASES
+				balanceChange = line.CreditAmount.InexactFloat64() - line.DebitAmount.InexactFloat64()
+			} else if account.Type == "EXPENSE" || account.Type == "ASSET" {
+				// Debit normal accounts
+				// For expense closing: we credit to close, which DECREASES the balance
+				// Debit INCREASES, Credit DECREASES
 				balanceChange = line.DebitAmount.InexactFloat64() - line.CreditAmount.InexactFloat64()
 			} else {
-				// Credit normal: credit increases, debit decreases
+				// LIABILITY (credit normal, like EQUITY)
 				balanceChange = line.CreditAmount.InexactFloat64() - line.DebitAmount.InexactFloat64()
 			}
 
@@ -183,8 +202,8 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 				return fmt.Errorf("failed to update account %d balance: %v", line.AccountID, err)
 			}
 
-			log.Printf("[UNIFIED CLOSING] Updated account %s (%s): balance change = %.2f",
-				account.Code, account.Name, balanceChange)
+			log.Printf("[UNIFIED CLOSING] Updated account %s (%s) Type=%s: current=%.2f, change=%.2f, new=%.2f",
+				account.Code, account.Name, account.Type, account.Balance, balanceChange, account.Balance+balanceChange)
 		}
 
 		// 8. Create accounting period record
@@ -229,12 +248,23 @@ func (s *UnifiedPeriodClosingService) PreviewPeriodClosing(ctx context.Context, 
 	s.db.Where("type = ? AND ABS(balance) > 0.01 AND is_header = false", "EXPENSE").Find(&expenseAccounts)
 
 	// Calculate totals
+	// Use absolute values to ensure correct positive amounts
 	var totalRevenue, totalExpense float64
 	for _, acc := range revenueAccounts {
-		totalRevenue += acc.Balance
+		// Revenue balance is stored as positive, use absolute value
+		if acc.Balance < 0 {
+			totalRevenue += -acc.Balance
+		} else {
+			totalRevenue += acc.Balance
+		}
 	}
 	for _, acc := range expenseAccounts {
-		totalExpense += acc.Balance
+		// Expense balance - use absolute value
+		if acc.Balance < 0 {
+			totalExpense += -acc.Balance
+		} else {
+			totalExpense += acc.Balance
+		}
 	}
 
 	netIncome := totalRevenue - totalExpense

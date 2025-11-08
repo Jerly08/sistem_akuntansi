@@ -330,13 +330,31 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 func (fycs *FiscalYearClosingService) GetFiscalYearClosingHistory(ctx context.Context) ([]map[string]interface{}, error) {
 	var closingEntries []models.JournalEntry
 
+	fmt.Printf("[GetFiscalYearClosingHistory] Querying for reference_type = %s\n", models.JournalRefClosing)
+
 	err := fycs.db.Where("reference_type = ?", models.JournalRefClosing).
 		Order("entry_date DESC").
 		Limit(10).
 		Find(&closingEntries).Error
 
 	if err != nil {
+		fmt.Printf("[GetFiscalYearClosingHistory] Query error: %v\n", err)
 		return nil, fmt.Errorf("failed to get closing history: %v", err)
+	}
+
+	fmt.Printf("[GetFiscalYearClosingHistory] Found %d closing entries\n", len(closingEntries))
+
+	// Debug: Check what reference_types exist in the database
+	if len(closingEntries) == 0 {
+		var allEntries []models.JournalEntry
+		fycs.db.Select("id, code, reference_type, entry_date").
+			Where("code LIKE ?", "CLO-%").
+			Limit(5).
+			Find(&allEntries)
+		fmt.Printf("[GetFiscalYearClosingHistory] Sample entries with CLO- prefix: %d\n", len(allEntries))
+		for i, e := range allEntries {
+			fmt.Printf("  %d. ID=%d, Code=%s, RefType=%s, Date=%v\n", i+1, e.ID, e.Code, e.ReferenceType, e.EntryDate)
+		}
 	}
 
 	var history []map[string]interface{}

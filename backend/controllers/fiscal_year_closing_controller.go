@@ -131,12 +131,18 @@ func (fycc *FiscalYearClosingController) ExecuteClosing(c *gin.Context) {
 func (fycc *FiscalYearClosingController) GetClosingHistory(c *gin.Context) {
 	history, err := fycc.service.GetFiscalYearClosingHistory(c.Request.Context())
 	if err != nil {
+		fmt.Printf("[GetClosingHistory] Error: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
 			"error":   "Failed to get closing history",
 			"details": err.Error(),
 		})
 		return
+	}
+
+	fmt.Printf("[GetClosingHistory] Found %d entries\n", len(history))
+	if len(history) > 0 {
+		fmt.Printf("[GetClosingHistory] First entry: %+v\n", history[0])
 	}
 
 	c.JSON(http.StatusOK, gin.H{
