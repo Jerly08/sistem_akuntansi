@@ -1,11 +1,13 @@
 package models
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"time"
 	"gorm.io/gorm"
 )
 
-// AccountingPeriod represents a closed accounting period
+// AccountingPeriod represents a closed accounting period with snapshots
 type AccountingPeriod struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
 	StartDate   time.Time      `json:"start_date" gorm:"not null;index"`
@@ -22,6 +24,18 @@ type AccountingPeriod struct {
 	NetIncome         float64 `json:"net_income" gorm:"type:decimal(20,2);default:0"`
 	ClosingJournalID  *uint   `json:"closing_journal_id" gorm:"index"` // Reference to closing journal entry
 	
+	// Archive snapshots (stored as JSONB in PostgreSQL)
+	BalanceSheetSnapshot *JSONMap   `json:"balance_sheet_snapshot,omitempty" gorm:"type:jsonb"`
+	ProfitLossSnapshot   *JSONMap   `json:"profit_loss_snapshot,omitempty" gorm:"type:jsonb"`
+	FinancialMetrics     *JSONMap   `json:"financial_metrics,omitempty" gorm:"type:jsonb"`
+	SnapshotGeneratedAt  *time.Time `json:"snapshot_generated_at,omitempty"`
+	
+	// Period categorization
+	PeriodType       string `json:"period_type" gorm:"type:varchar(20);default:'CUSTOM'"` // MONTHLY, QUARTERLY, SEMESTER, ANNUAL, CUSTOM
+	FiscalYear       *int   `json:"fiscal_year,omitempty" gorm:"index"`
+	AccountCount     int    `json:"account_count" gorm:"default:0"`
+	TransactionCount int    `json:"transaction_count" gorm:"default:0"`
+	
 	Notes     string         `json:"notes" gorm:"type:text"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -30,6 +44,30 @@ type AccountingPeriod struct {
 	// Relations
 	ClosedByUser    *User         `json:"closed_by_user,omitempty" gorm:"foreignKey:ClosedBy"`
 	ClosingJournal  *JournalEntry `json:"closing_journal,omitempty" gorm:"foreignKey:ClosingJournalID"`
+}
+
+// JSONMap is a type for storing JSON data in JSONB columns
+type JSONMap map[string]interface{}
+
+// Scan implements the sql.Scanner interface for JSONMap
+func (j *JSONMap) Scan(value interface{}) error {
+	if value == nil {
+		*j = nil
+		return nil
+	}
+	bytes, ok := value.([]byte)
+	if !ok {
+		return nil
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+// Value implements the driver.Valuer interface for JSONMap
+func (j JSONMap) Value() (driver.Value, error) {
+	if j == nil {
+		return nil, nil
+	}
+	return json.Marshal(j)
 }
 
 // TableName specifies the table name for AccountingPeriod

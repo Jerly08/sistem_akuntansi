@@ -48,6 +48,7 @@ import {
   Td,
   TableContainer,
   Divider,
+  Tooltip,
 } from '@chakra-ui/react';
 import { 
   FiFileText, 
@@ -66,7 +67,8 @@ import {
   FiUsers,
   FiTruck,
   FiCalendar,
-  FiClock
+  FiClock,
+  FiInfo
 } from 'react-icons/fi';
 // Legacy reportService removed - now using SSOT services only
 import { ssotBalanceSheetReportService, SSOTBalanceSheetData } from '../../src/services/ssotBalanceSheetReportService';
@@ -212,6 +214,8 @@ const ReportsPage: React.FC = () => {
   const [ssotBSLoading, setSSOTBSLoading] = useState(false);
   const [ssotBSError, setSSOTBSError] = useState<string | null>(null);
   const [ssotAsOfDate, setSSOTAsOfDate] = useState('');
+  const [closedPeriods, setClosedPeriods] = useState<any[]>([]);
+  const [loadingClosedPeriods, setLoadingClosedPeriods] = useState(false);
 
   // State untuk SSOT Cash Flow
   const [ssotCFOpen, setSSOTCFOpen] = useState(false);
@@ -698,6 +702,68 @@ const ReportsPage: React.FC = () => {
       });
     } finally {
       setSSOTGLLoading(false);
+    }
+  };
+
+  // Function untuk fetch closed periods
+  const fetchClosedPeriods = async () => {
+    setLoadingClosedPeriods(true);
+    try {
+      const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+      console.log('[Reports] Fetching closed periods:', response.data);
+      console.log('[Reports] Raw data:', JSON.stringify(response.data, null, 2));
+      
+      if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+        // Format data untuk dropdown dengan grouping by year
+        // Backend returns: { id, code, description, entry_date, created_at, total_debit }
+        const periods = response.data.data
+          .filter((entry: any) => entry.entry_date) // Filter entries dengan date valid
+          .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+          .map((entry: any) => {
+            // Use entry_date as the closed period date
+            const dateObj = new Date(entry.entry_date);
+            const formattedDate = dateObj.toLocaleDateString('id-ID', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric'
+            });
+            
+            // Convert to YYYY-MM-DD format for value
+            const dateValue = dateObj.toISOString().split('T')[0];
+            
+            return {
+              value: dateValue,
+              label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+              date: dateValue,
+              fiscal_year: dateObj.getFullYear(),
+              entry_id: entry.id,
+              code: entry.code
+            };
+          });
+        
+        setClosedPeriods(periods);
+        console.log(`[Reports] Loaded ${periods.length} closed periods:`, periods);
+        
+        if (periods.length === 0) {
+          console.warn('[Reports] No valid closed periods found - entries may not have entry_date');
+        }
+      } else {
+        console.log('[Reports] No closed periods found in response or invalid data structure');
+        console.log('[Reports] Response structure:', {
+          hasSuccess: !!response.data.success,
+          hasData: !!response.data.data,
+          dataType: typeof response.data.data,
+          isArray: Array.isArray(response.data.data)
+        });
+        setClosedPeriods([]);
+      }
+    } catch (error: any) {
+      console.error('[Reports] Error fetching closed periods:', error);
+      console.error('[Reports] Error details:', error.response?.data || error.message);
+      // Silent fail - tidak menampilkan error untuk ini
+      setClosedPeriods([]);
+    } finally {
+      setLoadingClosedPeriods(false);
     }
   };
 
@@ -2758,41 +2824,35 @@ leftIcon={<FiTrendingUp />}
       </Modal>
 
       {/* SSOT Balance Sheet Modal */}
-      <Modal isOpen={ssotBSOpen} onClose={() => setSSOTBSOpen(false)} size="6xl">
+      <Modal 
+        isOpen={ssotBSOpen} 
+        onClose={() => setSSOTBSOpen(false)} 
+        size="6xl"
+        onCloseComplete={() => {
+          // Reset closed periods when modal closes
+          setClosedPeriods([]);
+        }}
+      >
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
           <ModalHeader>
-            <HStack justify="space-between" width="full">
-              <HStack>
-                <Icon as={FiBarChart} color="blue.500" />
-                <VStack align="start" spacing={0}>
-                  <Text fontSize="lg" fontWeight="bold">
-                    SSOT Balance Sheet
-                  </Text>
-                  <Text fontSize="sm" color={previewPeriodTextColor}>
-                    Real-time integration with SSOT Journal System
-                  </Text>
-                </VStack>
-              </HStack>
-              <Button
-                size="sm"
-                variant="ghost"
-                leftIcon={<FiClock />}
-                onClick={() => {
-                  setClosingHistoryReportType('Balance Sheet');
-                  setClosingHistoryOpen(true);
-                }}
-                title="View closing period history"
-              >
-                History
-              </Button>
+            <HStack>
+              <Icon as={FiBarChart} color="blue.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  SSOT Balance Sheet
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
+                  Real-time integration with SSOT Journal System
+                </Text>
+              </VStack>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-<HStack spacing={4} mb={4} flexWrap="wrap">
-                <FormControl>
+              <HStack spacing={4} mb={4} flexWrap="wrap">
+                <FormControl flex="1">
                   <FormLabel>As Of Date</FormLabel>
                   <Input 
                     type="date" 
@@ -2800,11 +2860,83 @@ leftIcon={<FiTrendingUp />}
                     onChange={(e) => setSSOTAsOfDate(e.target.value)} 
                   />
                 </FormControl>
+                <FormControl flex="1">
+                  <FormLabel display="flex" alignItems="center">
+                    Closed Period
+                    <Badge ml={2} colorScheme="blue" fontSize="xs">
+                      Quick Select
+                    </Badge>
+                    <Tooltip label="Select from previously closed accounting periods or enter custom date">
+                      <span>
+                        <Icon as={FiInfo} ml={1} color="gray.500" boxSize={3} />
+                      </span>
+                    </Tooltip>
+                  </FormLabel>
+                  <Select 
+                    placeholder="Select closed period date..."
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setSSOTAsOfDate(e.target.value);
+                        console.log(`[Reports] Selected period: ${e.target.value}`);
+                      }
+                    }}
+                    onFocus={() => {
+                      // Fetch closed periods saat dropdown diklik (lazy loading)
+                      if (closedPeriods.length === 0 && !loadingClosedPeriods) {
+                        console.log('[Reports] Fetching closed periods on dropdown focus...');
+                        fetchClosedPeriods();
+                      }
+                    }}
+                    isDisabled={loadingClosedPeriods}
+                    icon={loadingClosedPeriods ? <Spinner size="xs" /> : undefined}
+                  >
+                    {loadingClosedPeriods && (
+                      <option disabled>Loading closed periods...</option>
+                    )}
+                    
+                    {!loadingClosedPeriods && closedPeriods.length === 0 && (
+                      <option disabled>No closed periods found</option>
+                    )}
+                    
+                    {!loadingClosedPeriods && closedPeriods.length > 0 && (
+                      <>
+                        {/* Group by year */}
+                        {Array.from(new Set(closedPeriods.map(p => {
+                          const year = new Date(p.date).getFullYear();
+                          const currentYear = new Date().getFullYear();
+                          if (year === currentYear) return 'Current Year';
+                          if (year === currentYear - 1) return 'Last Year';
+                          return `Year ${year}`;
+                        }))).map(group => (
+                          <optgroup label={group} key={group}>
+                            {closedPeriods
+                              .filter(p => {
+                                const year = new Date(p.date).getFullYear();
+                                const currentYear = new Date().getFullYear();
+                                if (year === currentYear) return group === 'Current Year';
+                                if (year === currentYear - 1) return group === 'Last Year';
+                                return group === `Year ${year}`;
+                              })
+                              .map((period, index) => (
+                                <option key={`${period.date}-${index}`} value={period.date}>
+                                  {period.label}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
+                      </>
+                    )}
+                  </Select>
+                  <Text fontSize="xs" color="gray.500" mt={1}>
+                    Select from previously closed periods or enter custom date
+                  </Text>
+                </FormControl>
                 <Button
                   colorScheme="blue"
                   onClick={fetchSSOTBalanceSheetReport}
                   isLoading={ssotBSLoading}
-leftIcon={<FiBarChart />}
+                  leftIcon={<FiBarChart />}
                   size="md"
                   mt={8}
                   whiteSpace="nowrap"
@@ -3145,6 +3277,9 @@ leftIcon={<FiActivity />}
                       <Text fontSize="xl" fontWeight="bold" color={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.600' : 'red.600'}>
                         {formatCurrency(ssotCFData.net_cash_flow || 0)}
                       </Text>
+                      <Text fontSize="xs" color={descriptionColor} fontStyle="italic">
+                        = Operating + Investing + Financing
+                      </Text>
                     </VStack>
                   </HStack>
                 </Box>
@@ -3179,14 +3314,52 @@ leftIcon={<FiActivity />}
                     </Text>
                     <VStack align="stretch" spacing={2}>
                       <HStack justify="space-between" bg="gray.50" p={2} borderRadius="md">
-                        <Text fontSize="sm" fontWeight="medium">Net Income</Text>
+                        <Tooltip 
+                          label={"Net Income dari Profit & Loss Statement. Jika Rp 0, kemungkinan periode ini sudah tutup buku dan laba/rugi sudah dipindahkan ke Laba Ditahan."}
+                          fontSize="sm"
+                          placement="top"
+                          hasArrow
+                        >
+                          <Text fontSize="sm" fontWeight="medium" cursor="help" borderBottom="1px dotted" borderColor="gray.400">
+                            Net Income ℹ️
+                          </Text>
+                        </Tooltip>
                         <Text fontSize="sm" fontWeight="bold" color={(ssotCFData.operating_activities?.net_income || 0) >= 0 ? 'green.600' : 'red.600'}>
                           {formatCurrency(ssotCFData.operating_activities?.net_income || 0)}
                         </Text>
                       </HStack>
+                      {(ssotCFData.operating_activities?.adjustments?.total_adjustments || 0) !== 0 && (
+                        <Box mt={2}>
+                          <Tooltip 
+                            label={"Adjustments mencakup item non-cash seperti depresiasi, amortisasi, dan perubahan retained earnings. Setelah tutup buku, laba ditahan yang berubah akan muncul di sini."}
+                            fontSize="sm"
+                            placement="top"
+                            hasArrow
+                          >
+                            <Text fontSize="sm" fontWeight="medium" color="gray.600" mb={2} cursor="help" borderBottom="1px dotted" borderColor="gray.400" display="inline-block">
+                              Adjustments (Non-cash items) ℹ️:
+                            </Text>
+                          </Tooltip>
+                          <HStack justify="space-between" pl={4} py={1} bg="orange.50" borderRadius="md">
+                            <Text fontSize="sm" color="gray.700">Total Adjustments</Text>
+                            <Text fontSize="sm" fontWeight="medium" color={(ssotCFData.operating_activities?.adjustments?.total_adjustments || 0) >= 0 ? 'green.600' : 'red.600'}>
+                              {formatCurrency(ssotCFData.operating_activities?.adjustments?.total_adjustments || 0)}
+                            </Text>
+                          </HStack>
+                        </Box>
+                      )}
                       {ssotCFData.operating_activities?.working_capital_changes?.items?.length > 0 && (
                         <Box mt={2}>
-                          <Text fontSize="sm" fontWeight="medium" color="gray.600" mb={2}>Working Capital Changes:</Text>
+                          <Tooltip 
+                            label={"Perubahan modal kerja mencakup perubahan piutang, utang, persediaan, dan akun lancar lainnya yang mempengaruhi kas."}
+                            fontSize="sm"
+                            placement="top"
+                            hasArrow
+                          >
+                            <Text fontSize="sm" fontWeight="medium" color="gray.600" mb={2} cursor="help" borderBottom="1px dotted" borderColor="gray.400" display="inline-block">
+                              Working Capital Changes ℹ️:
+                            </Text>
+                          </Tooltip>
                           {ssotCFData.operating_activities.working_capital_changes.items.map((item: any, idx: number) => (
                             <HStack key={idx} justify="space-between" pl={4} py={1}>
                               <Text fontSize="sm" color="gray.700">{item.account_name} ({item.account_code})</Text>
@@ -3199,10 +3372,33 @@ leftIcon={<FiActivity />}
                       )}
                       <Divider />
                       <HStack justify="space-between" bg="green.50" p={2} borderRadius="md">
-                        <Text fontWeight="bold" color="green.700">Total Operating Cash Flow</Text>
-                        <Text fontWeight="bold" color="green.700">
-                          {formatCurrency(ssotCFData.operating_activities?.total_operating_cash_flow || 0)}
-                        </Text>
+                        <VStack align="start" spacing={0}>
+                          <Tooltip 
+                            label={"Total kas yang dihasilkan dari aktivitas operasional perusahaan. Ini menunjukkan kemampuan perusahaan menghasilkan kas dari bisnis intinya."}
+                            fontSize="sm"
+                            placement="top"
+                            hasArrow
+                          >
+                            <Text fontWeight="bold" color="green.700" cursor="help" borderBottom="1px dotted" borderColor="green.600">
+                              Total Operating Cash Flow ℹ️
+                            </Text>
+                          </Tooltip>
+                          <Text fontSize="xs" color="green.600" fontStyle="italic">
+                            = Net Income + Adjustments + Working Capital Changes
+                          </Text>
+                        </VStack>
+                        <VStack align="end" spacing={0}>
+                          <Text fontWeight="bold" color="green.700">
+                            {formatCurrency(ssotCFData.operating_activities?.total_operating_cash_flow || 0)}
+                          </Text>
+                          <Text fontSize="xs" color="green.600">
+                            ({formatCurrency(ssotCFData.operating_activities?.net_income || 0)} + {formatCurrency(
+                              ssotCFData.operating_activities?.adjustments?.total_adjustments || 0
+                            )} + {formatCurrency(
+                              ssotCFData.operating_activities?.working_capital_changes?.total_working_capital_changes || 0
+                            )})
+                          </Text>
+                        </VStack>
                       </HStack>
                     </VStack>
                   </Box>
@@ -3225,7 +3421,12 @@ leftIcon={<FiActivity />}
                       ))}
                       <Divider />
                       <HStack justify="space-between" bg="blue.50" p={2} borderRadius="md">
-                        <Text fontWeight="bold" color="blue.700">Total Investing Cash Flow</Text>
+                        <VStack align="start" spacing={0}>
+                          <Text fontWeight="bold" color="blue.700">Total Investing Cash Flow</Text>
+                          <Text fontSize="xs" color="blue.600" fontStyle="italic">
+                            = Sum of all investing activities
+                          </Text>
+                        </VStack>
                         <Text fontWeight="bold" color="blue.700">
                           {formatCurrency(ssotCFData.investing_activities?.total_investing_cash_flow || 0)}
                         </Text>
@@ -3251,7 +3452,12 @@ leftIcon={<FiActivity />}
                       ))}
                       <Divider />
                       <HStack justify="space-between" bg="purple.50" p={2} borderRadius="md">
-                        <Text fontWeight="bold" color="purple.700">Total Financing Cash Flow</Text>
+                        <VStack align="start" spacing={0}>
+                          <Text fontWeight="bold" color="purple.700">Total Financing Cash Flow</Text>
+                          <Text fontSize="xs" color="purple.600" fontStyle="italic">
+                            = Sum of all financing activities
+                          </Text>
+                        </VStack>
                         <Text fontWeight="bold" color="purple.700">
                           {formatCurrency(ssotCFData.financing_activities?.total_financing_cash_flow || 0)}
                         </Text>

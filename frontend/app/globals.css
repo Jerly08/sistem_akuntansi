@@ -447,7 +447,11 @@ body {
 /* Ensure table cells don't clip dropdown content */
 .table td {
   position: relative;
-  overflow: visible;
+}
+
+/* Fix for Chakra UI Menu positioning */
+.chakra-menu__menu-list {
+  z-index: 9999 !important;
 }
 
 /* Enhanced General Ledger Report table styling */

@@ -40,6 +40,7 @@ import {
   Td,
   Tooltip,
   useColorModeValue,
+  Select,
 } from '@chakra-ui/react';
 import {
   FiBarChart,
@@ -62,6 +63,10 @@ import {
   exportAndDownloadCSV, 
   exportAndDownloadPDF
 } from '../../utils/balanceSheetExportClient';
+import { 
+  periodClosingService, 
+  PeriodFilterOption 
+} from '../../services/periodClosingService';
 
 interface EnhancedBalanceSheetReportProps {
   onClose?: () => void;
@@ -82,6 +87,11 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
   const [exportingCSV, setExportingCSV] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
   
+  // Closed Period states
+  const [closedPeriods, setClosedPeriods] = useState<PeriodFilterOption[]>([]);
+  const [loadingPeriods, setLoadingPeriods] = useState(false);
+  const [periodOptionsLoaded, setPeriodOptionsLoaded] = useState(false);
+  
   // Modal controls
   const { 
     isOpen: isExportModalOpen, 
@@ -97,6 +107,29 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
   const headingColor = useColorModeValue('gray.700', 'white');
   const textColor = useColorModeValue('gray.800', 'white');
   const descriptionColor = useColorModeValue('gray.600', 'gray.300');
+
+  // Fetch closed periods for dropdown (lazy loading)
+  const fetchClosedPeriods = async () => {
+    if (periodOptionsLoaded) return; // Already loaded
+    
+    setLoadingPeriods(true);
+    try {
+      const options = await periodClosingService.getClosedPeriodsForFilter();
+      setClosedPeriods(options);
+      setPeriodOptionsLoaded(true);
+      
+      if (options.length === 0) {
+        console.log('[EnhancedBalanceSheetReport] No closed periods found');
+      } else {
+        console.log(`[EnhancedBalanceSheetReport] Loaded ${options.length} closed periods`);
+      }
+    } catch (error) {
+      console.error('Error loading closed periods:', error);
+      // Silent fail - user can still enter date manually
+    } finally {
+      setLoadingPeriods(false);
+    }
+  };
 
   // Format currency for display with account type consideration
   const formatCurrency = (amount: number | null | undefined, accountCode?: string, accountType?: string) => {
@@ -303,9 +336,11 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
                 <Text fontSize="md" fontWeight="semibold" mb={3} color={headingColor}>
                   Report Configuration
                 </Text>
-                <SimpleGrid columns={[1, 2, 3]} spacing={4}>
+                <SimpleGrid columns={[1, 2]} spacing={4}>
                   <FormControl>
-                    <FormLabel fontSize="sm">As of Date</FormLabel>
+                    <FormLabel fontSize="sm" color="blue.600" fontWeight="semibold">
+                      As Of Date
+                    </FormLabel>
                     <Input 
                       type="date" 
                       value={asOfDate} 
@@ -313,22 +348,61 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
                       size="sm"
                     />
                   </FormControl>
+                  
                   <FormControl>
-                    <FormLabel fontSize="sm">Company Name</FormLabel>
-                    <Input 
-                      value={companyName} 
-                      onChange={(e) => setCompanyName(e.target.value)}
-                      placeholder="Company Name"
+                    <FormLabel fontSize="sm" display="flex" alignItems="center">
+                      Closed Period
+                      <Badge ml={2} colorScheme="blue" fontSize="xs">
+                        Quick Select
+                      </Badge>
+                      <Tooltip label="Select from previously closed accounting periods or enter custom date">
+                        <span>
+                          <Icon as={FiInfo} ml={1} color="gray.500" boxSize={3} />
+                        </span>
+                      </Tooltip>
+                    </FormLabel>
+                    <Select
+                      placeholder="Select closed period date..."
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setAsOfDate(e.target.value);
+                          console.log(`[EnhancedBalanceSheetReport] Selected period: ${e.target.value}`);
+                        }
+                      }}
+                      onFocus={fetchClosedPeriods}
+                      isDisabled={loadingPeriods}
                       size="sm"
-                    />
-                  </FormControl>
-                  <FormControl>
-                    <FormLabel fontSize="sm">Include Account Details</FormLabel>
-                    <Switch
-                      isChecked={includeAccountDetails}
-                      onChange={(e) => setIncludeAccountDetails(e.target.checked)}
-                      colorScheme="blue"
-                    />
+                      icon={loadingPeriods ? <Spinner size="xs" /> : undefined}
+                    >
+                      {loadingPeriods && (
+                        <option disabled>Loading closed periods...</option>
+                      )}
+                      
+                      {!loadingPeriods && closedPeriods.length === 0 && (
+                        <option disabled>No closed periods found</option>
+                      )}
+                      
+                      {!loadingPeriods && closedPeriods.length > 0 && (
+                        <>
+                          {/* Group by category */}
+                          {Array.from(new Set(closedPeriods.map(p => p.group))).map(group => (
+                            <optgroup label={group} key={group}>
+                              {closedPeriods
+                                .filter(p => p.group === group)
+                                .map(option => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          ))}
+                        </>
+                      )}
+                    </Select>
+                    <Text fontSize="xs" color={descriptionColor} mt={1}>
+                      Select from previously closed periods or enter custom date
+                    </Text>
                   </FormControl>
                 </SimpleGrid>
               </Box>

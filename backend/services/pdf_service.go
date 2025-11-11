@@ -205,6 +205,21 @@ func (p *PDFService) formatRupiah(amount float64) string {
 	return "Rp " + formattedAmount
 }
 
+// formatRupiahCompact formats rupiah in compact form (shorter for tight spaces)
+func (p *PDFService) formatRupiahCompact(amount float64) string {
+	// For very large amounts, use abbreviated format
+	if amount >= 1000000000 { // >= 1 billion
+		return fmt.Sprintf("%.1fB", amount/1000000000)
+	}
+	if amount >= 1000000 { // >= 1 million
+		return fmt.Sprintf("%.1fM", amount/1000000)
+	}
+	if amount >= 1000 { // >= 1 thousand
+		return fmt.Sprintf("%.0fK", amount/1000)
+	}
+	return fmt.Sprintf("%.0f", amount)
+}
+
 // getCompanyInfo retrieves company information from settings
 func (p *PDFService) getCompanyInfo() (*models.Settings, error) {
 	// Return default company info if database is not available
@@ -1159,37 +1174,23 @@ func (p *PDFService) GenerateSalesReportPDF(sales []models.Sale, startDate, endD
 	}
 	pdf.SetX(lm)
 
-	// Column widths (scaled to content width)
-	// Optimized widths: Date smaller, Customer wider, Status shorter, amounts balanced
-	base := []float64{15, 20, 25, 45, 14, 16, 38, 38, 39}
-	var baseSum float64
-	for _, b := range base {
-		baseSum += b
-	}
-	widths := make([]float64, len(base))
-	var accum float64
-	for i, b := range base {
-		if i == len(base)-1 {
-			widths[i] = contentW - accum
-		} else {
-			w := b * contentW / baseSum
-			widths[i] = w
-			accum += w
-		}
-	}
+	// Fixed column widths for consistent layout (safe for printing)
+	// Total: 12 + 18 + 20 + 35 + 12 + 13 + 15 + 15 + 15 = 155mm
+	widths := []float64{12, 18, 20, 35, 12, 13, 15, 15, 15}
 
 	drawHeader := func() {
+		pdf.SetX(lm)
 		pdf.SetFont("Arial", "B", 7)
 		pdf.SetFillColor(220, 220, 220)
 		pdf.CellFormat(widths[0], 7, loc("date", "Date"), "1", 0, "C", true, 0, "")
 		pdf.CellFormat(widths[1], 7, "Sale Code", "1", 0, "C", true, 0, "")
 		pdf.CellFormat(widths[2], 7, loc("invoice_number", "Invoice No."), "1", 0, "C", true, 0, "")
-		pdf.CellFormat(widths[3], 7, loc("customer", "Customer"), "1", 0, "L", true, 0, "")
+		pdf.CellFormat(widths[3], 7, loc("customer", "Customer"), "1", 0, "C", true, 0, "")
 		pdf.CellFormat(widths[4], 7, "Type", "1", 0, "C", true, 0, "")
 		pdf.CellFormat(widths[5], 7, loc("status", "Status"), "1", 0, "C", true, 0, "")
-		pdf.CellFormat(widths[6], 7, loc("amount", "Amount"), "1", 0, "R", true, 0, "")
-		pdf.CellFormat(widths[7], 7, loc("paid", "Paid"), "1", 0, "R", true, 0, "")
-		pdf.CellFormat(widths[8], 7, loc("outstanding", "Outstanding"), "1", 0, "R", true, 0, "")
+		pdf.CellFormat(widths[6], 7, loc("amount", "Amount"), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(widths[7], 7, loc("paid", "Paid"), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(widths[8], 7, loc("outstanding", "Outstanding"), "1", 0, "C", true, 0, "")
 		pdf.Ln(7)
 	}
 
@@ -1216,21 +1217,28 @@ func (p *PDFService) GenerateSalesReportPDF(sales []models.Sale, startDate, endD
 		customerName := "N/A"
 		if sale.Customer.ID != 0 {
 			customerName = sale.Customer.Name
-			// Adjusted for wider customer column and smaller font
-			if len(customerName) > 35 {
-				customerName = customerName[:32] + "..."
+			// Adjusted for narrower customer column
+			if len(customerName) > 22 {
+				customerName = customerName[:19] + "..."
 			}
 		}
 		invoiceNumber := sale.InvoiceNumber
 		if invoiceNumber == "" {
 			invoiceNumber = "-"
 		}
-		amount := p.formatRupiah(sale.TotalAmount)
-		paid := p.formatRupiah(sale.PaidAmount)
-		outstanding := p.formatRupiah(sale.OutstandingAmount)
+		// Shorten code if too long
+		saleCode := sale.Code
+		if len(saleCode) > 12 {
+			saleCode = saleCode[:10] + ".."
+		}
+		// Format amounts more compact
+		amount := p.formatRupiahCompact(sale.TotalAmount)
+		paid := p.formatRupiahCompact(sale.PaidAmount)
+		outstanding := p.formatRupiahCompact(sale.OutstandingAmount)
 
+		pdf.SetX(lm)
 		pdf.CellFormat(widths[0], 6.5, date, "1", 0, "C", false, 0, "")
-		pdf.CellFormat(widths[1], 6.5, sale.Code, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(widths[1], 6.5, saleCode, "1", 0, "L", false, 0, "")
 		pdf.CellFormat(widths[2], 6.5, invoiceNumber, "1", 0, "L", false, 0, "")
 		pdf.CellFormat(widths[3], 6.5, customerName, "1", 0, "L", false, 0, "")
 		pdf.CellFormat(widths[4], 6.5, sale.Type, "1", 0, "C", false, 0, "")
@@ -1248,13 +1256,14 @@ func (p *PDFService) GenerateSalesReportPDF(sales []models.Sale, startDate, endD
 
 	// Summary section
 	pdf.Ln(3)
-	pdf.SetFont("Arial", "B", 9)
+	pdf.SetX(lm)
+	pdf.SetFont("Arial", "B", 8)
 	pdf.SetFillColor(240, 240, 240)
 	leftGroup := widths[0] + widths[1] + widths[2] + widths[3] + widths[4] + widths[5]
 	pdf.CellFormat(leftGroup, 6, strings.ToUpper(loc("total", "TOTAL")), "1", 0, "R", true, 0, "")
-	pdf.CellFormat(widths[6], 6, p.formatRupiah(totalAmount), "1", 0, "R", true, 0, "")
-	pdf.CellFormat(widths[7], 6, p.formatRupiah(totalPaid), "1", 0, "R", true, 0, "")
-	pdf.CellFormat(widths[8], 6, p.formatRupiah(totalOutstanding), "1", 0, "R", true, 0, "")
+	pdf.CellFormat(widths[6], 6, p.formatRupiahCompact(totalAmount), "1", 0, "R", true, 0, "")
+	pdf.CellFormat(widths[7], 6, p.formatRupiahCompact(totalPaid), "1", 0, "R", true, 0, "")
+	pdf.CellFormat(widths[8], 6, p.formatRupiahCompact(totalOutstanding), "1", 0, "R", true, 0, "")
 
 	// Statistics
 	pdf.Ln(10)
@@ -1401,6 +1410,7 @@ func (p *PDFService) GenerateSalesSummaryPDF(summary interface{}) ([]byte, error
 
 	// Summary section removed as per user request
 
+	// Sales By Customer table - reduced widths: 45 + 20 + 30 + 30 = 125mm
 	// Top Customers table (similar to trial balance account table)
 	getList := func(keys ...string) []interface{} {
 		for _, k := range keys {
@@ -1436,15 +1446,19 @@ func (p *PDFService) GenerateSalesSummaryPDF(summary interface{}) ([]byte, error
 	// Top Customers table
 	if customers := getList("sales_by_customer", "top_customers", "TopCustomers"); len(customers) > 0 {
 		pdf.Ln(5)
-		pdf.SetFont("Arial", "B", 12)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(0, 6, "Sales By Customer")
+		pdf.Ln(8)
+		pdf.SetX(lm)
+		pdf.SetFont("Arial", "B", 7.5)
 		pdf.SetFillColor(220, 220, 220)
-		pdf.CellFormat(70, 8, "Customer", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(30, 8, "Orders", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(45, 8, "Amount", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(45, 8, "Avg Order", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(55, 8, "Customer Name", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(25, 8, "Transactions", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(35, 8, "Total Sales", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(40, 8, "Average Order", "1", 0, "C", true, 0, "")
 		pdf.Ln(8)
 
-		pdf.SetFont("Arial", "", 9)
+		pdf.SetFont("Arial", "", 7.5)
 		pdf.SetFillColor(255, 255, 255)
 		limit := len(customers)
 		if limit > 15 {
@@ -1456,46 +1470,52 @@ func (p *PDFService) GenerateSalesSummaryPDF(summary interface{}) ([]byte, error
 				if pdf.GetY() > 250 {
 					pdf.AddPage()
 					// Re-add headers
-					pdf.SetFont("Arial", "B", 12)
+					pdf.SetX(lm)
+					pdf.SetFont("Arial", "B", 7.5)
 					pdf.SetFillColor(220, 220, 220)
-					pdf.CellFormat(70, 8, "Customer", "1", 0, "C", true, 0, "")
-					pdf.CellFormat(30, 8, "Orders", "1", 0, "C", true, 0, "")
-					pdf.CellFormat(45, 8, "Amount", "1", 0, "C", true, 0, "")
-					pdf.CellFormat(45, 8, "Avg Order", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(55, 8, "Customer Name", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(25, 8, "Transactions", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(35, 8, "Total Sales", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(40, 8, "Average Order", "1", 0, "C", true, 0, "")
 					pdf.Ln(8)
-					pdf.SetFont("Arial", "", 9)
+					pdf.SetFont("Arial", "", 7.5)
 					pdf.SetFillColor(255, 255, 255)
 				}
 
 				name := getStr(cm, "customer_name", "name")
-				if len(name) > 30 {
-					name = name[:27] + "..."
+				if len(name) > 32 {
+					name = name[:29] + "..."
 				}
 				count := getNum(cm, "transaction_count", "count", "orders", "total_sales")
 				amount := getNum(cm, "total_amount", "amount", "total_sales")
 				avgOrderValue := getNum(cm, "average_order", "average_transaction", "average_order_value")
 
-				pdf.CellFormat(70, 6, name, "1", 0, "L", false, 0, "")
-				pdf.CellFormat(30, 6, fmt.Sprintf("%.0f", count), "1", 0, "R", false, 0, "")
-				pdf.CellFormat(45, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
-				pdf.CellFormat(45, 6, p.formatRupiah(avgOrderValue), "1", 0, "R", false, 0, "")
+				pdf.SetX(lm)
+				pdf.CellFormat(55, 6, name, "1", 0, "L", false, 0, "")
+				pdf.CellFormat(25, 6, fmt.Sprintf("%.0f", count), "1", 0, "C", false, 0, "")
+				pdf.CellFormat(35, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(40, 6, p.formatRupiah(avgOrderValue), "1", 0, "R", false, 0, "")
 				pdf.Ln(6)
 			}
 		}
 	}
 
-	// Top Products table
+	// Top Products table - Items Sold section
 	if products := getList("sales_by_product", "top_products", "TopProducts"); len(products) > 0 {
-		pdf.Ln(5)
-		pdf.SetFont("Arial", "B", 12)
-		pdf.SetFillColor(220, 220, 220)
-		pdf.CellFormat(70, 8, "Product", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(30, 8, "Qty", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(45, 8, "Amount", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(45, 8, "Avg Price", "1", 0, "C", true, 0, "")
+		pdf.Ln(10)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.Cell(0, 6, "Items Sold")
 		pdf.Ln(8)
+		pdf.SetX(lm)
+		pdf.SetFont("Arial", "B", 7.5)
+		pdf.SetFillColor(220, 220, 220)
+		pdf.CellFormat(55, 8, "Product", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(25, 8, "Qty", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(35, 8, "Unit Price", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(40, 8, "Total", "1", 0, "C", true, 0, "")
+		pdf.CellFormat(0, 8, "Date", "1", 1, "C", true, 0, "")
 
-		pdf.SetFont("Arial", "", 9)
+		pdf.SetFont("Arial", "", 7.5)
 		pdf.SetFillColor(255, 255, 255)
 		limit := len(products)
 		if limit > 15 {
@@ -1507,30 +1527,37 @@ func (p *PDFService) GenerateSalesSummaryPDF(summary interface{}) ([]byte, error
 				if pdf.GetY() > 250 {
 					pdf.AddPage()
 					// Re-add headers
-					pdf.SetFont("Arial", "B", 12)
+					pdf.SetX(lm)
+					pdf.SetFont("Arial", "B", 7.5)
 					pdf.SetFillColor(220, 220, 220)
-					pdf.CellFormat(70, 8, "Product", "1", 0, "C", true, 0, "")
-					pdf.CellFormat(30, 8, "Qty", "1", 0, "C", true, 0, "")
-					pdf.CellFormat(45, 8, "Amount", "1", 0, "C", true, 0, "")
-					pdf.CellFormat(45, 8, "Avg Price", "1", 0, "C", true, 0, "")
-					pdf.Ln(8)
-					pdf.SetFont("Arial", "", 9)
+					pdf.CellFormat(55, 8, "Product", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(25, 8, "Qty", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(35, 8, "Unit Price", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(40, 8, "Total", "1", 0, "C", true, 0, "")
+					pdf.CellFormat(0, 8, "Date", "1", 1, "C", true, 0, "")
+					pdf.SetFont("Arial", "", 7.5)
 					pdf.SetFillColor(255, 255, 255)
 				}
 
 				name := getStr(pm, "product_name", "name")
-				if len(name) > 30 {
-					name = name[:27] + "..."
+				if len(name) > 32 {
+					name = name[:29] + "..."
 				}
 				qty := getNum(pm, "quantity_sold", "quantity", "qty")
+				unitPrice := getNum(pm, "average_price", "unit_price")
 				amount := getNum(pm, "total_amount", "amount", "total_revenue")
-				avgPrice := getNum(pm, "average_price")
+				// Get date if available
+				dateStr := getStr(pm, "date", "purchase_date", "sale_date")
+				if dateStr == "" {
+					dateStr = "-"
+				}
 
-				pdf.CellFormat(70, 6, name, "1", 0, "L", false, 0, "")
-				pdf.CellFormat(30, 6, fmt.Sprintf("%.0f", qty), "1", 0, "R", false, 0, "")
-				pdf.CellFormat(45, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
-				pdf.CellFormat(45, 6, p.formatRupiah(avgPrice), "1", 0, "R", false, 0, "")
-				pdf.Ln(6)
+				pdf.SetX(lm)
+				pdf.CellFormat(55, 6, name, "1", 0, "L", false, 0, "")
+				pdf.CellFormat(25, 6, fmt.Sprintf("%.0f pcs", qty), "1", 0, "C", false, 0, "")
+				pdf.CellFormat(35, 6, p.formatRupiah(unitPrice), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(40, 6, p.formatRupiah(amount), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(0, 6, dateStr, "1", 1, "C", false, 0, "")
 			}
 		}
 	}
@@ -1613,24 +1640,26 @@ func (p *PDFService) GenerateSalesSummaryPDF(summary interface{}) ([]byte, error
 							pdf.AddPage()
 						}
 
-						// Customer name header
+						// Customer name header - reduced width: 105 + 50 = 155mm
 						customerName := getStr(cm, "customer_name", "name")
-						if len(customerName) > 40 {
-							customerName = customerName[:37] + "..."
+						if len(customerName) > 35 {
+							customerName = customerName[:32] + "..."
 						}
-						pdf.SetFont("Arial", "B", 10)
-						pdf.SetFillColor(230, 240, 255) // Light blue
-						pdf.CellFormat(140, 7, customerName, "1", 0, "L", true, 0, "")
+						pdf.SetX(lm)
+						pdf.SetFont("Arial", "B", 9)
+						pdf.SetFillColor(230, 240, 255)
+						pdf.CellFormat(105, 7, customerName, "1", 0, "L", true, 0, "")
 						pdf.CellFormat(50, 7, fmt.Sprintf("%d items", len(items)), "1", 1, "R", true, 0, "")
 
-						// Items table header
-						pdf.SetFont("Arial", "B", 8)
+						// Items table header - Total: 55 + 18 + 30 + 30 + 22 = 155mm
+						pdf.SetX(lm)
+						pdf.SetFont("Arial", "B", 7.5)
 						pdf.SetFillColor(245, 245, 245)
-						pdf.CellFormat(70, 6, "Product", "1", 0, "L", true, 0, "")
-						pdf.CellFormat(20, 6, "Qty", "1", 0, "R", true, 0, "")
-						pdf.CellFormat(35, 6, "Unit Price", "1", 0, "R", true, 0, "")
-						pdf.CellFormat(35, 6, "Total", "1", 0, "R", true, 0, "")
-						pdf.CellFormat(30, 6, "Date", "1", 1, "C", true, 0, "")
+						pdf.CellFormat(55, 6, "Product", "1", 0, "C", true, 0, "")
+						pdf.CellFormat(18, 6, "Qty", "1", 0, "C", true, 0, "")
+						pdf.CellFormat(30, 6, "Unit Price", "1", 0, "C", true, 0, "")
+						pdf.CellFormat(30, 6, "Total", "1", 0, "C", true, 0, "")
+						pdf.CellFormat(22, 6, "Date", "1", 1, "C", true, 0, "")
 
 						// Items rows
 						pdf.SetFont("Arial", "", 8)
@@ -3742,17 +3771,19 @@ func (p *PDFService) GenerateTrialBalancePDF(trialBalanceData interface{}, asOfD
 	pdf.Cell(34, 5, time.Now().Format("02/01/2006 15:04"))
 	pdf.Ln(12)
 
-	// Table headers
-	pdf.SetFont("Arial", "B", 9)
+	// Table headers - align with left margin (same as logo)
+	// Reduced column widths: 20 + 60 + 40 + 40 = 160mm (safe for A4 with 15mm margins)
+	pdf.SetX(lm)
+	pdf.SetFont("Arial", "B", 7.5)
 	pdf.SetFillColor(220, 220, 220)
-	pdf.CellFormat(25, 8, "Account Code", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(75, 8, "Account Name", "1", 0, "L", true, 0, "")
-	pdf.CellFormat(45, 8, "Debit Balance", "1", 0, "R", true, 0, "")
-	pdf.CellFormat(45, 8, "Credit Balance", "1", 0, "R", true, 0, "")
+	pdf.CellFormat(20, 8, "Account Code", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(60, 8, "Account Name", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(40, 8, "Debit Balance", "1", 0, "C", true, 0, "")
+	pdf.CellFormat(40, 8, "Credit Balance", "1", 0, "C", true, 0, "")
 	pdf.Ln(8)
 
 	// Process trial balance data
-	pdf.SetFont("Arial", "", 8)
+	pdf.SetFont("Arial", "", 7.5)
 	pdf.SetFillColor(255, 255, 255)
 
 	totalDebits := 0.0
@@ -3776,15 +3807,16 @@ func (p *PDFService) GenerateTrialBalancePDF(trialBalanceData interface{}, asOfD
 						// Check if we need a new page
 						if pdf.GetY() > 250 {
 							pdf.AddPage()
-							// Re-add headers
-							pdf.SetFont("Arial", "B", 9)
+							// Re-add headers aligned with left margin
+							pdf.SetX(lm)
+							pdf.SetFont("Arial", "B", 7.5)
 							pdf.SetFillColor(220, 220, 220)
-							pdf.CellFormat(25, 8, "Account Code", "1", 0, "C", true, 0, "")
-							pdf.CellFormat(75, 8, "Account Name", "1", 0, "L", true, 0, "")
-							pdf.CellFormat(45, 8, "Debit Balance", "1", 0, "R", true, 0, "")
-							pdf.CellFormat(45, 8, "Credit Balance", "1", 0, "R", true, 0, "")
-							pdf.Ln(8)
-							pdf.SetFont("Arial", "", 8)
+							pdf.CellFormat(20, 8, "Account Code", "1", 0, "C", true, 0, "")
+							pdf.CellFormat(60, 8, "Account Name", "1", 0, "C", true, 0, "")
+							pdf.CellFormat(40, 8, "Debit Balance", "1", 0, "C", true, 0, "")
+							pdf.CellFormat(40, 8, "Credit Balance", "1", 0, "C", true, 0, "")
+								pdf.Ln(8)
+							pdf.SetFont("Arial", "", 7.5)
 							pdf.SetFillColor(255, 255, 255)
 						}
 
@@ -3817,25 +3849,27 @@ func (p *PDFService) GenerateTrialBalancePDF(trialBalanceData interface{}, asOfD
 						}
 
 						// Truncate account name if too long
-						if len(accountName) > 45 {
-							accountName = accountName[:42] + "..."
+						if len(accountName) > 38 {
+							accountName = accountName[:35] + "..."
 						}
 
-						pdf.CellFormat(25, 5, accountCode, "1", 0, "C", false, 0, "")
-						pdf.CellFormat(75, 5, accountName, "1", 0, "L", false, 0, "")
+						// Align each row with left margin
+						pdf.SetX(lm)
+						pdf.CellFormat(20, 5, accountCode, "1", 0, "C", false, 0, "")
+						pdf.CellFormat(60, 5, accountName, "1", 0, "L", false, 0, "")
 
 						// Show debit balance or dash
 						if debitBalance != 0 {
-							pdf.CellFormat(45, 5, p.formatRupiah(debitBalance), "1", 0, "R", false, 0, "")
+							pdf.CellFormat(40, 5, p.formatRupiah(debitBalance), "1", 0, "R", false, 0, "")
 						} else {
-							pdf.CellFormat(45, 5, "-", "1", 0, "R", false, 0, "")
+							pdf.CellFormat(40, 5, "-", "1", 0, "R", false, 0, "")
 						}
 
 						// Show credit balance or dash
 						if creditBalance != 0 {
-							pdf.CellFormat(45, 5, p.formatRupiah(creditBalance), "1", 0, "R", false, 0, "")
+							pdf.CellFormat(40, 5, p.formatRupiah(creditBalance), "1", 0, "R", false, 0, "")
 						} else {
-							pdf.CellFormat(45, 5, "-", "1", 0, "R", false, 0, "")
+							pdf.CellFormat(40, 5, "-", "1", 0, "R", false, 0, "")
 						}
 						pdf.Ln(5)
 					}
@@ -3844,17 +3878,19 @@ func (p *PDFService) GenerateTrialBalancePDF(trialBalanceData interface{}, asOfD
 		}
 	} else {
 		// Fallback: simple data display
-		pdf.Cell(190, 6, "Trial Balance data structure not recognized")
+		pdf.SetX(lm)
+		pdf.Cell(contentW, 6, "Trial Balance data structure not recognized")
 		pdf.Ln(6)
 	}
 
-	// Totals section
+	// Totals section - align with left margin
 	pdf.Ln(3)
+	pdf.SetX(lm)
 	pdf.SetFont("Arial", "B", 9)
 	pdf.SetFillColor(240, 240, 240)
-	pdf.CellFormat(100, 6, "TOTAL", "1", 0, "R", true, 0, "")
-	pdf.CellFormat(45, 6, p.formatRupiah(totalDebits), "1", 0, "R", true, 0, "")
-	pdf.CellFormat(45, 6, p.formatRupiah(totalCredits), "1", 0, "R", true, 0, "")
+	pdf.CellFormat(80, 6, "TOTAL", "1", 0, "R", true, 0, "")
+	pdf.CellFormat(40, 6, p.formatRupiah(totalDebits), "1", 0, "R", true, 0, "")
+	pdf.CellFormat(40, 6, p.formatRupiah(totalCredits), "1", 0, "R", true, 0, "")
 	pdf.Ln(8)
 
 	// Balance verification
@@ -3864,22 +3900,25 @@ func (p *PDFService) GenerateTrialBalancePDF(trialBalanceData interface{}, asOfD
 		balanceStatus = "NOT BALANCED"
 	}
 
+	pdf.SetX(lm)
 	pdf.SetFont("Arial", "B", 10)
 	pdf.SetFillColor(200, 200, 200)
-	pdf.Cell(190, 6, fmt.Sprintf("BALANCE VERIFICATION: %s", balanceStatus))
+	pdf.Cell(160, 6, fmt.Sprintf("BALANCE VERIFICATION: %s", balanceStatus))
 	pdf.Ln(8)
 
 	if !isBalanced {
 		variance := totalDebits - totalCredits
+		pdf.SetX(lm)
 		pdf.SetFont("Arial", "", 9)
-		pdf.Cell(190, 5, fmt.Sprintf("Variance: %s", p.formatRupiah(variance)))
+		pdf.Cell(160, 5, fmt.Sprintf("Variance: %s", p.formatRupiah(variance)))
 		pdf.Ln(5)
 	}
 
-	// Footer
+	// Footer - align with left margin
 	pdf.Ln(10)
+	pdf.SetX(lm)
 	pdf.SetFont("Arial", "I", 8)
-	pdf.Cell(190, 4, fmt.Sprintf("Report generated on %s", time.Now().Format("02/01/2006 15:04")))
+	pdf.Cell(160, 4, fmt.Sprintf("Report generated on %s", time.Now().Format("02/01/2006 15:04")))
 
 	// Output to buffer
 	var buf bytes.Buffer

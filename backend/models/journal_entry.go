@@ -80,7 +80,7 @@ const (
 	JournalRefAsset    = "ASSET"
 	JournalRefManual   = "MANUAL"
 	JournalRefOpening  = "OPENING_BALANCE"
-	JournalRefClosing  = "CLOSING_BALANCE"
+	JournalRefClosing  = "CLOSING"  // Changed from CLOSING_BALANCE to match database data
 	JournalRefTransfer = "TRANSFER"
 	JournalRefDeposit  = "DEPOSIT"
 	JournalRefWithdrawal = "WITHDRAWAL"

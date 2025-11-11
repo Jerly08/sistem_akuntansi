@@ -319,42 +319,17 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                     </FormControl>
                   </HStack>
 
-                  <HStack width="full" spacing={4}>
-                    <FormControl flex={1}>
-                      <FormLabel>{t('settings.dateFormat')}</FormLabel>
-                      <Select
-                        value={formData.date_format}
-                        onChange={(e) => handleInputChange('date_format', e.target.value)}
-                      >
-                        <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                        <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                        <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                      </Select>
-                    </FormControl>
-
-                    <FormControl flex={1}>
-                      <FormLabel>
-                        <HStack spacing={1}>
-                          <span>{t('settings.fiscalYearStart')}</span>
-                          <Tooltip
-                            label="Start date of your company's fiscal year. Affects financial reporting periods and year-end calculations."
-                            placement="top"
-                            hasArrow
-                          >
-                            <Icon as={FiInfo} boxSize={3} color="blue.400" cursor="help" />
-                          </Tooltip>
-                        </HStack>
-                      </FormLabel>
-                      <Select
-                        value={formData.fiscal_year_start}
-                        onChange={(e) => handleInputChange('fiscal_year_start', e.target.value)}
-                      >
-                        <option value="January 1">January 1</option>
-                        <option value="April 1">April 1</option>
-                        <option value="July 1">July 1</option>
-                        <option value="October 1">October 1</option>
-                      </Select>
-                    </FormControl>
+                  <FormControl>
+                    <FormLabel>{t('settings.dateFormat')}</FormLabel>
+                    <Select
+                      value={formData.date_format}
+                      onChange={(e) => handleInputChange('date_format', e.target.value)}
+                    >
+                      <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                      <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                      <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                    </Select>
+                  </FormControl>
                   </HStack>
 
                   <HStack width="full" spacing={4}>

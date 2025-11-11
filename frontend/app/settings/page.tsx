@@ -727,57 +727,6 @@ const SettingsPage: React.FC = () => {
                   
                   <FormControl>
                     <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
-                      {t('settings.fiscalYearStart')}
-                    </FormLabel>
-                    <InputGroup>
-                      <InputLeftElement pointerEvents="none">
-                        <Icon as={FiCalendar} color="gray.500" />
-                      </InputLeftElement>
-                      <Input
-                        type="date"
-                        value={fiscalStartISO}
-                        onChange={(e) => {
-                          const iso = e.target.value;
-                          setFiscalStartISO(iso);
-                          // store normalized form for backend
-                          handleFormChange('fiscal_year_start', isoToMonthDayString(iso));
-                        }}
-                        variant="filled"
-                        _hover={{ bg: 'gray.100' }}
-                        _focus={{ bg: 'white', borderColor: 'blue.500' }}
-                      />
-                    </InputGroup>
-                    <FormHelperText fontSize="xs" color="gray.600">
-                      {language === 'id'
-                        ? 'Hanya hari dan bulan yang digunakan. Tahun akan ditentukan otomatis untuk periode fiskal.'
-                        : 'Only day and month are used. The year is determined automatically for the fiscal period.'}
-                    </FormHelperText>
-                    {(() => {
-                      if (!fiscalStartISO) return null;
-                      
-                      const fmt = formData?.date_format || settings?.date_format || 'YYYY-MM-DD';
-                      const range = computeFiscalRange(fiscalStartISO);
-                      if (!range) return null;
-                      
-                      // Show actual ISO date being used and computed range
-                      return (
-                        <Box mt={1}>
-                          <Text fontSize="xs" color="gray.700">
-                            {language === 'id' ? 'Periode fiskal saat ini:' : 'Current fiscal period:'} {formatDateISO(range.startISO, fmt)} — {formatDateISO(range.endISO, fmt)}
-                          </Text>
-                          {lastClosingInfo?.has_previous_closing && (
-                            <Text fontSize="xs" color="green.600" fontWeight="medium" mt={1}>
-                              ✅ Updated from last closing on {new Date(lastClosingInfo.last_closing_date).toLocaleDateString('id-ID')}
-                            </Text>
-                          )}
-                        </Box>
-                      );
-                    })()}
-                  </FormControl>
-                  <Divider />
-                  
-                  <FormControl>
-                    <FormLabel fontWeight="semibold" color="gray.600" fontSize="sm">
                       {t('settings.defaultTaxRate')}
                     </FormLabel>
                     <NumberInput

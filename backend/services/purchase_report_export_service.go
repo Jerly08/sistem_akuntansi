@@ -255,27 +255,30 @@ func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData, user
 		pdf.Cell(contentW, 6, utils.T("top_vendors", language))
 		pdf.Ln(8)
 		
-		// Table header dengan background yang lebih jelas
-		pdf.SetFont("Arial", "B", 8)
-		pdf.SetFillColor(245, 245, 245) // Sama seperti sales report
-		pdf.CellFormat(60, 6, utils.T("vendor", language), "1", 0, "L", true, 0, "")
-		pdf.CellFormat(25, 6, utils.T("orders", language), "1", 0, "R", true, 0, "")
-		pdf.CellFormat(35, 6, utils.T("amount", language), "1", 0, "R", true, 0, "")
-		pdf.CellFormat(35, 6, utils.T("paid", language), "1", 0, "R", true, 0, "")
-		pdf.CellFormat(35, 6, utils.T("outstanding", language), "1", 1, "R", true, 0, "")
+		// Table header dengan background yang lebih jelas - reduced widths for safety
+		// Total: 45 + 20 + 30 + 30 + 30 = 155mm (safe for 160mm content width)
+		pdf.SetX(lm)
+		pdf.SetFont("Arial", "B", 7.5)
+		pdf.SetFillColor(245, 245, 245)
+		pdf.CellFormat(45, 6, utils.T("vendor", language), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(20, 6, utils.T("orders", language), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(30, 6, utils.T("amount", language), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(30, 6, utils.T("paid", language), "1", 0, "C", true, 0, "")
+		pdf.CellFormat(30, 6, utils.T("outstanding", language), "1", 1, "C", true, 0, "")
 		
-		pdf.SetFont("Arial", "", 8)
+		pdf.SetFont("Arial", "", 7.5)
 		limit := len(data.PurchasesByVendor)
 		if limit > 20 { limit = 20 }
 		for i := 0; i < limit; i++ {
 			v := data.PurchasesByVendor[i]
 			name := v.VendorName
-			if len(name) > 35 { name = name[:32] + "..." }
-			pdf.CellFormat(60, 6, name, "1", 0, "L", false, 0, "")
-			pdf.CellFormat(25, 6, fmt.Sprintf("%d", v.TotalPurchases), "1", 0, "R", false, 0, "")
-			pdf.CellFormat(35, 6, formatRupiahSimple(v.TotalAmount), "1", 0, "R", false, 0, "")
-			pdf.CellFormat(35, 6, formatRupiahSimple(v.TotalPaid), "1", 0, "R", false, 0, "")
-			pdf.CellFormat(35, 6, formatRupiahSimple(v.Outstanding), "1", 1, "R", false, 0, "")
+			if len(name) > 28 { name = name[:25] + "..." }
+			pdf.SetX(lm)
+			pdf.CellFormat(45, 6, name, "1", 0, "L", false, 0, "")
+			pdf.CellFormat(20, 6, fmt.Sprintf("%d", v.TotalPurchases), "1", 0, "C", false, 0, "")
+			pdf.CellFormat(30, 6, formatRupiahSimple(v.TotalAmount), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(30, 6, formatRupiahSimple(v.TotalPaid), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(30, 6, formatRupiahSimple(v.Outstanding), "1", 1, "R", false, 0, "")
 		}
 		pdf.Ln(6)
 	}
@@ -313,62 +316,74 @@ func (s *PurchaseReportExportService) ExportToPDF(data *PurchaseReportData, user
 				pdf.AddPage()
 			}
 			
-			// Vendor name header - menggunakan warna yang sama dengan sales customer header
-			pdf.SetFont("Arial", "B", 10)
-			pdf.SetFillColor(255, 250, 240) // Light orange/beige - mirip customer di sales
+			// Vendor name header - reduced width for safety: 105 + 50 = 155mm
+			pdf.SetX(lm)
+			pdf.SetFont("Arial", "B", 9)
+			pdf.SetFillColor(230, 245, 255) // Light blue background (same as sales summary)
 			vendorName := vendor.VendorName
-			if len(vendorName) > 40 {
-				vendorName = vendorName[:37] + "..."
+			if len(vendorName) > 35 {
+				vendorName = vendorName[:32] + "..."
 			}
-			pdf.CellFormat(140, 7, vendorName, "1", 0, "L", true, 0, "")
+			pdf.CellFormat(105, 7, vendorName, "1", 0, "L", true, 0, "")
 			pdf.CellFormat(50, 7, fmt.Sprintf("%d items", len(vendor.Items)), "1", 1, "R", true, 0, "")
 			
-			// Items table header
-			pdf.SetFont("Arial", "B", 8)
+			// Items table header - reduced widths: 55 + 18 + 30 + 30 + 22 = 155mm
+			pdf.SetX(lm)
+			pdf.SetFont("Arial", "B", 7.5)
 			pdf.SetFillColor(245, 245, 245)
-			pdf.CellFormat(70, 6, utils.T("product", language), "1", 0, "L", true, 0, "")
-			pdf.CellFormat(20, 6, utils.T("qty", language), "1", 0, "R", true, 0, "")
-			pdf.CellFormat(35, 6, utils.T("unit_price", language), "1", 0, "R", true, 0, "")
-			pdf.CellFormat(35, 6, utils.T("total", language), "1", 0, "R", true, 0, "")
-			pdf.CellFormat(30, 6, utils.T("date", language), "1", 1, "C", true, 0, "")
+			pdf.CellFormat(55, 6, utils.T("product", language), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(18, 6, utils.T("qty", language), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(30, 6, utils.T("unit_price", language), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(30, 6, utils.T("total", language), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(22, 6, utils.T("date", language), "1", 1, "C", true, 0, "")
 			
 			// Items rows
-			pdf.SetFont("Arial", "", 8)
+			pdf.SetFont("Arial", "", 7.5)
 			for _, item := range vendor.Items {
 				// Check if we need a new page
 				_, y := pdf.GetXY()
 				if y > pageH-25 {
 					pdf.AddPage()
 					// Reprint header
-					pdf.SetFont("Arial", "B", 8)
+					pdf.SetX(lm)
+					pdf.SetFont("Arial", "B", 7.5)
 					pdf.SetFillColor(245, 245, 245)
-					pdf.CellFormat(70, 6, utils.T("product", language), "1", 0, "L", true, 0, "")
-					pdf.CellFormat(20, 6, utils.T("qty", language), "1", 0, "R", true, 0, "")
-					pdf.CellFormat(35, 6, utils.T("unit_price", language), "1", 0, "R", true, 0, "")
-					pdf.CellFormat(35, 6, utils.T("total", language), "1", 0, "R", true, 0, "")
-					pdf.CellFormat(30, 6, utils.T("date", language), "1", 1, "C", true, 0, "")
-					pdf.SetFont("Arial", "", 8)
+					pdf.CellFormat(55, 6, utils.T("product", language), "1", 0, "C", true, 0, "")
+					pdf.CellFormat(18, 6, utils.T("qty", language), "1", 0, "C", true, 0, "")
+					pdf.CellFormat(30, 6, utils.T("unit_price", language), "1", 0, "C", true, 0, "")
+					pdf.CellFormat(30, 6, utils.T("total", language), "1", 0, "C", true, 0, "")
+					pdf.CellFormat(22, 6, utils.T("date", language), "1", 1, "C", true, 0, "")
+					pdf.SetFont("Arial", "", 7.5)
 				}
 				
 				productName := item.ProductName
-				if len(productName) > 35 {
-					productName = productName[:32] + "..."
+				if len(productName) > 32 {
+					productName = productName[:29] + "..."
 				}
 				
 				qtyStr := fmt.Sprintf("%.0f %s", item.Quantity, item.Unit)
+				if len(qtyStr) > 12 {
+					qtyStr = qtyStr[:10] + ".."
+				}
 				
-				pdf.CellFormat(70, 6, productName, "1", 0, "L", false, 0, "")
-				pdf.CellFormat(20, 6, qtyStr, "1", 0, "R", false, 0, "")
-				pdf.CellFormat(35, 6, formatRupiahSimple(item.UnitPrice), "1", 0, "R", false, 0, "")
-				pdf.CellFormat(35, 6, formatRupiahSimple(item.TotalPrice), "1", 0, "R", false, 0, "")
-				pdf.CellFormat(30, 6, item.PurchaseDate.Format("02/01/2006"), "1", 1, "C", false, 0, "")
+				pdf.SetX(lm)
+				pdf.CellFormat(55, 6, productName, "1", 0, "L", false, 0, "")
+				pdf.CellFormat(18, 6, qtyStr, "1", 0, "R", false, 0, "")
+				pdf.CellFormat(30, 6, formatRupiahSimple(item.UnitPrice), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(30, 6, formatRupiahSimple(item.TotalPrice), "1", 0, "R", false, 0, "")
+				pdf.CellFormat(22, 6, item.PurchaseDate.Format("02/01/06"), "1", 1, "C", false, 0, "")
 			}
 			
-			// Vendor subtotal - warna yang sama dengan customer subtotal
-			pdf.SetFont("Arial", "B", 9)
-			pdf.SetFillColor(255, 250, 240) // Sama dengan vendor header
-			pdf.CellFormat(125, 6, fmt.Sprintf("Subtotal (%s)", vendor.VendorName), "1", 0, "R", true, 0, "")
-			pdf.CellFormat(65, 6, formatRupiahSimple(vendor.TotalAmount), "1", 1, "R", true, 0, "")
+			// Vendor subtotal - light blue background (same as sales summary)
+			pdf.SetX(lm)
+			pdf.SetFont("Arial", "B", 8)
+			pdf.SetFillColor(230, 245, 255)
+			vendorSubName := vendor.VendorName
+			if len(vendorSubName) > 25 {
+				vendorSubName = vendorSubName[:22] + "..."
+			}
+			pdf.CellFormat(103, 6, fmt.Sprintf("Subtotal (%s)", vendorSubName), "1", 0, "R", true, 0, "")
+			pdf.CellFormat(52, 6, formatRupiahSimple(vendor.TotalAmount), "1", 1, "R", true, 0, "")
 			pdf.Ln(4)
 		}
 	}

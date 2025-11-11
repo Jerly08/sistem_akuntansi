@@ -44,7 +44,7 @@ import {
   Input
 } from '@chakra-ui/react';
 import { formatCurrency } from '../../utils/formatters';
-import { SSOTSalesSummaryData, CustomerSalesData, ProductSalesData } from '../../services/ssotSalesSummaryService';
+import { SSOTSalesSummaryData, CustomerSalesData, ProductSalesData, SaleItemDetail } from '../../services/ssotSalesSummaryService';
 
 interface SalesSummaryModalProps {
   isOpen: boolean;
@@ -634,6 +634,94 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                         </SimpleGrid>
                       </Box>
                     ))}
+                  </VStack>
+                </Box>
+              )}
+
+              {/* Sale Items Detail */}
+              {data.sales_by_customer && data.sales_by_customer.some(c => c.items && c.items.length > 0) && (
+                <Box>
+                  <Heading size="sm" mb={4} color={textColor}>
+                    Items Sales
+                  </Heading>
+                  
+                  <VStack spacing={4} align="stretch">
+                    {data.sales_by_customer
+                      .filter(customer => customer.items && customer.items.length > 0)
+                      .map((customer: CustomerSalesData, customerIndex: number) => (
+                        <Card key={customerIndex}>
+                          <CardHeader bg="blue.50" py={3}>
+                            <HStack justify="space-between">
+                              <Heading size="xs" color="blue.800">
+                                {customer.customer_name}
+                              </Heading>
+                              <Badge colorScheme="blue">
+                                {customer.items?.length || 0} items
+                              </Badge>
+                            </HStack>
+                          </CardHeader>
+                          <CardBody>
+                            {/* Items Table Header */}
+                            <Box bg="gray.50" p={2} borderRadius="md" mb={2}>
+                              <SimpleGrid columns={[1, 5]} spacing={2} fontSize="xs" fontWeight="bold" color="gray.700">
+                                <Text>Product</Text>
+                                <Text textAlign="right">Qty</Text>
+                                <Text textAlign="right">Unit Price</Text>
+                                <Text textAlign="right">Total</Text>
+                                <Text textAlign="center">Date</Text>
+                              </SimpleGrid>
+                            </Box>
+                            
+                            {/* Items Rows */}
+                            <VStack spacing={1} align="stretch">
+                              {customer.items?.map((item: SaleItemDetail, itemIndex: number) => (
+                                <Box 
+                                  key={itemIndex} 
+                                  borderBottom="1px solid" 
+                                  borderColor="gray.100" 
+                                  py={2}
+                                  _hover={{ bg: 'gray.50' }}
+                                >
+                                  <SimpleGrid columns={[1, 5]} spacing={2} fontSize="sm">
+                                    <VStack align="start" spacing={0}>
+                                      <Text fontWeight="medium" color="gray.800">
+                                        {item.product_name}
+                                      </Text>
+                                      <Text fontSize="xs" color="gray.500">
+                                        {item.product_code}
+                                      </Text>
+                                    </VStack>
+                                    <Text textAlign="right" color="purple.600">
+                                      {item.quantity} {item.unit}
+                                    </Text>
+                                    <Text textAlign="right" color="gray.700">
+                                      {formatCurrency(item.unit_price)}
+                                    </Text>
+                                    <Text textAlign="right" fontWeight="bold" color="green.600">
+                                      {formatCurrency(item.total_price)}
+                                    </Text>
+                                    <Text textAlign="center" fontSize="xs" color="gray.600">
+                                      {new Date(item.sale_date).toLocaleDateString('id-ID')}
+                                    </Text>
+                                  </SimpleGrid>
+                                </Box>
+                              ))}
+                            </VStack>
+                            
+                            {/* Customer Total */}
+                            <Box mt={3} pt={3} borderTop="2px solid" borderColor="blue.200">
+                              <Flex justify="space-between" align="center">
+                                <Text fontWeight="bold" color="gray.700">
+                                  Subtotal ({customer.customer_name})
+                                </Text>
+                                <Text fontWeight="bold" fontSize="lg" color="blue.600">
+                                  {formatCurrency(customer.total_sales)}
+                                </Text>
+                              </Flex>
+                            </Box>
+                          </CardBody>
+                        </Card>
+                      ))}
                   </VStack>
                 </Box>
               )}

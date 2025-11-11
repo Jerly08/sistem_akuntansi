@@ -143,6 +143,7 @@ const PaymentsPage: React.FC = () => {
   };
 
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [allPayments, setAllPayments] = useState<Payment[]>([]); // Store all payments for client-side filtering
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState(''); // Local search state for client-side filtering
@@ -285,9 +286,15 @@ const PaymentsPage: React.FC = () => {
   {
     header: 'Actions',
     accessor: (row: Payment) => (
-      <Menu>
-        <MenuButton as={IconButton} icon={<FiMoreVertical />} variant="ghost" size="sm" />
-        <MenuList>
+      <Menu strategy="fixed" placement="bottom-end">
+        <MenuButton 
+          as={IconButton} 
+          icon={<FiMoreVertical />} 
+          variant="ghost" 
+          size="sm"
+          aria-label="Actions"
+        />
+        <MenuList zIndex={9999}>
           <MenuItem icon={<FiEye />} onClick={() => handleViewPayment(row)}>
             View Details
           </MenuItem>
@@ -330,10 +337,8 @@ const loadPayments = async (newFilters?: Partial<PaymentFilters>) => {
       limit: currentFilters.limit
     };
     
-    // Add search filter if provided (use searchInput instead of currentFilters.search)
-    if (searchInput && searchInput.trim()) {
-      apiFilters.search = searchInput.trim();
-    }
+    // NOTE: Search is handled client-side, so we don't send search to API
+    // Other filters (status, method, date) still use server-side filtering
     
     // Add status filter if selected
     if (statusFilter !== 'ALL') {
@@ -357,9 +362,18 @@ const loadPayments = async (newFilters?: Partial<PaymentFilters>) => {
     // Make API call
     const result = await paymentService.getPayments(apiFilters);
     
-    // Update state with results (no need for allPayments anymore since filtering is on server-side)
+    // Store all payments for client-side filtering
     const paymentData = result?.data || [];
-    setPayments(paymentData);
+    setAllPayments(paymentData);
+    
+    // Apply client-side search filter if search input exists
+    if (searchInput && searchInput.trim()) {
+      const filtered = filterPaymentsBySearch(paymentData, searchInput);
+      setPayments(filtered);
+    } else {
+      setPayments(paymentData);
+    }
+    
     setFilters({ ...currentFilters, page: result?.page || currentFilters.page });
     setPagination({
       current: result?.page || 1,
@@ -427,17 +441,41 @@ useEffect(() => {
   }
 }, [statusFilter, methodFilter, startDate, endDate]);
 
-// Handle search with debounce - trigger API call after 500ms of inactivity
+// Apply client-side search when allPayments changes
 useEffect(() => {
-  if (!token) return;
+  if (searchInput) {
+    handleSearch(searchInput);
+  }
+}, [allPayments]);
+
+// Helper function to filter payments by search term (client-side)
+const filterPaymentsBySearch = (paymentsToFilter: Payment[], searchTerm: string) => {
+  if (!searchTerm.trim()) return paymentsToFilter;
   
-  // Debounce search to avoid too many API calls
-  const debounceTimer = setTimeout(() => {
-    loadPayments({ page: 1 });
-  }, 500);
-  
-  return () => clearTimeout(debounceTimer);
-}, [searchInput]);
+  const term = searchTerm.toLowerCase();
+  return paymentsToFilter.filter(payment => {
+    // Search in payment code
+    if (payment.code?.toLowerCase().includes(term)) return true;
+    
+    // Search in contact name (handle PPN tax payments - show "Negara")
+    if (payment.payment_type === 'TAX_PPN' || 
+        payment.payment_type === 'TAX_PPN_INPUT' || 
+        payment.payment_type === 'TAX_PPN_OUTPUT' ||
+        payment.code?.startsWith('SETOR-PPN')) {
+      if ('negara'.includes(term)) return true;
+    } else if (payment.contact?.name?.toLowerCase().includes(term)) {
+      return true;
+    }
+    
+    // Search in payment reference
+    if (payment.reference?.toLowerCase().includes(term)) return true;
+    
+    // Search in notes
+    if (payment.notes?.toLowerCase().includes(term)) return true;
+    
+    return false;
+  });
+};
 
 // Handle page change
 const handlePageChange = (page: number) => {
@@ -447,10 +485,20 @@ const handlePageChange = (page: number) => {
   }));
 };
 
-// Server-side search handler with API call (debounced via useEffect)
+// Client-side search handler (instant, no API call)
 const handleSearch = (value: string) => {
   setSearchInput(value);
-  // API call will be triggered by useEffect with 500ms debounce
+  
+  // Client-side filtering - no API call
+  if (!value.trim()) {
+    // If search is empty, show all payments
+    setPayments(allPayments);
+    return;
+  }
+  
+  // Filter payments based on search term
+  const filtered = filterPaymentsBySearch(allPayments, value);
+  setPayments(filtered);
 };
 
 // Handle filter change
@@ -483,11 +531,13 @@ const resetFilters = () => {
   setStartDate('');
   setEndDate('');
   setSearchInput(''); // Clear search input
+  setPayments(allPayments); // Reset to show all payments
   setFilters({
     page: 1,
     limit: ITEMS_PER_PAGE
   });
-  // loadPayments will be triggered by useEffect when searchInput changes
+  // Reload data from server with reset filters
+  loadPayments({ page: 1 });
 };
 
   // Handle delete payment

@@ -257,6 +257,20 @@ const PurchasePaymentForm: React.FC<PurchasePaymentFormProps> = ({
     } catch (error: any) {
       console.error('Error recording payment:', error);
       
+      // Check if it's a period closed error (403)
+      if (error?.response?.status === 403 && error?.response?.data?.code === 'PERIOD_CLOSED') {
+        const errorData = error.response.data;
+        toast({
+          title: errorData.error || 'Periode Sudah Ditutup',
+          description: errorData.message || 'Tidak dapat membuat transaksi pada periode yang sudah ditutup.',
+          status: 'error',
+          duration: 8000,
+          isClosable: true,
+        });
+        setLoading(false);
+        return;
+      }
+      
       // Check if this is a timeout error
       const isTimeoutError = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
       
