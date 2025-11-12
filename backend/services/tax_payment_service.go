@@ -131,9 +131,13 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 	if paymentAmount <= 0 {
 		paymentAmount = ppnTerutang
 		log.Printf("✅ Using calculated PPN Terutang: %.2f", paymentAmount)
-	} else if paymentAmount > ppnTerutang {
-		tx.Rollback()
-		return nil, fmt.Errorf("payment amount (%.2f) cannot exceed PPN Terutang (%.2f)", paymentAmount, ppnTerutang)
+	} else {
+		// Add tolerance of 1 Rupiah to avoid floating point precision issues
+		const tolerance = 1.0
+		if paymentAmount > ppnTerutang+tolerance {
+			tx.Rollback()
+			return nil, fmt.Errorf("payment amount (%.2f) cannot exceed PPN Terutang (%.2f)", paymentAmount, ppnTerutang)
+		}
 	}
 
 	// Validate cash/bank balance

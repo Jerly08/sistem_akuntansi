@@ -195,7 +195,8 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
         
         const ppnMasukan = masukanData.balance || 0;
         const ppnKeluaran = keluaranData.balance || 0;
-        const ppnTerutang = ppnKeluaran - ppnMasukan;
+        // Round to avoid floating point precision issues
+        const ppnTerutang = Math.round(ppnKeluaran - ppnMasukan);
         
         console.log('✅ Calculated:', { ppnMasukan, ppnKeluaran, ppnTerutang });
         
@@ -539,8 +540,13 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                     min: { value: 1, message: 'Jumlah minimal 1' },
                     validate: {
                       notExceed: (value) => {
-                        if (ppnBalanceInfo && ppnBalanceInfo.ppn_terutang > 0 && value > ppnBalanceInfo.ppn_terutang) {
-                          return `Jumlah tidak boleh melebihi PPN Terutang: ${formatRupiah(ppnBalanceInfo.ppn_terutang)}`;
+                        if (ppnBalanceInfo && ppnBalanceInfo.ppn_terutang > 0) {
+                          // Round both values and add tolerance of 1 Rupiah to avoid floating point issues
+                          const roundedValue = Math.round(value);
+                          const roundedTerutang = Math.round(ppnBalanceInfo.ppn_terutang);
+                          if (roundedValue > roundedTerutang + 1) {
+                            return `Jumlah tidak boleh melebihi PPN Terutang: ${formatRupiah(ppnBalanceInfo.ppn_terutang)}`;
+                          }
                         }
                         return true;
                       }
@@ -551,7 +557,7 @@ const PPNPaymentModal: React.FC<PPNPaymentModalProps> = ({
                       value={field.value}
                       onChange={(_, valueNumber) => field.onChange(valueNumber || 0)}
                       min={0}
-                      max={ppnBalanceInfo?.ppn_terutang || undefined}
+                      max={ppnBalanceInfo ? Math.round(ppnBalanceInfo.ppn_terutang) + 1 : undefined}
                     >
                       <NumberInputField 
                         placeholder={ppnBalanceInfo && ppnBalanceInfo.ppn_terutang > 0

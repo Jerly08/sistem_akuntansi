@@ -4228,16 +4228,6 @@ const handleCreate = async () => {
                           </Select>
                           <FormHelperText fontSize="xs">
                             Required: Select {formData.payment_method === 'CASH' ? 'cash' : 'bank'} account for payment processing
-                            {/* Show filtered count */}
-                            {bankAccounts.filter(account => 
-                              formData.payment_method === 'CASH' ? account.type === 'CASH' : account.type === 'BANK'
-                            ).length > 0 && (
-                              <Text as="span" color="blue.500" ml={2}>
-                                ({bankAccounts.filter(account => 
-                                  formData.payment_method === 'CASH' ? account.type === 'CASH' : account.type === 'BANK'
-                                ).length} {formData.payment_method === 'CASH' ? 'cash' : 'bank'} accounts available)
-                              </Text>
-                            )}
                           </FormHelperText>
                         </FormControl>
                       )}
@@ -4914,16 +4904,6 @@ const handleCreate = async () => {
                           </Select>
                           <FormHelperText fontSize="xs">
                             Required: Select {formData.payment_method === 'CASH' ? 'cash' : 'bank'} account for payment processing
-                            {/* Show filtered count */}
-                            {bankAccounts.filter(account => 
-                              formData.payment_method === 'CASH' ? account.type === 'CASH' : account.type === 'BANK'
-                            ).length > 0 && (
-                              <Text as="span" color="blue.500" ml={2}>
-                                ({bankAccounts.filter(account => 
-                                  formData.payment_method === 'CASH' ? account.type === 'CASH' : account.type === 'BANK'
-                                ).length} {formData.payment_method === 'CASH' ? 'cash' : 'bank'} accounts available)
-                              </Text>
-                            )}
                           </FormHelperText>
                         </FormControl>
                       )}
