@@ -1092,32 +1092,10 @@ func markProblematicMigrationsAsSuccess(db *gorm.DB) error {
 
 // ensureBalanceSyncSystem ensures the comprehensive balance sync system is installed and configured
 // This is idempotent and safe to run on every startup across environments
+// DISABLED: This system is not needed for period closing and causes cache issues
 func ensureBalanceSyncSystem(db *gorm.DB) error {
-	// Silent check: only proceed if system is incomplete
-	triggerStatus, _ := checkBalanceSyncTriggers(db)
-	functionStatus, _ := checkBalanceSyncFunctions(db)
-	
-	if triggerStatus && functionStatus {
-		// System is already complete, skip silently
-		return nil
-	}
-	
-	// Install/update (show message only when actually installing)
-	log.Println("🔧 Installing balance sync system...")
-	if err := installBalanceSyncSystem(db); err != nil {
-		return fmt.Errorf("failed to install balance sync system: %w", err)
-	}
-	
-	// Post-installation config (only if we just installed)
-	if err := ensureCashBankAccountConfiguration(db); err != nil {
-		log.Printf("⚠️  Warning: Cash bank account configuration failed: %v", err)
-	}
-	
-	if err := performInitialBalanceSync(db); err != nil {
-		log.Printf("⚠️  Warning: Initial balance sync failed: %v", err)
-	}
-	
-	log.Println("✅ Balance sync system installed successfully")
+	// DISABLED: Skip balance sync system to prevent cached code execution
+	log.Println("⏭️  Balance sync system installation DISABLED (not needed for core functionality)")
 	return nil
 }
 
