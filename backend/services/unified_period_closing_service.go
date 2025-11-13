@@ -298,9 +298,9 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
 			LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
 			WHERE a.id IN ? AND a.deleted_at IS NULL
-				AND (uje.id IS NULL OR uje.status = 'POSTED')
+				AND (uje.id IS NULL OR (uje.status = 'POSTED' AND uje.entry_date <= ?))
 			GROUP BY a.id, a.type
-		`, affectedIDs).Scan(&rows).Error; err != nil {
+		`, affectedIDs, endDate).Scan(&rows).Error; err != nil {
 			return fmt.Errorf("failed to recalc balances for affected accounts: %v", err)
 		}
 
