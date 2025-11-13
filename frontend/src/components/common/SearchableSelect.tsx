@@ -33,6 +33,7 @@ interface SearchableSelectProps {
   displayFormat?: (option: SearchableSelectOption) => string;
   filterFunction?: (option: SearchableSelectOption, searchTerm: string) => boolean;
   allowClear?: boolean;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -51,6 +52,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     );
   },
   allowClear = true,
+  size = 'md',
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOption, setSelectedOption] = useState<SearchableSelectOption | null>(null);
@@ -168,7 +170,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   return (
     <Box ref={containerRef} position="relative">
-      <InputGroup>
+      <InputGroup size={size}>
         <Input
           ref={inputRef}
           value={getInputValue()}
@@ -178,6 +180,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
           isDisabled={isDisabled}
           bg={selectedOption ? 'green.50' : 'white'}
           borderColor={selectedOption ? 'green.300' : 'gray.200'}
+          size={size}
         />
         <InputRightElement width="4.5rem">
           <HStack spacing={1}>
@@ -210,17 +213,35 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
           top="100%"
           left={0}
           right={0}
-          zIndex={1000}
+          zIndex={1500}
           bg="white"
           border="1px"
           borderColor="gray.200"
           borderRadius="md"
           boxShadow="lg"
-          maxHeight="200px"
+          maxHeight="300px"
           overflowY="auto"
+          overflowX="hidden"
           mt={1}
           // Smooth programmatic scroll and better overscroll behaviour
-          sx={{ scrollBehavior: 'smooth', overscrollBehavior: 'contain' }}
+          sx={{ 
+            scrollBehavior: 'smooth', 
+            overscrollBehavior: 'contain',
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: '#f1f1f1',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#888',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb:hover': {
+              background: '#555',
+            },
+          }}
         >
           {isLoading ? (
             <Box p={4} textAlign="center">

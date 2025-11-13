@@ -138,11 +138,13 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 		// 6. Build map of account balances
 		revenueBalanceMap := make(map[uint64]decimal.Decimal)
 		for _, bal := range revenueBalances {
-			// Revenue: credit increases, debit decreases
-			// Net balance = Credit - Debit (should be positive for revenue)
-			netBalance := decimal.NewFromFloat(bal.TotalCredit).Sub(decimal.NewFromFloat(bal.TotalDebit))
-			if netBalance.GreaterThan(decimal.NewFromFloat(0.01)) {
-				revenueBalanceMap[bal.AccountID] = netBalance
+			// Revenue balance calculation: Debit - Credit (will be negative for credit balance)
+			// For closing, we need the ABSOLUTE value to debit revenue
+			netBalance := decimal.NewFromFloat(bal.TotalDebit).Sub(decimal.NewFromFloat(bal.TotalCredit))
+			// Take absolute value - if revenue has credit balance (negative), we need positive amount to close
+			absBalance := netBalance.Abs()
+			if absBalance.GreaterThan(decimal.NewFromFloat(0.01)) {
+				revenueBalanceMap[bal.AccountID] = absBalance
 			}
 		}
 
