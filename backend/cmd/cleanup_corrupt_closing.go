@@ -2,17 +2,36 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 func main() {
+	// Load .env file if exists
+	_ = godotenv.Load()
+
 	// Connect to database
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://postgres:postgres@localhost/sistem_akuntansi?sslmode=disable"
+		host := getEnvOrDefault("DB_HOST", "localhost")
+		port := getEnvOrDefault("DB_PORT", "5432")
+		user := getEnvOrDefault("DB_USER", "postgres")
+		password := getEnvOrDefault("DB_PASSWORD", "postgres")
+		dbname := getEnvOrDefault("DB_NAME", "sistem_akuntansi")
+		sslmode := getEnvOrDefault("DB_SSLMODE", "disable")
+		dbURL = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+			user, password, host, port, dbname, sslmode)
 	}
 
 	db, err := sql.Open("postgres", dbURL)

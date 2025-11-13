@@ -6,13 +6,32 @@ import (
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 func main() {
+	// Load .env file if exists
+	_ = godotenv.Load()
+
+	// Try DATABASE_URL first
 	dbURL := os.Getenv("DATABASE_URL")
+	
+	// If not set, try to build from individual env vars
 	if dbURL == "" {
-		dbURL = "postgres://postgres:postgres@localhost/sistem_akuntansi?sslmode=disable"
+		host := getEnvOrDefault("DB_HOST", "localhost")
+		port := getEnvOrDefault("DB_PORT", "5432")
+		user := getEnvOrDefault("DB_USER", "postgres")
+		password := getEnvOrDefault("DB_PASSWORD", "postgres")
+		dbname := getEnvOrDefault("DB_NAME", "sistem_akuntansi")
+		sslmode := getEnvOrDefault("DB_SSLMODE", "disable")
+		
+		dbURL = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+			user, password, host, port, dbname, sslmode)
+		
+		log.Printf("Connecting to: postgres://%s@%s:%s/%s", user, host, port, dbname)
+	} else {
+		log.Println("Connecting using DATABASE_URL from environment")
 	}
 
 	db, err := sql.Open("postgres", dbURL)
@@ -183,4 +202,12 @@ func main() {
 	log.Println("   3. Restart backend server")
 	log.Println("   4. Try period closing again")
 	fmt.Println("\n⚠️  IMPORTANT: Make sure to pull latest code FIRST!")
+}
+
+// Helper function to get env var or default value
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }

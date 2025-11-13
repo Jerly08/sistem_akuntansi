@@ -2,16 +2,33 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 func main() {
+	_ = godotenv.Load()
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://postgres:postgres@localhost/sistem_akuntansi?sslmode=disable"
+		host := getEnvOrDefault("DB_HOST", "localhost")
+		port := getEnvOrDefault("DB_PORT", "5432")
+		user := getEnvOrDefault("DB_USER", "postgres")
+		password := getEnvOrDefault("DB_PASSWORD", "postgres")
+		dbname := getEnvOrDefault("DB_NAME", "sistem_akuntansi")
+		sslmode := getEnvOrDefault("DB_SSLMODE", "disable")
+		dbURL = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+			user, password, host, port, dbname, sslmode)
 	}
 
 	db, err := sql.Open("postgres", dbURL)
@@ -71,17 +88,18 @@ func main() {
 		}
 	}
 	
-	balance := totalCredit - totalDebit
+	// Use correct formula: Debit - Credit (will be negative for revenue)
+	balance := totalDebit - totalCredit
 	log.Printf("\n📈 TOTALS (POSTED only):")
 	log.Printf("   Total Debit:  %12.2f", totalDebit)
 	log.Printf("   Total Credit: %12.2f", totalCredit)
-	log.Printf("   Balance:      %12.2f (Credit - Debit)", balance)
-	log.Printf("   Expected:     Negative (Credit balance for Revenue)")
+	log.Printf("   Balance:      %12.2f (Debit - Credit)", balance)
+	log.Printf("   Expected:     Negative for Revenue (credit balance)")
 	
 	if balance < 0 {
-		log.Printf("   ✅ Balance is correct (Credit balance)")
+		log.Printf("   ✅ Balance is correct (Negative = Credit balance)")
 	} else {
-		log.Printf("   ⚠️  WARNING: Balance is unusual (should be negative)")
+		log.Printf("   ⚠️  WARNING: Balance is positive (should be negative)")
 	}
 
 	// Check existing CLOSING entries
