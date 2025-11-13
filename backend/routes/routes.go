@@ -193,9 +193,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Initialize WarehouseLocationController
 	warehouseLocationController := controllers.NewWarehouseLocationController(db)
 	
-	// Initialize Fiscal Year Closing Service and Controller (Legacy - will be replaced by Period Closing)
-	fiscalYearClosingService := services.NewFiscalYearClosingService(db)
-	fiscalYearClosingController := controllers.NewFiscalYearClosingController(fiscalYearClosingService)
+	// Fiscal Year Closing Service removed - now using Unified Period Closing Service
+	// which provides more flexibility and consistent closing logic
 	
 	// Initialize SSOT Unified Journal Service first (needed by period closing)
 	unifiedJournalService := services.NewUnifiedJournalService(db)
@@ -203,6 +202,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// Initialize Period Closing Service and Controller (Unified Journal-based)
 	unifiedPeriodClosingService := services.NewUnifiedPeriodClosingService(db)
 	periodClosingController := controllers.NewPeriodClosingController(unifiedPeriodClosingService)
+	
+	// Initialize Unified Closing History Controller (combines all closing sources)
+	unifiedClosingHistoryController := controllers.NewUnifiedClosingHistoryController(db)
 	
 	// Initialize Period Validation Middleware
 	periodValidationMiddleware := middleware.NewPeriodValidationMiddleware(unifiedPeriodClosingService)
@@ -915,16 +917,18 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 			// Setup Settings routes
 			SetupSettingsRoutes(protected, db)
 			
-			// 🏁 Fiscal Year-End Closing routes (LEGACY - admin, director, finance only - high risk)
-			fiscalClosing := protected.Group("/fiscal-closing")
-			fiscalClosing.Use(middleware.RoleRequired("admin", "director", "finance")) // Finance can execute year-end closing
-			{
-				fiscalClosing.GET("/preview", fiscalYearClosingController.PreviewClosing)
-				fiscalClosing.POST("/execute", fiscalYearClosingController.ExecuteClosing)
-				fiscalClosing.GET("/history", fiscalYearClosingController.GetClosingHistory)
-			}
+		// 🏁 Fiscal Year-End Closing routes (USING UNIFIED SYSTEM)
+		fiscalClosing := protected.Group("/fiscal-closing")
+		fiscalClosing.Use(middleware.RoleRequired("admin", "director", "finance")) // Finance can execute year-end closing
+		{
+			// Use period closing for preview and execute (more flexible)
+			fiscalClosing.GET("/preview", periodClosingController.PreviewClosing)
+			fiscalClosing.POST("/execute", periodClosingController.ExecuteClosing)
+			// Use unified history controller that checks all sources
+			fiscalClosing.GET("/history", unifiedClosingHistoryController.GetUnifiedClosingHistory)
+		}
 			
-		// 📅 Period Closing routes (Flexible Period Closing - admin, director, finance only)
+		// 📅 Period Closing routes (Unified Period Closing System)
 		periodClosing := protected.Group("/period-closing")
 		periodClosing.Use(middleware.RoleRequired("admin", "director", "finance"))
 		{
@@ -932,7 +936,7 @@ unifiedSalesPaymentService := services.NewUnifiedSalesPaymentService(db)
 			periodClosing.GET("/preview", periodClosingController.PreviewClosing)              // Preview period closing
 			periodClosing.POST("/execute", periodClosingController.ExecuteClosing)             // Execute period closing
 			periodClosing.POST("/reopen", periodClosingController.ReopenPeriod)                // Reopen closed period
-			periodClosing.GET("/history", periodClosingController.GetClosingHistory)           // Get closing history
+			periodClosing.GET("/history", unifiedClosingHistoryController.GetUnifiedClosingHistory) // Use unified history
 			periodClosing.GET("/check-date", periodClosingController.CheckDateInClosedPeriod) // Check if date is closed
 		}
 			

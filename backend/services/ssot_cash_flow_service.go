@@ -181,6 +181,7 @@ func (s *SSOTCashFlowService) getCashFlowDataFromSSOT(startDate, endDate string)
 		WHERE uje.status = 'POSTED' 
 			AND uje.entry_date >= ? 
 			AND uje.entry_date < ?
+			AND UPPER(uje.source_type) != 'CLOSING'
 		GROUP BY a.id, a.code, a.name, a.type
 		HAVING COALESCE(SUM(ujl.debit_amount), 0) > 0 OR COALESCE(SUM(ujl.credit_amount), 0) > 0
 		ORDER BY a.code

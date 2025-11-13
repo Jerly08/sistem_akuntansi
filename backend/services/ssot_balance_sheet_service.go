@@ -146,33 +146,24 @@ func (s *SSOTBalanceSheetService) getAccountBalancesFromSSOT(asOfDate string) ([
 			COALESCE(SUM(ujl.debit_amount), 0) as debit_total,
 			COALESCE(SUM(ujl.credit_amount), 0) as credit_total,
 			CASE 
-				-- If account has journal entries, use journal-based calculation
-				-- Otherwise, fall back to account.balance (for manually adjusted accounts like Retained Earnings)
-				WHEN COUNT(ujl.id) > 0 THEN
-					CASE 
-						WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
-							COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
-						ELSE 
-							COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
-					END
-				ELSE
-					-- Use account.balance for accounts without journal entries
-					COALESCE(MAX(a.balance), 0)
+				WHEN UPPER(a.type) IN ('ASSET', 'EXPENSE') THEN 
+					COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0)
+				ELSE 
+					COALESCE(SUM(ujl.credit_amount), 0) - COALESCE(SUM(ujl.debit_amount), 0)
 			END as net_balance
 		FROM accounts a
-		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id 
-			AND uje.status = 'POSTED' 
-			AND uje.deleted_at IS NULL 
-			AND uje.entry_date <= ?
+		INNER JOIN unified_journal_lines ujl ON ujl.account_id = a.id
+		INNER JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
 	WHERE COALESCE(a.is_header, false) = false
 	  AND UPPER(a.type) IN ('ASSET', 'LIABILITY', 'EQUITY')
 	  AND a.is_active = true
 	  AND a.deleted_at IS NULL
+	  AND uje.status = 'POSTED'
+	  AND uje.deleted_at IS NULL
+	  AND uje.entry_date <= ?
 	GROUP BY a.code, UPPER(a.type)
 		HAVING COALESCE(SUM(ujl.debit_amount), 0) <> 0 
 		    OR COALESCE(SUM(ujl.credit_amount), 0) <> 0
-		    OR COALESCE(MAX(a.balance), 0) <> 0
 		ORDER BY a.code
 	`
 	

@@ -880,6 +880,7 @@ func (s *SSOTReportIntegrationService) generateTrialBalance(ctx context.Context,
 		LEFT JOIN accounts a ON a.id = sjl.account_id
 		WHERE sje.entry_date <= ?
 			AND sje.status = ?
+			AND UPPER(sje.source_type) != 'CLOSING'
 		GROUP BY sjl.account_id, a.code, a.name
 		ORDER BY a.code
 	`
@@ -998,6 +999,7 @@ func (s *SSOTReportIntegrationService) generateGeneralLedger(ctx context.Context
 			WHERE sje.status = ? 
 				AND sje.entry_date BETWEEN ? AND ?
 				AND sjl.account_id = ?
+				AND UPPER(sje.source_type) != 'CLOSING'
 			ORDER BY sje.entry_date, sje.id, sjl.line_number
 		`
 		args = []interface{}{models.SSOTStatusPosted, startDate, endDate, *accountID}
@@ -1021,6 +1023,7 @@ func (s *SSOTReportIntegrationService) generateGeneralLedger(ctx context.Context
 			LEFT JOIN accounts a ON a.id = sjl.account_id
 			WHERE sje.status = ? 
 				AND sje.entry_date BETWEEN ? AND ?
+				AND UPPER(sje.source_type) != 'CLOSING'
 			ORDER BY sje.entry_date, sje.id, sjl.line_number
 		`
 		args = []interface{}{models.SSOTStatusPosted, startDate, endDate}

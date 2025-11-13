@@ -330,11 +330,18 @@ func (fycs *FiscalYearClosingService) ExecuteFiscalYearClosing(ctx context.Conte
 func (fycs *FiscalYearClosingService) GetFiscalYearClosingHistory(ctx context.Context) ([]map[string]interface{}, error) {
 	var closingEntries []models.JournalEntry
 
-	fmt.Printf("[GetFiscalYearClosingHistory] Querying for reference_type = %s\n", models.JournalRefClosing)
+	fmt.Printf("[GetFiscalYearClosingHistory] Starting query for closing entries\n")
 
-	err := fycs.db.Where("reference_type = ?", models.JournalRefClosing).
-		Order("entry_date DESC").
-		Limit(10).
+	// Query for closing entries - look for multiple possible patterns
+	// Since the system might create entries with different reference types or codes
+	err := fycs.db.Where(
+		"reference_type IN (?) OR code LIKE ? OR description LIKE ? OR description LIKE ?",
+		[]string{models.JournalRefClosing, "FISCAL_CLOSING", "PERIOD_CLOSING", "CLOSING"},
+		"CLO-%",
+		"%closing%",
+		"%tutup buku%",
+	).Order("entry_date DESC").
+		Limit(20). // Increased limit to get more entries
 		Find(&closingEntries).Error
 
 	if err != nil {
@@ -344,17 +351,24 @@ func (fycs *FiscalYearClosingService) GetFiscalYearClosingHistory(ctx context.Co
 
 	fmt.Printf("[GetFiscalYearClosingHistory] Found %d closing entries\n", len(closingEntries))
 
-	// Debug: Check what reference_types exist in the database
+	// If still no entries found, try a more relaxed search
 	if len(closingEntries) == 0 {
-		var allEntries []models.JournalEntry
-		fycs.db.Select("id, code, reference_type, entry_date").
-			Where("code LIKE ?", "CLO-%").
-			Limit(5).
-			Find(&allEntries)
-		fmt.Printf("[GetFiscalYearClosingHistory] Sample entries with CLO- prefix: %d\n", len(allEntries))
-		for i, e := range allEntries {
-			fmt.Printf("  %d. ID=%d, Code=%s, RefType=%s, Date=%v\n", i+1, e.ID, e.Code, e.ReferenceType, e.EntryDate)
+		fmt.Printf("[GetFiscalYearClosingHistory] No entries found with primary query, trying alternative search\n")
+		
+		// Look for journal entries that might be closing entries based on patterns
+		err = fycs.db.Where(
+			"code LIKE ? OR code LIKE ? OR description LIKE ?",
+			"PC-%",     // Period Closing prefix
+			"YEC-%",    // Year End Closing prefix
+			"%Period Closing%",
+		).Order("entry_date DESC").
+			Limit(20).
+			Find(&closingEntries).Error
+		
+		if err != nil {
+			fmt.Printf("[GetFiscalYearClosingHistory] Alternative query error: %v\n", err)
 		}
+		fmt.Printf("[GetFiscalYearClosingHistory] Alternative search found %d entries\n", len(closingEntries))
 	}
 
 	var history []map[string]interface{}
@@ -367,6 +381,39 @@ func (fycs *FiscalYearClosingService) GetFiscalYearClosingHistory(ctx context.Co
 			"created_at":  entry.CreatedAt,
 			"total_debit": entry.TotalDebit,
 		})
+	}
+
+	// If no closing entries found in journal_entries, also check accounting_periods table
+	if len(history) == 0 {
+		fmt.Printf("[GetFiscalYearClosingHistory] No journal entries found, checking accounting_periods table\n")
+		
+		// Check if accounting_periods table exists and has data
+		var periods []models.AccountingPeriod
+		err = fycs.db.Where("status = ? OR is_locked = ?", "CLOSED", true).
+			Order("end_date DESC").
+			Limit(20).
+			Find(&periods).Error
+		
+		if err == nil && len(periods) > 0 {
+			fmt.Printf("[GetFiscalYearClosingHistory] Found %d closed periods in accounting_periods\n", len(periods))
+			for _, period := range periods {
+				// Generate a code based on the period dates
+				periodCode := fmt.Sprintf("PERIOD-%s-%s", 
+					period.StartDate.Format("2006-01-02"),
+					period.EndDate.Format("2006-01-02"))
+				
+				history = append(history, map[string]interface{}{
+					"id":          period.ID,
+					"code":        periodCode,
+					"description": period.Description,
+					"entry_date":  period.EndDate, // Use end_date as the closing date
+					"created_at":  period.CreatedAt,
+					"total_debit": period.NetIncome, // Use net income as indicator
+				})
+			}
+		} else if err != nil {
+			fmt.Printf("[GetFiscalYearClosingHistory] Error querying accounting_periods: %v\n", err)
+		}
 	}
 
 	return history, nil

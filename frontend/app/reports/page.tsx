@@ -207,6 +207,8 @@ const ReportsPage: React.FC = () => {
   const [ssotPLError, setSSOTPLError] = useState<string | null>(null);
   const [ssotStartDate, setSSOTStartDate] = useState('');
   const [ssotEndDate, setSSOTEndDate] = useState('');
+  const [ssotPLClosedPeriods, setSSOTPLClosedPeriods] = useState<any[]>([]);
+  const [loadingSSOTPLClosedPeriods, setLoadingSSOTPLClosedPeriods] = useState(false);
 
   // State untuk SSOT Balance Sheet
   const [ssotBSOpen, setSSOTBSOpen] = useState(false);
@@ -224,6 +226,8 @@ const ReportsPage: React.FC = () => {
   const [ssotCFError, setSSOTCFError] = useState<string | null>(null);
   const [ssotCFStartDate, setSSOTCFStartDate] = useState('');
   const [ssotCFEndDate, setSSOTCFEndDate] = useState('');
+  const [ssotCFClosedPeriods, setSSOTCFClosedPeriods] = useState<any[]>([]);
+  const [loadingSSOTCFClosedPeriods, setLoadingSSOTCFClosedPeriods] = useState(false);
 
   // State untuk SSOT Sales Summary
   const [ssotSSOpen, setSSOTSSOpen] = useState(false);
@@ -247,6 +251,8 @@ const ReportsPage: React.FC = () => {
   const [ssotTBLoading, setSSOTTBLoading] = useState(false);
   const [ssotTBError, setSSOTTBError] = useState<string | null>(null);
   const [ssotTBAsOfDate, setSSOTTBAsOfDate] = useState('');
+  const [ssotTBClosedPeriods, setSSOTTBClosedPeriods] = useState<any[]>([]);
+  const [loadingSSOTTBClosedPeriods, setLoadingSSOTTBClosedPeriods] = useState(false);
 
   // State untuk SSOT General Ledger
   const [ssotGLOpen, setSSOTGLOpen] = useState(false);
@@ -256,6 +262,8 @@ const ReportsPage: React.FC = () => {
   const [ssotGLStartDate, setSSOTGLStartDate] = useState('');
   const [ssotGLEndDate, setSSOTGLEndDate] = useState('');
   const [ssotGLAccountId, setSSOTGLAccountId] = useState<string>('');
+  const [ssotGLClosedPeriods, setSSOTGLClosedPeriods] = useState<any[]>([]);
+  const [loadingSSOTGLClosedPeriods, setLoadingSSOTGLClosedPeriods] = useState(false);
 
   // State untuk Customer History
   const [customerHistoryOpen, setCustomerHistoryOpen] = useState(false);
@@ -715,8 +723,8 @@ const ReportsPage: React.FC = () => {
       
       if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
         // Format data untuk dropdown dengan grouping by year
-        // Backend returns: { id, code, description, entry_date, created_at, total_debit }
-        const periods = response.data.data
+        // Backend returns: { id, code, description, entry_date, created_at, total_debit, source }
+        const allPeriods = response.data.data
           .filter((entry: any) => entry.entry_date) // Filter entries dengan date valid
           .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
           .map((entry: any) => {
@@ -737,12 +745,42 @@ const ReportsPage: React.FC = () => {
               date: dateValue,
               fiscal_year: dateObj.getFullYear(),
               entry_id: entry.id,
-              code: entry.code
+              code: entry.code,
+              source: entry.source,
+              created_at: entry.created_at
             };
           });
         
+        // Deduplikasi berdasarkan date - prioritaskan accounting_periods source
+        const uniquePeriodsMap = new Map<string, any>();
+        allPeriods.forEach((period: any) => {
+          const existing = uniquePeriodsMap.get(period.date);
+          if (!existing) {
+            // Belum ada entry untuk tanggal ini
+            uniquePeriodsMap.set(period.date, period);
+          } else {
+            // Sudah ada - prioritaskan accounting_periods, atau yang lebih baru
+            if (period.source === 'accounting_periods' && existing.source !== 'accounting_periods') {
+              uniquePeriodsMap.set(period.date, period);
+            } else if (period.source === existing.source) {
+              // Jika source sama, ambil yang created_at lebih baru
+              const periodDate = new Date(period.created_at);
+              const existingDate = new Date(existing.created_at);
+              if (periodDate > existingDate) {
+                uniquePeriodsMap.set(period.date, period);
+              }
+            }
+          }
+        });
+        
+        const periods = Array.from(uniquePeriodsMap.values());
+        
         setClosedPeriods(periods);
-        console.log(`[Reports] Loaded ${periods.length} closed periods:`, periods);
+        console.log(`[Reports] Loaded ${periods.length} unique closed periods (from ${allPeriods.length} total entries):`, periods);
+        
+        if (allPeriods.length > periods.length) {
+          console.log(`[Reports] Deduplicated ${allPeriods.length - periods.length} duplicate entries`);
+        }
         
         if (periods.length === 0) {
           console.warn('[Reports] No valid closed periods found - entries may not have entry_date');
@@ -2159,14 +2197,146 @@ const ReportsPage: React.FC = () => {
                             setSSOTPROpen(true);
                           } else if (report.id === 'trial-balance') {
                             setSSOTTBOpen(true);
+                            // Auto-load closed periods untuk Trial Balance
+                            (async () => {
+                              setLoadingSSOTTBClosedPeriods(true);
+                              try {
+                                const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+                                if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+                                  const periods = response.data.data
+                                    .filter((entry: any) => entry.entry_date)
+                                    .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+                                    .map((entry: any) => {
+                                      const dateObj = new Date(entry.entry_date);
+                                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        year: 'numeric'
+                                      });
+                                      const dateValue = dateObj.toISOString().split('T')[0];
+                                      return {
+                                        value: dateValue,
+                                        label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+                                        date: dateValue,
+                                        fiscal_year: dateObj.getFullYear()
+                                      };
+                                    });
+                                  setSSOTTBClosedPeriods(periods);
+                                  console.log(`[Trial Balance] Auto-loaded ${periods.length} closed periods`);
+                                }
+                              } catch (error) {
+                                console.error('[Trial Balance] Failed to auto-load closed periods:', error);
+                              } finally {
+                                setLoadingSSOTTBClosedPeriods(false);
+                              }
+                            })();
                           } else if (report.id === 'general-ledger') {
                             setSSOTGLOpen(true);
+                            // Auto-load closed periods untuk General Ledger
+                            (async () => {
+                              setLoadingSSOTGLClosedPeriods(true);
+                              try {
+                                const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+                                if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+                                  const periods = response.data.data
+                                    .filter((entry: any) => entry.entry_date)
+                                    .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+                                    .map((entry: any) => {
+                                      const dateObj = new Date(entry.entry_date);
+                                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        year: 'numeric'
+                                      });
+                                      const dateValue = dateObj.toISOString().split('T')[0];
+                                      return {
+                                        value: dateValue,
+                                        label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+                                        date: dateValue,
+                                        fiscal_year: dateObj.getFullYear()
+                                      };
+                                    });
+                                  setSSOTGLClosedPeriods(periods);
+                                  console.log(`[General Ledger] Auto-loaded ${periods.length} closed periods`);
+                                }
+                              } catch (error) {
+                                console.error('[General Ledger] Failed to auto-load closed periods:', error);
+                              } finally {
+                                setLoadingSSOTGLClosedPeriods(false);
+                              }
+                            })();
                           } else if (report.id === 'balance-sheet') {
                             setSSOTBSOpen(true);
                           } else if (report.id === 'cash-flow') {
                             setSSOTCFOpen(true);
+                            // Auto-load closed periods untuk Cash Flow
+                            (async () => {
+                              setLoadingSSOTCFClosedPeriods(true);
+                              try {
+                                const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+                                if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+                                  const periods = response.data.data
+                                    .filter((entry: any) => entry.entry_date)
+                                    .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+                                    .map((entry: any) => {
+                                      const dateObj = new Date(entry.entry_date);
+                                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        year: 'numeric'
+                                      });
+                                      const dateValue = dateObj.toISOString().split('T')[0];
+                                      return {
+                                        value: dateValue,
+                                        label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+                                        date: dateValue,
+                                        fiscal_year: dateObj.getFullYear()
+                                      };
+                                    });
+                                  setSSOTCFClosedPeriods(periods);
+                                  console.log(`[Cash Flow] Auto-loaded ${periods.length} closed periods`);
+                                }
+                              } catch (error) {
+                                console.error('[Cash Flow] Failed to auto-load closed periods:', error);
+                              } finally {
+                                setLoadingSSOTCFClosedPeriods(false);
+                              }
+                            })();
                           } else if (report.id === 'profit-loss') {
                             setSSOTPLOpen(true);
+                            // Auto-load closed periods untuk P&L
+                            (async () => {
+                              setLoadingSSOTPLClosedPeriods(true);
+                              try {
+                                const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+                                if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+                                  const periods = response.data.data
+                                    .filter((entry: any) => entry.entry_date)
+                                    .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+                                    .map((entry: any) => {
+                                      const dateObj = new Date(entry.entry_date);
+                                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        year: 'numeric'
+                                      });
+                                      const dateValue = dateObj.toISOString().split('T')[0];
+                                      return {
+                                        value: dateValue,
+                                        label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+                                        date: dateValue,
+                                        fiscal_year: dateObj.getFullYear()
+                                      };
+                                    });
+                                  setSSOTPLClosedPeriods(periods);
+                                  console.log(`[P&L] Auto-loaded ${periods.length} closed periods`);
+                                }
+                              } catch (error) {
+                                console.error('[P&L] Failed to auto-load closed periods:', error);
+                              } finally {
+                                setLoadingSSOTPLClosedPeriods(false);
+                              }
+                            })();
                           } else if (report.id === 'customer-history') {
                             setCustomerHistoryOpen(true);
                           } else if (report.id === 'vendor-history') {
@@ -2453,37 +2623,121 @@ const ReportsPage: React.FC = () => {
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
           <ModalHeader>
-            <HStack justify="space-between" width="full">
-              <HStack>
-                <Icon as={FiTrendingUp} color="purple.500" />
-                <VStack align="start" spacing={0}>
-                  <Text fontSize="lg" fontWeight="bold">
-                    SSOT Profit & Loss Statement
-                  </Text>
-                  <Text fontSize="sm" color={previewPeriodTextColor}>
-                    Enhanced Revenue Analysis with Real-time SSOT Integration
-                  </Text>
-                </VStack>
-              </HStack>
-              <Button
-                size="sm"
-                variant="ghost"
-                leftIcon={<FiClock />}
-                onClick={() => {
-                  setClosingHistoryReportType('Profit & Loss');
-                  setClosingHistoryOpen(true);
-                }}
-                title="View closing period history"
-              >
-                History
-              </Button>
+            <HStack>
+              <Icon as={FiTrendingUp} color="purple.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  SSOT Profit & Loss Statement
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
+                  Enhanced Revenue Analysis with Real-time SSOT Integration
+                </Text>
+              </VStack>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             {/* Date Range Controls */}
             <Box mb={4}>
-<HStack spacing={4} mb={4} flexWrap="wrap">
+              {/* Closed Period History Selector */}
+              <HStack spacing={4} mb={4} alignItems="flex-start">
+                <FormControl flex="1">
+                  <FormLabel fontSize="sm">
+                    <HStack spacing={2}>
+                      <Icon as={FiCalendar} />
+                      <Text>Period Closed History</Text>
+                      <Tooltip label="Select a closed period to view historical P&L report" placement="top">
+                        <Box><Icon as={FiInfo} color="gray.500" /></Box>
+                      </Tooltip>
+                    </HStack>
+                  </FormLabel>
+                  <Select
+                    placeholder="Select closed period (optional)"
+                    size="md"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const selectedPeriod = ssotPLClosedPeriods.find(p => p.date === e.target.value);
+                        if (selectedPeriod) {
+                          // Set date range untuk periode yang dipilih
+                          // Ambil dari fiscal year start sampai periode end
+                          const periodEndDate = new Date(selectedPeriod.date);
+                          const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
+                          setSSOTStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                          setSSOTEndDate(selectedPeriod.date);
+                        }
+                      }
+                    }}
+                    isDisabled={loadingSSOTPLClosedPeriods}
+                  >
+                    {ssotPLClosedPeriods.length > 0 ? (
+                      ssotPLClosedPeriods.map((period, index) => (
+                        <option key={`${period.date}-${index}`} value={period.date}>
+                          {period.label}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>No closed periods available</option>
+                    )}
+                  </Select>
+                </FormControl>
+                <Button
+                  size="md"
+                  variant="outline"
+                  colorScheme="blue"
+                  onClick={async () => {
+                    setLoadingSSOTPLClosedPeriods(true);
+                    try {
+                      const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+                      if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+                        const periods = response.data.data
+                          .filter((entry: any) => entry.entry_date)
+                          .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+                          .map((entry: any) => {
+                            const dateObj = new Date(entry.entry_date);
+                            const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            });
+                            const dateValue = dateObj.toISOString().split('T')[0];
+                            return {
+                              value: dateValue,
+                              label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+                              date: dateValue,
+                              fiscal_year: dateObj.getFullYear()
+                            };
+                          });
+                        
+                        // Remove duplicates based on date
+                        const uniquePeriods = Array.from(
+                          new Map(periods.map(p => [p.date, p])).values()
+                        );
+                        
+                        setSSOTPLClosedPeriods(uniquePeriods);
+                        toast({
+                          title: 'Success',
+                          description: `Loaded ${uniquePeriods.length} closed periods`,
+                          status: 'success',
+                          duration: 2000
+                        });
+                      }
+                    } catch (error) {
+                      console.error('Failed to load closed periods:', error);
+                    } finally {
+                      setLoadingSSOTPLClosedPeriods(false);
+                    }
+                  }}
+                  isLoading={loadingSSOTPLClosedPeriods}
+                  leftIcon={<FiClock />}
+                  mt={7}
+                >
+                  Load History
+                </Button>
+              </HStack>
+
+              <Divider my={4} />
+
+              <HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -2877,8 +3131,74 @@ leftIcon={<FiTrendingUp />}
                     value=""
                     onChange={(e) => {
                       if (e.target.value) {
-                        setSSOTAsOfDate(e.target.value);
-                        console.log(`[Reports] Selected period: ${e.target.value}`);
+                        // Auto-fill As Of Date dengan entry_date dari closed period
+                        const selectedDate = e.target.value;
+                        setSSOTAsOfDate(selectedDate);
+                        
+                        // Find selected period details untuk logging
+                        const selectedPeriod = closedPeriods.find(p => p.date === selectedDate);
+                        
+                        console.log(`[Reports] Closed period selected: ${selectedDate}`);
+                        console.log(`[Reports] Auto-filled As Of Date: ${selectedDate}`);
+                        
+                        if (selectedPeriod) {
+                          console.log(`[Reports] Period details: ${selectedPeriod.label}`);
+                        }
+                        
+                        // Show success toast
+                        toast({
+                          title: 'Period Selected',
+                          description: `Generating Balance Sheet for ${new Date(selectedDate).toLocaleDateString('id-ID', {
+                            day: '2-digit',
+                            month: 'long',
+                            year: 'numeric'
+                          })}`,
+                          status: 'info',
+                          duration: 2000,
+                          isClosable: true,
+                        });
+                        
+                        // Auto-generate report dengan tanggal yang dipilih
+                        // Gunakan setTimeout untuk memastikan state sudah update
+                        setTimeout(() => {
+                          console.log(`[Reports] Auto-generating Balance Sheet for date: ${selectedDate}`);
+                          // Call generate function langsung dengan parameter date yang sudah diset
+                          setSSOTBSLoading(true);
+                          setSSOTBSError(null);
+                          
+                          ssotBalanceSheetReportService.generateSSOTBalanceSheet({
+                            as_of_date: selectedDate,
+                            format: 'json'
+                          })
+                          .then((balanceSheetData) => {
+                            console.log('SSOT Balance Sheet Data received (auto-generated):', balanceSheetData);
+                            setSSOTBSData(balanceSheetData);
+                            
+                            toast({
+                              title: 'Success',
+                              description: 'SSOT Balance Sheet generated successfully',
+                              status: 'success',
+                              duration: 3000,
+                              isClosable: true,
+                            });
+                          })
+                          .catch((error) => {
+                            console.error('Error auto-generating SSOT Balance Sheet:', error);
+                            const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+                            setSSOTBSError(errorMessage);
+                            
+                            toast({
+                              title: 'Error',
+                              description: errorMessage,
+                              status: 'error',
+                              duration: 5000,
+                              isClosable: true,
+                            });
+                          })
+                          .finally(() => {
+                            setSSOTBSLoading(false);
+                          });
+                        }, 100);
                       }
                     }}
                     onFocus={() => {
@@ -3168,36 +3488,116 @@ leftIcon={<FiTrendingUp />}
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
           <ModalHeader>
-            <HStack justify="space-between" width="full">
-              <HStack>
-                <Icon as={FiActivity} color="blue.500" />
-                <VStack align="start" spacing={0}>
-                  <Text fontSize="lg" fontWeight="bold">
-                    SSOT Cash Flow Statement
-                  </Text>
-                  <Text fontSize="sm" color={previewPeriodTextColor}>
-                    {ssotCFStartDate} - {ssotCFEndDate} | SSOT Journal Integration
-                  </Text>
-                </VStack>
-              </HStack>
-              <Button
-                size="sm"
-                variant="ghost"
-                leftIcon={<FiClock />}
-                onClick={() => {
-                  setClosingHistoryReportType('Cash Flow');
-                  setClosingHistoryOpen(true);
-                }}
-                title="View closing period history"
-              >
-                History
-              </Button>
+            <HStack>
+              <Icon as={FiActivity} color="blue.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  SSOT Cash Flow Statement
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
+                  {ssotCFStartDate} - {ssotCFEndDate} | SSOT Journal Integration
+                </Text>
+              </VStack>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
-<HStack spacing={4} mb={4} flexWrap="wrap">
+              {/* Closed Period History Selector */}
+              <HStack spacing={4} mb={4} alignItems="flex-start">
+                <FormControl flex="1">
+                  <FormLabel fontSize="sm">
+                    <HStack spacing={2}>
+                      <Icon as={FiCalendar} />
+                      <Text>Period Closed History</Text>
+                      <Tooltip label="Select a closed period to view historical Cash Flow report" placement="top">
+                        <Box><Icon as={FiInfo} color="gray.500" /></Box>
+                      </Tooltip>
+                    </HStack>
+                  </FormLabel>
+                  <Select
+                    placeholder="Select closed period (optional)"
+                    size="md"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const selectedPeriod = ssotCFClosedPeriods.find(p => p.date === e.target.value);
+                        if (selectedPeriod) {
+                          // Set date range untuk periode yang dipilih
+                          const periodEndDate = new Date(selectedPeriod.date);
+                          const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
+                          setSSOTCFStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                          setSSOTCFEndDate(selectedPeriod.date);
+                        }
+                      }
+                    }}
+                    isDisabled={loadingSSOTCFClosedPeriods}
+                  >
+                    {ssotCFClosedPeriods.length > 0 ? (
+                      ssotCFClosedPeriods.map((period, index) => (
+                        <option key={`${period.date}-${index}`} value={period.date}>
+                          {period.label}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>No closed periods available</option>
+                    )}
+                  </Select>
+                </FormControl>
+                <Button
+                  size="md"
+                  variant="outline"
+                  colorScheme="blue"
+                  onClick={async () => {
+                    setLoadingSSOTCFClosedPeriods(true);
+                    try {
+                      const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+                      if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+                        const periods = response.data.data
+                          .filter((entry: any) => entry.entry_date)
+                          .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+                          .map((entry: any) => {
+                            const dateObj = new Date(entry.entry_date);
+                            const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            });
+                            const dateValue = dateObj.toISOString().split('T')[0];
+                            return {
+                              value: dateValue,
+                              label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+                              date: dateValue,
+                              fiscal_year: dateObj.getFullYear()
+                            };
+                          });
+                        const uniquePeriods = Array.from(
+                          new Map(periods.map(p => [p.date, p])).values()
+                        );
+                        setSSOTCFClosedPeriods(uniquePeriods);
+                        toast({
+                          title: 'Success',
+                          description: `Loaded ${uniquePeriods.length} closed periods`,
+                          status: 'success',
+                          duration: 2000
+                        });
+                      }
+                    } catch (error) {
+                      console.error('Failed to load closed periods:', error);
+                    } finally {
+                      setLoadingSSOTCFClosedPeriods(false);
+                    }
+                  }}
+                  isLoading={loadingSSOTCFClosedPeriods}
+                  leftIcon={<FiClock />}
+                  mt={7}
+                >
+                  Load History
+                </Button>
+              </HStack>
+
+              <Divider my={4} />
+
+              <HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>Start Date</FormLabel>
                   <Input 
@@ -3218,7 +3618,7 @@ leftIcon={<FiTrendingUp />}
                   colorScheme="blue"
                   onClick={fetchSSOTCashFlowReport}
                   isLoading={ssotCFLoading}
-leftIcon={<FiActivity />}
+                  leftIcon={<FiActivity />}
                   size="md"
                   mt={8}
                   whiteSpace="nowrap"
@@ -3772,35 +4172,112 @@ leftIcon={<FiActivity />}
         <ModalOverlay />
         <ModalContent bg={modalContentBg}>
           <ModalHeader>
-            <HStack justify="space-between" width="full">
-              <HStack>
-                <Icon as={FiBook} color="blue.500" />
-                <VStack align="start" spacing={0}>
-                  <Text fontSize="lg" fontWeight="bold">
-                    Trial Balance (SSOT)
-                  </Text>
-                  <Text fontSize="sm" color={previewPeriodTextColor}>
+            <HStack>
+              <Icon as={FiBook} color="blue.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  Trial Balance (SSOT)
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
 As of {ssotTBAsOfDate} | SSOT Journal Integration
-                  </Text>
-                </VStack>
-              </HStack>
-              <Button
-                size="sm"
-                variant="ghost"
-                leftIcon={<FiClock />}
-                onClick={() => {
-                  setClosingHistoryReportType('Trial Balance');
-                  setClosingHistoryOpen(true);
-                }}
-                title="View closing period history"
-              >
-                History
-              </Button>
+                </Text>
+              </VStack>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
+              {/* Closed Period History Selector */}
+              <HStack spacing={4} mb={4} alignItems="flex-start">
+                <FormControl flex="1">
+                  <FormLabel fontSize="sm">
+                    <HStack spacing={2}>
+                      <Icon as={FiCalendar} />
+                      <Text>Period Closed History</Text>
+                      <Tooltip label="Select a closed period to view historical Trial Balance" placement="top">
+                        <Box><Icon as={FiInfo} color="gray.500" /></Box>
+                      </Tooltip>
+                    </HStack>
+                  </FormLabel>
+                  <Select
+                    placeholder="Select closed period (optional)"
+                    size="md"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const selectedPeriod = ssotTBClosedPeriods.find(p => p.date === e.target.value);
+                        if (selectedPeriod) {
+                          // Set as-of date ke periode yang dipilih
+                          setSSOTTBAsOfDate(selectedPeriod.date);
+                        }
+                      }
+                    }}
+                    isDisabled={loadingSSOTTBClosedPeriods}
+                  >
+                    {ssotTBClosedPeriods.length > 0 ? (
+                      ssotTBClosedPeriods.map((period, index) => (
+                        <option key={`${period.date}-${index}`} value={period.date}>
+                          {period.label}
+                        </option>
+                      ))
+                    ) : (
+                      <option disabled>No closed periods available</option>
+                    )}
+                  </Select>
+                </FormControl>
+                <Button
+                  size="md"
+                  variant="outline"
+                  colorScheme="blue"
+                  onClick={async () => {
+                    setLoadingSSOTTBClosedPeriods(true);
+                    try {
+                      const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+                      if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+                        const periods = response.data.data
+                          .filter((entry: any) => entry.entry_date)
+                          .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+                          .map((entry: any) => {
+                            const dateObj = new Date(entry.entry_date);
+                            const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric'
+                            });
+                            const dateValue = dateObj.toISOString().split('T')[0];
+                            return {
+                              value: dateValue,
+                              label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+                              date: dateValue,
+                              fiscal_year: dateObj.getFullYear()
+                            };
+                          });
+                        const uniquePeriods = Array.from(
+                          new Map(periods.map(p => [p.date, p])).values()
+                        );
+                        setSSOTTBClosedPeriods(uniquePeriods);
+                        toast({
+                          title: 'Success',
+                          description: `Loaded ${uniquePeriods.length} closed periods`,
+                          status: 'success',
+                          duration: 2000
+                        });
+                      }
+                    } catch (error) {
+                      console.error('Failed to load closed periods:', error);
+                    } finally {
+                      setLoadingSSOTTBClosedPeriods(false);
+                    }
+                  }}
+                  isLoading={loadingSSOTTBClosedPeriods}
+                  leftIcon={<FiClock />}
+                  mt={7}
+                >
+                  Load History
+                </Button>
+              </HStack>
+
+              <Divider my={4} />
+
               <HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
                   <FormLabel>As Of Date</FormLabel>
@@ -4578,36 +5055,116 @@ As of: {ssotTBAsOfDate}
         <ModalOverlay />
         <ModalContent bg={modalContentBg} maxW="95vw" m={4}>
           <ModalHeader>
-            <HStack justify="space-between" width="full">
-              <HStack>
-                <Icon as={FiBook} color="green.500" />
-                <VStack align="start" spacing={0}>
-                  <Text fontSize="lg" fontWeight="bold">
-                    General Ledger (SSOT)
-                  </Text>
-                  <Text fontSize="sm" color={previewPeriodTextColor}>
-                    {ssotGLStartDate} - {ssotGLEndDate} | SSOT Journal Integration
-                  </Text>
-                </VStack>
-              </HStack>
-              <Button
-                size="sm"
-                variant="ghost"
-                leftIcon={<FiClock />}
-                onClick={() => {
-                  setClosingHistoryReportType('General Ledger');
-                  setClosingHistoryOpen(true);
-                }}
-                title="View closing period history"
-              >
-                History
-              </Button>
+            <HStack>
+              <Icon as={FiBook} color="green.500" />
+              <VStack align="start" spacing={0}>
+                <Text fontSize="lg" fontWeight="bold">
+                  General Ledger (SSOT)
+                </Text>
+                <Text fontSize="sm" color={previewPeriodTextColor}>
+                  {ssotGLStartDate} - {ssotGLEndDate} | SSOT Journal Integration
+                </Text>
+              </VStack>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
             <Box mb={4}>
               <VStack spacing={4} align="stretch">
+                {/* Closed Period History Selector */}
+                <HStack spacing={4} mb={2} alignItems="flex-start">
+                  <FormControl flex="1">
+                    <FormLabel fontSize="sm">
+                      <HStack spacing={2}>
+                        <Icon as={FiCalendar} />
+                        <Text>Period Closed History</Text>
+                        <Tooltip label="Select a closed period to view historical General Ledger" placement="top">
+                          <Box><Icon as={FiInfo} color="gray.500" /></Box>
+                        </Tooltip>
+                      </HStack>
+                    </FormLabel>
+                    <Select
+                      placeholder="Select closed period (optional)"
+                      size="md"
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const selectedPeriod = ssotGLClosedPeriods.find(p => p.date === e.target.value);
+                          if (selectedPeriod) {
+                            // Set date range untuk periode yang dipilih
+                            const periodEndDate = new Date(selectedPeriod.date);
+                            const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
+                            setSSOTGLStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                            setSSOTGLEndDate(selectedPeriod.date);
+                          }
+                        }
+                      }}
+                      isDisabled={loadingSSOTGLClosedPeriods}
+                    >
+                      {ssotGLClosedPeriods.length > 0 ? (
+                        ssotGLClosedPeriods.map((period, index) => (
+                          <option key={`${period.date}-${index}`} value={period.date}>
+                            {period.label}
+                          </option>
+                        ))
+                      ) : (
+                        <option disabled>No closed periods available</option>
+                      )}
+                    </Select>
+                  </FormControl>
+                  <Button
+                    size="md"
+                    variant="outline"
+                    colorScheme="blue"
+                    onClick={async () => {
+                      setLoadingSSOTGLClosedPeriods(true);
+                      try {
+                        const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
+                        if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
+                          const periods = response.data.data
+                            .filter((entry: any) => entry.entry_date)
+                            .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
+                            .map((entry: any) => {
+                              const dateObj = new Date(entry.entry_date);
+                              const formattedDate = dateObj.toLocaleDateString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric'
+                              });
+                              const dateValue = dateObj.toISOString().split('T')[0];
+                              return {
+                                value: dateValue,
+                                label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+                                date: dateValue,
+                                fiscal_year: dateObj.getFullYear()
+                              };
+                            });
+                          const uniquePeriods = Array.from(
+                            new Map(periods.map(p => [p.date, p])).values()
+                          );
+                          setSSOTGLClosedPeriods(uniquePeriods);
+                          toast({
+                            title: 'Success',
+                            description: `Loaded ${uniquePeriods.length} closed periods`,
+                            status: 'success',
+                            duration: 2000
+                          });
+                        }
+                      } catch (error) {
+                        console.error('Failed to load closed periods:', error);
+                      } finally {
+                        setLoadingSSOTGLClosedPeriods(false);
+                      }
+                    }}
+                    isLoading={loadingSSOTGLClosedPeriods}
+                    leftIcon={<FiClock />}
+                    mt={7}
+                  >
+                    Load History
+                  </Button>
+                </HStack>
+
+                <Divider my={2} />
+
                 <HStack spacing={4} flexWrap="wrap">
                   <FormControl flex="1" minW="200px" isRequired>
                   <FormLabel>Start Date</FormLabel>

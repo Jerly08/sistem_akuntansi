@@ -39,63 +39,163 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			return fmt.Errorf("retained earnings account (3201) not found: %v", err)
 		}
 
-		// 2. Get all revenue accounts with non-zero balances
+		// 2. Get the last closed period to determine starting point
+		// We should only close transactions AFTER the last closed period
+		var lastClosedPeriod models.AccountingPeriod
+		err := tx.Where("is_closed = ?", true).Order("end_date DESC").First(&lastClosedPeriod).Error
+		var periodStartDate time.Time
+		if err != nil {
+			// No previous closed periods, use the start_date provided
+			periodStartDate = startDate
+			log.Printf("[UNIFIED CLOSING] No previous closed periods found, using provided start date: %s", startDate.Format("2006-01-02"))
+		} else {
+			// Start from the day after last closed period
+			periodStartDate = lastClosedPeriod.EndDate.AddDate(0, 0, 1)
+			log.Printf("[UNIFIED CLOSING] Last closed period end: %s, starting from: %s", 
+				lastClosedPeriod.EndDate.Format("2006-01-02"), periodStartDate.Format("2006-01-02"))
+			
+			// Validate that startDate matches periodStartDate
+			if !startDate.Equal(periodStartDate) {
+				log.Printf("[UNIFIED CLOSING] ⚠️ WARNING: Provided startDate (%s) doesn't match expected (%s)", 
+					startDate.Format("2006-01-02"), periodStartDate.Format("2006-01-02"))
+			}
+		}
+
+		// 3. Get all revenue accounts (not just non-zero balances)
 		var revenueAccounts []models.Account
-		if err := tx.Where("type = ? AND ABS(balance) > 0.01 AND is_header = false", "REVENUE").
+		if err := tx.Where("type = ? AND is_header = false", "REVENUE").
 			Find(&revenueAccounts).Error; err != nil {
 			return fmt.Errorf("failed to get revenue accounts: %v", err)
 		}
 
-		// 3. Get all expense accounts with non-zero balances
+		// 4. Get all expense accounts (not just non-zero balances)
 		var expenseAccounts []models.Account
-		if err := tx.Where("type = ? AND ABS(balance) > 0.01 AND is_header = false", "EXPENSE").
+		if err := tx.Where("type = ? AND is_header = false", "EXPENSE").
 			Find(&expenseAccounts).Error; err != nil {
 			return fmt.Errorf("failed to get expense accounts: %v", err)
 		}
 
-		if len(revenueAccounts) == 0 && len(expenseAccounts) == 0 {
-			log.Println("[UNIFIED CLOSING] No revenue or expense accounts to close")
+		// 5. Calculate CUMULATIVE balances from fiscal year start to closing date
+		// Query all journal lines for Revenue/Expense accounts from fiscal year start to end date
+		// This ensures we capture ALL transactions, not just current period
+		type AccountBalance struct {
+			AccountID uint64
+			TotalDebit  float64
+			TotalCredit float64
+		}
+
+		// Get cumulative balances for revenue accounts
+		revenueAccountIDs := make([]uint64, 0, len(revenueAccounts))
+		for _, acc := range revenueAccounts {
+			revenueAccountIDs = append(revenueAccountIDs, uint64(acc.ID))
+		}
+
+		expenseAccountIDs := make([]uint64, 0, len(expenseAccounts))
+		for _, acc := range expenseAccounts {
+			expenseAccountIDs = append(expenseAccountIDs, uint64(acc.ID))
+		}
+
+		// IMPORTANT: Calculate CUMULATIVE balances (ALL TIME, exclude closing entries)
+		// This ensures we close the TOTAL accumulated balance, not just current period
+		var revenueBalances []AccountBalance
+		if len(revenueAccountIDs) > 0 {
+			if err := tx.Raw(`
+				SELECT 
+					ujl.account_id,
+					COALESCE(SUM(ujl.debit_amount), 0) as total_debit,
+					COALESCE(SUM(ujl.credit_amount), 0) as total_credit
+				FROM unified_journal_lines ujl
+				INNER JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
+				WHERE ujl.account_id IN ?
+					AND uje.entry_date <= ?
+					AND uje.status = 'POSTED'
+					AND uje.source_type != 'CLOSING'
+				GROUP BY ujl.account_id
+			`, revenueAccountIDs, endDate).Scan(&revenueBalances).Error; err != nil {
+				return fmt.Errorf("failed to calculate cumulative revenue balances: %v", err)
+			}
+		}
+
+	var expenseBalances []AccountBalance
+		if len(expenseAccountIDs) > 0 {
+			if err := tx.Raw(`
+				SELECT 
+					ujl.account_id,
+					COALESCE(SUM(ujl.debit_amount), 0) as total_debit,
+					COALESCE(SUM(ujl.credit_amount), 0) as total_credit
+				FROM unified_journal_lines ujl
+				INNER JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
+				WHERE ujl.account_id IN ?
+					AND uje.entry_date <= ?
+					AND uje.status = 'POSTED'
+					AND uje.source_type != 'CLOSING'
+				GROUP BY ujl.account_id
+			`, expenseAccountIDs, endDate).Scan(&expenseBalances).Error; err != nil {
+				return fmt.Errorf("failed to calculate cumulative expense balances: %v", err)
+			}
+		}
+
+		// 6. Build map of account balances
+		revenueBalanceMap := make(map[uint64]decimal.Decimal)
+		for _, bal := range revenueBalances {
+			// Revenue: credit increases, debit decreases
+			// Net balance = Credit - Debit (should be positive for revenue)
+			netBalance := decimal.NewFromFloat(bal.TotalCredit).Sub(decimal.NewFromFloat(bal.TotalDebit))
+			if netBalance.GreaterThan(decimal.NewFromFloat(0.01)) {
+				revenueBalanceMap[bal.AccountID] = netBalance
+			}
+		}
+
+		expenseBalanceMap := make(map[uint64]decimal.Decimal)
+		for _, bal := range expenseBalances {
+			// Expense: debit increases, credit decreases
+			// Net balance = Debit - Credit (should be positive for expense)
+			netBalance := decimal.NewFromFloat(bal.TotalDebit).Sub(decimal.NewFromFloat(bal.TotalCredit))
+			if netBalance.GreaterThan(decimal.NewFromFloat(0.01)) {
+				expenseBalanceMap[bal.AccountID] = netBalance
+			}
+		}
+
+		if len(revenueBalanceMap) == 0 && len(expenseBalanceMap) == 0 {
+			log.Println("[UNIFIED CLOSING] No revenue or expense balances to close")
 			return nil
 		}
 
-		// 4. Calculate totals
-		// IMPORTANT: In this system, Revenue accounts have POSITIVE balances (credit side)
-		// Expense accounts can be POSITIVE (debit side) or NEGATIVE depending on data
+		// 7. Calculate totals
 		var totalRevenue, totalExpense decimal.Decimal
-		for _, acc := range revenueAccounts {
-			// Revenue balance is stored as positive value in this system
-			// Take absolute value to ensure positive
-			totalRevenue = totalRevenue.Add(decimal.NewFromFloat(acc.Balance).Abs())
+		for _, balance := range revenueBalanceMap {
+			totalRevenue = totalRevenue.Add(balance)
 		}
-		for _, acc := range expenseAccounts {
-			// Expense balance - take absolute value to ensure positive
-			totalExpense = totalExpense.Add(decimal.NewFromFloat(acc.Balance).Abs())
+		for _, balance := range expenseBalanceMap {
+			totalExpense = totalExpense.Add(balance)
 		}
 
 		netIncome := totalRevenue.Sub(totalExpense)
 
-		log.Printf("[UNIFIED CLOSING] Total Revenue: %.2f, Total Expense: %.2f, Net Income: %.2f",
+		log.Printf("[UNIFIED CLOSING] Period Start Date: %s", periodStartDate.Format("2006-01-02"))
+		log.Printf("[UNIFIED CLOSING] Period End Date (Closing): %s", endDate.Format("2006-01-02"))
+		log.Printf("[UNIFIED CLOSING] Period Revenue: %.2f, Period Expense: %.2f, Net Income: %.2f",
 			totalRevenue.InexactFloat64(), totalExpense.InexactFloat64(), netIncome.InexactFloat64())
 
-		// 5. Create unified journal entry for closing
+		// 8. Create unified journal entry for closing
 		var journalLines []models.SSOTJournalLine
 		lineNum := 1
 
 		// Close Revenue accounts (Debit Revenue, Credit Retained Earnings)
-		// In this system, Revenue accounts have POSITIVE balances
-		// To close them: Debit Revenue (decrease credit side) to make balance 0
+		// Revenue accounts have CREDIT balances (credit > debit)
+		// To close them: Debit Revenue to zero out the cumulative credit balance
 		for _, acc := range revenueAccounts {
-			if acc.Balance > 0.01 || acc.Balance < -0.01 { // Check for any non-zero balance
-				// Take absolute value of balance for debit amount
-				amount := decimal.NewFromFloat(acc.Balance).Abs()
+			balance, exists := revenueBalanceMap[uint64(acc.ID)]
+			if exists && balance.GreaterThan(decimal.NewFromFloat(0.01)) {
 				journalLines = append(journalLines, models.SSOTJournalLine{
 					AccountID:    uint64(acc.ID),
 					LineNumber:   lineNum,
-					Description:  fmt.Sprintf("Close revenue account: %s", acc.Name),
-					DebitAmount:  amount,
+					Description:  fmt.Sprintf("Close period revenue: %s", acc.Name),
+					DebitAmount:  balance,
 					CreditAmount: decimal.Zero,
 				})
 				lineNum++
+				log.Printf("[UNIFIED CLOSING] Closing Revenue: %s (ID: %d) Balance: %.2f", acc.Name, acc.ID, balance.InexactFloat64())
 			}
 		}
 
@@ -123,23 +223,25 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			lineNum++
 		}
 
-		// Close Expense accounts (Credit Expense to make balance 0, Debit Retained Earnings)
+		// Close Expense accounts (Credit Expense to zero out the cumulative debit balance)
+		// Expense accounts have DEBIT balances (debit > credit)
+		// To close them: Credit Expense to zero out the cumulative debit balance
 		for _, acc := range expenseAccounts {
-			if acc.Balance > 0.01 || acc.Balance < -0.01 { // Check for any non-zero balance
-				// Take absolute value of balance for credit amount
-				amount := decimal.NewFromFloat(acc.Balance).Abs()
+			balance, exists := expenseBalanceMap[uint64(acc.ID)]
+			if exists && balance.GreaterThan(decimal.NewFromFloat(0.01)) {
 				journalLines = append(journalLines, models.SSOTJournalLine{
 					AccountID:    uint64(acc.ID),
 					LineNumber:   lineNum,
-					Description:  fmt.Sprintf("Close expense account: %s", acc.Name),
+					Description:  fmt.Sprintf("Close period expense: %s", acc.Name),
 					DebitAmount:  decimal.Zero,
-					CreditAmount: amount,
+					CreditAmount: balance,
 				})
 				lineNum++
+				log.Printf("[UNIFIED CLOSING] Closing Expense: %s (ID: %d) Balance: %.2f", acc.Name, acc.ID, balance.InexactFloat64())
 			}
 		}
 
-		// 6. Create unified journal entry
+		// 9. Create unified journal entry
 		closingEntry := &models.SSOTJournalEntry{
 			SourceType:      "CLOSING",
 			EntryDate:       endDate,
@@ -164,46 +266,71 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 
 		log.Printf("[UNIFIED CLOSING] Created unified journal entry ID: %d with %d lines", closingEntry.ID, len(journalLines))
 
-		// 7. Update account balances based on the journal entry
-		// This implementation works with the actual balance sign convention in the database:
-		// - Revenue accounts: POSITIVE balance (credit side) - Debit DECREASES
-		// - Expense accounts: can be POSITIVE or NEGATIVE - Credit DECREASES positive, Debit DECREASES negative
-		// - Retained Earnings (EQUITY): POSITIVE balance (credit side) - Credit INCREASES
+		// 7. Robust balance update: recalculate exact balances for affected accounts from SSOT lines
+		// Rationale: DB triggers are disabled to avoid double-posting; manual per-line +/- is error-prone due to sign conventions.
+		// We recalc the true balance for each affected account and set it explicitly.
+		affectedIDsMap := make(map[uint64]struct{})
 		for _, line := range journalLines {
-			var account models.Account
-			if err := tx.First(&account, line.AccountID).Error; err != nil {
-				return fmt.Errorf("failed to find account %d: %v", line.AccountID, err)
+			affectedIDsMap[line.AccountID] = struct{}{}
+		}
+		var affectedIDs []uint64
+		for id := range affectedIDsMap {
+			affectedIDs = append(affectedIDs, id)
+		}
+
+		if len(affectedIDs) > 0 {
+			// Query correct balances from unified journals (POSTED only)
+			type BalanceRow struct {
+				AccountID uint64
+				AccType   string
+				Correct   float64
+			}
+			var rows []BalanceRow
+			if err := tx.Raw(`
+				SELECT a.id as account_id, a.type as acc_type,
+					CASE 
+						WHEN a.type IN ('ASSET','EXPENSE') THEN COALESCE(SUM(ujl.debit_amount),0) - COALESCE(SUM(ujl.credit_amount),0)
+						ELSE COALESCE(SUM(ujl.credit_amount),0) - COALESCE(SUM(ujl.debit_amount),0)
+					END AS correct
+				FROM accounts a
+				LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
+				LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id AND uje.status = 'POSTED'
+				WHERE a.id IN ? AND a.deleted_at IS NULL
+				GROUP BY a.id, a.type
+			`, affectedIDs).Scan(&rows).Error; err != nil {
+				return fmt.Errorf("failed to recalc balances for affected accounts: %v", err)
 			}
 
-			var balanceChange float64
-			
-			// For closing entries:
-			// Revenue (credit balance): Debit to close → DECREASES balance
-			// Expense (debit balance): Credit to close → DECREASES balance
-			// Retained Earnings: Receive net income → INCREASES balance
-			
-			if account.Type == "REVENUE" || account.Type == "EQUITY" {
-				// Credit normal accounts: stored as positive balance
-				// Debit DECREASES, Credit INCREASES
-				balanceChange = line.CreditAmount.InexactFloat64() - line.DebitAmount.InexactFloat64()
-			} else if account.Type == "EXPENSE" || account.Type == "ASSET" {
-				// Debit normal accounts
-				// For expense closing: we credit to close, which DECREASES the balance
-				// Debit INCREASES, Credit DECREASES
-				balanceChange = line.DebitAmount.InexactFloat64() - line.CreditAmount.InexactFloat64()
-			} else {
-				// LIABILITY (credit normal, like EQUITY)
-				balanceChange = line.CreditAmount.InexactFloat64() - line.DebitAmount.InexactFloat64()
+			for _, r := range rows {
+				if err := tx.Model(&models.Account{}).
+					Where("id = ?", r.AccountID).
+					Update("balance", r.Correct).Error; err != nil {
+					return fmt.Errorf("failed to set recalculated balance for account %d: %v", r.AccountID, err)
+				}
+				log.Printf("[UNIFIED CLOSING] Recalculated balance set: account_id=%d type=%s new_balance=%.2f", r.AccountID, r.AccType, r.Correct)
 			}
-
+			
+			// VALIDATION: Verify that all Revenue and Expense accounts are now ZERO
+			var nonZeroCount int64
 			if err := tx.Model(&models.Account{}).
-				Where("id = ?", line.AccountID).
-				Update("balance", gorm.Expr("balance + ?", balanceChange)).Error; err != nil {
-				return fmt.Errorf("failed to update account %d balance: %v", line.AccountID, err)
+				Where("type IN (?) AND ABS(balance) > 0.01", []string{"REVENUE", "EXPENSE"}).
+				Count(&nonZeroCount).Error; err != nil {
+				return fmt.Errorf("failed to validate zero balances: %v", err)
 			}
-
-			log.Printf("[UNIFIED CLOSING] Updated account %s (%s) Type=%s: current=%.2f, change=%.2f, new=%.2f",
-				account.Code, account.Name, account.Type, account.Balance, balanceChange, account.Balance+balanceChange)
+			
+			if nonZeroCount > 0 {
+				// Log which accounts are not zero for debugging
+				var problemAccounts []models.Account
+				tx.Where("type IN (?) AND ABS(balance) > 0.01", []string{"REVENUE", "EXPENSE"}).
+					Find(&problemAccounts)
+				for _, acc := range problemAccounts {
+					log.Printf("[UNIFIED CLOSING] ⚠️ WARNING: Account %s (%s) still has balance: %.2f", 
+						acc.Code, acc.Name, acc.Balance)
+				}
+				return fmt.Errorf("closing validation failed: %d revenue/expense accounts still have non-zero balance", nonZeroCount)
+			}
+			
+			log.Printf("[UNIFIED CLOSING] ✅ Validation passed: All Revenue and Expense accounts are ZERO")
 		}
 
 		// 8. Create accounting period record

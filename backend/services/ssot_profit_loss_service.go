@@ -183,6 +183,8 @@ func (s *SSOTProfitLossService) getAccountBalancesFromSSOT(startDate, endDate st
 	var balances []SSOTAccountBalance
 	source := "SSOT"
 	
+	// CRITICAL: Exclude CLOSING entries to show historical data for closed periods
+	// Similar to Balance Sheet logic - we want to see data BEFORE closing
 	query := `
 		SELECT 
 			MIN(a.id) as account_id,
@@ -199,7 +201,10 @@ func (s *SSOTProfitLossService) getAccountBalancesFromSSOT(startDate, endDate st
 			END as net_balance
 		FROM accounts a
 		LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id AND uje.status = 'POSTED' AND uje.deleted_at IS NULL
+		LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id 
+			AND uje.status = 'POSTED' 
+			AND uje.deleted_at IS NULL
+			AND UPPER(uje.source_type) != 'CLOSING'
 		WHERE uje.entry_date >= ? AND uje.entry_date <= ?
 		  AND COALESCE(a.is_header, false) = false
 		GROUP BY a.code
@@ -207,8 +212,19 @@ func (s *SSOTProfitLossService) getAccountBalancesFromSSOT(startDate, endDate st
 		ORDER BY a.code
 	`
 	
-if err := s.db.Raw(query, startDate, endDate).Scan(&balances).Error; err != nil {
+	fmt.Printf("[P&L DEBUG] Executing SSOT query for period %s to %s (EXCLUDING CLOSING entries)\n", startDate, endDate)
+	if err := s.db.Raw(query, startDate, endDate).Scan(&balances).Error; err != nil {
 		return nil, source, fmt.Errorf("error executing account balances query: %v", err)
+	}
+	fmt.Printf("[P&L DEBUG] Retrieved %d accounts from SSOT (excluding closing)\n", len(balances))
+	
+	// Debug: Log Revenue and Expense accounts
+	for _, balance := range balances {
+		if strings.HasPrefix(balance.AccountCode, "4") || strings.HasPrefix(balance.AccountCode, "5") {
+			fmt.Printf("[P&L DEBUG] %s - %s | Type: %s | Debit: %.2f | Credit: %.2f | Net: %.2f\n",
+				balance.AccountCode, balance.AccountName, balance.AccountType,
+				balance.DebitTotal, balance.CreditTotal, balance.NetBalance)
+		}
 	}
 	
 	// Fallback to legacy journals if SSOT returns no activity OR no PL activity (no 4xxx/5xxx)
