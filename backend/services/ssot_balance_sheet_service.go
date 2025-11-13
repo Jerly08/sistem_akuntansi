@@ -478,7 +478,10 @@ func (s *SSOTBalanceSheetService) generateBalanceSheetFromBalances(balances []SS
 			
 			// Convert negative liability balances to positive for proper display
 			// This handles cases where the database might store negative values incorrectly
-			if amount < 0 {
+			// EXCEPTION: Don't convert PPN accounts - they need original values for netting
+			isPPNAccount := strings.Contains(strings.ToLower(balance.AccountName), "ppn keluaran") ||
+				strings.Contains(strings.ToLower(balance.AccountName), "ppn masukan")
+			if amount < 0 && !isPPNAccount {
 				amount = -amount // Make it positive
 				fmt.Printf("[DEBUG] Converted negative liability %s (%s) from %.2f to %.2f\n",
 					code, balance.AccountName, balance.NetBalance, amount)
@@ -948,11 +951,18 @@ func (s *SSOTBalanceSheetService) removePPNAccountsFromDisplay(bsData *SSOTBalan
 	}
 	
 	// Remove PPN Masukan from assets display and adjust totals
+	// Also check for PPN_NET (if net PPN is negative, it's in assets as receivable)
 	var filteredAssets []BSAccountItem
 	var totalPPNMasukanRemoved float64
+	var ppnNetInAssets float64
 	for _, item := range bsData.Assets.CurrentAssets.Items {
-		if strings.Contains(strings.ToLower(item.AccountName), "ppn masukan") {
+		if strings.Contains(strings.ToLower(item.AccountName), "ppn masukan") && item.AccountCode != "PPN_NET" {
+			// Remove original PPN Masukan
 			totalPPNMasukanRemoved += item.Amount
+		} else if item.AccountCode == "PPN_NET" {
+			// Keep PPN_NET in display and track for subcategory
+			ppnNetInAssets = item.Amount
+			filteredAssets = append(filteredAssets, item)
 		} else {
 			filteredAssets = append(filteredAssets, item)
 		}
@@ -962,6 +972,14 @@ func (s *SSOTBalanceSheetService) removePPNAccountsFromDisplay(bsData *SSOTBalan
 	bsData.Assets.CurrentAssets.OtherCurrentAssets -= totalPPNMasukanRemoved
 	bsData.Assets.CurrentAssets.TotalCurrentAssets -= totalPPNMasukanRemoved
 	bsData.Assets.TotalAssets -= totalPPNMasukanRemoved
+	
+	// Add PPN_NET to receivables subcategory if it's in assets
+	if ppnNetInAssets != 0 {
+		bsData.Assets.CurrentAssets.Receivables += ppnNetInAssets
+		bsData.Assets.CurrentAssets.TotalCurrentAssets += ppnNetInAssets
+		bsData.Assets.TotalAssets += ppnNetInAssets
+		fmt.Printf("[DEBUG] Added PPN_NET (%.2f) to Assets Receivables subcategory\n", ppnNetInAssets)
+	}
 	
 	fmt.Printf("[DEBUG] Before removing PPN Keluaran - AccountsPayable: %.2f\n", bsData.Liabilities.CurrentLiabilities.AccountsPayable)
 	
@@ -995,7 +1013,8 @@ func (s *SSOTBalanceSheetService) removePPNAccountsFromDisplay(bsData *SSOTBalan
 		fmt.Printf("[DEBUG] Added PPN_NET (%.2f) to TaxPayable subcategory\n", ppnNetAmount)
 	}
 	
-	fmt.Printf("[DEBUG] Removed PPN accounts from display - Masukan: %.2f, Keluaran: %.2f, Net PPN added: %.2f\n", totalPPNMasukanRemoved, totalPPNKeluaranRemoved, ppnNetAmount)
+	fmt.Printf("[DEBUG] Removed PPN accounts from display - Masukan: %.2f, Keluaran: %.2f, Net PPN added: %.2f (in liabilities: %.2f, in assets: %.2f)\n", 
+		totalPPNMasukanRemoved, totalPPNKeluaranRemoved, ppnNetAmount+ppnNetInAssets, ppnNetAmount, ppnNetInAssets)
 	fmt.Printf("[DEBUG] After removing PPN Keluaran - AccountsPayable: %.2f\n", bsData.Liabilities.CurrentLiabilities.AccountsPayable)
 	
 	// Log items after removal
