@@ -973,12 +973,15 @@ func (s *SSOTBalanceSheetService) removePPNAccountsFromDisplay(bsData *SSOTBalan
 	bsData.Assets.CurrentAssets.TotalCurrentAssets -= totalPPNMasukanRemoved
 	bsData.Assets.TotalAssets -= totalPPNMasukanRemoved
 	
-	// Add PPN_NET to receivables subcategory if it's in assets
+	// Add PPN_NET to OtherCurrentAssets subcategory (same as PPN Masukan) to replace it
+	// This ensures proper netting: OtherCurrentAssets = OtherCurrentAssets - PPN_Masukan + PPN_NET
 	if ppnNetInAssets != 0 {
-		bsData.Assets.CurrentAssets.Receivables += ppnNetInAssets
-		bsData.Assets.CurrentAssets.TotalCurrentAssets += ppnNetInAssets
-		bsData.Assets.TotalAssets += ppnNetInAssets
-		fmt.Printf("[DEBUG] Added PPN_NET (%.2f) to Assets Receivables subcategory\n", ppnNetInAssets)
+		// Since we already removed PPN Masukan (which was negative), we now add the net
+		// PPN_NET here is positive for display, but represents the net receivable
+		// Effect: OtherCurrentAssets - (-2554200) + (-2554199) = +1 (the PPN Keluaran amount)
+		// But ppnNetInAssets is already made positive for display, so we subtract it
+		bsData.Assets.CurrentAssets.OtherCurrentAssets -= ppnNetInAssets
+		fmt.Printf("[DEBUG] Added PPN_NET (%.2f) to Assets OtherCurrentAssets subcategory (net effect after removal)\n", ppnNetInAssets)
 	}
 	
 	fmt.Printf("[DEBUG] Before removing PPN Keluaran - AccountsPayable: %.2f\n", bsData.Liabilities.CurrentLiabilities.AccountsPayable)
