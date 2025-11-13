@@ -598,6 +598,7 @@ func (s *SSOTBalanceSheetService) netPPNAccounts(bsData *SSOTBalanceSheetData) {
 // addNetPPNToBalanceSheet adds a consolidated PPN line item to show the net PPN liability
 func (s *SSOTBalanceSheetService) addNetPPNToBalanceSheet(bsData *SSOTBalanceSheetData) {
 	// Calculate total PPN Masukan (from assets)
+	// PPN Masukan is typically negative in our system (debit balance stored as negative)
 	var totalPPNMasukan float64
 	for _, item := range bsData.Assets.CurrentAssets.Items {
 		if strings.Contains(strings.ToLower(item.AccountName), "ppn masukan") {
@@ -606,6 +607,7 @@ func (s *SSOTBalanceSheetService) addNetPPNToBalanceSheet(bsData *SSOTBalanceShe
 	}
 	
 	// Calculate total PPN Keluaran (from liabilities)
+	// PPN Keluaran is typically negative in our system (credit balance stored as negative)
 	var totalPPNKeluaran float64
 	for _, item := range bsData.Liabilities.CurrentLiabilities.Items {
 		if strings.Contains(strings.ToLower(item.AccountName), "ppn keluaran") {
@@ -614,8 +616,10 @@ func (s *SSOTBalanceSheetService) addNetPPNToBalanceSheet(bsData *SSOTBalanceShe
 	}
 	
 	// Only add net PPN line if there are PPN accounts
-	if totalPPNMasukan > 0 || totalPPNKeluaran > 0 {
-		netPPN := totalPPNKeluaran - totalPPNMasukan
+	if totalPPNMasukan != 0 || totalPPNKeluaran != 0 {
+		// Net PPN = |PPN Keluaran| - |PPN Masukan|
+		// Use absolute values since both are negative in our system
+		netPPN := -totalPPNKeluaran - (-totalPPNMasukan)
 		ppnItem := BSAccountItem{
 			AccountCode: "PPN_NET",
 			AccountName: fmt.Sprintf("PPN (Keluaran %.0f - Masukan %.0f)", totalPPNKeluaran, totalPPNMasukan),
@@ -693,9 +697,13 @@ func (s *SSOTBalanceSheetService) categorizeAssetAccount(bsData *SSOTBalanceShee
 // categorizeLiabilityAccount categorizes liability accounts into current and non-current liabilities
 // Only adds items with non-zero amounts to improve report clarity
 func (s *SSOTBalanceSheetService) categorizeLiabilityAccount(bsData *SSOTBalanceSheetData, item BSAccountItem, code string) {
-	// Ensure liability amounts are positive for proper categorization
+	// IMPORTANT: Don't convert PPN accounts here - they need original values for netting
+	isPPNAccount := strings.Contains(strings.ToLower(item.AccountName), "ppn keluaran") ||
+		strings.Contains(strings.ToLower(item.AccountName), "ppn masukan")
+	
+	// Ensure liability amounts are positive for proper categorization (except PPN)
 	amount := item.Amount
-	if amount < 0 {
+	if amount < 0 && !isPPNAccount {
 		amount = -amount // Make it positive
 		fmt.Printf("[DEBUG] Converted negative liability %s from %.2f to %.2f\n", item.AccountCode, item.Amount, amount)
 	}
@@ -706,10 +714,10 @@ func (s *SSOTBalanceSheetService) categorizeLiabilityAccount(bsData *SSOTBalance
 	}
 	
 	// Log liability categorization for debugging
-	fmt.Printf("[DEBUG] Categorizing Liability: %s - %s (Amount: %.2f)\n", 
-		item.AccountCode, item.AccountName, amount)
+	fmt.Printf("[DEBUG] Categorizing Liability: %s - %s (Amount: %.2f, isPPN: %v)\n", 
+		item.AccountCode, item.AccountName, amount, isPPNAccount)
 	
-	// Update the item amount to be positive for consistency
+	// Update the item amount (preserve original for PPN)
 	item.Amount = amount
 	
 	switch {
