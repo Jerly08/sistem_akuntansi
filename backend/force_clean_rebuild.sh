@@ -55,10 +55,31 @@ echo ""
 echo "7️⃣  Running database fix..."
 go run cmd/fix_period_closing_comprehensive.go
 
-# 8. Build fresh
+# 8. Verify no old processes
 echo ""
-echo "8️⃣  Building fresh binary..."
-go build -a -o main main.go
+echo "8️⃣  Final process cleanup..."
+pkill -9 -f "go" 2>/dev/null || true
+pkill -9 -f "main" 2>/dev/null || true
+sleep 2
+
+# 9. Remove any remaining binaries
+echo ""
+echo "9️⃣  Removing ALL binary artifacts..."
+find . -name "main" -type f -delete 2>/dev/null || true
+find . -name "*.exe" -type f -delete 2>/dev/null || true
+rm -rf tmp/ 2>/dev/null || true
+
+# 10. Build fresh with verbose output
+echo ""
+echo "🔨 Building fresh binary (forcing recompile)..."
+go build -a -v -o main main.go
+
+if [ -f "main" ]; then
+    echo "   ✅ Binary built successfully: $(ls -lh main | awk '{print $5}')"
+else
+    echo "   ❌ Binary build failed!"
+    exit 1
+fi
 
 echo ""
 echo "============================================"
