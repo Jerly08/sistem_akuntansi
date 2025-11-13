@@ -608,13 +608,13 @@ func (dc *DashboardController) getMonthlySalesData() []map[string]interface{} {
 	var results []MonthlyData
 	dc.DB.Raw(`
 		SELECT 
-			TO_CHAR(created_at, 'Mon') as month,
+			TO_CHAR(date, 'Mon') as month,
 			COALESCE(SUM(total_amount), 0) as value
 		FROM sales 
-		WHERE created_at >= CURRENT_DATE - INTERVAL '7 months'
+		WHERE date >= CURRENT_DATE - INTERVAL '7 months'
 			AND deleted_at IS NULL
-		GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at), TO_CHAR(created_at, 'Mon')
-		ORDER BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at)
+		GROUP BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date), TO_CHAR(date, 'Mon')
+		ORDER BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
 	`).Scan(&results)
 	
 	// Convert to interface{} slice
@@ -641,14 +641,14 @@ func (dc *DashboardController) getMonthlyPurchasesData() []map[string]interface{
 	var results []MonthlyData
 	dc.DB.Raw(`
 		SELECT 
-			TO_CHAR(created_at, 'Mon') as month,
+			TO_CHAR(date, 'Mon') as month,
 			COALESCE(SUM(total_amount), 0) as value
 		FROM purchases 
-		WHERE created_at >= CURRENT_DATE - INTERVAL '7 months'
+		WHERE date >= CURRENT_DATE - INTERVAL '7 months'
 			AND deleted_at IS NULL
 			AND status IN ('APPROVED', 'COMPLETED')
-		GROUP BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at), TO_CHAR(created_at, 'Mon')
-		ORDER BY EXTRACT(YEAR FROM created_at), EXTRACT(MONTH FROM created_at)
+		GROUP BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date), TO_CHAR(date, 'Mon')
+		ORDER BY EXTRACT(YEAR FROM date), EXTRACT(MONTH FROM date)
 	`).Scan(&results)
 	
 	// Convert to interface{} slice
