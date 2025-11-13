@@ -9,10 +9,10 @@ import {
   InputRightElement,
   IconButton,
   useDisclosure,
-  Collapse,
   Spinner,
   Badge,
   HStack,
+  Portal,
 } from '@chakra-ui/react';
 import { FiChevronDown, FiChevronUp, FiX } from 'react-icons/fi';
 
@@ -56,6 +56,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOption, setSelectedOption] = useState<SearchableSelectOption | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const { isOpen, onOpen, onClose } = useDisclosure();
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +158,30 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [isOpen, selectedOption]);
 
+  // Update dropdown position when opening or window resizes
+  useEffect(() => {
+    const updatePosition = () => {
+      if (containerRef.current && isOpen) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        });
+      }
+    };
+
+    if (isOpen) {
+      updatePosition();
+      window.addEventListener('resize', updatePosition);
+      window.addEventListener('scroll', updatePosition, true);
+      return () => {
+        window.removeEventListener('resize', updatePosition);
+        window.removeEventListener('scroll', updatePosition, true);
+      };
+    }
+  }, [isOpen]);
+
   // Display value in input
   const getInputValue = () => {
     if (searchTerm) {
@@ -206,43 +231,44 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         </InputRightElement>
       </InputGroup>
 
-      <Collapse in={isOpen && !isDisabled}>
-        <Box
-          ref={dropdownRef}
-          position="absolute"
-          top="100%"
-          left={0}
-          right={0}
-          zIndex={1500}
-          bg="white"
-          border="1px"
-          borderColor="gray.200"
-          borderRadius="md"
-          boxShadow="lg"
-          maxHeight="300px"
-          overflowY="auto"
-          overflowX="hidden"
-          mt={1}
-          // Smooth programmatic scroll and better overscroll behaviour
-          sx={{ 
-            scrollBehavior: 'smooth', 
-            overscrollBehavior: 'contain',
-            '&::-webkit-scrollbar': {
-              width: '8px',
-            },
-            '&::-webkit-scrollbar-track': {
-              background: '#f1f1f1',
-              borderRadius: '4px',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: '#888',
-              borderRadius: '4px',
-            },
-            '&::-webkit-scrollbar-thumb:hover': {
-              background: '#555',
-            },
-          }}
-        >
+      {isOpen && !isDisabled && (
+        <Portal>
+          <Box
+            ref={dropdownRef}
+            position="fixed"
+            top={`${dropdownPosition.top}px`}
+            left={`${dropdownPosition.left}px`}
+            width={`${dropdownPosition.width}px`}
+            zIndex={2000}
+            bg="white"
+            border="1px"
+            borderColor="gray.200"
+            borderRadius="md"
+            boxShadow="xl"
+            maxHeight="300px"
+            overflowY="auto"
+            overflowX="hidden"
+            mt={1}
+            // Smooth programmatic scroll and better overscroll behaviour
+            sx={{ 
+              scrollBehavior: 'smooth', 
+              overscrollBehavior: 'contain',
+              '&::-webkit-scrollbar': {
+                width: '8px',
+              },
+              '&::-webkit-scrollbar-track': {
+                background: '#f1f1f1',
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: '#888',
+                borderRadius: '4px',
+              },
+              '&::-webkit-scrollbar-thumb:hover': {
+                background: '#555',
+              },
+            }}
+          >
           {isLoading ? (
             <Box p={4} textAlign="center">
               <Spinner size="sm" />
@@ -282,8 +308,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
               </Text>
             </Box>
           )}
-        </Box>
-      </Collapse>
+          </Box>
+        </Portal>
+      )}
     </Box>
   );
 };

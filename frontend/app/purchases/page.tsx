@@ -3801,9 +3801,9 @@ const handleCreate = async () => {
                                     />
                                   </Box>
                                 </Td>
-                                <Td minW="240px">
+                                <Td minW="240px" position="relative">
                                   {canListExpenseAccounts ? (
-                                    <Box maxW="240px">
+                                    <Box minW="240px" w="100%">
                                       <SearchableSelect
                                         options={expenseAccounts.map(acc => ({
                                           id: acc.id!,

@@ -11,6 +11,7 @@ Dropdown terlihat mentok di "5202 - BEBAN LISTRIK", "5203 - BEBAN TELEPON", "520
 2. **zIndex terlalu rendah**: zIndex 1000 bisa tertutup oleh elemen modal lainnya (modal biasanya punya zIndex 1400+)
 3. **Tidak ada visual scrollbar**: User tidak tahu bahwa dropdown sebenarnya bisa di-scroll
 4. **overflowX tidak diatur**: Bisa menyebabkan horizontal scroll yang tidak diinginkan
+5. **Parent overflow constraints**: Dropdown menggunakan `position: absolute` sehingga dibatasi oleh parent container (Table > Td > Box maxW="240px")
 
 ## Solusi yang Diterapkan
 
@@ -71,6 +72,71 @@ interface SearchableSelectProps {
 
 // Default size = 'md'
 // Bisa digunakan dengan: <SearchableSelect size="sm" ... />
+```
+
+#### 6. Menggunakan Portal dengan Fixed Positioning (SOLUSI UTAMA)
+```typescript
+// Import Portal
+import { Portal } from '@chakra-ui/react';
+
+// State untuk posisi dropdown
+const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+
+// Update posisi saat dropdown dibuka
+useEffect(() => {
+  const updatePosition = () => {
+    if (containerRef.current && isOpen) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    }
+  };
+  // ... listeners
+}, [isOpen]);
+
+// Render dengan Portal dan fixed positioning
+{isOpen && !isDisabled && (
+  <Portal>
+    <Box
+      position="fixed"  // CHANGED: absolute → fixed
+      top={`${dropdownPosition.top}px`}
+      left={`${dropdownPosition.left}px`}
+      width={`${dropdownPosition.width}px`}
+      zIndex={2000}  // INCREASED: 1500 → 2000
+      // ... other props
+    >
+      {/* dropdown content */}
+    </Box>
+  </Portal>
+)}
+```
+
+**Mengapa Portal + Fixed Positioning?**
+- Portal merender dropdown di luar hierarki DOM parent
+- Fixed positioning membuat dropdown tidak dibatasi oleh parent overflow
+- Dropdown bisa muncul di atas semua elemen tanpa batasan dari table, modal, atau container lainnya
+- Position dihitung dinamis berdasarkan posisi input field
+
+#### 7. Menghapus maxW constraint di parent
+```typescript
+// File: frontend/app/purchases/page.tsx
+
+// BEFORE:
+<Td minW="240px">
+  <Box maxW="240px">  // ❌ Membatasi dropdown
+    <SearchableSelect ... />
+  </Box>
+</Td>
+
+// AFTER:
+<Td minW="240px" position="relative">
+  <Box minW="240px" w="100%">  // ✅ Tidak membatasi dropdown
+    <SearchableSelect ... />
+  </Box>
+</Td>
 ```
 
 ## Testing
