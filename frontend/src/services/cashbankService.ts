@@ -118,6 +118,8 @@ export interface WithdrawalRequest {
   amount: number;
   reference?: string;
   notes?: string;
+  // Optional: expense/target GL account for automatic journal integration
+  target_account_id?: number;
   journal_entries?: ManualJournalEntry[];
 }
 

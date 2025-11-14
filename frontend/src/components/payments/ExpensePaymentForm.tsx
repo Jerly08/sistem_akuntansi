@@ -46,7 +46,7 @@ import {
 } from 'react-icons/fi';
 import paymentService from '@/services/paymentService';
 import accountService from '@/services/accountService';
-import cashbankService, { CashBank } from '@/services/cashbankService';
+import cashbankService, { CashBank, WithdrawalRequest } from '@/services/cashbankService';
 import { AccountCatalogItem } from '@/types/account';
 import CurrencyInput from '@/components/common/CurrencyInput';
 import { useAuth } from '@/contexts/AuthContext';
@@ -90,6 +90,7 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const textColor = useColorModeValue('gray.600', 'gray.300');
   const labelColor = useColorModeValue('gray.700', 'gray.200');
+  const selectedAccountBg = useColorModeValue('gray.50', 'gray.700');
   
   const [loading, setLoading] = useState(false);
   const [expenseAccounts, setExpenseAccounts] = useState<AccountCatalogItem[]>([]);
@@ -157,21 +158,21 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
   const onSubmit = async (data: ExpensePaymentFormData) => {
     setLoading(true);
     try {
-      // Create expense payment request
-      const paymentRequest = {
-        expense_account_id: Number(data.expense_account_id),
-        cash_bank_id: Number(data.cash_bank_id),
+      // Build withdrawal request mapped to Cash/Bank SSOT endpoint
+      const withdrawalRequest: WithdrawalRequest = {
+        account_id: Number(data.cash_bank_id),
         date: data.date,
         amount: data.amount,
-        method: data.method,
         reference: data.reference || '',
-        notes: data.notes || '',
-        description: data.description || `Payment for ${selectedAccount?.name || 'Expense'}`,
-        auto_create_journal: true,
+        notes:
+          data.notes ||
+          data.description ||
+          `Payment for ${selectedAccount?.code || ''} ${selectedAccount?.name || 'Expense'}`.trim(),
+        target_account_id: Number(data.expense_account_id),
       };
 
-      // Call the expense payment endpoint
-      await paymentService.createExpensePayment(paymentRequest);
+      // Process withdrawal via Cash/Bank service (creates SSOT journal automatically)
+      await cashbankService.processWithdrawal(withdrawalRequest);
 
       toast({
         title: 'Success',
@@ -424,7 +425,7 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
                   width="full"
                   p={3}
                   borderRadius="md"
-                  bg={useColorModeValue('gray.50', 'gray.700')}
+                  bg={selectedAccountBg}
                   borderWidth={1}
                   borderColor={borderColor}
                 >
