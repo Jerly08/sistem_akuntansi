@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -128,15 +129,20 @@ func (s *TaxPaymentService) CreatePPNPayment(req CreatePPNPaymentRequest, userID
 
 	// Use calculated amount or provided amount
 	paymentAmount := req.Amount
+	// Frontend already rounds PPN Terutang to rupiah (Math.round) and allows
+	// tolerance +1. Di backend kita samakan agar tidak ada mismatch floating point.
+	roundedTerutang := math.Round(ppnTerutang)
 	if paymentAmount <= 0 {
-		paymentAmount = ppnTerutang
-		log.Printf("✅ Using calculated PPN Terutang: %.2f", paymentAmount)
+		// Default: gunakan PPN Terutang yang sudah dibulatkan ke rupiah
+		paymentAmount = roundedTerutang
+		log.Printf("✅ Using rounded PPN Terutang: %.2f (raw: %.2f)", paymentAmount, ppnTerutang)
 	} else {
-		// Add tolerance of 1 Rupiah to avoid floating point precision issues
+		// Tolerance 1 Rupiah di atas PPN Terutang yang dibulatkan
 		const tolerance = 1.0
-		if paymentAmount > ppnTerutang+tolerance {
+		maxAllowed := roundedTerutang + tolerance
+		if paymentAmount > maxAllowed {
 			tx.Rollback()
-			return nil, fmt.Errorf("payment amount (%.2f) cannot exceed PPN Terutang (%.2f)", paymentAmount, ppnTerutang)
+			return nil, fmt.Errorf("payment amount (%.2f) cannot exceed PPN Terutang (%.2f)", paymentAmount, roundedTerutang)
 		}
 	}
 

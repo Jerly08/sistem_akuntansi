@@ -28,7 +28,20 @@ func NewPurchasePaymentCOASyncService(
 }
 
 // SyncCOABalanceAfterPayment ensures COA balance is updated after purchase payment
-// This fixes the issue where UnifiedJournalService creates SSOT entries but doesn't update COA balance
+// IMPORTANT ACCOUNTING RULE:
+//   - Hanya purchase dengan payment_method = CREDIT yang membentuk Hutang Usaha (2101)
+//   - Pembelian CASH / BANK_TRANSFER / CHECK TIDAK boleh mengubah saldo Hutang Usaha
+//     karena tidak pernah ada kewajiban yang tercatat.
+//
+// Sebelumnya, fungsi ini selalu membuat jurnal:
+//   Dr 2101 Hutang Usaha
+//   Cr Bank/Kas
+// untuk SEMUA pemanggilan (termasuk pembelian cash via immediate payment), sehingga
+// COA menampilkan saldo Utang Usaha negatif ketika user membeli secara cash.
+//
+// Perbaikan: batasi sinkronisasi "pelunasan hutang" hanya untuk purchase kredit.
+// Untuk pembelian non‑kredit, kita hanya mengupdate saldo Cash/Bank melalui modul lain
+// dan TIDAK menyentuh 2101 sama sekali.
 func (s *PurchasePaymentCOASyncService) SyncCOABalanceAfterPayment(
 	purchaseID uint,
 	paymentAmount float64,
@@ -39,10 +52,19 @@ func (s *PurchasePaymentCOASyncService) SyncCOABalanceAfterPayment(
 ) error {
 	log.Printf("🔧 Starting COA balance sync after payment for purchase %d, amount %.2f", purchaseID, paymentAmount)
 
-	// Get purchase details
+	// Get purchase details (termasuk payment_method)
 	var purchase models.Purchase
 	if err := s.db.Preload("Vendor").First(&purchase, purchaseID).Error; err != nil {
 		return fmt.Errorf("failed to get purchase: %v", err)
+	}
+
+	// ✅ CRITICAL FIX: Hanya lakukan jurnal pelunasan hutang untuk purchase kredit
+	if purchase.PaymentMethod != models.PurchasePaymentCredit {
+		// Untuk pembelian cash/transfer/check, Hutang Usaha tidak pernah terbentuk,
+		// sehingga tidak boleh ada jurnal Dr 2101 / Cr Bank di sini.
+		log.Printf("ℹ️ Skipping AP COA sync for purchase %d with payment method %s (no Accounts Payable)", 
+			purchase.ID, purchase.PaymentMethod)
+		return nil
 	}
 
 	// Create fallback SimpleSSOTJournal entry to ensure COA balance is updated

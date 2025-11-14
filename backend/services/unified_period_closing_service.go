@@ -39,8 +39,9 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			return fmt.Errorf("retained earnings account (3201) not found: %v", err)
 		}
 
-		// 2. Get the last closed period to determine starting point
-		// We should only close transactions AFTER the last closed period
+		// 2. Get the last closed period (for logging & validation only)
+		//    Saldo yang ditutup tetap dihitung dari SSOT sampai endDate, sehingga tidak tergantung startDate,
+		//    dan tidak akan terjadi double-closing untuk periode sebelumnya.
 		var lastClosedPeriod models.AccountingPeriod
 		err := tx.Where("is_closed = ?", true).Order("end_date DESC").First(&lastClosedPeriod).Error
 		var periodStartDate time.Time
@@ -75,16 +76,17 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			return fmt.Errorf("failed to get expense accounts: %v", err)
 		}
 
-		// 5. Calculate CUMULATIVE balances from fiscal year start to closing date
-		// Query all journal lines for Revenue/Expense accounts from fiscal year start to end date
-		// This ensures we capture ALL transactions, not just current period
+		// 5. Hitung saldo SEBENARNYA per akun sampai tanggal closing (endDate)
+		//    Menggunakan SSOT (unified_journal_ledger + unified_journal_lines)
+		//    Rumus umum: saldo = SUM(debit) - SUM(kredit) untuk SEMUA transaksi (termasuk closing sebelumnya)
+		//    Dengan begitu, yang kita tutup hanyalah saldo TEMPORARY yang masih tersisa.
 		type AccountBalance struct {
 			AccountID uint64
-			TotalDebit  float64
-			TotalCredit float64
+			AccType   string
+			Net       float64 // Debit - Credit sampai endDate
 		}
 
-		// Get cumulative balances for revenue accounts
+		// Kumpulkan semua ID akun revenue + expense untuk query SSOT
 		revenueAccountIDs := make([]uint64, 0, len(revenueAccounts))
 		for _, acc := range revenueAccounts {
 			revenueAccountIDs = append(revenueAccountIDs, uint64(acc.ID))
@@ -95,81 +97,60 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			expenseAccountIDs = append(expenseAccountIDs, uint64(acc.ID))
 		}
 
-		// IMPORTANT: Calculate CUMULATIVE balances (ALL TIME, exclude closing entries)
-		// This ensures we close the TOTAL accumulated balance, not just current period
-		var revenueBalances []AccountBalance
-		if len(revenueAccountIDs) > 0 {
+		allTempAccountIDs := append(revenueAccountIDs, expenseAccountIDs...)
+
+		var balances []AccountBalance
+		if len(allTempAccountIDs) > 0 {
+			// Query saldo nyata dari unified journals sampai endDate
 			if err := tx.Raw(`
 				SELECT 
-					ujl.account_id,
-					COALESCE(SUM(ujl.debit_amount), 0) as total_debit,
-					COALESCE(SUM(ujl.credit_amount), 0) as total_credit
-				FROM unified_journal_lines ujl
-				INNER JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
-				WHERE ujl.account_id IN ?
-					AND uje.entry_date <= ?
-					AND uje.status = 'POSTED'
-					AND uje.source_type != 'CLOSING'
-				GROUP BY ujl.account_id
-			`, revenueAccountIDs, endDate).Scan(&revenueBalances).Error; err != nil {
-				return fmt.Errorf("failed to calculate cumulative revenue balances: %v", err)
+					a.id AS account_id,
+					a.type AS acc_type,
+					COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0) AS net
+				FROM accounts a
+				LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
+				LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
+				WHERE a.id IN ? 
+					AND a.deleted_at IS NULL
+					AND (uje.id IS NULL OR (uje.status = 'POSTED' AND uje.entry_date <= ?))
+				GROUP BY a.id, a.type
+			`, allTempAccountIDs, endDate).Scan(&balances).Error; err != nil {
+				return fmt.Errorf("failed to calculate account balances for closing: %v", err)
 			}
 		}
 
-	var expenseBalances []AccountBalance
-		if len(expenseAccountIDs) > 0 {
-			if err := tx.Raw(`
-				SELECT 
-					ujl.account_id,
-					COALESCE(SUM(ujl.debit_amount), 0) as total_debit,
-					COALESCE(SUM(ujl.credit_amount), 0) as total_credit
-				FROM unified_journal_lines ujl
-				INNER JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
-				WHERE ujl.account_id IN ?
-					AND uje.entry_date <= ?
-					AND uje.status = 'POSTED'
-					AND uje.source_type != 'CLOSING'
-				GROUP BY ujl.account_id
-			`, expenseAccountIDs, endDate).Scan(&expenseBalances).Error; err != nil {
-				return fmt.Errorf("failed to calculate cumulative expense balances: %v", err)
+		// 6. Dari saldo nyata, hitung berapa yang harus ditutup per akun.
+		//    saldo_sekarang = SUM(debit) - SUM(kredit)
+		//    delta_closing  = -saldo_sekarang  (agar saldo baru = 0)
+		//    Untuk baris jurnal: delta_closing = debit_closing - credit_closing
+		closingDeltaMap := make(map[uint64]decimal.Decimal) // debit_closing - credit_closing per akun
+
+		threshold := decimal.NewFromFloat(0.01)
+		var totalRevenue, totalExpense decimal.Decimal
+
+		for _, bal := range balances {
+			currentBalance := decimal.NewFromFloat(bal.Net) // bisa negatif (credit) atau positif (debit)
+			if currentBalance.Abs().LessThan(threshold) {
+				continue // akun sudah effectively 0
+			}
+
+			// Delta yang perlu diposting supaya saldo menjadi 0
+			closingDelta := currentBalance.Neg() // debit_closing - credit_closing
+			closingDeltaMap[bal.AccountID] = closingDelta
+
+			amountToClose := closingDelta.Abs() // nilai positif untuk laporan (Rp)
+			if bal.AccType == models.AccountTypeRevenue {
+				// Revenue bersifat kredit normal → total revenue pakai nilai absolut
+				totalRevenue = totalRevenue.Add(amountToClose)
+			} else if bal.AccType == models.AccountTypeExpense {
+				// Expense bersifat debit normal → total expense pakai nilai absolut
+				totalExpense = totalExpense.Add(amountToClose)
 			}
 		}
 
-		// 6. Build map of account balances
-		revenueBalanceMap := make(map[uint64]decimal.Decimal)
-		for _, bal := range revenueBalances {
-			// Revenue balance calculation: Debit - Credit (will be negative for credit balance)
-			// For closing, we need the ABSOLUTE value to debit revenue
-			netBalance := decimal.NewFromFloat(bal.TotalDebit).Sub(decimal.NewFromFloat(bal.TotalCredit))
-			// Take absolute value - if revenue has credit balance (negative), we need positive amount to close
-			absBalance := netBalance.Abs()
-			if absBalance.GreaterThan(decimal.NewFromFloat(0.01)) {
-				revenueBalanceMap[bal.AccountID] = absBalance
-			}
-		}
-
-		expenseBalanceMap := make(map[uint64]decimal.Decimal)
-		for _, bal := range expenseBalances {
-			// Expense: debit increases, credit decreases
-			// Net balance = Debit - Credit (should be positive for expense)
-			netBalance := decimal.NewFromFloat(bal.TotalDebit).Sub(decimal.NewFromFloat(bal.TotalCredit))
-			if netBalance.GreaterThan(decimal.NewFromFloat(0.01)) {
-				expenseBalanceMap[bal.AccountID] = netBalance
-			}
-		}
-
-		if len(revenueBalanceMap) == 0 && len(expenseBalanceMap) == 0 {
+		if totalRevenue.Abs().LessThan(threshold) && totalExpense.Abs().LessThan(threshold) {
 			log.Println("[UNIFIED CLOSING] No revenue or expense balances to close")
 			return nil
-		}
-
-		// 7. Calculate totals
-		var totalRevenue, totalExpense decimal.Decimal
-		for _, balance := range revenueBalanceMap {
-			totalRevenue = totalRevenue.Add(balance)
-		}
-		for _, balance := range expenseBalanceMap {
-			totalExpense = totalExpense.Add(balance)
 		}
 
 		netIncome := totalRevenue.Sub(totalExpense)
@@ -179,29 +160,65 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 		log.Printf("[UNIFIED CLOSING] Period Revenue: %.2f, Period Expense: %.2f, Net Income: %.2f",
 			totalRevenue.InexactFloat64(), totalExpense.InexactFloat64(), netIncome.InexactFloat64())
 
-		// 8. Create unified journal entry for closing
+		// 7. Buat baris jurnal closing berdasarkan delta_closing per akun
 		var journalLines []models.SSOTJournalLine
 		lineNum := 1
 
-		// Close Revenue accounts (Debit Revenue, Credit Retained Earnings)
-		// Revenue accounts have CREDIT balances (credit > debit)
-		// To close them: Debit Revenue to zero out the cumulative credit balance
-		for _, acc := range revenueAccounts {
-			balance, exists := revenueBalanceMap[uint64(acc.ID)]
-			if exists && balance.GreaterThan(decimal.NewFromFloat(0.01)) {
-				journalLines = append(journalLines, models.SSOTJournalLine{
-					AccountID:    uint64(acc.ID),
-					LineNumber:   lineNum,
-					Description:  fmt.Sprintf("Close period revenue: %s", acc.Name),
-					DebitAmount:  balance,
-					CreditAmount: decimal.Zero,
-				})
-				lineNum++
-				log.Printf("[UNIFIED CLOSING] Closing Revenue: %s (ID: %d) Balance: %.2f", acc.Name, acc.ID, balance.InexactFloat64())
+		// Helper kecil untuk membuat baris jurnal satu akun berdasarkan delta_closing
+		buildLine := func(acc models.Account, closingDelta decimal.Decimal, desc string) *models.SSOTJournalLine {
+			amount := closingDelta.Abs()
+			if amount.LessThan(threshold) {
+				return nil
+			}
+
+			debitAmount := decimal.Zero
+			creditAmount := decimal.Zero
+			if closingDelta.GreaterThan(decimal.Zero) {
+				// debit_closing - credit_closing = +amount → letakkan di DEBIT
+				debitAmount = amount
+			} else {
+				// delta negatif → butuh CREDIT lebih besar
+				creditAmount = amount
+			}
+
+			return &models.SSOTJournalLine{
+				AccountID:    uint64(acc.ID),
+				LineNumber:   lineNum,
+				Description:  desc,
+				DebitAmount:  debitAmount,
+				CreditAmount: creditAmount,
 			}
 		}
 
-		// Credit Retained Earnings with total revenue
+		// Tutup akun Revenue
+		for _, acc := range revenueAccounts {
+			closingDelta, exists := closingDeltaMap[uint64(acc.ID)]
+			if !exists {
+				continue
+			}
+			line := buildLine(acc, closingDelta, fmt.Sprintf("Close period revenue: %s", acc.Name))
+			if line != nil {
+				journalLines = append(journalLines, *line)
+				log.Printf("[UNIFIED CLOSING] Closing Revenue: %s (ID: %d) Delta: %.2f", acc.Name, acc.ID, closingDelta.Abs().InexactFloat64())
+				lineNum++
+			}
+		}
+
+		// Tutup akun Expense
+		for _, acc := range expenseAccounts {
+			closingDelta, exists := closingDeltaMap[uint64(acc.ID)]
+			if !exists {
+				continue
+			}
+			line := buildLine(acc, closingDelta, fmt.Sprintf("Close period expense: %s", acc.Name))
+			if line != nil {
+				journalLines = append(journalLines, *line)
+				log.Printf("[UNIFIED CLOSING] Closing Expense: %s (ID: %d) Delta: %.2f", acc.Name, acc.ID, closingDelta.Abs().InexactFloat64())
+				lineNum++
+			}
+		}
+
+		// Pindahkan total revenue & expense ke Retained Earnings
 		if totalRevenue.GreaterThan(decimal.Zero) {
 			journalLines = append(journalLines, models.SSOTJournalLine{
 				AccountID:    uint64(retainedEarnings.ID),
@@ -213,7 +230,6 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			lineNum++
 		}
 
-		// Debit Retained Earnings with total expense
 		if totalExpense.GreaterThan(decimal.Zero) {
 			journalLines = append(journalLines, models.SSOTJournalLine{
 				AccountID:    uint64(retainedEarnings.ID),
@@ -225,25 +241,7 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 			lineNum++
 		}
 
-		// Close Expense accounts (Credit Expense to zero out the cumulative debit balance)
-		// Expense accounts have DEBIT balances (debit > credit)
-		// To close them: Credit Expense to zero out the cumulative debit balance
-		for _, acc := range expenseAccounts {
-			balance, exists := expenseBalanceMap[uint64(acc.ID)]
-			if exists && balance.GreaterThan(decimal.NewFromFloat(0.01)) {
-				journalLines = append(journalLines, models.SSOTJournalLine{
-					AccountID:    uint64(acc.ID),
-					LineNumber:   lineNum,
-					Description:  fmt.Sprintf("Close period expense: %s", acc.Name),
-					DebitAmount:  decimal.Zero,
-					CreditAmount: balance,
-				})
-				lineNum++
-				log.Printf("[UNIFIED CLOSING] Closing Expense: %s (ID: %d) Balance: %.2f", acc.Name, acc.ID, balance.InexactFloat64())
-			}
-		}
-
-		// 9. Create unified journal entry
+		// 8. Create unified journal entry
 		closingEntry := &models.SSOTJournalEntry{
 			SourceType:      "CLOSING",
 			EntryDate:       endDate,
@@ -363,67 +361,245 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 }
 
 // PreviewPeriodClosing generates preview of period closing
+// IMPORTANT: Logika perhitungan HARUS sama dengan ExecutePeriodClosing agar angka preview = angka real
 func (s *UnifiedPeriodClosingService) PreviewPeriodClosing(ctx context.Context, startDate, endDate time.Time) (map[string]interface{}, error) {
-	// Get retained earnings account
+	if endDate.Before(startDate) {
+		return nil, fmt.Errorf("end_date must be on or after start_date")
+	}
+
+	tx := s.db.WithContext(ctx)
+
+	// 1. Retained earnings account
 	var retainedEarnings models.Account
-	if err := s.db.Where("code = ? AND type = ?", "3201", "EQUITY").First(&retainedEarnings).Error; err != nil {
+	if err := tx.Where("code = ? AND type = ?", "3201", models.AccountTypeEquity).First(&retainedEarnings).Error; err != nil {
 		return nil, fmt.Errorf("retained earnings account (3201) not found: %v", err)
 	}
 
-	// Get revenue and expense accounts
+	// 2. Info last closed period (untuk warning & auto-detection di UI)
+	var validationMessages []string
+	var transactionCount int64
+	var periodDays int
+
+	var lastPeriod models.AccountingPeriod
+	if err := tx.Where("is_closed = ?", true).Order("end_date DESC").First(&lastPeriod).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			validationMessages = append(validationMessages, "First period closing - no previous closed period found.")
+		} else {
+			return nil, fmt.Errorf("failed to query last closed period: %v", err)
+		}
+	} else {
+		// Expected start date = last end date + 1 hari
+		expectedStart := lastPeriod.EndDate.AddDate(0, 0, 1)
+		if !startDate.Equal(expectedStart) {
+			validationMessages = append(validationMessages,
+				fmt.Sprintf("Warning: expected start date %s based on last closing, but got %s",
+					expectedStart.Format("2006-01-02"), startDate.Format("2006-01-02")))
+		}
+
+		if !endDate.After(lastPeriod.EndDate) {
+			validationMessages = append(validationMessages, "End date must be after last closing date.")
+		}
+	}
+
+	// 3. Hitung jumlah transaksi non-closing dalam periode untuk informasi tambahan
+	if err := tx.Model(&models.SSOTJournalEntry{}).
+		Where("entry_date BETWEEN ? AND ? AND status = ? AND source_type != ?",
+			startDate, endDate, models.SSOTStatusPosted, models.SSOTSourceTypeClosing).
+		Count(&transactionCount).Error; err != nil {
+		return nil, fmt.Errorf("failed to count transactions for preview: %v", err)
+	}
+
+	// +1 karena periode inklusif (start & end)
+	periodDays = int(endDate.Sub(startDate).Hours()/24) + 1
+	if periodDays < 0 {
+		periodDays = 0
+	}
+
+	// 4. Ambil semua akun revenue & expense (bukan hanya yang non-zero)
 	var revenueAccounts []models.Account
-	s.db.Where("type = ? AND ABS(balance) > 0.01 AND is_header = false", "REVENUE").Find(&revenueAccounts)
+	if err := tx.Where("type = ? AND is_header = false", models.AccountTypeRevenue).Find(&revenueAccounts).Error; err != nil {
+		return nil, fmt.Errorf("failed to get revenue accounts: %v", err)
+	}
 
 	var expenseAccounts []models.Account
-	s.db.Where("type = ? AND ABS(balance) > 0.01 AND is_header = false", "EXPENSE").Find(&expenseAccounts)
+	if err := tx.Where("type = ? AND is_header = false", models.AccountTypeExpense).Find(&expenseAccounts).Error; err != nil {
+		return nil, fmt.Errorf("failed to get expense accounts: %v", err)
+	}
 
-	// Calculate totals
-	// Use absolute values to ensure correct positive amounts
-	var totalRevenue, totalExpense float64
+	// Build map untuk akses cepat account by ID
+	revenueMap := make(map[uint64]models.Account)
 	for _, acc := range revenueAccounts {
-		// Revenue balance is stored as positive, use absolute value
-		if acc.Balance < 0 {
-			totalRevenue += -acc.Balance
-		} else {
-			totalRevenue += acc.Balance
-		}
+		revenueMap[uint64(acc.ID)] = acc
 	}
+
+	expenseMap := make(map[uint64]models.Account)
 	for _, acc := range expenseAccounts {
-		// Expense balance - use absolute value
-		if acc.Balance < 0 {
-			totalExpense += -acc.Balance
-		} else {
-			totalExpense += acc.Balance
+		expenseMap[uint64(acc.ID)] = acc
+	}
+
+	// 5. Hitung saldo nyata dari SSOT (exact sama seperti di ExecutePeriodClosing)
+	type AccountBalance struct {
+		AccountID uint64
+		AccType   string
+		Net       float64 // Debit - Credit sampai endDate
+	}
+
+	revenueIDs := make([]uint64, 0, len(revenueAccounts))
+	for _, acc := range revenueAccounts {
+		revenueIDs = append(revenueIDs, uint64(acc.ID))
+	}
+
+	expenseIDs := make([]uint64, 0, len(expenseAccounts))
+	for _, acc := range expenseAccounts {
+		expenseIDs = append(expenseIDs, uint64(acc.ID))
+	}
+
+	allTempIDs := append(revenueIDs, expenseIDs...)
+
+	var balances []AccountBalance
+	if len(allTempIDs) > 0 {
+		if err := tx.Raw(`
+			SELECT 
+				a.id AS account_id,
+				a.type AS acc_type,
+				COALESCE(SUM(ujl.debit_amount), 0) - COALESCE(SUM(ujl.credit_amount), 0) AS net
+			FROM accounts a
+			LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
+			LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
+			WHERE a.id IN ?
+				AND a.deleted_at IS NULL
+				AND (uje.id IS NULL OR (uje.status = 'POSTED' AND uje.entry_date <= ?))
+			GROUP BY a.id, a.type
+		`, allTempIDs, endDate).Scan(&balances).Error; err != nil {
+			return nil, fmt.Errorf("failed to calculate account balances for preview: %v", err)
 		}
 	}
 
-	netIncome := totalRevenue - totalExpense
+	threshold := decimal.NewFromFloat(0.01)
+	var totalRevenueDec, totalExpenseDec decimal.Decimal
 
+	var revenuePreview []models.PeriodAccountBalance
+	var expensePreview []models.PeriodAccountBalance
+
+	for _, bal := range balances {
+		currentBalance := decimal.NewFromFloat(bal.Net)
+		if currentBalance.Abs().LessThan(threshold) {
+			continue
+		}
+
+		// Delta closing = -saldo sekarang → nilai absolut = jumlah yang akan ditutup
+		amountToClose := currentBalance.Neg().Abs()
+		amountFloat := amountToClose.InexactFloat64()
+
+		switch bal.AccType {
+		case models.AccountTypeRevenue:
+			acc, ok := revenueMap[bal.AccountID]
+			if !ok {
+				continue
+			}
+			totalRevenueDec = totalRevenueDec.Add(amountToClose)
+			revenuePreview = append(revenuePreview, models.PeriodAccountBalance{
+				ID:      acc.ID,
+				Code:    acc.Code,
+				Name:    acc.Name,
+				Balance: amountFloat,
+				Type:    acc.Type,
+			})
+		case models.AccountTypeExpense:
+			acc, ok := expenseMap[bal.AccountID]
+			if !ok {
+				continue
+			}
+			totalExpenseDec = totalExpenseDec.Add(amountToClose)
+			expensePreview = append(expensePreview, models.PeriodAccountBalance{
+				ID:      acc.ID,
+				Code:    acc.Code,
+				Name:    acc.Name,
+				Balance: amountFloat,
+				Type:    acc.Type,
+			})
+		}
+	}
+
+	canClose := len(revenuePreview) > 0 || len(expensePreview) > 0
+	if !canClose {
+		validationMessages = append(validationMessages, "No revenue or expense balances to close.")
+	}
+
+	totalRevenue := totalRevenueDec.InexactFloat64()
+	totalExpense := totalExpenseDec.InexactFloat64()
+	netIncome := totalRevenueDec.Sub(totalExpenseDec).InexactFloat64()
+
+	// 6. Preview jurnal closing (high level)
+	retainedName := fmt.Sprintf("%s - %s", retainedEarnings.Code, retainedEarnings.Name)
+	closingEntries := []models.ClosingEntryPreview{}
+
+	if totalRevenueDec.GreaterThan(decimal.Zero) {
+		closingEntries = append(closingEntries, models.ClosingEntryPreview{
+			Description:   "Close Revenue Accounts to Retained Earnings",
+			DebitAccount:  "Revenue Accounts (Total)",
+			CreditAccount: retainedName,
+			Amount:        totalRevenue,
+		})
+	}
+	if totalExpenseDec.GreaterThan(decimal.Zero) {
+		closingEntries = append(closingEntries, models.ClosingEntryPreview{
+			Description:   "Close Expense Accounts to Retained Earnings",
+			DebitAccount:  retainedName,
+			CreditAccount: "Expense Accounts (Total)",
+			Amount:        totalExpense,
+		})
+	}
+
+	// 7. Susun response map untuk kompatibilitas dengan frontend (SettingsPage)
 	return map[string]interface{}{
 		"start_date":        startDate.Format("2006-01-02"),
 		"end_date":          endDate.Format("2006-01-02"),
 		"total_revenue":     totalRevenue,
 		"total_expense":     totalExpense,
 		"net_income":        netIncome,
-		"revenue_accounts":  len(revenueAccounts),
-		"expense_accounts":  len(expenseAccounts),
-		"can_close":         len(revenueAccounts) > 0 || len(expenseAccounts) > 0,
-		"retained_earnings": retainedEarnings.Name,
+		"retained_earnings": retainedName,
+		"retained_earnings_id": retainedEarnings.ID,
+		"revenue_accounts":    revenuePreview,
+		"expense_accounts":    expensePreview,
+		"closing_entries":     closingEntries,
+		"can_close":           canClose,
+		"validation_messages": validationMessages,
+		"transaction_count":   transactionCount,
+		"period_days":         periodDays,
 	}, nil
 }
 
 // GetLastClosingInfo returns information about the last closed period
+// Digunakan frontend untuk:
+//   - Menentukan start date otomatis (day-after-last-closing)
+//   - Menentukan start date pertama kali (earliest transaction date)
 func (s *UnifiedPeriodClosingService) GetLastClosingInfo(ctx context.Context) (map[string]interface{}, error) {
+	tx := s.db.WithContext(ctx)
+
 	var lastPeriod models.AccountingPeriod
-	err := s.db.Where("is_closed = ?", true).
+	err := tx.Where("is_closed = ?", true).
 		Order("end_date DESC").
 		First(&lastPeriod).Error
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return map[string]interface{}{
+			// Belum pernah closing sama sekali → cari tanggal transaksi pertama dari SSOT
+			var earliestTxn time.Time
+			if err := tx.Model(&models.SSOTJournalEntry{}).
+				Where("status = ? AND source_type != ?", models.SSOTStatusPosted, models.SSOTSourceTypeClosing).
+				Select("MIN(entry_date)").
+				Scan(&earliestTxn).Error; err != nil {
+				return nil, fmt.Errorf("failed to query earliest transaction date: %v", err)
+			}
+
+			resp := map[string]interface{}{
 				"has_previous_closing": false,
-			}, nil
+			}
+			if !earliestTxn.IsZero() {
+				resp["period_start_date"] = earliestTxn.Format("2006-01-02")
+			}
+			return resp, nil
 		}
 		return nil, fmt.Errorf("failed to query last closing period: %v", err)
 	}
