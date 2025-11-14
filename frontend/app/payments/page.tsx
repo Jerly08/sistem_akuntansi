@@ -71,12 +71,14 @@ import {
   FiFileText,
   FiChevronDown,
   FiArrowDown,
-  FiArrowRight
+  FiArrowRight,
+  FiBriefcase
 } from 'react-icons/fi';
 import paymentService, { Payment, PaymentFilters, PaymentResult, PaymentCreateRequest } from '@/services/paymentService';
 import AdvancedPaymentForm from '@/components/payments/AdvancedPaymentForm';
 import PaymentDetailModal from '@/components/payments/PaymentDetailModal';
 import PPNPaymentModal from '@/components/payments/PPNPaymentModal';
+import ExpensePaymentForm from '@/components/payments/ExpensePaymentForm';
 import { exportPaymentsToPDF, exportPaymentDetailToPDF, PDFExportOptions } from '@/utils/pdfExport';
 import ExportButton from '@/components/common/ExportButton';
 
@@ -174,6 +176,7 @@ const PaymentsPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   const [showPPNPayment, setShowPPNPayment] = useState(false);
   const [ppnPaymentType, setPPNPaymentType] = useState<'INPUT' | 'OUTPUT'>('OUTPUT');
+  const [showExpensePayment, setShowExpensePayment] = useState(false);
 
   // Permission checks - Normalize role comparison for case-insensitive check
   const userRole = user?.role?.toLowerCase();
@@ -855,6 +858,12 @@ const resetFilters = () => {
                   >
                     Setor PPN (Tax Remittance)
                   </MenuItem>
+                  <MenuItem 
+                    icon={<FiBriefcase />} 
+                    onClick={() => setShowExpensePayment(true)}
+                  >
+                    Expense Payment (from COA)
+                  </MenuItem>
                 </MenuList>
               </Menu>
             )}
@@ -1039,6 +1048,22 @@ const resetFilters = () => {
           toast({
             title: 'Success',
             description: 'PPN remittance (Setor PPN) has been processed successfully',
+            status: 'success',
+            duration: 3000,
+          });
+        }}
+      />
+      
+      {/* Expense Payment Modal */}
+      <ExpensePaymentForm
+        isOpen={showExpensePayment}
+        onClose={() => setShowExpensePayment(false)}
+        onSuccess={() => {
+          setShowExpensePayment(false);
+          loadPayments();
+          toast({
+            title: 'Success',
+            description: 'Expense payment has been created successfully',
             status: 'success',
             duration: 3000,
           });

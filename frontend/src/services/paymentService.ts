@@ -748,6 +748,62 @@ class PaymentService {
       throw new Error(error.response?.data?.error || 'Failed to get integration metrics');
     }
   }
+
+  // Create expense payment (for expense/liability accounts from COA)
+  async createExpensePayment(data: ExpensePaymentRequest): Promise<Payment> {
+    try {
+      // Format the payment request for expense payment
+      const formattedData = {
+        expense_account_id: data.expense_account_id,
+        cash_bank_id: data.cash_bank_id,
+        date: this.formatDateForAPI(data.date),
+        amount: data.amount,
+        method: data.method,
+        reference: data.reference || '',
+        notes: data.notes || '',
+        description: data.description || 'Expense Payment',
+        payment_type: 'EXPENSE',
+        auto_create_journal: data.auto_create_journal ?? true,
+      };
+      
+      // Check if SSOT expense payment endpoint exists, otherwise use regular endpoint
+      const endpoint = (API_ENDPOINTS as any).PAYMENTS?.SSOT?.EXPENSE || 
+                      API_ENDPOINTS.PAYMENTS.CREATE;
+      
+      const response = await api.post(endpoint, formattedData, {
+        timeout: 30000 // 30 seconds timeout for payment operations
+      });
+      
+      // Handle response format variations
+      return response.data?.data?.payment || response.data?.payment || response.data;
+    } catch (error: any) {
+      console.error('PaymentService - Error creating expense payment:', error);
+      
+      // Check for authentication errors
+      if (error.isAuthError || error.code === 'AUTH_SESSION_EXPIRED' || error.message?.includes('Session expired')) {
+        const authError = new Error('Session expired. Please login again.');
+        (authError as any).isAuthError = true;
+        (authError as any).code = 'AUTH_SESSION_EXPIRED';
+        throw authError;
+      } else if (error.response?.status === 401) {
+        const authError = new Error('Session expired. Please login again.');
+        (authError as any).isAuthError = true;
+        (authError as any).code = 'AUTH_SESSION_EXPIRED';
+        throw authError;
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to create expense payments.');
+      } else if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      } else if (error.response?.data?.details) {
+        throw new Error(error.response.data.details);
+      } else if (error.message) {
+        throw new Error(error.message);
+      }
+      
+      throw new Error('An unexpected error occurred while creating expense payment');
+    }
+  }
+
 }
 
 // ============ SSOT Journal Integration Types ============
@@ -913,6 +969,18 @@ export interface CreatePaymentWithJournalRequest {
     validate_balance: boolean;
     update_account_balances: boolean;
   };
+}
+
+export interface ExpensePaymentRequest {
+  expense_account_id: number;
+  cash_bank_id: number;
+  date: string;
+  amount: number;
+  method: string;
+  reference?: string;
+  notes?: string;
+  description?: string;
+  auto_create_journal?: boolean;
 }
 
 export default new PaymentService();

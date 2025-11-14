@@ -533,7 +533,7 @@ export const EnhancedBalanceSheetReport: React.FC<EnhancedBalanceSheetReportProp
                     {balanceSheetData.is_balanced ? (
                       <>
                         <Icon as={FiCheckCircle} mr={1} />
-                        Balanced ✓
+                        Balanced
                       </>
                     ) : (
                       <>

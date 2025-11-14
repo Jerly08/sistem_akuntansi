@@ -115,13 +115,21 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     }
   };
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside (both input and dropdown area)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        onClose();
-        setSearchTerm(''); // Clear search when closing
+      const targetNode = event.target as Node;
+      const containerEl = containerRef.current;
+      const dropdownEl = dropdownRef.current;
+
+      // If click happens inside the input container OR inside the dropdown portal,
+      // we treat it as an internal click and do not close the dropdown.
+      if ((containerEl && containerEl.contains(targetNode)) || (dropdownEl && dropdownEl.contains(targetNode))) {
+        return;
       }
+
+      onClose();
+      setSearchTerm(''); // Clear search when closing
     };
 
     document.addEventListener('mousedown', handleClickOutside);

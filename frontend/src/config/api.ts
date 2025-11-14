@@ -243,6 +243,7 @@ export const API_ENDPOINTS = {
       LIST: '/api/v1/payments/ssot',
       RECEIVABLE: '/api/v1/payments/ssot/receivable',
       PAYABLE: '/api/v1/payments/ssot/payable',
+      EXPENSE: '/api/v1/payments/ssot/expense',
       GET_BY_ID: (id: number) => `/api/v1/payments/ssot/${id}`,
       REVERSE: (id: number) => `/api/v1/payments/ssot/${id}/reverse`,
       PREVIEW_JOURNAL: '/api/v1/payments/ssot/preview-journal',
