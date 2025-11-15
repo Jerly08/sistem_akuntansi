@@ -21,6 +21,10 @@ func SetupSSOTPaymentRoutes(router *gin.RouterGroup, db *gorm.DB, jwtManager *mi
 	// Initialize SSOT unified journal service
 	unifiedJournalService := services.NewUnifiedJournalService(db)
 
+	// Initialize Unified Period Closing Service & Middleware for closed-period validation
+	periodClosingService := services.NewUnifiedPeriodClosingService(db)
+	periodValidationMiddleware := middleware.NewPeriodValidationMiddleware(periodClosingService)
+
 	// Initialize Enhanced Payment Service with Journal integration
 	enhancedPaymentService := services.NewEnhancedPaymentServiceWithJournal(
 		db,
@@ -44,7 +48,8 @@ func SetupSSOTPaymentRoutes(router *gin.RouterGroup, db *gorm.DB, jwtManager *mi
 
 		// SSOT Payment routes - replaces legacy payment routes
 		ssotPayments := router.Group("/payments/ssot")
-		ssotPayments.Use(middleware.PaymentRateLimit()) // Apply rate limiting
+		ssotPayments.Use(middleware.PaymentRateLimit())                    // Apply rate limiting
+		ssotPayments.Use(periodValidationMiddleware.ValidateTransactionPeriod()) // Block transactions in closed periods
 		if middleware.GlobalAuditLogger != nil {
 			ssotPayments.Use(middleware.GlobalAuditLogger.PaymentAuditMiddleware()) // Apply audit logging
 		}
@@ -52,9 +57,10 @@ func SetupSSOTPaymentRoutes(router *gin.RouterGroup, db *gorm.DB, jwtManager *mi
 			// SSOT Payment CRUD operations with journal integration
 			ssotPayments.POST("/receivable", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreateReceivablePayment)
 			ssotPayments.POST("/payable", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreatePayablePayment)
+			ssotPayments.POST("/expense", permissionMiddleware.CanCreate("payments"), ssotPaymentController.CreateExpensePayment)
 			ssotPayments.GET("/:id", permissionMiddleware.CanView("payments"), ssotPaymentController.GetPaymentWithJournal)
 			ssotPayments.POST("/:id/reverse", permissionMiddleware.CanEdit("payments"), ssotPaymentController.ReversePayment)
-		
+			
 			// Journal integration endpoints
 			ssotPayments.POST("/preview-journal", permissionMiddleware.CanView("payments"), ssotPaymentController.PreviewPaymentJournal)
 			ssotPayments.GET("/:id/balance-updates", permissionMiddleware.CanView("payments"), ssotPaymentController.GetAccountBalanceUpdates)

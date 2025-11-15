@@ -713,6 +713,61 @@ const ReportsPage: React.FC = () => {
     }
   };
 
+  // Helper: normalisasi & deduplikasi closed periods berdasarkan tanggal kalender (YYYY-MM-DD)
+  const buildUniqueClosedPeriods = (entries: any[]): any[] => {
+    if (!Array.isArray(entries)) return [];
+
+    // Backend returns: { id, code, description, entry_date, created_at, total_debit, source }
+    const mapped = entries
+      .filter((entry: any) => entry && entry.entry_date)
+      .map((entry: any) => {
+        const rawDate = String(entry.entry_date);
+        // Ambil hanya bagian tanggal 'YYYY-MM-DD' untuk menghindari perbedaan timezone
+        const dateKey = rawDate.slice(0, 10);
+        const dateObj = new Date(dateKey);
+        const formattedDate = dateObj.toLocaleDateString('id-ID', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        });
+
+        return {
+          value: dateKey,
+          label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
+          date: dateKey,
+          fiscal_year: dateObj.getFullYear(),
+          entry_id: entry.id,
+          code: entry.code,
+          source: entry.source,
+          created_at: entry.created_at
+        };
+      });
+
+    // Deduplikasi berdasarkan tanggal kalender, prioritaskan source accounting_periods
+    const uniqueMap = new Map<string, any>();
+    mapped.forEach((period: any) => {
+      const key = period.date;
+      const existing = uniqueMap.get(key);
+      if (!existing) {
+        uniqueMap.set(key, period);
+      } else {
+        if (period.source === 'accounting_periods' && existing.source !== 'accounting_periods') {
+          uniqueMap.set(key, period);
+        } else if (period.source === existing.source) {
+          const periodCreated = period.created_at ? new Date(period.created_at).getTime() : 0;
+          const existingCreated = existing.created_at ? new Date(existing.created_at).getTime() : 0;
+          if (periodCreated > existingCreated) {
+            uniqueMap.set(key, period);
+          }
+        }
+      }
+    });
+
+    return Array.from(uniqueMap.values()).sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  };
+
   // Function untuk fetch closed periods
   const fetchClosedPeriods = async () => {
     setLoadingClosedPeriods(true);
@@ -722,64 +777,18 @@ const ReportsPage: React.FC = () => {
       console.log('[Reports] Raw data:', JSON.stringify(response.data, null, 2));
       
       if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-        // Format data untuk dropdown dengan grouping by year
-        // Backend returns: { id, code, description, entry_date, created_at, total_debit, source }
-        const allPeriods = response.data.data
-          .filter((entry: any) => entry.entry_date) // Filter entries dengan date valid
-          .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-          .map((entry: any) => {
-            // Use entry_date as the closed period date
-            const dateObj = new Date(entry.entry_date);
-            const formattedDate = dateObj.toLocaleDateString('id-ID', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric'
-            });
-            
-            // Convert to YYYY-MM-DD format for value
-            const dateValue = dateObj.toISOString().split('T')[0];
-            
-            return {
-              value: dateValue,
-              label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-              date: dateValue,
-              fiscal_year: dateObj.getFullYear(),
-              entry_id: entry.id,
-              code: entry.code,
-              source: entry.source,
-              created_at: entry.created_at
-            };
-          });
-        
-        // Deduplikasi berdasarkan date - prioritaskan accounting_periods source
-        const uniquePeriodsMap = new Map<string, any>();
-        allPeriods.forEach((period: any) => {
-          const existing = uniquePeriodsMap.get(period.date);
-          if (!existing) {
-            // Belum ada entry untuk tanggal ini
-            uniquePeriodsMap.set(period.date, period);
-          } else {
-            // Sudah ada - prioritaskan accounting_periods, atau yang lebih baru
-            if (period.source === 'accounting_periods' && existing.source !== 'accounting_periods') {
-              uniquePeriodsMap.set(period.date, period);
-            } else if (period.source === existing.source) {
-              // Jika source sama, ambil yang created_at lebih baru
-              const periodDate = new Date(period.created_at);
-              const existingDate = new Date(existing.created_at);
-              if (periodDate > existingDate) {
-                uniquePeriodsMap.set(period.date, period);
-              }
-            }
-          }
-        });
-        
-        const periods = Array.from(uniquePeriodsMap.values());
-        
+        const periods = buildUniqueClosedPeriods(response.data.data);
+
         setClosedPeriods(periods);
-        console.log(`[Reports] Loaded ${periods.length} unique closed periods (from ${allPeriods.length} total entries):`, periods);
+        console.log(
+          `[Reports] Loaded ${periods.length} unique closed periods (from ${response.data.data.length} total entries):`,
+          periods
+        );
         
-        if (allPeriods.length > periods.length) {
-          console.log(`[Reports] Deduplicated ${allPeriods.length - periods.length} duplicate entries`);
+        if (response.data.data.length > periods.length) {
+          console.log(
+            `[Reports] Deduplicated ${response.data.data.length - periods.length} duplicate entries`
+          );
         }
         
         if (periods.length === 0) {
@@ -2197,32 +2206,15 @@ const ReportsPage: React.FC = () => {
                             setSSOTPROpen(true);
                           } else if (report.id === 'trial-balance') {
                             setSSOTTBOpen(true);
-                            // Auto-load closed periods untuk Trial Balance
+                            // Auto-load closed periods untuk Trial Balance (deduplicated)
                             (async () => {
                               setLoadingSSOTTBClosedPeriods(true);
                               try {
                                 const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
                                 if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-                                  const periods = response.data.data
-                                    .filter((entry: any) => entry.entry_date)
-                                    .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-                                    .map((entry: any) => {
-                                      const dateObj = new Date(entry.entry_date);
-                                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
-                                        day: '2-digit',
-                                        month: 'short',
-                                        year: 'numeric'
-                                      });
-                                      const dateValue = dateObj.toISOString().split('T')[0];
-                                      return {
-                                        value: dateValue,
-                                        label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-                                        date: dateValue,
-                                        fiscal_year: dateObj.getFullYear()
-                                      };
-                                    });
+                                  const periods = buildUniqueClosedPeriods(response.data.data);
                                   setSSOTTBClosedPeriods(periods);
-                                  console.log(`[Trial Balance] Auto-loaded ${periods.length} closed periods`);
+                                  console.log(`[Trial Balance] Auto-loaded ${periods.length} unique closed periods`);
                                 }
                               } catch (error) {
                                 console.error('[Trial Balance] Failed to auto-load closed periods:', error);
@@ -2232,32 +2224,15 @@ const ReportsPage: React.FC = () => {
                             })();
                           } else if (report.id === 'general-ledger') {
                             setSSOTGLOpen(true);
-                            // Auto-load closed periods untuk General Ledger
+                            // Auto-load closed periods untuk General Ledger (deduplicated)
                             (async () => {
                               setLoadingSSOTGLClosedPeriods(true);
                               try {
                                 const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
                                 if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-                                  const periods = response.data.data
-                                    .filter((entry: any) => entry.entry_date)
-                                    .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-                                    .map((entry: any) => {
-                                      const dateObj = new Date(entry.entry_date);
-                                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
-                                        day: '2-digit',
-                                        month: 'short',
-                                        year: 'numeric'
-                                      });
-                                      const dateValue = dateObj.toISOString().split('T')[0];
-                                      return {
-                                        value: dateValue,
-                                        label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-                                        date: dateValue,
-                                        fiscal_year: dateObj.getFullYear()
-                                      };
-                                    });
+                                  const periods = buildUniqueClosedPeriods(response.data.data);
                                   setSSOTGLClosedPeriods(periods);
-                                  console.log(`[General Ledger] Auto-loaded ${periods.length} closed periods`);
+                                  console.log(`[General Ledger] Auto-loaded ${periods.length} unique closed periods`);
                                 }
                               } catch (error) {
                                 console.error('[General Ledger] Failed to auto-load closed periods:', error);
@@ -2269,32 +2244,15 @@ const ReportsPage: React.FC = () => {
                             setSSOTBSOpen(true);
                           } else if (report.id === 'cash-flow') {
                             setSSOTCFOpen(true);
-                            // Auto-load closed periods untuk Cash Flow
+                            // Auto-load closed periods untuk Cash Flow (deduplicated)
                             (async () => {
                               setLoadingSSOTCFClosedPeriods(true);
                               try {
                                 const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
                                 if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-                                  const periods = response.data.data
-                                    .filter((entry: any) => entry.entry_date)
-                                    .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-                                    .map((entry: any) => {
-                                      const dateObj = new Date(entry.entry_date);
-                                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
-                                        day: '2-digit',
-                                        month: 'short',
-                                        year: 'numeric'
-                                      });
-                                      const dateValue = dateObj.toISOString().split('T')[0];
-                                      return {
-                                        value: dateValue,
-                                        label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-                                        date: dateValue,
-                                        fiscal_year: dateObj.getFullYear()
-                                      };
-                                    });
+                                  const periods = buildUniqueClosedPeriods(response.data.data);
                                   setSSOTCFClosedPeriods(periods);
-                                  console.log(`[Cash Flow] Auto-loaded ${periods.length} closed periods`);
+                                  console.log(`[Cash Flow] Auto-loaded ${periods.length} unique closed periods`);
                                 }
                               } catch (error) {
                                 console.error('[Cash Flow] Failed to auto-load closed periods:', error);
@@ -2304,32 +2262,16 @@ const ReportsPage: React.FC = () => {
                             })();
                           } else if (report.id === 'profit-loss') {
                             setSSOTPLOpen(true);
-                            // Auto-load closed periods untuk P&L
+                            // Auto-load closed periods untuk P&L (deduplicated)
                             (async () => {
                               setLoadingSSOTPLClosedPeriods(true);
                               try {
                                 const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
                                 if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-                                  const periods = response.data.data
-                                    .filter((entry: any) => entry.entry_date)
-                                    .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-                                    .map((entry: any) => {
-                                      const dateObj = new Date(entry.entry_date);
-                                      const formattedDate = dateObj.toLocaleDateString('id-ID', {
-                                        day: '2-digit',
-                                        month: 'short',
-                                        year: 'numeric'
-                                      });
-                                      const dateValue = dateObj.toISOString().split('T')[0];
-                                      return {
-                                        value: dateValue,
-                                        label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-                                        date: dateValue,
-                                        fiscal_year: dateObj.getFullYear()
-                                      };
-                                    });
+                                  const periods = buildUniqueClosedPeriods(response.data.data);
+
                                   setSSOTPLClosedPeriods(periods);
-                                  console.log(`[P&L] Auto-loaded ${periods.length} closed periods`);
+                                  console.log(`[P&L] Auto-loaded ${periods.length} unique closed periods`);
                                 }
                               } catch (error) {
                                 console.error('[P&L] Failed to auto-load closed periods:', error);
@@ -2689,34 +2631,11 @@ const ReportsPage: React.FC = () => {
                     try {
                       const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
                       if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-                        const periods = response.data.data
-                          .filter((entry: any) => entry.entry_date)
-                          .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-                          .map((entry: any) => {
-                            const dateObj = new Date(entry.entry_date);
-                            const formattedDate = dateObj.toLocaleDateString('id-ID', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric'
-                            });
-                            const dateValue = dateObj.toISOString().split('T')[0];
-                            return {
-                              value: dateValue,
-                              label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-                              date: dateValue,
-                              fiscal_year: dateObj.getFullYear()
-                            };
-                          });
-                        
-                        // Remove duplicates based on date
-                        const uniquePeriods = Array.from(
-                          new Map(periods.map(p => [p.date, p])).values()
-                        );
-                        
-                        setSSOTPLClosedPeriods(uniquePeriods);
+                        const periods = buildUniqueClosedPeriods(response.data.data);
+                        setSSOTPLClosedPeriods(periods);
                         toast({
                           title: 'Success',
-                          description: `Loaded ${uniquePeriods.length} closed periods`,
+                          description: `Loaded ${periods.length} closed periods`,
                           status: 'success',
                           duration: 2000
                         });
@@ -3552,31 +3471,11 @@ leftIcon={<FiTrendingUp />}
                     try {
                       const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
                       if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-                        const periods = response.data.data
-                          .filter((entry: any) => entry.entry_date)
-                          .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-                          .map((entry: any) => {
-                            const dateObj = new Date(entry.entry_date);
-                            const formattedDate = dateObj.toLocaleDateString('id-ID', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric'
-                            });
-                            const dateValue = dateObj.toISOString().split('T')[0];
-                            return {
-                              value: dateValue,
-                              label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-                              date: dateValue,
-                              fiscal_year: dateObj.getFullYear()
-                            };
-                          });
-                        const uniquePeriods = Array.from(
-                          new Map(periods.map(p => [p.date, p])).values()
-                        );
-                        setSSOTCFClosedPeriods(uniquePeriods);
+                        const periods = buildUniqueClosedPeriods(response.data.data);
+                        setSSOTCFClosedPeriods(periods);
                         toast({
                           title: 'Success',
-                          description: `Loaded ${uniquePeriods.length} closed periods`,
+                          description: `Loaded ${periods.length} closed periods`,
                           status: 'success',
                           duration: 2000
                         });
@@ -4233,31 +4132,11 @@ As of {ssotTBAsOfDate} | SSOT Journal Integration
                     try {
                       const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
                       if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-                        const periods = response.data.data
-                          .filter((entry: any) => entry.entry_date)
-                          .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-                          .map((entry: any) => {
-                            const dateObj = new Date(entry.entry_date);
-                            const formattedDate = dateObj.toLocaleDateString('id-ID', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric'
-                            });
-                            const dateValue = dateObj.toISOString().split('T')[0];
-                            return {
-                              value: dateValue,
-                              label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-                              date: dateValue,
-                              fiscal_year: dateObj.getFullYear()
-                            };
-                          });
-                        const uniquePeriods = Array.from(
-                          new Map(periods.map(p => [p.date, p])).values()
-                        );
-                        setSSOTTBClosedPeriods(uniquePeriods);
+                        const periods = buildUniqueClosedPeriods(response.data.data);
+                        setSSOTTBClosedPeriods(periods);
                         toast({
                           title: 'Success',
-                          description: `Loaded ${uniquePeriods.length} closed periods`,
+                          description: `Loaded ${periods.length} closed periods`,
                           status: 'success',
                           duration: 2000
                         });
@@ -5120,31 +4999,11 @@ As of: {ssotTBAsOfDate}
                       try {
                         const response = await api.get(API_ENDPOINTS.FISCAL_CLOSING.HISTORY);
                         if (response.data.success && response.data.data && Array.isArray(response.data.data)) {
-                          const periods = response.data.data
-                            .filter((entry: any) => entry.entry_date)
-                            .sort((a: any, b: any) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
-                            .map((entry: any) => {
-                              const dateObj = new Date(entry.entry_date);
-                              const formattedDate = dateObj.toLocaleDateString('id-ID', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric'
-                              });
-                              const dateValue = dateObj.toISOString().split('T')[0];
-                              return {
-                                value: dateValue,
-                                label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-                                date: dateValue,
-                                fiscal_year: dateObj.getFullYear()
-                              };
-                            });
-                          const uniquePeriods = Array.from(
-                            new Map(periods.map(p => [p.date, p])).values()
-                          );
-                          setSSOTGLClosedPeriods(uniquePeriods);
+                          const periods = buildUniqueClosedPeriods(response.data.data);
+                          setSSOTGLClosedPeriods(periods);
                           toast({
                             title: 'Success',
-                            description: `Loaded ${uniquePeriods.length} closed periods`,
+                            description: `Loaded ${periods.length} closed periods`,
                             status: 'success',
                             duration: 2000
                           });

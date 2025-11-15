@@ -2106,8 +2106,20 @@ func (s *PurchaseService) createSimpleSSOTPurchaseJournalFallback(purchase *mode
 	// 3) Insert lines: debit inventory/expense items
 	lineNo := 1
 	for _, it := range purchase.PurchaseItems {
+		// Treat physical goods (non-service products) as inventory purchases so
+		// fallback journals also keep 1301 in sync with COGS postings
 		accID := invID
-		if it.ExpenseAccountID != 0 { accID = uint(it.ExpenseAccountID) }
+		if it.Product.ID != 0 && !it.Product.IsService {
+			// Force inventory account for stock items, regardless of ExpenseAccountID
+			if it.ExpenseAccountID != 0 {
+				fmt.Printf("⚠️ [SSOT-FALLBACK] Inventory product %s (item %d) has ExpenseAccountID=%d configured; ignoring it and using inventory account ID %d\n",
+					it.Product.Name, it.ID, it.ExpenseAccountID, invID)
+			}
+		} else if it.ExpenseAccountID != 0 {
+			// Non-stock / service purchases: respect explicit expense account when provided
+			accID = uint(it.ExpenseAccountID)
+		}
+
 		if err := s.db.Exec(
 			"INSERT INTO simple_ssot_journal_items (journal_id, account_id, debit, credit, description, line_number) VALUES (?,?,?,?,?,?)",
 			jr.ID, accID, it.TotalPrice, 0, fmt.Sprintf("Purchase - %s", it.Product.Name), lineNo,

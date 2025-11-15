@@ -14,15 +14,30 @@ import (
 
 // EnhancedPaymentServiceWithJournal extends payment service with SSOT journal integration
 type EnhancedPaymentServiceWithJournal struct {
-	db                    *gorm.DB
-	paymentRepo          repositories.PaymentRepository
-	contactRepo          repositories.ContactRepository
-	cashBankRepo         *repositories.CashBankRepository
-	salesRepo            *repositories.SalesRepository
-	purchaseRepo         *repositories.PurchaseRepository
-	journalFactory       *PaymentJournalFactory
-	journalService       *UnifiedJournalService
-	statusValidator      *StatusValidationHelper // NEW: Konsistensi dengan SalesJournalServiceV2
+	db               *gorm.DB
+	paymentRepo      repositories.PaymentRepository
+	contactRepo      repositories.ContactRepository
+	cashBankRepo     *repositories.CashBankRepository
+	salesRepo        *repositories.SalesRepository
+	purchaseRepo     *repositories.PurchaseRepository
+	journalFactory   *PaymentJournalFactory
+	journalService   *UnifiedJournalService
+	statusValidator  *StatusValidationHelper // NEW: Konsistensi dengan SalesJournalServiceV2
+}
+
+// ExpensePaymentRequest represents a direct expense payment mapped from COA (no specific vendor/customer)
+type ExpensePaymentRequest struct {
+	ContactID          uint      `json:"contact_id"`
+	ExpenseAccountID   uint      `json:"expense_account_id" binding:"required"`
+	CashBankID         uint      `json:"cash_bank_id" binding:"required"`
+	Date               time.Time `json:"date" binding:"required"`
+	Amount             float64   `json:"amount" binding:"required,min=0.01"`
+	Method             string    `json:"method" binding:"required"`
+	Reference          string    `json:"reference"`
+	Notes              string    `json:"notes"`
+	Description        string    `json:"description"`
+	AutoCreateJournal  bool      `json:"auto_create_journal"`
+	UserID             uint      `json:"user_id"`
 }
 
 // ListPayments returns paginated payments with filters (SSOT-compatible)
@@ -109,6 +124,151 @@ type PaymentProcessingSummary struct {
 	AccountBalancesUpdated bool           `json:"account_balances_updated"`
 	AllocationsCreated    int             `json:"allocations_created"`
 	TransactionID         string          `json:"transaction_id"`
+}
+
+// CreateExpensePayment creates a direct expense payment (Expense/Liability from COA) with SSOT journal integration.
+// It records a row in payments table (PaymentTypeExpense) AND posts a journal entry:
+//   Debit:  expense account (from COA)
+//   Credit: cash/bank GL account linked to selected CashBank.
+// It also updates CashBank balance & history via applyCashBankMovement.
+func (eps *EnhancedPaymentServiceWithJournal) CreateExpensePayment(req *ExpensePaymentRequest) (*models.Payment, error) {
+	// Basic validation
+	if req.Amount <= 0 {
+		return nil, fmt.Errorf("payment amount must be positive")
+	}
+	if req.CashBankID == 0 {
+		return nil, fmt.Errorf("cash/bank account ID is required")
+	}
+	if req.ExpenseAccountID == 0 {
+		return nil, fmt.Errorf("expense account ID is required")
+	}
+	if req.UserID == 0 {
+		return nil, fmt.Errorf("user ID is required")
+	}
+	if req.Date.IsZero() {
+		req.Date = time.Now()
+	}
+	if req.Method == "" {
+		// Default to bank transfer for cash out if method not specified
+		req.Method = models.PaymentMethodBankTransfer
+	}
+	if req.Description == "" {
+		req.Description = "Expense Payment"
+	}
+
+	var payment *models.Payment
+
+	// Execute everything in a single transaction
+	err := eps.db.Transaction(func(tx *gorm.DB) error {
+		// Load cash/bank account (must have linked GL account)
+		cashBank, err := eps.cashBankRepo.FindByID(req.CashBankID)
+		if err != nil {
+			return fmt.Errorf("cash/bank account not found: %w", err)
+		}
+		if cashBank.AccountID == 0 {
+			return fmt.Errorf("cash/bank account %s has no linked GL account", cashBank.Name)
+		}
+
+		// Load expense account from COA
+		var expenseAccount models.Account
+		if err := tx.First(&expenseAccount, req.ExpenseAccountID).Error; err != nil {
+			return fmt.Errorf("expense account not found: %w", err)
+		}
+
+		// Use provided contact when available; otherwise fall back to system contact (e.g. "Internal Expense").
+		// Follows the same pattern as TaxPaymentService which uses a default system contact.
+		const systemContactID uint = 1
+		contactID := systemContactID
+		if req.ContactID != 0 {
+			// Validate that the contact exists and is a VENDOR, since expense payments are only for vendors
+			contact, err := eps.contactRepo.GetByID(req.ContactID)
+			if err != nil {
+				return fmt.Errorf("contact not found: %w", err)
+			}
+			if strings.ToUpper(contact.Type) != "VENDOR" {
+				return fmt.Errorf("expense payments can only be linked to vendor contacts")
+			}
+			contactID = req.ContactID
+		}
+
+		// Build payment model (cash out, treated similar to PAY prefix)
+		payment = &models.Payment{
+			ContactID:   contactID,
+			UserID:      req.UserID,
+			Date:        req.Date,
+			Amount:      req.Amount,
+			Method:      req.Method,
+			Reference:   req.Reference,
+			Status:      models.PaymentStatusCompleted,
+			PaymentType: models.PaymentTypeExpense,
+			Notes:       req.Notes,
+		}
+
+		// Generate payment code using vendor-style prefix (PAY-YYYY/MM-XXXX)
+		code, err := eps.generatePaymentCode(tx, req.Method, "VENDOR")
+		if err != nil {
+			return fmt.Errorf("failed to generate payment code: %w", err)
+		}
+		payment.Code = code
+
+		// Persist payment
+		if err := tx.Create(payment).Error; err != nil {
+			return fmt.Errorf("failed to create expense payment: %w", err)
+		}
+
+		// Prepare journal entry: Debit Expense, Credit Cash/Bank
+		journalLines := []JournalLineRequest{
+			{
+				AccountID:   uint64(expenseAccount.ID),
+				DebitAmount: decimal.NewFromFloat(req.Amount),
+				CreditAmount: decimal.Zero,
+				Description: fmt.Sprintf("Expense Payment %s - %s", payment.Code, req.Description),
+			},
+			{
+				AccountID:   uint64(cashBank.AccountID),
+				DebitAmount: decimal.Zero,
+				CreditAmount: decimal.NewFromFloat(req.Amount),
+				Description: fmt.Sprintf("Expense Payment %s - Cash/Bank", payment.Code),
+			},
+		}
+
+		journalRequest := &JournalEntryRequest{
+			SourceType:  models.SSOTSourceTypePayment,
+			SourceID:    uint64(payment.ID),
+			Reference:   payment.Code,
+			EntryDate:   payment.Date,
+			Description: req.Description,
+			Lines:       journalLines,
+			AutoPost:    req.AutoCreateJournal || true,
+			CreatedBy:   uint64(req.UserID),
+		}
+
+		journalService := NewUnifiedJournalService(tx)
+		journalResponse, err := journalService.CreateJournalEntryWithTx(tx, journalRequest)
+		if err != nil {
+			return fmt.Errorf("failed to create expense journal entry: %w", err)
+		}
+
+		// Link payment to journal entry
+		journalEntryID := uint(journalResponse.ID)
+		payment.JournalEntryID = &journalEntryID
+		if err := tx.Save(payment).Error; err != nil {
+			return fmt.Errorf("failed to update payment with journal reference: %w", err)
+		}
+
+		// Apply cash/bank movement (treat as vendor/outgoing)
+		if err := eps.applyCashBankMovement(tx, cashBank, "VENDOR", req.Amount, payment, req.Date); err != nil {
+			return fmt.Errorf("failed to update cash/bank balances: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return payment, nil
 }
 
 // CreatePaymentWithJournal creates a payment with automatic journal entry creation

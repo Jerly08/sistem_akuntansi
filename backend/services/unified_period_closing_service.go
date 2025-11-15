@@ -280,27 +280,32 @@ func (s *UnifiedPeriodClosingService) ExecutePeriodClosing(ctx context.Context, 
 
 		if len(affectedIDs) > 0 {
 			// Query correct balances from unified journals (POSTED only)
+			// IMPORTANT: gunakan konvensi saldo yang sama dengan updateAccountBalance()
+			// - ASSET / EXPENSE  : saldo = Debit - Credit  (debit menambah)
+			// - LIABILITY/EQUITY/REVENUE : saldo = Credit - Debit (kredit menambah)
 			type BalanceRow struct {
 				AccountID uint64
 				AccType   string
 				Correct   float64
 			}
-		var rows []BalanceRow
-		if err := tx.Raw(`
-			SELECT a.id as account_id, a.type as acc_type,
-				-- For ALL account types: Debit - Credit
-				-- ASSET/EXPENSE will be positive (debit balance)
-				-- LIABILITY/EQUITY/REVENUE will be negative (credit balance)
-				COALESCE(SUM(ujl.debit_amount),0) - COALESCE(SUM(ujl.credit_amount),0) AS correct
-			FROM accounts a
-			LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
-			LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
-			WHERE a.id IN ? AND a.deleted_at IS NULL
-				AND (uje.id IS NULL OR (uje.status = 'POSTED' AND uje.entry_date <= ?))
-			GROUP BY a.id, a.type
-		`, affectedIDs, endDate).Scan(&rows).Error; err != nil {
-			return fmt.Errorf("failed to recalc balances for affected accounts: %v", err)
-		}
+			var rows []BalanceRow
+			if err := tx.Raw(`
+				SELECT a.id as account_id, a.type as acc_type,
+					CASE
+						WHEN a.type IN ('ASSET', 'EXPENSE') THEN
+							COALESCE(SUM(ujl.debit_amount),0) - COALESCE(SUM(ujl.credit_amount),0)
+						ELSE
+							COALESCE(SUM(ujl.credit_amount),0) - COALESCE(SUM(ujl.debit_amount),0)
+					END AS correct
+				FROM accounts a
+				LEFT JOIN unified_journal_lines ujl ON ujl.account_id = a.id
+				LEFT JOIN unified_journal_ledger uje ON uje.id = ujl.journal_id
+				WHERE a.id IN ? AND a.deleted_at IS NULL
+					AND (uje.id IS NULL OR (uje.status = 'POSTED' AND uje.entry_date <= ?))
+				GROUP BY a.id, a.type
+			`, affectedIDs, endDate).Scan(&rows).Error; err != nil {
+				return fmt.Errorf("failed to recalc balances for affected accounts: %v", err)
+			}
 
 			for _, r := range rows {
 				if err := tx.Model(&models.Account{}).

@@ -754,6 +754,7 @@ class PaymentService {
     try {
       // Format the payment request for expense payment
       const formattedData = {
+        contact_id: data.contact_id,
         expense_account_id: data.expense_account_id,
         cash_bank_id: data.cash_bank_id,
         date: this.formatDateForAPI(data.date),
@@ -972,6 +973,7 @@ export interface CreatePaymentWithJournalRequest {
 }
 
 export interface ExpensePaymentRequest {
+  contact_id?: number;
   expense_account_id: number;
   cash_bank_id: number;
   date: string;

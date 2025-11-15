@@ -438,6 +438,16 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 				continue
 			}
 			
+			// ✅ NEW: Only treat NON-SERVICE products as inventory for COGS purposes
+			// This keeps behaviour consistent with purchase journals and stock service:
+			//  - Barang (IsService=false) → ada pergerakan persediaan & COGS
+			//  - Jasa  (IsService=true)  → TIDAK mengurangi akun persediaan 1301
+			if item.Product.IsService {
+				log.Printf("ℹ️ [COGS] Product '%s' (ID: %d) is marked as service, skipping COGS & inventory movement",
+					item.Product.Name, item.Product.ID)
+				continue
+			}
+			
 			// Calculate COGS: Quantity × Cost Price
 			itemCOGS := decimal.NewFromFloat(float64(item.Quantity)).
 				Mul(decimal.NewFromFloat(item.Product.CostPrice))

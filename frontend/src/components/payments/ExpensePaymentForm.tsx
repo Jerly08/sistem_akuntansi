@@ -47,10 +47,11 @@ import {
 import paymentService from '@/services/paymentService';
 import accountService from '@/services/accountService';
 import cashbankService, { CashBank, WithdrawalRequest } from '@/services/cashbankService';
+import searchableSelectService, { Contact as SelectContact } from '@/services/searchableSelectService';
+import closingHistoryService from '@/services/closingHistoryService';
 import { AccountCatalogItem } from '@/types/account';
 import CurrencyInput from '@/components/common/CurrencyInput';
 import { useAuth } from '@/contexts/AuthContext';
-
 interface ExpensePaymentFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -58,6 +59,7 @@ interface ExpensePaymentFormProps {
 }
 
 interface ExpensePaymentFormData {
+  contact_id?: number;
   expense_account_id: number;
   cash_bank_id: number;
   date: string;
@@ -68,13 +70,10 @@ interface ExpensePaymentFormData {
   description: string;
 }
 
+// For expense payments we only support two methods: Cash and Bank Transfer
 const PAYMENT_METHODS = [
   { value: 'CASH', label: 'Cash', icon: FiDollarSign },
   { value: 'BANK_TRANSFER', label: 'Bank Transfer', icon: FiCreditCard },
-  { value: 'CHECK', label: 'Check', icon: FiFileText },
-  { value: 'CREDIT_CARD', label: 'Credit Card', icon: FiCreditCard },
-  { value: 'DEBIT_CARD', label: 'Debit Card', icon: FiCreditCard },
-  { value: 'OTHER', label: 'Other', icon: FiFileText },
 ];
 
 const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
@@ -93,11 +92,13 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
   const selectedAccountBg = useColorModeValue('gray.50', 'gray.700');
   
   const [loading, setLoading] = useState(false);
+  const [contacts, setContacts] = useState<SelectContact[]>([]);
   const [expenseAccounts, setExpenseAccounts] = useState<AccountCatalogItem[]>([]);
   const [liabilityAccounts, setLiabilityAccounts] = useState<AccountCatalogItem[]>([]);
   const [cashBanks, setCashBanks] = useState<CashBank[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
-
+  const [checkingClosedPeriod, setCheckingClosedPeriod] = useState(false);
+  const [isDateClosed, setIsDateClosed] = useState(false);
   const {
     control,
     register,
@@ -105,6 +106,7 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
     formState: { errors },
     reset,
     watch,
+    setValue,
   } = useForm<ExpensePaymentFormData>({
     defaultValues: {
       date: new Date().toISOString().split('T')[0],
@@ -117,9 +119,17 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
   });
 
   const selectedAccountId = watch('expense_account_id');
+  const selectedMethod = watch('method');
+  const paymentDate = watch('date');
   const selectedAccount = [...expenseAccounts, ...liabilityAccounts].find(
     acc => acc.id === Number(selectedAccountId)
   );
+  // Filter cash/bank accounts based on selected payment method
+  const filteredCashBanks = cashBanks.filter(cb => {
+    if (selectedMethod === 'CASH') return cb.type === 'CASH';
+    if (selectedMethod === 'BANK_TRANSFER') return cb.type === 'BANK';
+    return true;
+  });
 
   // Load accounts and cash banks
   useEffect(() => {
@@ -128,6 +138,40 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
     }
   }, [isOpen, token]);
 
+  // Validate payment date against closed accounting periods
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkClosedPeriod = async () => {
+      if (!paymentDate) {
+        setIsDateClosed(false);
+        return;
+      }
+
+      setCheckingClosedPeriod(true);
+      try {
+        const isClosed = await closingHistoryService.isDateInClosedPeriod(paymentDate);
+        if (!cancelled) {
+          setIsDateClosed(!!isClosed);
+        }
+      } catch (err) {
+        console.error('Error checking closed period for payment date:', err);
+        if (!cancelled) {
+          setIsDateClosed(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingClosedPeriod(false);
+        }
+      }
+    };
+
+    checkClosedPeriod();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [paymentDate]);
   const loadData = async () => {
     setLoadingAccounts(true);
     try {
@@ -142,6 +186,10 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
       // Load cash/bank accounts that can be used for payments
       const cashBankData = await cashbankService.getPaymentAccounts();
       setCashBanks(cashBankData || []);
+
+      // Load contacts (vendors) for tagging expense payee
+      const contactData = await searchableSelectService.getContacts({ type: 'VENDOR', is_active: true });
+      setContacts(contactData || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
@@ -158,21 +206,22 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
   const onSubmit = async (data: ExpensePaymentFormData) => {
     setLoading(true);
     try {
-      // Build withdrawal request mapped to Cash/Bank SSOT endpoint
-      const withdrawalRequest: WithdrawalRequest = {
-        account_id: Number(data.cash_bank_id),
+      // Create expense payment via unified PaymentService so it appears in Payment Management
+      await paymentService.createExpensePayment({
+        contact_id: data.contact_id ? Number(data.contact_id) : undefined,
+        expense_account_id: Number(data.expense_account_id),
+        cash_bank_id: Number(data.cash_bank_id),
         date: data.date,
         amount: data.amount,
+        method: data.method,
         reference: data.reference || '',
         notes:
           data.notes ||
           data.description ||
           `Payment for ${selectedAccount?.code || ''} ${selectedAccount?.name || 'Expense'}`.trim(),
-        target_account_id: Number(data.expense_account_id),
-      };
-
-      // Process withdrawal via Cash/Bank service (creates SSOT journal automatically)
-      await cashbankService.processWithdrawal(withdrawalRequest);
+        description: data.description || selectedAccount?.name || 'Expense Payment',
+        auto_create_journal: true,
+      });
 
       toast({
         title: 'Success',
@@ -231,6 +280,39 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
                 </Box>
               ) : (
                 <>
+                  {/* Contact (optional) */}
+                  <FormControl isInvalid={!!errors.contact_id}>
+                    <FormLabel color={labelColor}>
+                      <HStack spacing={1}>
+                        <Icon as={FiCreditCard} />
+                        <Text>Contact (optional)</Text>
+                        <Tooltip label="Select the vendor or contact this expense is paid to">
+                          <Icon as={FiInfo} boxSize={3} color={textColor} />
+                        </Tooltip>
+                      </HStack>
+                    </FormLabel>
+                    <Controller
+                      name="contact_id"
+                      control={control}
+                      render={({ field }) => (
+                        <Select
+                          {...field}
+                          placeholder="Select contact (optional)"
+                          borderColor={borderColor}
+                        >
+                          {contacts.map(contact => (
+                            <option key={contact.id} value={contact.id}>
+                              {contact.name} (Vendor)
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    />
+                    <FormHelperText color={textColor}>
+                      Optional: choose vendor/contact to track who this expense is paid to
+                    </FormHelperText>
+                  </FormControl>
+
                   {/* Expense/Liability Account Selection */}
                   <FormControl isInvalid={!!errors.expense_account_id} isRequired>
                     <FormLabel color={labelColor}>
@@ -299,7 +381,7 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
                       rules={{ required: 'Please select a cash/bank account' }}
                       render={({ field }) => (
                         <Select {...field} placeholder="Select cash/bank account" borderColor={borderColor}>
-                          {cashBanks.map(cb => (
+                          {filteredCashBanks.map(cb => (
                             <option key={cb.id} value={cb.id}>
                               {cb.name} ({cb.type}) - Balance: {new Intl.NumberFormat('id-ID', {
                                 style: 'currency',
@@ -316,7 +398,7 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
 
                   <HStack width="full" spacing={4}>
                     {/* Payment Date */}
-                    <FormControl isInvalid={!!errors.date} isRequired flex={1}>
+                    <FormControl isInvalid={!!errors.date || isDateClosed} isRequired flex={1}>
                       <FormLabel color={labelColor}>
                         <HStack spacing={1}>
                           <Icon as={FiCalendar} />
@@ -327,8 +409,14 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
                         type="date"
                         {...register('date', { required: 'Payment date is required' })}
                         borderColor={borderColor}
+                        isDisabled={checkingClosedPeriod}
                       />
-                      <FormErrorMessage>{errors.date?.message}</FormErrorMessage>
+                      <FormErrorMessage>
+                        {errors.date?.message ||
+                          (isDateClosed
+                            ? 'Tanggal pembayaran berada pada periode yang sudah ditutup. Silakan pilih tanggal di periode yang masih terbuka.'
+                            : '')}
+                      </FormErrorMessage>
                     </FormControl>
 
                     {/* Payment Method */}
@@ -339,7 +427,16 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
                         control={control}
                         rules={{ required: 'Payment method is required' }}
                         render={({ field }) => (
-                          <Select {...field} borderColor={borderColor}>
+                          <Select
+                            {...field}
+                            borderColor={borderColor}
+                            onChange={(e) => {
+                              const newMethod = e.target.value;
+                              field.onChange(newMethod);
+                              // Reset selected cash/bank account when payment method changes
+                              setValue('cash_bank_id', undefined as any);
+                            }}
+                          >
                             {PAYMENT_METHODS.map(method => (
                               <option key={method.value} value={method.value}>
                                 {method.label}
@@ -450,7 +547,7 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
               type="submit"
               colorScheme="blue"
               isLoading={loading}
-              isDisabled={loadingAccounts}
+              isDisabled={loadingAccounts || isDateClosed || checkingClosedPeriod}
               leftIcon={<FiDollarSign />}
             >
               Create Payment

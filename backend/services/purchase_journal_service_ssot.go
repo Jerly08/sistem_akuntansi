@@ -97,21 +97,39 @@ func (s *PurchaseJournalServiceSSOT) CreatePurchaseJournal(purchase *models.Purc
 		var debitAccount *models.Account
 		var err error
 
-		// Try to use expense account if specified
-		if item.ExpenseAccountID != 0 {
-			if err := dbToUse.First(&debitAccount, item.ExpenseAccountID).Error; err != nil {
-				log.Printf("⚠️ Expense account ID %d not found for item %d, using default inventory account", 
-					item.ExpenseAccountID, item.ID)
-				debitAccount, err = resolveByCode("1301") // Default: Persediaan Barang
-				if err != nil {
-					return fmt.Errorf("inventory account not found: %v", err)
-				}
-			}
-		} else {
-			// Default to inventory account - use configured account
+		// Treat physical goods (non-service products) as inventory purchases
+		isInventoryItem := item.Product.ID != 0 && !item.Product.IsService
+
+		if isInventoryItem {
+			// For stock items, ALWAYS use configured inventory account so purchase debits
+			// match the same account that COGS will credit later (keeps 1301 in sync)
 			debitAccount, err = s.taxAccountHelper.GetInventoryAccount(dbToUse)
 			if err != nil {
 				return fmt.Errorf("inventory account not found: %v", err)
+			}
+
+			// If an expense account was configured for an inventory product, ignore it but log for visibility
+			if item.ExpenseAccountID != 0 {
+				log.Printf("⚠️ [SSOT] Inventory product '%s' (item %d) has ExpenseAccountID=%d configured; ignoring it and using inventory account %s (%s) to keep COGS in sync",
+					item.Product.Name, item.ID, item.ExpenseAccountID, debitAccount.Code, debitAccount.Name)
+			}
+		} else {
+			// Non-stock / service purchases: respect explicit expense account when provided
+			if item.ExpenseAccountID != 0 {
+				if err := dbToUse.First(&debitAccount, item.ExpenseAccountID).Error; err != nil {
+					log.Printf("⚠️ Expense account ID %d not found for item %d, falling back to inventory account", 
+						item.ExpenseAccountID, item.ID)
+					debitAccount, err = s.taxAccountHelper.GetInventoryAccount(dbToUse)
+					if err != nil {
+						return fmt.Errorf("inventory account not found: %v", err)
+					}
+				}
+			} else {
+				// Default to inventory account when no specific expense account configured
+				debitAccount, err = s.taxAccountHelper.GetInventoryAccount(dbToUse)
+				if err != nil {
+					return fmt.Errorf("inventory account not found: %v", err)
+				}
 			}
 		}
 
@@ -144,26 +162,28 @@ func (s *PurchaseJournalServiceSSOT) CreatePurchaseJournal(purchase *models.Purc
 	
 	paymentMethod := strings.ToUpper(strings.TrimSpace(purchase.PaymentMethod))
 	
+	// Normalize payment method using domain constants to avoid mismatches
 	switch paymentMethod {
-	case "TUNAI", "CASH":
+	// Immediate cash payments
+	case strings.ToUpper(models.PurchasePaymentCash), "TUNAI", "CASH":
 		creditAccount, err = resolveByCode("1101") // Kas
 		if err != nil {
 			return fmt.Errorf("cash account not found: %v", err)
 		}
-	case "TRANSFER", "BANK":
+	// Immediate bank-based payments (transfer & cheque)
+	case strings.ToUpper(models.PurchasePaymentTransfer), strings.ToUpper(models.PurchasePaymentCheck), "TRANSFER", "BANK":
 		creditAccount, err = resolveByCode("1102") // Bank
 		if err != nil {
 			return fmt.Errorf("bank account not found: %v", err)
 		}
-	case "KREDIT", "CREDIT", "HUTANG":
+	// Credit purchases / payables
+	case strings.ToUpper(models.PurchasePaymentCredit), "KREDIT", "CREDIT", "HUTANG":
 		creditAccount, err = resolveByCode("2101") // Hutang Usaha
 		if err != nil {
 			return fmt.Errorf("payables account not found: %v", err)
 		}
 	default:
-		// ✅ FIX: Use CREDIT as safe default for unknown payment methods
-		// This allows journal creation even if payment method doesn't match exactly
-		// Better to record the transaction than to fail completely
+		// ✅ SAFE DEFAULT: Treat unknown methods as CREDIT (AP) to avoid mis-posting to cash/bank
 		log.Printf("⚠️ [SSOT] Warning: Unknown payment method '%s' for Purchase #%d, defaulting to CREDIT (Hutang)", 
 			purchase.PaymentMethod, purchase.ID)
 		creditAccount, err = resolveByCode("2101")

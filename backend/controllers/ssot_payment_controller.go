@@ -92,6 +92,40 @@ func (ctrl *SSOTPaymentController) CreatePayablePayment(c *gin.Context) {
 	})
 }
 
+// CreateExpensePayment creates a direct expense payment (from COA) with SSOT journal integration
+func (ctrl *SSOTPaymentController) CreateExpensePayment(c *gin.Context) {
+	var req services.ExpensePaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid request format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Attach user ID from JWT context
+	userID := getSSOTUserIDFromContext(c)
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	req.UserID = userID
+
+	payment, err := ctrl.enhancedPaymentService.CreateExpensePayment(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Failed to create expense payment",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Expense payment created successfully",
+		"data":    payment,
+	})
+}
+
 // GetPaymentWithJournal retrieves a payment with its journal entry details
 func (ctrl *SSOTPaymentController) GetPaymentWithJournal(c *gin.Context) {
 	paymentIDStr := c.Param("id")

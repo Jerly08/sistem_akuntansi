@@ -96,40 +96,54 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 	
 	// 1. Debit Inventory/Expense accounts for each item
 	for _, item := range purchase.PurchaseItems {
-		// Determine account based on item type
-		if item.ExpenseAccountID != 0 {
-			// Use specific expense account if provided
-			var acc models.Account
-			if err := dbToUse.First(&acc, item.ExpenseAccountID).Error; err == nil {
-				journalItems = append(journalItems, models.SimpleSSOTJournalItem{
-					JournalID:   ssotEntry.ID,
-					AccountID:   acc.ID,
-					AccountCode: acc.Code,
-					AccountName: acc.Name,
-					Debit:       item.TotalPrice,
-					Credit:      0,
-					Description: fmt.Sprintf("Purchase expense - %s", item.Product.Name),
-				})
-				log.Printf("📋 Expense: Debit to %s (%s) = %.2f", acc.Name, acc.Code, item.TotalPrice)
-			} else {
-				log.Printf("⚠️ Failed to load expense account %d: %v", item.ExpenseAccountID, err)
-			}
-		} else {
-			// Use default inventory account (1301 - Persediaan Barang Dagangan)
-			if acc, err := resolveByCode("1301"); err == nil {
-				journalItems = append(journalItems, models.SimpleSSOTJournalItem{
-					JournalID:   ssotEntry.ID,
-					AccountID:   acc.ID,
-					AccountCode: acc.Code,
-					AccountName: acc.Name,
-					Debit:       item.TotalPrice,
-					Credit:      0,
-					Description: fmt.Sprintf("Inventory - %s", item.Product.Name),
-				})
-				log.Printf("📦 Inventory: Debit to %s (%s) = %.2f", acc.Name, acc.Code, item.TotalPrice)
+		var acc models.Account
+
+		// Treat physical goods (non-service products) as inventory purchases so legacy
+		// journals stay consistent with COGS postings (which always credit inventory)
+		isInventoryItem := item.Product.ID != 0 && !item.Product.IsService
+
+		if isInventoryItem {
+			// Always use inventory account 1301 for stock items
+			if invAcc, err := resolveByCode("1301"); err == nil {
+				acc = *invAcc
+				if item.ExpenseAccountID != 0 {
+					log.Printf("⚠️ Inventory product '%s' (item %d) has ExpenseAccountID=%d configured; ignoring it and using inventory account %s (%s) for legacy journal",
+						item.Product.Name, item.ID, item.ExpenseAccountID, acc.Code, acc.Name)
+				}
 			} else {
 				log.Printf("⚠️ Missing inventory account 1301: %v", err)
+				continue
 			}
+		} else if item.ExpenseAccountID != 0 {
+			// Non-stock / service purchases: respect explicit expense account when provided
+			if err := dbToUse.First(&acc, item.ExpenseAccountID).Error; err != nil {
+				log.Printf("⚠️ Failed to load expense account %d: %v", item.ExpenseAccountID, err)
+				continue
+			}
+		} else {
+			// Fallback: use inventory account when nothing specified
+			if invAcc, err := resolveByCode("1301"); err == nil {
+				acc = *invAcc
+			} else {
+				log.Printf("⚠️ Missing inventory account 1301: %v", err)
+				continue
+			}
+		}
+
+		journalItems = append(journalItems, models.SimpleSSOTJournalItem{
+			JournalID:   ssotEntry.ID,
+			AccountID:   acc.ID,
+			AccountCode: acc.Code,
+			AccountName: acc.Name,
+			Debit:       item.TotalPrice,
+			Credit:      0,
+			Description: fmt.Sprintf("Purchase - %s", item.Product.Name),
+		})
+
+		if isInventoryItem {
+			log.Printf("📦 Inventory: Debit to %s (%s) = %.2f", acc.Name, acc.Code, item.TotalPrice)
+		} else {
+			log.Printf("📋 Expense: Debit to %s (%s) = %.2f", acc.Name, acc.Code, item.TotalPrice)
 		}
 	}
 

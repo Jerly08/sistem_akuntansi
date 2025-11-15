@@ -62,10 +62,12 @@ const (
 
 // Payment Type Constants
 const (
-	PaymentTypeRegular        = "REGULAR"
-	PaymentTypeTaxPPN         = "TAX_PPN"
-	PaymentTypeTaxPPNInput    = "TAX_PPN_INPUT"
-	PaymentTypeTaxPPNOutput   = "TAX_PPN_OUTPUT"
+    PaymentTypeRegular        = "REGULAR"
+    PaymentTypeTaxPPN         = "TAX_PPN"
+    PaymentTypeTaxPPNInput    = "TAX_PPN_INPUT"
+    PaymentTypeTaxPPNOutput   = "TAX_PPN_OUTPUT"
+    // Custom type for direct expense payments created from COA (no specific vendor/customer)
+    PaymentTypeExpense        = "EXPENSE"
 )
 
 // GetPayeeName returns the payee name for display (e.g., in PDF)
