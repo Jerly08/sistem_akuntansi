@@ -714,28 +714,36 @@ const ReportsPage: React.FC = () => {
   };
 
   // Helper: normalisasi & deduplikasi closed periods berdasarkan tanggal kalender (YYYY-MM-DD)
+  // Sekarang juga menyimpan start_date dari accounting_periods (jika tersedia)
   const buildUniqueClosedPeriods = (entries: any[]): any[] => {
     if (!Array.isArray(entries)) return [];
 
-    // Backend returns: { id, code, description, entry_date, created_at, total_debit, source }
+    // Backend returns (unified):
+    // - accounting_periods: { id, code, description, entry_date, start_date, created_at, total_debit, net_income, source }
+    // - ssot_journal:       { id, code, description, entry_date, created_at, total_debit, source }
     const mapped = entries
-      .filter((entry: any) => entry && entry.entry_date)
+      .filter((entry: any) => entry && (entry.entry_date || entry.end_date))
       .map((entry: any) => {
-        const rawDate = String(entry.entry_date);
+        const rawEnd = String(entry.entry_date || entry.end_date);
         // Ambil hanya bagian tanggal 'YYYY-MM-DD' untuk menghindari perbedaan timezone
-        const dateKey = rawDate.slice(0, 10);
-        const dateObj = new Date(dateKey);
-        const formattedDate = dateObj.toLocaleDateString('id-ID', {
+        const endDateKey = rawEnd.slice(0, 10);
+        const endDateObj = new Date(endDateKey);
+        const formattedEndDate = endDateObj.toLocaleDateString('id-ID', {
           day: '2-digit',
           month: 'short',
           year: 'numeric'
         });
 
+        // Normalisasi start_date jika ada (accounting_periods)
+        const rawStart = entry.start_date ? String(entry.start_date).slice(0, 10) : undefined;
+
         return {
-          value: dateKey,
-          label: `${formattedDate} - ${entry.description || 'Period Closing'}`,
-          date: dateKey,
-          fiscal_year: dateObj.getFullYear(),
+          value: endDateKey,
+          label: `${formattedEndDate} - ${entry.description || 'Period Closing'}`,
+          // date tetap disimpan sebagai end_date agar kompatibel dengan existing usage
+          date: endDateKey,
+          start_date: rawStart,
+          fiscal_year: endDateObj.getFullYear(),
           entry_id: entry.id,
           code: entry.code,
           source: entry.source,
@@ -743,7 +751,7 @@ const ReportsPage: React.FC = () => {
         };
       });
 
-    // Deduplikasi berdasarkan tanggal kalender, prioritaskan source accounting_periods
+    // Deduplikasi berdasarkan tanggal kalender (end_date), prioritaskan source accounting_periods
     const uniqueMap = new Map<string, any>();
     mapped.forEach((period: any) => {
       const key = period.date;
@@ -2601,10 +2609,20 @@ const ReportsPage: React.FC = () => {
                         const selectedPeriod = ssotPLClosedPeriods.find(p => p.date === e.target.value);
                         if (selectedPeriod) {
                           // Set date range untuk periode yang dipilih
-                          // Ambil dari fiscal year start sampai periode end
-                          const periodEndDate = new Date(selectedPeriod.date);
-                          const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
-                          setSSOTStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                          // Prioritas: gunakan start_date dari accounting_periods jika tersedia
+                          const rawStart = selectedPeriod.start_date as string | undefined;
+
+                          if (rawStart) {
+                            const normalizedStart = String(rawStart).slice(0, 10);
+                            setSSOTStartDate(normalizedStart);
+                          } else {
+                            // Fallback: gunakan fiscal year start (behaviour lama)
+                            const periodEndDate = new Date(selectedPeriod.date);
+                            const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
+                            setSSOTStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                          }
+
+                          // End date selalu pakai end_date / entry_date dari history
                           setSSOTEndDate(selectedPeriod.date);
                         }
                       }
@@ -3442,9 +3460,20 @@ leftIcon={<FiTrendingUp />}
                         const selectedPeriod = ssotCFClosedPeriods.find(p => p.date === e.target.value);
                         if (selectedPeriod) {
                           // Set date range untuk periode yang dipilih
-                          const periodEndDate = new Date(selectedPeriod.date);
-                          const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
-                          setSSOTCFStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                          // Prioritas: gunakan start_date dari accounting_periods jika tersedia
+                          const rawStart = selectedPeriod.start_date as string | undefined;
+
+                          if (rawStart) {
+                            const normalizedStart = String(rawStart).slice(0, 10);
+                            setSSOTCFStartDate(normalizedStart);
+                          } else {
+                            // Fallback: gunakan fiscal year start (behaviour lama)
+                            const periodEndDate = new Date(selectedPeriod.date);
+                            const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
+                            setSSOTCFStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                          }
+
+                          // End date selalu pakai end_date / entry_date dari history
                           setSSOTCFEndDate(selectedPeriod.date);
                         }
                       }
@@ -4970,9 +4999,20 @@ As of: {ssotTBAsOfDate}
                           const selectedPeriod = ssotGLClosedPeriods.find(p => p.date === e.target.value);
                           if (selectedPeriod) {
                             // Set date range untuk periode yang dipilih
-                            const periodEndDate = new Date(selectedPeriod.date);
-                            const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
-                            setSSOTGLStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                            // Prioritas: gunakan start_date dari accounting_periods jika tersedia
+                            const rawStart = selectedPeriod.start_date as string | undefined;
+
+                            if (rawStart) {
+                              const normalizedStart = String(rawStart).slice(0, 10);
+                              setSSOTGLStartDate(normalizedStart);
+                            } else {
+                              // Fallback: gunakan fiscal year start (behaviour lama)
+                              const periodEndDate = new Date(selectedPeriod.date);
+                              const fiscalYearStart = new Date(periodEndDate.getFullYear(), 0, 1); // Default Jan 1
+                              setSSOTGLStartDate(fiscalYearStart.toISOString().split('T')[0]);
+                            }
+
+                            // End date selalu pakai end_date / entry_date dari history
                             setSSOTGLEndDate(selectedPeriod.date);
                           }
                         }
