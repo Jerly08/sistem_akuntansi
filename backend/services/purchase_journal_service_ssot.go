@@ -189,7 +189,7 @@ func (s *PurchaseJournalServiceSSOT) CreatePurchaseJournal(purchase *models.Purc
 	
 	// Normalize payment method using domain constants to avoid mismatches
 	switch paymentMethod {
-	// Immediate cash payments
+	// Immediate cash payments -> always use default Kas (1101)
 	case strings.ToUpper(models.PurchasePaymentCash), "TUNAI", "CASH":
 		creditAccount, err = resolveByCode("1101") // Kas
 		if err != nil {
@@ -197,9 +197,26 @@ func (s *PurchaseJournalServiceSSOT) CreatePurchaseJournal(purchase *models.Purc
 		}
 	// Immediate bank-based payments (transfer & cheque)
 	case strings.ToUpper(models.PurchasePaymentTransfer), strings.ToUpper(models.PurchasePaymentCheck), "TRANSFER", "BANK":
-		creditAccount, err = resolveByCode("1102") // Bank
-		if err != nil {
-			return fmt.Errorf("bank account not found: %v", err)
+		// ✅ NEW LOGIC: gunakan GL account dari bank yang dipilih (CashBank.AccountID)
+		if purchase.BankAccountID != nil && *purchase.BankAccountID > 0 {
+			var cashBank models.CashBank
+			if err := dbToUse.First(&cashBank, *purchase.BankAccountID).Error; err == nil && cashBank.AccountID != 0 {
+				var bankAcc models.Account
+				if e2 := dbToUse.First(&bankAcc, cashBank.AccountID).Error; e2 == nil {
+					creditAccount = &bankAcc
+					log.Printf("🏦 [SSOT] Using linked bank GL account %s (%s) for Purchase #%d (CashBank: %s)", bankAcc.Code, bankAcc.Name, purchase.ID, cashBank.Name)
+				}
+			} else if err != nil {
+				log.Printf("⚠️ [SSOT] Failed to load CashBank ID %d for Purchase #%d: %v", *purchase.BankAccountID, purchase.ID, err)
+			}
+		}
+		// Fallback: gunakan akun BANK default 1102 bila tidak berhasil resolve dari CashBank
+		if creditAccount == nil {
+			creditAccount, err = resolveByCode("1102") // Bank
+			if err != nil {
+				return fmt.Errorf("bank account not found: %v", err)
+			}
+			log.Printf("🏦 [SSOT] Fallback to default bank account 1102 for Purchase #%d", purchase.ID)
 		}
 	// Credit purchases / payables
 	case strings.ToUpper(models.PurchasePaymentCredit), "KREDIT", "CREDIT", "HUTANG":

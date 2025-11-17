@@ -268,18 +268,69 @@ func (s *SalesJournalServiceSSOT) CreateSalesJournal(sale *models.Sale, tx *gorm
 		Description:  fmt.Sprintf("Penjualan - %s", sale.InvoiceNumber),
 	})
 
-	// 2. CREDIT side - Revenue
-	revenueAccount, err := resolveByCode("4101")
-	if err != nil {
-		return fmt.Errorf("revenue account not found: %v", err)
+	// 2. CREDIT side - Revenue per item based on RevenueAccountID
+	// ✅ FIX: Gunakan akun pendapatan yang dipilih di setiap SaleItem (revenue_account_id)
+	// sehingga hanya akun yang dipilih di COA yang bertambah.
+	if len(sale.SaleItems) == 0 {
+		// Safety: kalau SaleItems belum ter-load, coba preload dari DB
+		var saleWithItems models.Sale
+		if err := dbToUse.Preload("SaleItems").First(&saleWithItems, sale.ID).Error; err == nil {
+			_sale := saleWithItems // local copy to avoid shadowing pointer
+			sale = &_sale
+		} else {
+			log.Printf("⚠️ [SSOT] Failed to preload SaleItems for Sale #%d: %v", sale.ID, err)
+		}
 	}
 
-	lines = append(lines, SalesJournalLineRequest{
-		AccountID:    uint64(revenueAccount.ID),
-		DebitAmount:  decimal.Zero,
-		CreditAmount: decimal.NewFromFloat(sale.Subtotal),
-		Description:  fmt.Sprintf("Pendapatan Penjualan - %s", sale.InvoiceNumber),
-	})
+	// Kelompokkan total pendapatan per akun
+	revenueTotals := make(map[uint64]decimal.Decimal)
+	defaultRevenueAccID := uint64(0)
+
+	for _, item := range sale.SaleItems {
+		amount := decimal.NewFromFloat(item.LineTotal)
+		if amount.IsZero() {
+			continue
+		}
+
+		accID := uint64(item.RevenueAccountID)
+		if accID == 0 {
+			// Fallback: pakai akun pendapatan default (4101) jika item lama tidak punya RevenueAccountID
+			if defaultRevenueAccID == 0 {
+				defaultAcc, err := resolveByCode("4101")
+				if err != nil {
+					return fmt.Errorf("revenue account not found: %v", err)
+				}
+				defaultRevenueAccID = uint64(defaultAcc.ID)
+			}
+			accID = defaultRevenueAccID
+		}
+
+		revenueTotals[accID] = revenueTotals[accID].Add(amount)
+	}
+
+	// Jika tidak ada item (atau semua 0), fallback ke perilaku lama
+	if len(revenueTotals) == 0 {
+		defaultAcc, err := resolveByCode("4101")
+		if err != nil {
+			return fmt.Errorf("revenue account not found: %v", err)
+		}
+		lines = append(lines, SalesJournalLineRequest{
+			AccountID:    uint64(defaultAcc.ID),
+			DebitAmount:  decimal.Zero,
+			CreditAmount: decimal.NewFromFloat(sale.Subtotal),
+			Description:  fmt.Sprintf("Pendapatan Penjualan - %s", sale.InvoiceNumber),
+		})
+	} else {
+		for accID, amount := range revenueTotals {
+			lines = append(lines, SalesJournalLineRequest{
+				AccountID:    accID,
+				DebitAmount:  decimal.Zero,
+				CreditAmount: amount,
+				Description:  fmt.Sprintf("Pendapatan Penjualan - %s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 [Revenue] Credit account %d amount %.2f for Sale #%d", accID, amount.InexactFloat64(), sale.ID)
+		}
+	}
 
 	// 3. PPN if exists
 	if sale.PPN > 0 {

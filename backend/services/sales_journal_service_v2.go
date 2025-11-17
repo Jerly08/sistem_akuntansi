@@ -178,8 +178,47 @@ func (s *SalesJournalServiceV2) CreateSalesJournal(sale *models.Sale, tx *gorm.D
 	}
 
 	// CREDIT SIDE - Revenue dan PPN
-	// Revenue (4101) - Credit
-	if sale.Subtotal > 0 {
+	// ✅ FIX: Revenue per akun berdasarkan RevenueAccountID di SaleItem
+	if len(sale.SaleItems) == 0 {
+		// Safety: kalau SaleItems belum ter-load, coba preload dari DB
+		var saleWithItems models.Sale
+		if err := dbToUse.Preload("SaleItems").First(&saleWithItems, sale.ID).Error; err == nil {
+			// gunakan slice dari hasil preload
+			sale.SaleItems = saleWithItems.SaleItems
+		} else {
+			log.Printf("⚠️ Failed to preload SaleItems for Sale #%d: %v", sale.ID, err)
+		}
+	}
+
+	// Kelompokkan subtotal per akun pendapatan
+	revenueTotals := make(map[uint]float64)
+	var defaultRevenueAcc *models.Account
+
+	for _, item := range sale.SaleItems {
+		amount := item.LineTotal
+		if amount == 0 {
+			continue
+		}
+
+		accID := item.RevenueAccountID
+		if accID == 0 {
+			// Fallback: gunakan akun 4101 untuk data lama yang tidak punya RevenueAccountID
+			if defaultRevenueAcc == nil {
+				acc, err := resolveByCode("4101")
+				if err != nil {
+					log.Printf("⚠️ Missing default revenue account 4101: %v", err)
+					continue
+				}
+				defaultRevenueAcc = acc
+			}
+			accID = defaultRevenueAcc.ID
+		}
+
+		revenueTotals[accID] += amount
+	}
+
+	if len(revenueTotals) == 0 {
+		// Tidak ada grouping (mis. data sangat lama), fallback ke perilaku lama
 		if acc, err := resolveByCode("4101"); err == nil {
 			journalItems = append(journalItems, models.SimpleSSOTJournalItem{
 				JournalID:   ssotEntry.ID,
@@ -193,6 +232,26 @@ func (s *SalesJournalServiceV2) CreateSalesJournal(sale *models.Sale, tx *gorm.D
 			log.Printf("💰 Revenue: Credit to %s (%s) = %.2f", acc.Name, acc.Code, sale.Subtotal)
 		} else {
 			log.Printf("⚠️ Missing revenue account 4101: %v", err)
+		}
+	} else {
+		// Buat satu baris kredit per akun pendapatan
+		for accID, amount := range revenueTotals {
+			var acc models.Account
+			if err := dbToUse.First(&acc, accID).Error; err != nil {
+				log.Printf("⚠️ Failed to load revenue account %d: %v", accID, err)
+				continue
+			}
+
+			journalItems = append(journalItems, models.SimpleSSOTJournalItem{
+				JournalID:   ssotEntry.ID,
+				AccountID:   acc.ID,
+				AccountCode: acc.Code,
+				AccountName: acc.Name,
+				Debit:       0,
+				Credit:      amount,
+				Description: fmt.Sprintf("Sales revenue for Invoice #%s", sale.InvoiceNumber),
+			})
+			log.Printf("💰 Revenue: Credit to %s (%s) = %.2f", acc.Name, acc.Code, amount)
 		}
 	}
 
