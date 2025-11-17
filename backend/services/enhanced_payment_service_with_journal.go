@@ -25,9 +25,10 @@ type EnhancedPaymentServiceWithJournal struct {
 	statusValidator  *StatusValidationHelper // NEW: Konsistensi dengan SalesJournalServiceV2
 }
 
-// ExpensePaymentRequest represents a direct expense payment mapped from COA (no specific vendor/customer)
+// ExpensePaymentRequest represents a direct expense payment mapped from COA.
+// Contact must be explicitly selected (no more fallback to system contact).
 type ExpensePaymentRequest struct {
-	ContactID          uint      `json:"contact_id"`
+	ContactID          uint      `json:"contact_id" binding:"required"`
 	ExpenseAccountID   uint      `json:"expense_account_id" binding:"required"`
 	CashBankID         uint      `json:"cash_bank_id" binding:"required"`
 	Date               time.Time `json:"date" binding:"required"`
@@ -133,6 +134,9 @@ type PaymentProcessingSummary struct {
 // It also updates CashBank balance & history via applyCashBankMovement.
 func (eps *EnhancedPaymentServiceWithJournal) CreateExpensePayment(req *ExpensePaymentRequest) (*models.Payment, error) {
 	// Basic validation
+	if req.ContactID == 0 {
+		return nil, fmt.Errorf("contact ID is required for expense payments")
+	}
 	if req.Amount <= 0 {
 		return nil, fmt.Errorf("payment amount must be positive")
 	}
@@ -175,25 +179,18 @@ func (eps *EnhancedPaymentServiceWithJournal) CreateExpensePayment(req *ExpenseP
 			return fmt.Errorf("expense account not found: %w", err)
 		}
 
-		// Use provided contact when available; otherwise fall back to system contact (e.g. "Internal Expense").
-		// Follows the same pattern as TaxPaymentService which uses a default system contact.
-		const systemContactID uint = 1
-		contactID := systemContactID
-		if req.ContactID != 0 {
-			// Validate that the contact exists and is a VENDOR, since expense payments are only for vendors
-			contact, err := eps.contactRepo.GetByID(req.ContactID)
-			if err != nil {
-				return fmt.Errorf("contact not found: %w", err)
-			}
-			if strings.ToUpper(contact.Type) != "VENDOR" {
-				return fmt.Errorf("expense payments can only be linked to vendor contacts")
-			}
-			contactID = req.ContactID
+		// Load and validate contact; expense payments must be linked to a vendor contact.
+		contact, err := eps.contactRepo.GetByID(req.ContactID)
+		if err != nil {
+			return fmt.Errorf("contact not found: %w", err)
+		}
+		if strings.ToUpper(contact.Type) != "VENDOR" {
+			return fmt.Errorf("expense payments can only be linked to vendor contacts")
 		}
 
 		// Build payment model (cash out, treated similar to PAY prefix)
 		payment = &models.Payment{
-			ContactID:   contactID,
+			ContactID:   req.ContactID,
 			UserID:      req.UserID,
 			Date:        req.Date,
 			Amount:      req.Amount,

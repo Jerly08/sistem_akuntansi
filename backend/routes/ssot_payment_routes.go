@@ -70,12 +70,13 @@ func SetupSSOTPaymentRoutes(router *gin.RouterGroup, db *gorm.DB, jwtManager *mi
 		}
 		
 		// Tax Payment routes (PPN Masukan & Keluaran)
-		taxPayments := router.Group("/tax-payments")
-		taxPayments.Use(middleware.PaymentRateLimit()) // Apply rate limiting
-		if middleware.GlobalAuditLogger != nil {
-			taxPayments.Use(middleware.GlobalAuditLogger.PaymentAuditMiddleware()) // Apply audit logging
-		}
-		{
+			taxPayments := router.Group("/tax-payments")
+			taxPayments.Use(middleware.PaymentRateLimit())                    // Apply rate limiting
+			taxPayments.Use(periodValidationMiddleware.ValidateTransactionPeriod()) // Block PPN payments in closed periods
+			if middleware.GlobalAuditLogger != nil {
+				taxPayments.Use(middleware.GlobalAuditLogger.PaymentAuditMiddleware()) // Apply audit logging
+			}
+			{
 			// PPN Payment CRUD operations with journal integration
 			taxPayments.POST("/ppn", permissionMiddleware.CanCreate("payments"), taxPaymentController.CreatePPNPayment)
 			taxPayments.GET("/ppn", permissionMiddleware.CanView("payments"), taxPaymentController.GetPPNPayments)
