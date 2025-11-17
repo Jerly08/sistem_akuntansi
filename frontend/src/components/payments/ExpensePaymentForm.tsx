@@ -59,7 +59,7 @@ interface ExpensePaymentFormProps {
 }
 
 interface ExpensePaymentFormData {
-  contact_id?: number;
+  contact_id: number;
   expense_account_id: number;
   cash_bank_id: number;
   date: string;
@@ -204,11 +204,22 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
   };
 
   const onSubmit = async (data: ExpensePaymentFormData) => {
+    // Validate contact selection
+    if (!data.contact_id || data.contact_id === 0) {
+      toast({
+        title: 'Contact Required',
+        description: 'Please select a contact for expense payment',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       // Create expense payment via unified PaymentService so it appears in Payment Management
       await paymentService.createExpensePayment({
-        contact_id: data.contact_id ? Number(data.contact_id) : undefined,
+        contact_id: Number(data.contact_id),
         expense_account_id: Number(data.expense_account_id),
         cash_bank_id: Number(data.cash_bank_id),
         date: data.date,
@@ -280,12 +291,12 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
                 </Box>
               ) : (
                 <>
-                  {/* Contact (optional) */}
-                  <FormControl isInvalid={!!errors.contact_id}>
+                  {/* Contact */}
+                  <FormControl isInvalid={!!errors.contact_id} isRequired>
                     <FormLabel color={labelColor}>
                       <HStack spacing={1}>
                         <Icon as={FiCreditCard} />
-                        <Text>Contact (optional)</Text>
+                        <Text>Contact</Text>
                         <Tooltip label="Select the vendor or contact this expense is paid to">
                           <Icon as={FiInfo} boxSize={3} color={textColor} />
                         </Tooltip>
@@ -294,10 +305,11 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
                     <Controller
                       name="contact_id"
                       control={control}
+                      rules={{ required: 'Please select a contact' }}
                       render={({ field }) => (
                         <Select
                           {...field}
-                          placeholder="Select contact (optional)"
+                          placeholder="Select contact"
                           borderColor={borderColor}
                         >
                           {contacts.map(contact => (
@@ -309,8 +321,9 @@ const ExpensePaymentForm: React.FC<ExpensePaymentFormProps> = ({
                       )}
                     />
                     <FormHelperText color={textColor}>
-                      Optional: choose vendor/contact to track who this expense is paid to
+                      Choose vendor/contact to track who this expense is paid to
                     </FormHelperText>
+                    <FormErrorMessage>{errors.contact_id?.message}</FormErrorMessage>
                   </FormControl>
 
                   {/* Expense/Liability Account Selection */}
