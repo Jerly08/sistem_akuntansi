@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -37,8 +39,8 @@ func (pvm *PeriodValidationMiddleware) ValidateTransactionPeriod() gin.HandlerFu
 			return
 		}
 
-		// Restore body for next handlers
-		c.Request.Body = &bodyReader{data: bodyBytes}
+		// Restore body for next handlers so downstream binders can read it again
+		c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 		// Parse body to check for date fields
 		var requestBody map[string]interface{}
@@ -162,21 +164,3 @@ func parseDate(dateStr string) (time.Time, error) {
 	}
 }
 
-// bodyReader implements io.ReadCloser for restoring request body
-type bodyReader struct {
-	data   []byte
-	offset int
-}
-
-func (r *bodyReader) Read(p []byte) (n int, err error) {
-	if r.offset >= len(r.data) {
-		return 0, nil
-	}
-	n = copy(p, r.data[r.offset:])
-	r.offset += n
-	return n, nil
-}
-
-func (r *bodyReader) Close() error {
-	return nil
-}
