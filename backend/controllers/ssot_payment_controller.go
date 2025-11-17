@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"strings"
 
 	"app-sistem-akuntansi/repositories"
 	"app-sistem-akuntansi/services"
@@ -96,6 +97,16 @@ func (ctrl *SSOTPaymentController) CreatePayablePayment(c *gin.Context) {
 func (ctrl *SSOTPaymentController) CreateExpensePayment(c *gin.Context) {
 	var req services.ExpensePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		// Handle common validation error when contact is not provided
+		if strings.Contains(err.Error(), "ContactID") && strings.Contains(err.Error(), "required") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "Please select a contact for expense payment",
+				"code":    "CONTACT_REQUIRED",
+				"details": "contact_id is required",
+			})
+			return
+		}
+
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "Invalid request format",
 			"details": err.Error(),
