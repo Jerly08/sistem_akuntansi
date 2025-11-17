@@ -165,8 +165,10 @@ class PaymentService {
         })
       };
       
+      // Use a more generous timeout specifically for payment creation,
+      // because backend payment + journal processing can legitimately take longer.
       const response = await api.post(API_ENDPOINTS.PAYMENTS.SSOT.RECEIVABLE, ssotData, {
-        timeout: 30000 // 30 seconds timeout for payment operations
+        timeout: 60000 // 60 seconds timeout for receivable payment operations
       });
       // SSOT returns data in response.data.data format
       return response.data.data?.payment || response.data;
@@ -180,6 +182,11 @@ class PaymentService {
         responseData: error.response?.data
       });
       
+      // Explicit handling for network timeouts so the UI can show a clearer message
+      if (error.code === 'ECONNABORTED' || (typeof error.message === 'string' && error.message.toLowerCase().includes('timeout'))) {
+        throw new Error('Permintaan pembuatan pembayaran terlalu lama (timeout). Cek koneksi / status server, lalu pastikan pembayaran belum tercatat sebelum mencoba lagi.');
+      }
+
       // Check if it's an authentication error from API interceptor
       if (error.isAuthError || error.code === 'AUTH_SESSION_EXPIRED' || error.message?.includes('Session expired')) {
         console.log('PaymentService - Detected auth error, throwing auth error');
@@ -227,7 +234,7 @@ class PaymentService {
       };
       
       const response = await api.post(API_ENDPOINTS.PAYMENTS.SSOT.PAYABLE, ssotData, {
-        timeout: 30000 // 30 seconds timeout for payment operations
+        timeout: 60000 // 60 seconds timeout for payable payment operations
       });
       // SSOT returns data in response.data.data format
       return response.data.data?.payment || response.data;
@@ -241,6 +248,11 @@ class PaymentService {
         responseData: error.response?.data
       });
       
+      // Explicit handling for network timeouts so the UI can show a clearer message
+      if (error.code === 'ECONNABORTED' || (typeof error.message === 'string' && error.message.toLowerCase().includes('timeout'))) {
+        throw new Error('Permintaan pembayaran hutang terlalu lama (timeout). Cek koneksi / status server, lalu pastikan pembayaran belum tercatat sebelum mencoba lagi.');
+      }
+
       // Check if it's an authentication error from API interceptor
       if (error.isAuthError || error.code === 'AUTH_SESSION_EXPIRED' || error.message?.includes('Session expired')) {
         console.log('PaymentService - Detected auth error, throwing auth error');
@@ -641,12 +653,17 @@ class PaymentService {
       };
       
       const response = await api.post(API_ENDPOINTS.PAYMENTS.ENHANCED_WITH_JOURNAL, formattedData, {
-        timeout: 30000 // 30 seconds timeout for journal operations
+        timeout: 60000 // 60 seconds timeout for journal-heavy payment operations
       });
       return response.data.data;
     } catch (error: any) {
       console.error('PaymentService - Error creating payment with journal:', error);
       
+      // Explicit handling for network timeouts so the UI can show a clearer message
+      if (error.code === 'ECONNABORTED' || (typeof error.message === 'string' && error.message.toLowerCase().includes('timeout'))) {
+        throw new Error('Proses pembayaran + jurnal terlalu lama (timeout). Sistem mungkin sedang sibuk, silakan cek kembali status pembayaran sebelum mengulang.');
+      }
+
       if (error.response?.data?.error) {
         throw new Error(error.response.data.error);
       } else if (error.response?.data?.details) {
@@ -772,7 +789,7 @@ class PaymentService {
                       API_ENDPOINTS.PAYMENTS.CREATE;
       
       const response = await api.post(endpoint, formattedData, {
-        timeout: 30000 // 30 seconds timeout for payment operations
+        timeout: 60000 // 60 seconds timeout for expense payment operations
       });
       
       // Handle response format variations
@@ -780,6 +797,11 @@ class PaymentService {
     } catch (error: any) {
       console.error('PaymentService - Error creating expense payment:', error);
       
+      // Explicit handling for network timeouts so the UI can show a clearer message
+      if (error.code === 'ECONNABORTED' || (typeof error.message === 'string' && error.message.toLowerCase().includes('timeout'))) {
+        throw new Error('Permintaan pembayaran beban terlalu lama (timeout). Cek koneksi / status server, lalu pastikan transaksi belum tercatat sebelum mencoba lagi.');
+      }
+
       // Check for authentication errors
       if (error.isAuthError || error.code === 'AUTH_SESSION_EXPIRED' || error.message?.includes('Session expired')) {
         const authError = new Error('Session expired. Please login again.');

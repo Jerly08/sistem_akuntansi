@@ -29,6 +29,39 @@ class PeriodClosingService {
   }
 
   /**
+   * Quick check apakah sebuah tanggal sudah masuk periode yang ditutup.
+   * Digunakan untuk validasi form (misalnya payment) sebelum kirim request berat.
+   */
+  async isDateInClosedPeriod(date: string): Promise<boolean> {
+    try {
+      if (!date) return false;
+
+      const response = await fetch(`${API_ENDPOINTS.PERIOD_CLOSING.CHECK_DATE}?date=${date}`, {
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        console.warn('PeriodClosingService.isDateInClosedPeriod - non OK response', response.status);
+        // Jangan mem‑block transaksi hanya karena service pengecekan gagal;
+        // backend masih punya middleware ValidateTransactionPeriod sebagai pengaman terakhir.
+        return false;
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        console.warn('PeriodClosingService.isDateInClosedPeriod - unsuccessful result', result);
+        return false;
+      }
+
+      return Boolean(result.is_closed);
+    } catch (error) {
+      console.error('PeriodClosingService.isDateInClosedPeriod - error', error);
+      // Fail-open: biarkan backend yang menolak jika memang tertutup.
+      return false;
+    }
+  }
+
+  /**
    * Get all closed periods for filtering
    */
   async getClosedPeriodsForFilter(): Promise<PeriodFilterOption[]> {

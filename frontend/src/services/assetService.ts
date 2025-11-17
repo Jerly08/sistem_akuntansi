@@ -45,6 +45,11 @@ export interface AssetCreateRequest {
   condition?: string;
   asset_account_id?: number;
   depreciation_account_id?: number;
+  // Backend AssetCreateRequest requires these additional fields (user_id required)
+  user_id?: number;
+  payment_method?: string;
+  payment_account_id?: number;
+  credit_account_id?: number;
 }
 
 export interface AssetUpdateRequest {

@@ -92,43 +92,68 @@ func (s *PurchaseJournalServiceSSOT) CreatePurchaseJournal(purchase *models.Purc
 		subtotal += item.TotalPrice
 	}
 
-	// 1. DEBIT SIDE - Inventory/Expense accounts for each item
+	// 1. DEBIT SIDE - Inventory/Expense/Fixed Asset accounts for each item
 	for _, item := range purchase.PurchaseItems {
 		var debitAccount *models.Account
-		var err error
 
-		// Treat physical goods (non-service products) as inventory purchases
-		isInventoryItem := item.Product.ID != 0 && !item.Product.IsService
-
-		if isInventoryItem {
-			// For stock items, ALWAYS use configured inventory account so purchase debits
-			// match the same account that COGS will credit later (keeps 1301 in sync)
-			debitAccount, err = s.taxAccountHelper.GetInventoryAccount(dbToUse)
-			if err != nil {
-				return fmt.Errorf("inventory account not found: %v", err)
+		// ✅ FIX: Jika user memilih akun Fixed Asset (mis. TRUK 1509) di Purchase Item,
+		// gunakan akun tersebut langsung sebagai debit, meskipun produknya bertipe persediaan.
+		// Ini memastikan saldo aset tetap (COA) bertambah sesuai harapan user.
+		if item.ExpenseAccountID != 0 {
+			var configuredAcc models.Account
+			if err := dbToUse.First(&configuredAcc, item.ExpenseAccountID).Error; err == nil {
+				if strings.ToUpper(configuredAcc.Category) == strings.ToUpper(models.CategoryFixedAsset) {
+					debitAccount = &configuredAcc
+					log.Printf("🏗️ [SSOT] Fixed asset purchase detected for product '%s' (item %d); debiting fixed asset account %s (%s)",
+						item.Product.Name, item.ID, configuredAcc.Code, configuredAcc.Name)
+				}
+			} else {
+				log.Printf("⚠️ [SSOT] Failed to load configured expense account %d for item %d: %v",
+					item.ExpenseAccountID, item.ID, err)
 			}
+		}
 
-			// If an expense account was configured for an inventory product, ignore it but log for visibility
-			if item.ExpenseAccountID != 0 {
-				log.Printf("⚠️ [SSOT] Inventory product '%s' (item %d) has ExpenseAccountID=%d configured; ignoring it and using inventory account %s (%s) to keep COGS in sync",
-					item.Product.Name, item.ID, item.ExpenseAccountID, debitAccount.Code, debitAccount.Name)
-			}
-		} else {
-			// Non-stock / service purchases: respect explicit expense account when provided
-			if item.ExpenseAccountID != 0 {
-				if err := dbToUse.First(&debitAccount, item.ExpenseAccountID).Error; err != nil {
-					log.Printf("⚠️ Expense account ID %d not found for item %d, falling back to inventory account", 
-						item.ExpenseAccountID, item.ID)
-					debitAccount, err = s.taxAccountHelper.GetInventoryAccount(dbToUse)
+		// Jika bukan fixed asset, pakai aturan persediaan/beban seperti biasa
+		if debitAccount == nil {
+			// Treat physical goods (non-service products) as inventory purchases
+			isInventoryItem := item.Product.ID != 0 && !item.Product.IsService
+
+			if isInventoryItem {
+				// For stock items, ALWAYS use configured inventory account so purchase debits
+				// match the same account that COGS will credit later (keeps 1301 in sync)
+				invAcc, err := s.taxAccountHelper.GetInventoryAccount(dbToUse)
+				if err != nil {
+					return fmt.Errorf("inventory account not found: %v", err)
+				}
+				debitAccount = invAcc
+
+				// If an expense account was configured for an inventory product, ignore it but log for visibility
+				if item.ExpenseAccountID != 0 {
+					log.Printf("⚠️ [SSOT] Inventory product '%s' (item %d) has ExpenseAccountID=%d configured; ignoring it and using inventory account %s (%s) to keep COGS in sync",
+						item.Product.Name, item.ID, item.ExpenseAccountID, invAcc.Code, invAcc.Name)
+				}
+			} else {
+				// Non-stock / service purchases: respect explicit expense account when provided
+				if item.ExpenseAccountID != 0 {
+					var expenseAcc models.Account
+					if err := dbToUse.First(&expenseAcc, item.ExpenseAccountID).Error; err != nil {
+						log.Printf("⚠️ Expense account ID %d not found for item %d, falling back to inventory account",
+							item.ExpenseAccountID, item.ID)
+						invAcc, err := s.taxAccountHelper.GetInventoryAccount(dbToUse)
+						if err != nil {
+							return fmt.Errorf("inventory account not found: %v", err)
+						}
+						debitAccount = invAcc
+					} else {
+						debitAccount = &expenseAcc
+					}
+				} else {
+					// Default to inventory account when no specific expense account configured
+					invAcc, err := s.taxAccountHelper.GetInventoryAccount(dbToUse)
 					if err != nil {
 						return fmt.Errorf("inventory account not found: %v", err)
 					}
-				}
-			} else {
-				// Default to inventory account when no specific expense account configured
-				debitAccount, err = s.taxAccountHelper.GetInventoryAccount(dbToUse)
-				if err != nil {
-					return fmt.Errorf("inventory account not found: %v", err)
+					debitAccount = invAcc
 				}
 			}
 		}

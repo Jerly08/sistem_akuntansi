@@ -61,6 +61,7 @@ import paymentService, {
 } from '@/services/paymentService';
 import { searchableSelectService } from '@/services/searchableSelectService';
 import cashbankService, { CashBank } from '@/services/cashbankService';
+import periodClosingService from '@/services/periodClosingService';
 import AuthExpiredModal from '@/components/auth/AuthExpiredModal';
 import CurrencyInput from '@/components/common/CurrencyInput';
 import { useAuth } from '@/contexts/AuthContext';
@@ -544,6 +545,23 @@ const AdvancedPaymentForm: React.FC<AdvancedPaymentFormProps> = ({
 
   const onSubmit = async (data: PaymentFormData) => {
     try {
+      // ===== Period closing validation =====
+      // Cegah pembuatan payment pada tanggal yang sudah ditutup buku.
+      if (data.date) {
+        const isClosed = await periodClosingService.isDateInClosedPeriod(data.date);
+        if (isClosed) {
+          toast({
+            title: 'Periode Akuntansi Sudah Ditutup',
+            description:
+              'Tidak dapat membuat pembayaran pada tanggal ini karena periode akuntansi sudah ditutup. Gunakan tanggal di periode yang masih terbuka.',
+            status: 'error',
+            duration: 8000,
+            isClosable: true,
+          });
+          return;
+        }
+      }
+
       setLoading(true);
 
       const paymentData: PaymentCreateRequest = {

@@ -955,6 +955,7 @@ const PurchasesPage: React.FC = () => {
   useEffect(() => {
     fetchPurchases();
     fetchVendors(); // Load vendors for filter
+    fetchBankAccounts(); // Load bank/cash accounts for view & forms
   }, [token]);
 
   // Handle filter changes (immediate for non-search filters)
@@ -1203,9 +1204,25 @@ const PurchasesPage: React.FC = () => {
   // Handle create receipt for approved purchases
   const handleCreateReceipt = async (purchase: Purchase) => {
     try {
-      // Fetch detailed purchase data to get items
+      // Fetch detailed purchase data to get items and latest status from backend
       const detailResponse = await purchaseService.getById(purchase.id);
       setSelectedPurchase(detailResponse);
+
+      // Safety guard: backend hanya mengizinkan status APPROVED, PENDING, atau PAID
+      const serverStatus = (detailResponse.status || '').toUpperCase();
+      const allowedStatuses = ['APPROVED', 'PENDING', 'PAID'];
+      if (!allowedStatuses.includes(serverStatus)) {
+        toast({
+          title: 'Tidak dapat membuat receipt',
+          description:
+            `Purchase ini belum boleh diterima di server (status sekarang: ${serverStatus || 'UNKNOWN'}). ` +
+            'Pastikan purchase sudah APPROVED/PAID lalu refresh data.',
+          status: 'warning',
+          duration: 5000,
+          isClosable: true,
+        });
+        return;
+      }
 
       // Fetch existing receipts to compute remaining qty per item
       const receiptsRes = await fetch(`${API_ENDPOINTS.PURCHASES_RECEIPTS_BY_ID(purchase.id)}`, {
@@ -1315,13 +1332,21 @@ const PurchasesPage: React.FC = () => {
       // Filter setelah validasi agar minimal ada 1 item
       const filteredItems = receiptFormData.receipt_items
         .filter(item => (item.quantity_received || 0) > 0)
-        .map(item => ({
-          purchase_item_id: item.purchase_item_id,
-          quantity_received: Math.min(item.quantity_received, remainingQtyMap[item.purchase_item_id] ?? item.quantity_received),
-          condition: item.condition,
-          notes: item.notes,
-          capitalize_asset: !!item.create_asset,
-        }));
+        .map(item => {
+          const maxRemaining = remainingQtyMap[item.purchase_item_id] ?? item.quantity_received;
+          const safeQty = Math.min(item.quantity_received, maxRemaining);
+
+          return {
+            purchase_item_id: item.purchase_item_id,
+            // Ensure backend validation (min=1) is satisfied; items that would
+            // become 0 are already filtered out by the previous .filter.
+            quantity_received: safeQty <= 0 ? 0 : safeQty,
+            condition: item.condition,
+            notes: item.notes,
+            // NOTE: Do NOT send asset-specific flags here to keep API payload compatible.
+            // Asset creation is handled separately via assetService after receipt is successfully created.
+          };
+        });
 
       if (filteredItems.length === 0) {
         toast({
@@ -1353,12 +1378,52 @@ const PurchasesPage: React.FC = () => {
         body: JSON.stringify(payload),
       });
 
+      // Robust error handling: backend may respond with plain text (e.g. "Internal Server Error")
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create receipt');
+        let errorMessage = 'Failed to create receipt';
+
+        try {
+          const contentType = response.headers.get('content-type') || '';
+
+          if (contentType.includes('application/json')) {
+            const errorData = await response.json();
+            // Prefer specific backend fields, but fall back to any useful details
+            errorMessage =
+              errorData?.error ||
+              errorData?.message ||
+              errorData?.details ||
+              errorMessage;
+
+            console.error('Create receipt failed with JSON error:', {
+              status: response.status,
+              statusText: response.statusText,
+              errorData,
+            });
+          } else {
+            const errorText = await response.text();
+            if (errorText) {
+              errorMessage = errorText;
+            }
+            console.error('Create receipt failed with non-JSON response:', {
+              status: response.status,
+              statusText: response.statusText,
+              body: errorText,
+            });
+          }
+        } catch (parseError) {
+          console.error('Failed to parse receipt error response:', parseError);
+        }
+
+        // Include HTTP status in the thrown error message for easier debugging
+        throw new Error(`${errorMessage} (HTTP ${response.status} ${response.statusText})`);
       }
 
-      const receiptData = await response.json();
+      let receiptData: any = {};
+      try {
+        receiptData = await response.json();
+      } catch (parseOkError) {
+        console.error('Failed to parse receipt success response as JSON:', parseOkError);
+      }
       
       // Normalize receipt number from API response shape
       const receiptNumber: string = receiptData?.receipt?.receipt_number || receiptData?.receipt_number || 'N/A';
@@ -1940,15 +2005,28 @@ const PurchasesPage: React.FC = () => {
         const purchasePrice = purchaseItem.unit_price * receiptItem.quantity_received;
         const salvageValue = purchasePrice * (receiptItem.asset_salvage_percentage || 10) / 100;
         
-        // Create minimal asset data - let backend handle complex logic
+        // Create asset payload aligned with AssetCreateRequest; let backend handle journals
         const assetName = `${purchaseItem.product?.name || 'Asset'} (${purchase.code})`;
+
+        // Parse user ID from auth context (backend requires user_id)
+        let userIdNum: number | undefined = undefined;
+        try {
+          if (user?.id) {
+            const parsed = parseInt(user.id, 10);
+            if (!Number.isNaN(parsed) && parsed > 0) {
+              userIdNum = parsed;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not parse user.id for asset creation', user?.id, e);
+        }
+
         const assetData = {
           // Core Asset Info
           name: assetName,
           category: receiptItem.asset_category || 'Equipment',
-          serial_number: receiptItem.serial_number || '',
+          serial_number: receiptItem.serial_number || undefined,
           condition: receiptItem.condition || 'Good',
-          status: 'ACTIVE',
           is_active: true,
           
           // Financial Info
@@ -1958,19 +2036,16 @@ const PurchasesPage: React.FC = () => {
           useful_life: receiptItem.asset_useful_life || 5,
           depreciation_method: 'STRAIGHT_LINE',
           
-          // References
-          vendor_id: purchase.vendor_id,
-          purchase_reference: purchase.code,
-          receipt_reference: receiptNumber,
+          // Notes (include references & vendor info here instead of extra fields)
+          notes: `Auto-created from Purchase ${purchase.code}, Receipt ${receiptNumber}. Vendor: ${purchase.vendor?.name || 'N/A'}. ${receiptItem.notes || ''}`,
           
-          // Notes
-          notes: `Auto-created from Purchase ${purchase.code}, Receipt ${receiptNumber}. ${receiptItem.notes || ''}`,
-          
-          // MINIMAL ACCOUNTING DATA - Let backend use defaults
-          payment_method: 'CREDIT', // Simplify to avoid account ID issues
-          
-          // User
-          user_id: 1
+          // Accounting links (optional, backend may fall back to defaults)
+          asset_account_id: accountIds.assetAccountId,
+          depreciation_account_id: accountIds.depreciationAccountId,
+
+          // Backend-required context
+          user_id: userIdNum,
+          payment_method: 'CREDIT',
         };
         
         console.log('📋 Asset data prepared:', assetData);
@@ -3255,8 +3330,18 @@ const handleCreate = async () => {
                           <FormControl>
                             <FormLabel fontSize="sm">Bank Account</FormLabel>
                             <Text fontWeight="medium">
-                              {selectedPurchase.bank_account?.name || 'Unknown Account'}
-                              {selectedPurchase.bank_account?.code && ` (${selectedPurchase.bank_account.code})`}
+                              {(() => {
+                                // Prefer relation from backend if available
+                                const relatedAccount: any = (selectedPurchase as any).bank_account;
+                                const accountFromList = bankAccounts.find(
+                                  (account) => account.id === selectedPurchase.bank_account_id
+                                );
+                                const name = relatedAccount?.name || accountFromList?.name;
+                                const code = relatedAccount?.code || accountFromList?.code;
+                                if (!name && !code) return 'Unknown Account';
+                                if (name && code) return `${name} (${code})`;
+                                return name || code || 'Unknown Account';
+                              })()}
                             </Text>
                           </FormControl>
                         )}

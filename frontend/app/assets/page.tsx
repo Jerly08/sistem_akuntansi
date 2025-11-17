@@ -996,7 +996,7 @@ const AssetsPage = () => {
   };
 
   return (
-<SimpleLayout allowedRoles={['admin', 'finance', 'director', 'employee']}>
+<SimpleLayout allowedRoles={['admin', 'finance', 'inventory_manager', 'director', 'employee']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Box>

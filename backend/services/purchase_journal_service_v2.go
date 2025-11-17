@@ -94,39 +94,58 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 
 	// DEBIT SIDE - Inventory/Expense accounts and PPN Masukan
 	
-	// 1. Debit Inventory/Expense accounts for each item
+	// 1. Debit Inventory/Expense/Fixed Asset accounts for each item
 	for _, item := range purchase.PurchaseItems {
 		var acc models.Account
+		isInventoryItem := false
 
-		// Treat physical goods (non-service products) as inventory purchases so legacy
-		// journals stay consistent with COGS postings (which always credit inventory)
-		isInventoryItem := item.Product.ID != 0 && !item.Product.IsService
-
-		if isInventoryItem {
-			// Always use inventory account 1301 for stock items
-			if invAcc, err := resolveByCode("1301"); err == nil {
-				acc = *invAcc
-				if item.ExpenseAccountID != 0 {
-					log.Printf("⚠️ Inventory product '%s' (item %d) has ExpenseAccountID=%d configured; ignoring it and using inventory account %s (%s) for legacy journal",
-						item.Product.Name, item.ID, item.ExpenseAccountID, acc.Code, acc.Name)
+		// ✅ FIX: Jika ExpenseAccountID mengarah ke akun Fixed Asset (kategori FIXED_ASSET),
+		// gunakan akun tersebut langsung sebagai debit sehingga saldo aset tetap (mis. TRUK) bertambah.
+		if item.ExpenseAccountID != 0 {
+			var configuredAcc models.Account
+			if err := dbToUse.First(&configuredAcc, item.ExpenseAccountID).Error; err == nil {
+				if strings.ToUpper(configuredAcc.Category) == strings.ToUpper(models.CategoryFixedAsset) {
+					acc = configuredAcc
+					log.Printf("🏗️ Fixed asset purchase detected for product '%s' (item %d); debiting fixed asset account %s (%s)",
+						item.Product.Name, item.ID, acc.Code, acc.Name)
 				}
 			} else {
-				log.Printf("⚠️ Missing inventory account 1301: %v", err)
-				continue
+				log.Printf("⚠️ Failed to load configured expense account %d for item %d: %v", item.ExpenseAccountID, item.ID, err)
 			}
-		} else if item.ExpenseAccountID != 0 {
-			// Non-stock / service purchases: respect explicit expense account when provided
-			if err := dbToUse.First(&acc, item.ExpenseAccountID).Error; err != nil {
-				log.Printf("⚠️ Failed to load expense account %d: %v", item.ExpenseAccountID, err)
-				continue
-			}
-		} else {
-			// Fallback: use inventory account when nothing specified
-			if invAcc, err := resolveByCode("1301"); err == nil {
-				acc = *invAcc
+		}
+
+		// Jika belum ter-resolve sebagai fixed asset, pakai aturan lama inventory/expense
+		if acc.ID == 0 {
+			// Treat physical goods (non-service products) as inventory purchases so legacy
+			// journals stay consistent with COGS postings (which always credit inventory)
+			isInventoryItem = item.Product.ID != 0 && !item.Product.IsService
+
+			if isInventoryItem {
+				// Always use inventory account 1301 for stock items
+				if invAcc, err := resolveByCode("1301"); err == nil {
+					acc = *invAcc
+					if item.ExpenseAccountID != 0 {
+						log.Printf("⚠️ Inventory product '%s' (item %d) has ExpenseAccountID=%d configured; ignoring it and using inventory account %s (%s) for legacy journal",
+							item.Product.Name, item.ID, item.ExpenseAccountID, acc.Code, acc.Name)
+					}
+				} else {
+					log.Printf("⚠️ Missing inventory account 1301: %v", err)
+					continue
+				}
+			} else if item.ExpenseAccountID != 0 {
+				// Non-stock / service purchases: respect explicit expense account when provided
+				if err := dbToUse.First(&acc, item.ExpenseAccountID).Error; err != nil {
+					log.Printf("⚠️ Failed to load expense account %d: %v", item.ExpenseAccountID, err)
+					continue
+				}
 			} else {
-				log.Printf("⚠️ Missing inventory account 1301: %v", err)
-				continue
+				// Fallback: use inventory account when nothing specified
+				if invAcc, err := resolveByCode("1301"); err == nil {
+					acc = *invAcc
+				} else {
+					log.Printf("⚠️ Missing inventory account 1301: %v", err)
+					continue
+				}
 			}
 		}
 
@@ -143,7 +162,7 @@ func (s *PurchaseJournalServiceV2) CreatePurchaseJournal(purchase *models.Purcha
 		if isInventoryItem {
 			log.Printf("📦 Inventory: Debit to %s (%s) = %.2f", acc.Name, acc.Code, item.TotalPrice)
 		} else {
-			log.Printf("📋 Expense: Debit to %s (%s) = %.2f", acc.Name, acc.Code, item.TotalPrice)
+			log.Printf("📋 Expense/Asset: Debit to %s (%s) = %.2f", acc.Name, acc.Code, item.TotalPrice)
 		}
 	}
 
