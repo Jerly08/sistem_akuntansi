@@ -115,7 +115,7 @@ export function validateEnvironmentVariables(): {
   // Build configuration object
   const config: EnvironmentConfig = {
     api: {
-      baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+      baseURL: process.env.NEXT_PUBLIC_API_URL || '',
       timeout: Number(process.env.API_TIMEOUT) || (nodeEnv === 'production' ? 15000 : 10000),
       retries: Number(process.env.API_RETRIES) || (nodeEnv === 'production' ? 3 : 1),
       validateEndpoints: process.env.VALIDATE_ENDPOINTS !== 'false'

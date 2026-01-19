@@ -1,8 +1,5 @@
-import { API_ENDPOINTS, API_V1_BASE } from '@/config/api';
+import { API_ENDPOINTS, API_V1_BASE, API_BASE_URL } from '@/config/api';
 import { getAuthHeaders } from '@/utils/authTokenUtils';
-
-// Base URL for API calls
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 // Types for SSOT Profit Loss Report
 export interface SSOTProfitLossData {

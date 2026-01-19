@@ -1,0 +1,54 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+*_test.go
+test/
+tests/
+
+# Debug scripts (not needed in production)
+debug_scripts/
+scripts_temp/
+scripts_fixes/
+
+# Temporary files
+*.log
+*.tmp
+*.pdf
+*.txt
+token.txt
+
+# Build artifacts
+*.exe
+temp_test_build
+
+# Documentation (optional - remove if you need swagger docs)
+# docs/
+
+# Environment files
+.env
+.env.local
+.env.production
+
+# SQL scripts (migrations are handled separately)
+*.sql
+
+# PowerShell scripts
+*.ps1
+*.bat
+*.sh
+
+# Backup files
+*.backup*
+backup_*

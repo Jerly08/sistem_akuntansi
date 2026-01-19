@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: akuntansi_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-sistem_akuntansi}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-sistem_akuntansi}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - akuntansi_network
+
+  # Backend API (Go)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: akuntansi_backend
+    restart: unless-stopped
+    environment:
+      # Database
+      DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@db:5432/${DB_NAME:-sistem_akuntansi}?sslmode=disable
+      
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-your-access-secret-key}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-refresh-secret-key}
+      
+      # Server
+      SERVER_PORT: 8080
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      
+      # CORS - Allow frontend origin
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      
+      # Other configs
+      SKIP_BALANCE_RESET: ${SKIP_BALANCE_RESET:-false}
+      ENABLE_LEGACY_PAYMENT_JOURNALS: ${ENABLE_LEGACY_PAYMENT_JOURNALS:-true}
+      ENABLE_SSOT_PAYMENT_JOURNALS: ${ENABLE_SSOT_PAYMENT_JOURNALS:-true}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - akuntansi_network
+
+  # Frontend (Next.js)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: akuntansi_frontend
+    restart: unless-stopped
+    environment:
+      # API URL - points to backend service
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8080}
+      
+      # Node environment
+      NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    networks:
+      - akuntansi_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  akuntansi_network:
+    driver: bridge

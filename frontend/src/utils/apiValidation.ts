@@ -76,10 +76,19 @@ function extractEndpointURLs(obj: any, prefix: string = ''): string[] {
  * Get base URL based on environment
  */
 function getBaseURL(): string {
-  if (process.env.NODE_ENV === 'production') {
-    return process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || '';
+  // Always prefer environment variable
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || process.env.API_URL;
+  if (envUrl) {
+    return envUrl;
   }
-  return 'http://localhost:8080';
+  
+  // Fallback for development only
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:8080';
+  }
+  
+  // In production without env var, use empty string (relative URLs via Next.js proxy)
+  return '';
 }
 
 /**
