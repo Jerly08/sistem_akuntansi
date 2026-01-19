@@ -23,6 +23,7 @@ import {
 } from 'react-icons/fi';
 import { Account } from '@/types/account';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import accountService from '@/services/accountService';
 
 interface AccountTreeViewProps {
@@ -54,6 +55,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   showBalance = true,
 }) => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const isAdmin = user?.role?.toLowerCase() === 'admin';
   const { isOpen, onToggle } = useDisclosure();
   const hasChildren = account.children && account.children.length > 0;
@@ -118,19 +120,19 @@ const TreeNode: React.FC<TreeNodeProps> = ({
               size="sm"
               variant="subtle"
             >
-              {accountService.getAccountTypeLabel(account.type, true)}
+              {t(`accounts.types.${account.type.toLowerCase()}`)}
             </Badge>
 
             {!account.is_active && (
               <Badge colorScheme="gray" size="sm">
-                Inactive
+                {t('accounts.inactive')}
               </Badge>
             )}
             
             {/* Show child count for parent accounts */}
             {account.is_header && account.child_count > 0 && (
               <Badge colorScheme="blue" size="sm" variant="solid">
-                {account.child_count} child{account.child_count !== 1 ? 'ren' : ''}
+                {account.child_count} {account.child_count !== 1 ? t('accounts.children') : t('accounts.child')}
               </Badge>
             )}
           </HStack>
@@ -158,7 +160,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                   onClick={handleEdit}
                   isDisabled={!account.is_active}
                 >
-                  Edit
+                  {t('common.edit')}
                 </Button>
                 <Button
                   size="xs"
@@ -168,7 +170,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                   onClick={handleDelete}
                   isDisabled={!account.is_active || hasChildren}
                 >
-                  Delete
+                  {t('common.delete')}
                 </Button>
               </HStack>
             )}
@@ -183,7 +185,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
                   leftIcon={<FiTrash2 />}
                   onClick={handleAdminDelete}
                 >
-                  Delete
+                  {t('common.delete')}
                 </Button>
               </HStack>
             )}
@@ -222,10 +224,12 @@ const AccountTreeView: React.FC<AccountTreeViewProps> = ({
   showActions = true,
   showBalance = true,
 }) => {
+  const { t } = useTranslation();
+  
   if (accounts.length === 0) {
     return (
       <Box p={4} textAlign="center" color="gray.500">
-        <Text>No accounts found</Text>
+        <Text>{t('accounts.noAccountsFound')}</Text>
       </Box>
     );
   }

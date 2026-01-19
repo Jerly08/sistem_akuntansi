@@ -25,6 +25,7 @@ import {
 } from '@chakra-ui/react';
 import { FiPlus, FiTrash2, FiEdit } from 'react-icons/fi';
 import { ContactAddress } from '@/types/contact';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ContactAddressFormProps {
   addresses: ContactAddress[];
@@ -35,6 +36,7 @@ export default function ContactAddressForm({
   addresses = [], 
   onAddressChange 
 }: ContactAddressFormProps) {
+  const { t } = useTranslation();
   const toast = useToast();
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [newAddress, setNewAddress] = useState<Partial<ContactAddress>>({
@@ -54,8 +56,8 @@ export default function ContactAddressForm({
   const handleAddAddress = () => {
     if (!newAddress.address1 || !newAddress.city) {
       toast({
-        title: 'Validation Error',
-        description: 'Address and city are required',
+        title: t('messages.toast.validationError'),
+        description: t('contacts.address.addressCityRequired'),
         status: 'error',
         duration: 3000,
       });
@@ -106,9 +108,9 @@ export default function ContactAddressForm({
 
   const getAddressTypeLabel = (type: string) => {
     switch (type) {
-      case 'BILLING': return 'Billing';
-      case 'SHIPPING': return 'Shipping';
-      case 'MAILING': return 'Mailing';
+      case 'BILLING': return t('contacts.address.billing');
+      case 'SHIPPING': return t('contacts.address.shipping');
+      case 'MAILING': return t('contacts.address.mailing');
       default: return type;
     }
   };

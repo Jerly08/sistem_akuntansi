@@ -63,6 +63,7 @@ import salesService, {
 import invoiceTypeService, { InvoiceType } from '@/services/invoiceTypeService';
 import ErrorHandler, { ParsedValidationError } from '@/utils/errorHandler';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface SalesFormProps {
   isOpen: boolean;
@@ -123,6 +124,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
   onSave,
   sale
 }) => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -154,34 +156,6 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const scrollThumbBg = useColorModeValue('#cbd5e0', '#4a5568');
   const scrollThumbHoverBg = useColorModeValue('#a0aec0', '#718096');
   
-  // Tooltip descriptions for sales form fields
-  const tooltips = {
-    customer: 'Pilih customer/pelanggan untuk transaksi ini',
-    salesPerson: 'Sales person yang menangani transaksi (opsional)',
-    invoiceType: 'Jenis invoice: Invoice (standar), Quotation (penawaran), atau Sales Order',
-    date: 'Tanggal transaksi penjualan',
-    dueDate: 'Tanggal jatuh tempo pembayaran (untuk invoice kredit)',
-    paymentMethod: 'Metode pembayaran: Cash (tunai), Bank (transfer bank), atau Credit (kredit/hutang)',
-    cashBank: 'Pilih akun kas/bank tujuan pembayaran',
-    currency: 'Mata uang transaksi (default: IDR)',
-    exchangeRate: 'Kurs konversi untuk mata uang asing',
-    discount: 'Diskon global untuk seluruh transaksi (dalam persen)',
-    ppnRate: 'Tarif PPN/Pajak Pertambahan Nilai (default: 11%)',
-    otherTaxAdditions: 'Pajak tambahan lainnya (dalam nominal)',
-    pph21Rate: 'Tarif PPh 21 untuk pemotongan pajak penghasilan',
-    pph23Rate: 'Tarif PPh 23 untuk pemotongan pajak jasa',
-    otherTaxDeductions: 'Potongan pajak lainnya (dalam nominal)',
-    shippingCost: 'Biaya pengiriman barang',
-    notes: 'Catatan atau keterangan tambahan untuk customer',
-    internalNotes: 'Catatan internal (tidak terlihat oleh customer)',
-    product: 'Pilih produk/jasa yang dijual',
-    quantity: 'Jumlah unit produk',
-    unitPrice: 'Harga per unit (sebelum diskon dan pajak)',
-    itemDiscount: 'Diskon untuk item ini (dalam persen)',
-    taxable: 'Centang jika item ini dikenakan pajak (PPN)',
-    revenueAccount: 'Akun pendapatan untuk item ini (opsional, default dari produk)',
-  };
-  
   // Check if user has permission to create/edit sales - using lowercase for consistency
   const userRole = user?.role?.toLowerCase();
   const canCreateSales = userRole === 'finance' || userRole === 'director' || userRole === 'admin';
@@ -195,8 +169,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
     if (isOpen && user && !hasPermission) {
       const action = sale ? 'edit' : 'create';
       toast({
-        title: 'Access Denied',
-        description: `You do not have permission to ${action} sales. Contact your administrator for access.`,
+        title: t('sales.messages.accessDenied'),
+        description: sale ? t('sales.messages.noPermissionEdit') : t('sales.messages.noPermissionCreate'),
         status: 'error',
         duration: 5000,
       });
@@ -275,12 +249,17 @@ const SalesForm: React.FC<SalesFormProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      loadFormData();
-      if (sale) {
-        populateFormWithSale(sale);
-      } else {
-        resetForm();
-      }
+      // Load form data first, then populate with sale data
+      loadFormData().then(() => {
+        if (sale) {
+          // Small delay to ensure all state updates are complete
+          setTimeout(() => {
+            populateFormWithSale(sale);
+          }, 100);
+        } else {
+          resetForm();
+        }
+      });
     }
   }, [isOpen, sale]);
 
@@ -323,8 +302,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
   const loadFormData = async () => {
     if (!token) {
       toast({
-        title: 'Authentication Required',
-        description: 'Please login to access this feature.',
+        title: t('sales.messages.authRequired'),
+        description: t('sales.messages.pleaseLogin'),
         status: 'error',
         duration: 5000,
         isClosable: true
@@ -457,8 +436,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
     } catch (error: any) {
       console.error('Error loading form data:', error);
       toast({
-        title: 'Loading Error',
-        description: 'Failed to load form data. Please try again.',
+        title: t('sales.messages.loadingError'),
+        description: t('sales.messages.failedToLoadData'),
         status: 'error',
         duration: 5000,
         isClosable: true
@@ -469,49 +448,62 @@ const SalesForm: React.FC<SalesFormProps> = ({
   };
 
   const populateFormWithSale = (saleData: Sale) => {
+    console.log('📝 Populating form with sale data:', saleData);
+    
     reset({
       customer_id: saleData.customer_id,
-      sales_person_id: saleData.sales_person_id,
-      invoice_type_id: saleData.invoice_type_id,
-      type: saleData.type,
-      date: saleData.date.split('T')[0],
+      sales_person_id: saleData.sales_person_id || undefined,
+      invoice_type_id: saleData.invoice_type_id || undefined,
+      type: saleData.type || 'INVOICE',
+      date: saleData.date ? saleData.date.split('T')[0] : new Date().toISOString().split('T')[0],
       due_date: saleData.due_date ? saleData.due_date.split('T')[0] : undefined,
       valid_until: saleData.valid_until ? saleData.valid_until.split('T')[0] : undefined,
-      currency: saleData.currency,
-      exchange_rate: saleData.exchange_rate,
-      discount_percent: saleData.discount_percent,
+      currency: saleData.currency || 'IDR',
+      exchange_rate: saleData.exchange_rate || 1,
+      discount_percent: saleData.discount_percent || 0,
       // Legacy tax fields
-      ppn_percent: saleData.ppn_percent,
-      pph_percent: saleData.pph_percent,
-      pph_type: saleData.pph_type,
+      ppn_percent: saleData.ppn_percent || 0,
+      pph_percent: saleData.pph_percent || 0,
+      pph_type: saleData.pph_type || undefined,
       // Enhanced tax configuration
-      ppn_rate: saleData.ppn_rate || saleData.ppn_percent || 11,
+      ppn_rate: saleData.ppn_rate || saleData.ppn_percent || 0,
       other_tax_additions: saleData.other_tax_additions || 0,
       pph21_rate: saleData.pph21_rate || 0,
       pph23_rate: saleData.pph23_rate || 0,
       other_tax_deductions: saleData.other_tax_deductions || 0,
-      payment_terms: saleData.payment_terms,
-      payment_method: saleData.payment_method,
+      payment_terms: saleData.payment_terms || 'NET_30',
+      payment_method: saleData.payment_method || undefined,
       payment_method_type: saleData.payment_method_type || 'CREDIT',
-      cash_bank_id: saleData.cash_bank_id,
-      shipping_method: saleData.shipping_method,
-      shipping_cost: saleData.shipping_cost,
-      billing_address: saleData.billing_address,
-      shipping_address: saleData.shipping_address,
-      notes: saleData.notes,
-      internal_notes: saleData.internal_notes,
-      reference: saleData.reference,
-      items: saleData.sale_items?.map(item => ({
-        id: item.id,
-        product_id: item.product_id,
-        description: item.description || '',
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        discount_percent: item.discount_percent,
-        taxable: item.taxable,
-        revenue_account_id: item.revenue_account_id
-      })) || []
+      cash_bank_id: saleData.cash_bank_id || undefined,
+      shipping_method: saleData.shipping_method || undefined,
+      shipping_cost: saleData.shipping_cost || 0,
+      billing_address: saleData.billing_address || undefined,
+      shipping_address: saleData.shipping_address || undefined,
+      notes: saleData.notes || undefined,
+      internal_notes: saleData.internal_notes || undefined,
+      reference: saleData.reference || undefined,
+      items: saleData.sale_items && saleData.sale_items.length > 0 
+        ? saleData.sale_items.map(item => ({
+            id: item.id,
+            product_id: item.product_id || 0,
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            unit_price: item.unit_price || 0,
+            discount_percent: item.discount_percent || 0,
+            taxable: item.taxable !== undefined ? item.taxable : true,
+            revenue_account_id: item.revenue_account_id || undefined
+          }))
+        : [{
+            product_id: 0,
+            description: '',
+            quantity: 1,
+            unit_price: 0,
+            discount_percent: 0,
+            taxable: true
+          }]
     });
+    
+    console.log('✅ Form populated successfully');
   };
 
 
@@ -607,7 +599,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
     const afterDiscount = subtotal - globalDiscount;
     
     // Tax calculations using enhanced fields (same as Tax Summary)
-    const ppnRate = watchPPNRate || watchPPNPercent || 11;
+    // Use explicit check to allow 0 as valid value
+    const ppnRate = watchPPNRate !== undefined && watchPPNRate !== null ? watchPPNRate : (watchPPNPercent ?? 11);
     const ppnAmount = afterDiscount * (ppnRate / 100);
     const otherAdditions = watchOtherTaxAdditions || 0;
     const totalAdditions = ppnAmount + otherAdditions;
@@ -673,13 +666,13 @@ const SalesForm: React.FC<SalesFormProps> = ({
     switch (type) {
       case 'QUOTE':
       case 'QUOTATION':
-        return 'Quote Date';
+        return t('sales.form.quoteDate');
       case 'INVOICE':
-        return 'Invoice Date';
+        return t('sales.form.invoiceDate');
       case 'SALES_ORDER':
-        return 'Order Date';
+        return t('sales.form.orderDate');
       default:
-        return 'Transaction Date';
+        return t('sales.form.transactionDate');
     }
   };
 
@@ -719,8 +712,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
       
       if (validItems.length === 0) {
         const errorMsg = products.length > 0 
-          ? 'At least one item with a selected product is required'
-          : 'At least one item with description and price is required';
+          ? t('sales.messages.atLeastOneItem')
+          : t('sales.messages.atLeastOneItemManual');
         ErrorHandler.handleValidationError([errorMsg], toast, 'sales form');
         return;
       }
@@ -790,7 +783,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
         };
 
         await salesService.updateSale(sale.id, updateData);
-        ErrorHandler.handleSuccess('Sale has been updated successfully', toast, 'update sale');
+        ErrorHandler.handleSuccess(t('sales.messages.saleUpdated'), toast, 'update sale');
       } else {
         // Create new sale
         const createData: SaleCreateRequest = {
@@ -839,7 +832,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
         };
 
         await salesService.createSale(createData);
-        ErrorHandler.handleSuccess('Sale has been created successfully', toast, 'create sale');
+        ErrorHandler.handleSuccess(t('sales.messages.saleCreated'), toast, 'create sale');
       }
 
       // Clear any validation errors on success
@@ -973,15 +966,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
           <HStack justify="space-between" align="center">
             <Box>
               <Heading size="lg" color={headingColor}>
-                {sale ? 'Edit Sale Transaction' : 'Create New Sale'}
+                {sale ? t('sales.editSale') : t('sales.createSale')}
               </Heading>
               <Text color={textColor} fontSize="sm" mt={1}>
-                {sale ? 'Modify existing sale details and items' : 'Create a new sales transaction with items and pricing'}
+                {sale ? t('sales.manageTransactions') : t('sales.manageTransactions')}
               </Text>
             </Box>
             <Badge colorScheme="blue" variant="solid" px={3} py={1} borderRadius="md">
               <Icon as={FiShoppingCart} mr={1} />
-              Sale Form
+              {t('sales.title')}
             </Badge>
           </HStack>
         </ModalHeader>
@@ -1055,15 +1048,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
               {/* Basic Information */}
               <Box>
                 <Heading size="md" mb={4} color={subHeadingColor}>
-                  📋 Basic Information
+                  📋 {t('sales.form.basicInfo')}
                 </Heading>
                 <VStack spacing={4}>
                   <HStack w="full" spacing={4}>
                       <FormControl isRequired isInvalid={!!errors.customer_id}>
-                        <FormLabel>Customer</FormLabel>
+                        <FormLabel>{t('sales.customer')}</FormLabel>
                         <Select
                           {...register('customer_id', {
-                            required: 'Customer is required',
+                            required: t('validation.required'),
                             setValueAs: value => parseInt(value) || 0
                           })}
                           bg={inputBg}
@@ -1071,8 +1064,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           isDisabled={loadingData}
                         >
                           <option value="">
-                            {loadingData ? 'Loading customers...' : 
-                             customers.length === 0 ? 'No customers available' : 'Select customer'}
+                            {loadingData ? t('common.loading') : 
+                             customers.length === 0 ? t('common.noData') : t('sales.form.selectCustomer')}
                           </option>
                           {customers.map(customer => (
                             <option key={customer.id} value={customer.id}>
@@ -1082,12 +1075,12 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         </Select>
                         <FormErrorMessage>{errors.customer_id?.message}</FormErrorMessage>
                         <FormHelperText color={textColor}>
-                          Choose the customer for this transaction
+                          {t('sales.tooltips.customer')}
                         </FormHelperText>
                       </FormControl>
 
                       <FormControl>
-                        <FormLabel>Sales Person</FormLabel>
+                        <FormLabel>{t('sales.form.salesPerson')}</FormLabel>
                         <Select
                           {...register('sales_person_id', {
                             setValueAs: value => value ? parseInt(value) : undefined
@@ -1097,8 +1090,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           isDisabled={loadingData}
                         >
                           <option value="">
-                            {loadingData ? 'Loading sales persons...' : 
-                             salesPersons.length === 0 ? 'No sales persons available' : 'Select sales person'}
+                            {loadingData ? t('common.loading') : 
+                             salesPersons.length === 0 ? t('common.noData') : t('sales.form.selectSalesPerson')}
                           </option>
                           {salesPersons.map(person => (
                             <option key={person.id} value={person.id}>
@@ -1107,12 +1100,12 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           ))}
                         </Select>
                         <FormHelperText color={textColor}>
-                          Assign a sales representative (optional)
+                          {t('sales.tooltips.salesPerson')}
                         </FormHelperText>
                       </FormControl>
 
                       <FormControl>
-                        <FormLabel>Invoice Type</FormLabel>
+                        <FormLabel>{t('sales.invoiceTypes')}</FormLabel>
                         <Select
                           {...register('invoice_type_id', {
                             setValueAs: value => value ? parseInt(value) : undefined
@@ -1122,8 +1115,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           isDisabled={loadingData}
                         >
                           <option value="">
-                            {loadingData ? 'Loading invoice types...' : 
-                             invoiceTypes.length === 0 ? 'No invoice types available' : 'Select invoice type'}
+                            {loadingData ? t('common.loading') : 
+                             invoiceTypes.length === 0 ? t('common.noData') : t('sales.form.selectInvoiceType')}
                           </option>
                           {invoiceTypes.map(invoiceType => (
                             <option key={invoiceType.id} value={invoiceType.id}>
@@ -1132,7 +1125,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           ))}
                         </Select>
                         <FormHelperText color={textColor}>
-                          Choose invoice type for custom numbering format (optional)
+                          {t('sales.tooltips.invoiceType')}
                         </FormHelperText>
                       </FormControl>
                   </HStack>
@@ -1143,22 +1136,22 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         <Input
                           type="date"
                           {...register('date', {
-                            required: 'Date is required'
+                            required: t('validation.required')
                           })}
                           bg={inputBg}
                           _focus={{ bg: inputFocusBg }}
                         />
                         <FormErrorMessage>{errors.date?.message}</FormErrorMessage>
                         <FormHelperText color={textColor}>
-                          When this transaction occurred
+                          {t('sales.tooltips.date')}
                         </FormHelperText>
                       </FormControl>
 
                       <FormControl>
                         <FormLabel>
-                          Due Date
+                          {t('sales.dueDate')}
                           {isDueDateAutoCalculated && (
-                            <Badge ml={2} colorScheme="green" size="sm">Auto</Badge>
+                            <Badge ml={2} colorScheme="green" size="sm">{t('sales.form.autoCalculated')}</Badge>
                           )}
                         </FormLabel>
                         <Input
@@ -1170,13 +1163,13 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         />
                         <FormHelperText color={isDueDateAutoCalculated ? 'green.600' : textColor}>
                           {isDueDateAutoCalculated 
-                            ? 'Auto-calculated from Payment Terms' 
-                            : 'When payment is due (leave empty for auto-calculation)'}
+                            ? t('sales.form.dueDateAutoCalculated')
+                            : t('sales.tooltips.dueDate')}
                         </FormHelperText>
                       </FormControl>
 
                       <FormControl>
-                        <FormLabel>Valid Until</FormLabel>
+                        <FormLabel>{t('sales.validUntil')}</FormLabel>
                         <Input
                           type="date"
                           {...register('valid_until')}
@@ -1184,7 +1177,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                           _focus={{ bg: inputFocusBg }}
                         />
                         <FormHelperText color={textColor}>
-                          For quotes: when this offer expires
+                          {t('sales.tooltips.validUntil')}
                         </FormHelperText>
                       </FormControl>
                   </HStack>
@@ -1197,7 +1190,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
               <Box>
                 <Flex justify="space-between" align="center" mb={4}>
                   <Heading size="md" color={subHeadingColor}>
-                    🛍️ Sale Items
+                    🛍️ {t('sales.form.items')}
                   </Heading>
                   <Button
                     size="sm"
@@ -1205,7 +1198,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                     leftIcon={<FiPlus />}
                     onClick={addItem}
                   >
-                    Add Item
+                    {t('sales.form.addItem')}
                   </Button>
                 </Flex>
 
@@ -1214,7 +1207,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   <Alert status="warning" mb={4} borderRadius="md" bg={alertBg} borderColor={alertBorderColor}>
                     <AlertIcon />
                     <AlertDescription fontSize="sm">
-                      Products are not available. You can still create sales by manually entering product information in the description field.
+                      {t('common.noData')}
                     </AlertDescription>
                   </Alert>
                 )}
@@ -1246,15 +1239,15 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   <Table variant="simple" size="sm">
                     <Thead>
                       <Tr>
-                        <Th>Product</Th>
-                        <Th>Description</Th>
-                        <Th>Qty</Th>
-                        <Th>Unit Price</Th>
-                        <Th>Discount %</Th>
-                        <Th>Taxable</Th>
-                        <Th>Revenue Account</Th>
-                        <Th>Line Total</Th>
-                        <Th width="60px">Action</Th>
+                        <Th>{t('sales.form.product')}</Th>
+                        <Th>{t('sales.form.description')}</Th>
+                        <Th>{t('sales.form.quantity')}</Th>
+                        <Th>{t('sales.form.unitPrice')}</Th>
+                        <Th>{t('sales.form.itemDiscount')}</Th>
+                        <Th>{t('sales.form.taxable')}</Th>
+                        <Th>{t('sales.form.revenueAccount')}</Th>
+                        <Th>{t('sales.form.lineTotal')}</Th>
+                        <Th width="60px">{t('common.actions')}</Th>
                       </Tr>
                     </Thead>
                     <Tbody>
@@ -1270,9 +1263,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
                                 onChange={(e) => handleProductChange(index, parseInt(e.target.value))}
                                 bg={inputBg}
                                 _focus={{ bg: inputFocusBg }}
-                                placeholder="Select product"
+                                placeholder={t('common.placeholders.selectProduct')}
                               >
-                                <option value="">Manual entry</option>
+                                <option value="">{t('sales.form.manualEntry')}</option>
                                 {products.map(product => (
                                   <option key={product.id} value={product.id}>
                                     {product.code} - {product.name}
@@ -1281,7 +1274,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                               </Select>
                               {isManualEntry(index) && (
                                 <Badge colorScheme="orange" size="xs">
-                                  Manual
+                                  {t('sales.form.manualEntry')}
                                 </Badge>
                               )}
                             </VStack>
@@ -1290,11 +1283,11 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             <Input
                               size="sm"
                               {...register(`items.${index}.description`, {
-                                required: 'Description is required'
+                                required: t('validation.required')
                               })}
                               placeholder={isManualEntry(index) 
-                                ? "Enter item description manually" 
-                                : "Item description"}
+                                ? t('common.placeholders.itemDescription')
+                                : t('common.placeholders.itemDescription')}
                               bg={isManualEntry(index) ? 'orange.50' : inputBg}
                               _focus={{ bg: isManualEntry(index) ? 'orange.100' : inputFocusBg }}
                               borderColor={isManualEntry(index) ? 'orange.200' : 'gray.200'}
@@ -1354,9 +1347,9 @@ const SalesForm: React.FC<SalesFormProps> = ({
                               })}
                               bg={inputBg}
                               _focus={{ bg: inputFocusBg }}
-                              placeholder="Select account"
+                              placeholder={t('common.placeholders.selectAccount')}
                             >
-                              <option value="">Choose revenue account</option>
+                              <option value="">{t('sales.form.revenueAccount')}</option>
                               {accounts.map(account => (
                                 <option key={account.id} value={account.id}>
                                   {account.code} - {account.name}
@@ -1377,7 +1370,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                               icon={<FiTrash2 />}
                               onClick={() => removeItem(index)}
                               isDisabled={fields.length === 1}
-                              aria-label="Remove item"
+                              aria-label={t('accessibility.removeItem')}
                             />
                           </Td>
                         </Tr>
@@ -1393,7 +1386,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
               <Card>
                 <CardHeader pb={3}>
                   <Heading size="md" color={subHeadingColor}>
-                    💰 Tax Configuration
+                    💰 {t('sales.form.taxInfo')}
                   </Heading>
                 </CardHeader>
                 <CardBody pt={0}>
@@ -1401,7 +1394,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                     {/* Global Discount */}
                     <FormControl>
                       <FormLabel>
-                        Global Discount 
+                        {t('sales.form.globalDiscount')} 
                         <Badge ml={2} colorScheme="blue" size="sm" cursor="pointer" 
                                onClick={() => setDiscountType(discountType === 'percentage' ? 'amount' : 'percentage')}>
                           {discountType === 'percentage' ? '%' : 'Rp'}
@@ -1431,10 +1424,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                         />
                       )}
                       <FormHelperText fontSize="xs" color={textColor}>
-                        {discountType === 'percentage' 
-                          ? 'Percentage discount applied to entire order'
-                          : 'Fixed amount discount applied to entire order'
-                        } (Click badge to toggle)
+                        {t('sales.tooltips.discount')}
                       </FormHelperText>
                     </FormControl>
 
@@ -1443,11 +1433,11 @@ const SalesForm: React.FC<SalesFormProps> = ({
                     {/* Tax Additions (Penambahan) */}
                     <Box>
                       <Text fontSize="sm" fontWeight="medium" color="green.600" mb={3}>
-                        ➕ Tax Additions (Penambahan)
+                        ➕ {t('sales.form.otherTaxAdditions')}
                       </Text>
                       <HStack w="full" spacing={4}>
                         <FormControl>
-                          <FormLabel fontSize="sm">PPN Rate (%)</FormLabel>
+                          <FormLabel fontSize="sm">{t('sales.form.ppnRate')}</FormLabel>
                           <NumberInput
                             min={0}
                             max={100}
@@ -1465,11 +1455,11 @@ const SalesForm: React.FC<SalesFormProps> = ({
                               <NumberDecrementStepper />
                             </NumberInputStepper>
                           </NumberInput>
-                          <FormHelperText fontSize="xs">Pajak Pertambahan Nilai (default 11%)</FormHelperText>
+                          <FormHelperText fontSize="xs">{t('sales.tooltips.ppnRate')}</FormHelperText>
                         </FormControl>
 
                         <FormControl>
-                          <FormLabel fontSize="sm">Other Tax Additions (IDR)</FormLabel>
+                          <FormLabel fontSize="sm">{t('sales.form.otherTaxAdditions')}</FormLabel>
                           <CurrencyInput
                             value={watchOtherTaxAdditions || 0}
                             onChange={(value) => setValue('other_tax_additions', value)}
@@ -1478,11 +1468,11 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             showLabel={false}
                             size="sm"
                           />
-                          <FormHelperText fontSize="xs">Pajak tambahan lainnya (flat amount)</FormHelperText>
+                          <FormHelperText fontSize="xs">{t('sales.tooltips.otherTaxAdditions')}</FormHelperText>
                         </FormControl>
 
                         <FormControl>
-                          <FormLabel fontSize="sm">Shipping Cost</FormLabel>
+                          <FormLabel fontSize="sm">{t('sales.form.shippingCost')}</FormLabel>
                           <CurrencyInput
                             value={watchShippingCost || 0}
                             onChange={(value) => setValue('shipping_cost', value)}
@@ -1491,7 +1481,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             showLabel={false}
                             size="sm"
                           />
-                          <FormHelperText fontSize="xs">Biaya pengiriman/delivery</FormHelperText>
+                          <FormHelperText fontSize="xs">{t('sales.tooltips.shippingCost')}</FormHelperText>
                         </FormControl>
                       </HStack>
                     </Box>
@@ -1501,11 +1491,11 @@ const SalesForm: React.FC<SalesFormProps> = ({
                     {/* Tax Deductions (Pemotongan) */}
                     <Box>
                       <Text fontSize="sm" fontWeight="medium" color="red.600" mb={3}>
-                        ➖ Tax Deductions (Pemotongan)
+                        ➖ {t('sales.form.otherTaxDeductions')}
                       </Text>
                       <HStack w="full" spacing={4}>
                         <FormControl>
-                          <FormLabel fontSize="sm">PPh 21 Rate (%)</FormLabel>
+                          <FormLabel fontSize="sm">{t('sales.form.pph21Rate')}</FormLabel>
                           <NumberInput
                             min={0}
                             max={100}
@@ -1523,11 +1513,11 @@ const SalesForm: React.FC<SalesFormProps> = ({
                               <NumberDecrementStepper />
                             </NumberInputStepper>
                           </NumberInput>
-                          <FormHelperText fontSize="xs">PPh 21: 2% jasa konstruksi, 15% dividen/bunga</FormHelperText>
+                          <FormHelperText fontSize="xs">{t('sales.tooltips.pph21Rate')}</FormHelperText>
                         </FormControl>
 
                         <FormControl>
-                          <FormLabel fontSize="sm">PPh 23 Rate (%)</FormLabel>
+                          <FormLabel fontSize="sm">{t('sales.form.pph23Rate')}</FormLabel>
                           <NumberInput
                             min={0}
                             max={100}
@@ -1576,7 +1566,8 @@ const SalesForm: React.FC<SalesFormProps> = ({
                             const afterDiscount = subtotal - discountAmount;
                             
                             // Tax calculations using enhanced fields
-                            const ppnRate = watchPPNRate || watchPPNPercent || 11;
+                            // Use nullish coalescing to allow 0 as valid value
+                            const ppnRate = watchPPNRate !== undefined && watchPPNRate !== null ? watchPPNRate : (watchPPNPercent ?? 11);
                             const ppnAmount = afterDiscount * (ppnRate / 100);
                             const otherAdditions = watchOtherTaxAdditions || 0;
                             const totalAdditions = ppnAmount + otherAdditions;
@@ -1664,39 +1655,39 @@ const SalesForm: React.FC<SalesFormProps> = ({
               {/* Additional Information */}
               <Box>
                 <Heading size="md" mb={4} color={subHeadingColor}>
-                  📝 Additional Information
+                  📝 {t('sales.form.additionalInfo')}
                 </Heading>
                 <VStack spacing={4}>
                   <HStack w="full" spacing={4}>
                       <FormControl>
-                        <FormLabel>Payment Terms</FormLabel>
+                        <FormLabel>{t('sales.form.paymentTerms')}</FormLabel>
                         <Select 
                           {...register('payment_terms')}
                           bg={inputBg}
                           _focus={{ bg: inputFocusBg }}
                         >
-                          <option value="COD">COD (Cash on Delivery)</option>
-                          <option value="NET_15">NET 15 (15 days)</option>
-                          <option value="NET_30">NET 30 (30 days)</option>
-                          <option value="NET_60">NET 60 (60 days)</option>
-                          <option value="NET_90">NET 90 (90 days)</option>
-                          <option value="CUSTOM">Custom Due Date</option>
+                          <option value="COD">{t('sales.form.paymentTermsOptions.cod')}</option>
+                          <option value="NET_15">{t('sales.form.paymentTermsOptions.net15')}</option>
+                          <option value="NET_30">{t('sales.form.paymentTermsOptions.net30')}</option>
+                          <option value="NET_60">{t('sales.form.paymentTermsOptions.net60')}</option>
+                          <option value="NET_90">{t('sales.form.paymentTermsOptions.net90')}</option>
+                          <option value="CUSTOM">{t('sales.form.paymentTermsOptions.custom')}</option>
                         </Select>
                         <FormHelperText color={textColor}>
-                          How long customer has to pay
+                          {t('sales.tooltips.paymentMethod')}
                         </FormHelperText>
                       </FormControl>
 
                       <FormControl>
-                        <FormLabel>Reference</FormLabel>
+                        <FormLabel>{t('sales.form.reference')}</FormLabel>
                         <Input
                           {...register('reference')}
-                          placeholder="External reference number"
+                          placeholder={t('common.placeholders.referenceNumber')}
                           bg={inputBg}
                           _focus={{ bg: inputFocusBg }}
                         />
                         <FormHelperText color={textColor}>
-                          External reference (PO number, etc.)
+                          {t('common.placeholders.referenceNumber')}
                         </FormHelperText>
                       </FormControl>
                   </HStack>
@@ -1704,45 +1695,45 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   {/* Double Entry Accounting Section */}
                   <Box p={4} bg={alertBg} borderRadius="md" border="1px solid" borderColor={alertBorderColor}>
                     <Text fontSize="md" fontWeight="semibold" color={subHeadingColor} mb={3}>
-                      🏦 Double Entry & Payment Method
+                      🏦 {t('sales.form.paymentInfo')}
                     </Text>
                     <VStack spacing={4} align="stretch">
                       <Alert status="info" size="sm" borderRadius="md">
                         <AlertIcon />
                         <AlertDescription fontSize="sm">
                           <Text><strong>Double Entry Logic:</strong></Text>
-                          <Text mt={1}>• <strong>Cash/Bank:</strong> Debit Cash/Bank Account, Credit Revenue Account</Text>
-                          <Text>• <strong>Credit:</strong> Debit Accounts Receivable, Credit Revenue Account</Text>
+                          <Text mt={1}>• <strong>{t('sales.form.paymentMethodOptions.cash')}/{t('sales.form.paymentMethodOptions.bank')}:</strong> Debit Cash/Bank Account, Credit Revenue Account</Text>
+                          <Text>• <strong>{t('sales.form.paymentMethodOptions.credit')}:</strong> Debit Accounts Receivable, Credit Revenue Account</Text>
                         </AlertDescription>
                       </Alert>
                       
                       <HStack w="full" spacing={4}>
                         <FormControl isRequired>
-                          <FormLabel>Payment Method</FormLabel>
+                          <FormLabel>{t('sales.form.paymentMethod')}</FormLabel>
                           <Select
                             {...register('payment_method_type', {
-                              required: 'Payment method is required'
+                              required: t('validation.required')
                             })}
                             bg={inputBg}
                             _focus={{ bg: inputFocusBg }}
                           >
-                            <option value="CASH">Cash Payment</option>
-                            <option value="BANK">Bank Transfer</option>
-                            <option value="CREDIT">Credit (Accounts Receivable)</option>
+                            <option value="CASH">{t('sales.form.paymentMethodOptions.cash')}</option>
+                            <option value="BANK">{t('sales.form.paymentMethodOptions.bank')}</option>
+                            <option value="CREDIT">{t('sales.form.paymentMethodOptions.credit')}</option>
                           </Select>
                           <FormHelperText color={textColor}>
-                            Choose payment method for proper double-entry recording
+                            {t('sales.tooltips.paymentMethod')}
                           </FormHelperText>
                         </FormControl>
 
                         {(watchPaymentMethodType === 'CASH' || watchPaymentMethodType === 'BANK') && (
                           <FormControl isRequired>
                             <FormLabel>
-                              {watchPaymentMethodType === 'CASH' ? 'Cash Account' : 'Bank Account'}
+                              {watchPaymentMethodType === 'CASH' ? t('sales.form.paymentMethodOptions.cash') : t('sales.form.paymentMethodOptions.bank')}
                             </FormLabel>
                             <Select
                               {...register('cash_bank_id', {
-                                required: `${watchPaymentMethodType === 'CASH' ? 'Cash' : 'Bank'} account is required`,
+                                required: t('validation.required'),
                                 setValueAs: value => parseInt(value) || undefined
                               })}
                               bg={inputBg}
@@ -1840,30 +1831,30 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   )}
 
                   <FormControl>
-                    <FormLabel>Notes</FormLabel>
+                    <FormLabel>{t('sales.form.notes')}</FormLabel>
                     <Textarea
                       {...register('notes')}
-                      placeholder="Customer-visible notes"
+                      placeholder={t('common.placeholders.notes')}
                       rows={3}
                       bg={inputBg}
                       _focus={{ bg: inputFocusBg }}
                     />
                     <FormHelperText color={textColor}>
-                      Notes visible to customer on invoice
+                      {t('sales.tooltips.notes')}
                     </FormHelperText>
                   </FormControl>
 
                   <FormControl>
-                    <FormLabel>Internal Notes</FormLabel>
+                    <FormLabel>{t('sales.form.internalNotes')}</FormLabel>
                     <Textarea
                       {...register('internal_notes')}
-                      placeholder="Internal notes (not visible to customer)"
+                      placeholder={t('common.placeholders.internalNotes')}
                       rows={3}
                       bg={inputBg}
                       _focus={{ bg: inputFocusBg }}
                     />
                     <FormHelperText color={textColor}>
-                      Internal notes (not visible to customer)
+                      {t('sales.tooltips.internalNotes')}
                     </FormHelperText>
                   </FormControl>
                 </VStack>
@@ -1888,11 +1879,11 @@ const SalesForm: React.FC<SalesFormProps> = ({
               {/* Left side - Form info */}
               <HStack spacing={2}>
                 <Text fontSize="sm" color={textColor}>
-                  {loadingData ? 'Loading...' : `${fields.length} item${fields.length !== 1 ? 's' : ''}`}
+                  {loadingData ? t('common.loading') : `${fields.length} ${t('sales.form.items')}`}
                 </Text>
                 {calculateSubtotal() > 0 && (
                   <Text fontSize="sm" color="blue.600" fontWeight="medium">
-                    Total: {salesService.formatCurrency(calculateTotal())}
+                    {t('sales.total')}: {salesService.formatCurrency(calculateTotal())}
                   </Text>
                 )}
               </HStack>
@@ -1908,7 +1899,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   colorScheme="gray"
                   minW="120px"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   leftIcon={loading ? undefined : <FiSave />}
@@ -1916,7 +1907,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                   colorScheme="blue"
                   size="lg"
                   isLoading={loading}
-                  loadingText={sale ? "Updating..." : "Creating..."}
+                  loadingText={sale ? t('common.updating') : t('common.creating')}
                   minW="150px"
                   shadow="md"
                   _hover={{
@@ -1927,7 +1918,7 @@ const SalesForm: React.FC<SalesFormProps> = ({
                     transform: "translateY(0)",
                   }}
                 >
-                  {sale ? 'Update Sale' : 'Create Sale'}
+                  {sale ? t('common.update') : t('common.create')}
                 </Button>
               </HStack>
             </HStack>

@@ -68,7 +68,18 @@ func (c *EnhancedInvoiceController) GenerateCleanInvoicePDF(ctx *gin.Context) {
 	}
 
 	// Generate PDF using the enhanced service
-	pdfBytes, err := c.pdfService.GenerateInvoicePDF(&sale)
+	// Get language from query parameter (defaults to user's language from settings)
+	lang := ctx.Query("lang")
+	var pdfBytes []byte
+	
+	if lang != "" {
+		// Use specified language
+		pdfBytes, err = c.pdfService.GenerateInvoicePDFWithLanguage(&sale, lang)
+	} else {
+		// Use default language from settings
+		pdfBytes, err = c.pdfService.GenerateInvoicePDF(&sale)
+	}
+	
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to generate invoice PDF",

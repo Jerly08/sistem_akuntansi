@@ -34,6 +34,7 @@ import {
   FiPlus,
 } from 'react-icons/fi';
 import AutoFitText from '@/components/common/AutoFitText';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   LineChart,
   Line,
@@ -74,7 +75,15 @@ interface AdminDashboardProps {
   analytics: DashboardAnalytics | null;
 }
 
-const StatCard = ({ icon, title, stat, change, changeType }) => {
+interface StatCardProps {
+  icon: React.ElementType;
+  title: string;
+  stat: string;
+  change: string;
+  changeType: 'increase' | 'decrease';
+}
+
+const StatCard: React.FC<StatCardProps> = ({ icon, title, stat, change, changeType }) => {
   const labelColor = useColorModeValue('gray.500', 'var(--text-secondary)');
   const numberColor = useColorModeValue('gray.800', 'var(--text-primary)');
   const iconBgColor = useColorModeValue(
@@ -129,6 +138,7 @@ const StatCard = ({ icon, title, stat, change, changeType }) => {
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => {
   const router = useRouter();
   const { colorMode } = useColorMode();
+  const { t } = useTranslation();
   
   // Dynamic colors for charts based on theme
   const chartColors = {
@@ -145,7 +155,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
   const formatThousands = (value: number) => new Intl.NumberFormat('id-ID').format(Number(value) || 0);
   
   if (!analytics) {
-    return <Box color={colorMode === 'dark' ? 'var(--text-primary)' : 'gray.800'}>Loading analytics...</Box>;
+    return <Box color={colorMode === 'dark' ? 'var(--text-primary)' : 'gray.800'}>{t('dashboard.loading')}</Box>;
   }
 
   const formatCurrency = (value: number) =>
@@ -184,28 +194,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6} mb={6}>
         <StatCard
           icon={FiDollarSign}
-          title="Total Pendapatan"
+          title={t('dashboard.stats.totalRevenue')}
           stat={formatCurrency(analytics.totalSales || 0)}
           change={formatGrowthPercentage(analytics.salesGrowth || 0)}
           changeType={getGrowthType(analytics.salesGrowth || 0)}
         />
         <StatCard
           icon={FiShoppingCart}
-          title="Total Pembelian"
+          title={t('dashboard.stats.totalPurchases')}
           stat={formatCurrency(analytics.totalPurchases || 0)}
           change={formatGrowthPercentage(analytics.purchasesGrowth || 0)}
           changeType={getGrowthType(analytics.purchasesGrowth || 0)}
         />
         <StatCard
           icon={FiTrendingUp}
-          title="Piutang Usaha"
+          title={t('dashboard.stats.accountsReceivable')}
           stat={formatCurrency(analytics.accountsReceivable || 0)}
           change={formatGrowthPercentage(analytics.receivablesGrowth || 0)}
           changeType={getGrowthType(analytics.receivablesGrowth || 0)}
         />
         <StatCard
           icon={FiTrendingDown}
-          title="Utang Usaha"
+          title={t('dashboard.stats.accountsPayable')}
           stat={formatCurrency(analytics.accountsPayable || 0)}
           change={formatGrowthPercentage(analytics.payablesGrowth || 0)}
           changeType={getGrowthType(analytics.payablesGrowth || 0)}
@@ -217,7 +227,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
         <CardHeader>
           <Heading size="md" display="flex" alignItems="center">
             <Icon as={FiPlus} mr={2} color="blue.500" />
-            Akses Cepat
+            {t('dashboard.quickAccess.title')}
           </Heading>
         </CardHeader>
         <CardBody>
@@ -229,7 +239,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
               onClick={() => router.push('/sales')}
               size="md"
             >
-              Tambah Penjualan
+              {t('dashboard.quickAccess.addSale')}
             </Button>
             <Button
               leftIcon={<FiShoppingCart />}
@@ -238,7 +248,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
               onClick={() => router.push('/purchases')}
               size="md"
             >
-              Tambah Pembelian
+              {t('dashboard.quickAccess.addPurchase')}
             </Button>
             <Button
               leftIcon={<FiTrendingUp />}
@@ -247,7 +257,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
               onClick={() => router.push('/cash-bank')}
               size="md"
             >
-              Kelola Kas & Bank
+              {t('dashboard.quickAccess.manageCashBank')}
             </Button>
             <Button
               leftIcon={<FiBarChart2 />}
@@ -256,7 +266,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
               onClick={() => router.push('/reports')}
               size="md"
             >
-              Laporan Keuangan
+              {t('dashboard.quickAccess.financialReports')}
             </Button>
           </HStack>
         </CardBody>
@@ -267,7 +277,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
           <CardHeader>
             <Heading size="md" display="flex" alignItems="center">
               <Icon as={FiActivity} mr={2} color="blue.500" />
-              Tinjauan Penjualan & Pembelian
+              {t('dashboard.charts.salesPurchaseOverview')}
             </Heading>
           </CardHeader>
           <CardBody>
@@ -293,12 +303,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
                   }}
                   formatter={(value: number, name: string) => [
                     formatCurrency(value),
-                    name === 'sales' ? 'Penjualan' : 'Pembelian'
+                    name === 'sales' ? t('dashboard.charts.sales') : t('dashboard.charts.purchases')
                   ]}
                 />
                 <Legend wrapperStyle={{ color: chartColors.textColor }} />
-                <Line type="monotone" dataKey="sales" stroke={chartColors.primary} activeDot={{ r: 8 }} strokeWidth={2} />
-                <Line type="monotone" dataKey="purchases" stroke={chartColors.secondary} strokeWidth={2} />
+                <Line type="monotone" dataKey="sales" stroke={chartColors.primary} activeDot={{ r: 8 }} strokeWidth={2} name={t('dashboard.charts.sales')} />
+                <Line type="monotone" dataKey="purchases" stroke={chartColors.secondary} strokeWidth={2} name={t('dashboard.charts.purchases')} />
               </LineChart>
             </ResponsiveContainer>
           </CardBody>
@@ -308,7 +318,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
           <CardHeader>
             <Heading size="md" display="flex" alignItems="center">
               <Icon as={FiPieChart} mr={2} color="green.500" />
-              Akun Teratas
+              {t('dashboard.charts.topAccounts')}
             </Heading>
           </CardHeader>
           <CardBody>
@@ -339,7 +349,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
                     borderRadius: '8px',
                     color: chartColors.textColor,
                   }}
-                  formatter={(value: number) => [formatCurrency(value), 'Saldo']}
+                  formatter={(value: number) => [formatCurrency(value), t('common.labels.balance')]}
                 />
                 <Legend wrapperStyle={{ color: chartColors.textColor }} />
               </RechartsPieChart>
@@ -353,7 +363,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
         <CardHeader>
           <Heading size="md" display="flex" alignItems="center">
             <Icon as={FiBarChart2} mr={2} color="purple.500" />
-            Arus Kas Bulanan
+            {t('dashboard.charts.monthlyCashFlow')}
           </Heading>
         </CardHeader>
         <CardBody>
@@ -379,14 +389,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ analytics }) => 
                 }}
                 formatter={(value: number, name: string) => [
                   formatCurrency(value),
-                  name === 'inflow' ? 'Arus Masuk' : 
-                  name === 'outflow' ? 'Arus Keluar' : 'Saldo'
+                  name === 'inflow' ? t('dashboard.charts.inflow') : 
+                  name === 'outflow' ? t('dashboard.charts.outflow') : t('dashboard.charts.balance')
                 ]}
               />
               <Legend wrapperStyle={{ color: chartColors.textColor }} />
-              <Bar dataKey="inflow" fill={chartColors.secondary} name="Arus Masuk" />
-              <Bar dataKey="outflow" fill={chartColors.quaternary} name="Arus Keluar" />
-              <Bar dataKey="balance" fill={chartColors.primary} name="Saldo" />
+              <Bar dataKey="inflow" fill={chartColors.secondary} name={t('dashboard.charts.inflow')} />
+              <Bar dataKey="outflow" fill={chartColors.quaternary} name={t('dashboard.charts.outflow')} />
+              <Bar dataKey="balance" fill={chartColors.primary} name={t('dashboard.charts.balance')} />
             </BarChart>
           </ResponsiveContainer>
         </CardBody>

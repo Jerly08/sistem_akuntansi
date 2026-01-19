@@ -32,8 +32,10 @@ import {
 import PDFReportExample from './PDFReportExample';
 import EnhancedTrialBalanceReport from './EnhancedTrialBalanceReport';
 import { EnhancedBalanceSheetReport } from './EnhancedBalanceSheetReport';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const EnhancedReportsPage: React.FC = () => {
+  const { t } = useTranslation();
   const [selectedReportType, setSelectedReportType] = useState<string | null>(null);
   
   const { 
@@ -51,32 +53,32 @@ const EnhancedReportsPage: React.FC = () => {
   const reportTypes = [
     {
       id: 'trial-balance',
-      title: 'Trial Balance Report',
-      description: 'Generate comprehensive trial balance with account details and real-time SSOT integration',
+      title: t('reports.trialBalance'),
+      description: t('reports.description.trialBalance'),
       icon: FiBarChart3,
       color: 'purple',
       onOpen: onTrialBalanceOpen
     },
     {
       id: 'balance-sheet',
-      title: 'Balance Sheet Report', 
-      description: 'Generate detailed balance sheet with assets, liabilities and equity breakdown',
+      title: t('reports.balanceSheet'), 
+      description: t('reports.description.balanceSheet'),
       icon: FiBarChart,
       color: 'blue',
       onOpen: onBalanceSheetOpen
     },
     {
       id: 'profit-loss',
-      title: 'Profit & Loss Report',
-      description: 'Comprehensive income statement with revenue, expenses and financial metrics',
+      title: t('reports.profitLossStatement'),
+      description: t('reports.description.profitLoss'),
       icon: FiTrendingUp,
       color: 'green',
       onOpen: () => console.log('P&L Report - Coming Soon')
     },
     {
       id: 'cash-flow',
-      title: 'Cash Flow Report',
-      description: 'Track cash movements across operating, investing and financing activities',
+      title: t('reports.cashFlowStatement'),
+      description: t('reports.description.cashFlow'),
       icon: FiDollarSign,
       color: 'orange',
       onOpen: () => console.log('Cash Flow Report - Coming Soon')
@@ -88,10 +90,10 @@ const EnhancedReportsPage: React.FC = () => {
       <VStack spacing={6} align="stretch">
         <Box>
           <Heading as="h1" size="xl" mb={2}>
-            Financial Reports & Documents
+            {t('reports.financialReports')}
           </Heading>
           <Text color="gray.600" fontSize="lg">
-            Generate professional financial reports with real-time data and export capabilities
+            {t('reports.title')}
           </Text>
         </Box>
 
@@ -122,7 +124,7 @@ const EnhancedReportsPage: React.FC = () => {
                   size="sm"
                   width="full"
                 >
-                  Generate Report
+                  {t('reports.generateReport')}
                 </Button>
               </CardBody>
             </Card>
@@ -132,7 +134,7 @@ const EnhancedReportsPage: React.FC = () => {
         {/* PDF Generator Section */}
         <Box>
           <Heading as="h2" size="lg" mb={4}>
-            Document Generator
+            {t('reports.title')}
           </Heading>
           <SimpleGrid columns={[1, 1, 1]} spacing={6}>
             <PDFReportExample />
@@ -141,9 +143,7 @@ const EnhancedReportsPage: React.FC = () => {
 
         <Box bg="blue.50" p={4} borderRadius="md" border="1px" borderColor="blue.200">
           <Text fontSize="sm" color="blue.800">
-            <strong>Integration Guide:</strong> All reports are integrated with SSOT (Single Source of Truth) data system. 
-            Reports automatically use your company settings (logo, name, address, etc.) from the Settings page and 
-            provide real-time data with advanced export capabilities (CSV, PDF).
+            <strong>{t('reports.integrationGuide.title')}:</strong> {t('reports.integrationGuide.description')}
           </Text>
         </Box>
       </VStack>
@@ -152,7 +152,7 @@ const EnhancedReportsPage: React.FC = () => {
       <Modal isOpen={isTrialBalanceOpen} onClose={onTrialBalanceClose} size="6xl">
         <ModalOverlay />
         <ModalContent maxW="90vw">
-          <ModalHeader>Trial Balance Report</ModalHeader>
+          <ModalHeader>{t('reports.trialBalance')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody p={0}>
             <EnhancedTrialBalanceReport onClose={onTrialBalanceClose} />
@@ -164,7 +164,7 @@ const EnhancedReportsPage: React.FC = () => {
       <Modal isOpen={isBalanceSheetOpen} onClose={onBalanceSheetClose} size="6xl">
         <ModalOverlay />
         <ModalContent maxW="90vw">
-          <ModalHeader>Balance Sheet Report</ModalHeader>
+          <ModalHeader>{t('reports.balanceSheet')}</ModalHeader>
           <ModalCloseButton />
           <ModalBody p={0}>
             <EnhancedBalanceSheetReport onClose={onBalanceSheetClose} />

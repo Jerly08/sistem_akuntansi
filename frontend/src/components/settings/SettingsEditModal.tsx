@@ -316,20 +316,16 @@ const SettingsEditModal: React.FC<SettingsEditModalProps> = ({
                     </FormControl>
 
                     <FormControl flex={1}>
+                      <FormLabel>{t('settings.dateFormat')}</FormLabel>
+                      <Select
+                        value={formData.date_format}
+                        onChange={(e) => handleInputChange('date_format', e.target.value)}
+                      >
+                        <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                        <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                        <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                      </Select>
                     </FormControl>
-                  </HStack>
-
-                  <FormControl>
-                    <FormLabel>{t('settings.dateFormat')}</FormLabel>
-                    <Select
-                      value={formData.date_format}
-                      onChange={(e) => handleInputChange('date_format', e.target.value)}
-                    >
-                      <option value="DD/MM/YYYY">DD/MM/YYYY</option>
-                      <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-                      <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                    </Select>
-                  </FormControl>
                   </HStack>
 
                   <HStack width="full" spacing={4}>

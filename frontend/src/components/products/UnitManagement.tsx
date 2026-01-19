@@ -33,8 +33,10 @@ import {
 import { FiEdit, FiTrash2, FiPlus, FiSearch } from 'react-icons/fi';
 import ProductService from '@/services/productService';
 import UnitForm, { ProductUnit } from './UnitForm';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const UnitManagement: React.FC = () => {
+  const { t } = useTranslation();
   const [units, setUnits] = useState<ProductUnit[]>([]);
   const [filteredUnits, setFilteredUnits] = useState<ProductUnit[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,7 +70,7 @@ const UnitManagement: React.FC = () => {
       setUnits(data.data || []);
     } catch (error) {
       toast({
-        title: 'Failed to fetch units',
+        title: t('products.management.fetchFailed') + ' ' + t('products.management.units').toLowerCase(),
         status: 'error',
         isClosable: true,
       });
@@ -96,7 +98,7 @@ const UnitManagement: React.FC = () => {
     try {
       await ProductService.deleteProductUnit(unitToDelete.id);
       toast({
-        title: 'Unit deleted successfully',
+        title: t('products.management.unitDeleted'),
         status: 'success',
         isClosable: true,
       });
@@ -104,7 +106,7 @@ const UnitManagement: React.FC = () => {
       onDeleteClose();
     } catch (error: any) {
       toast({
-        title: 'Failed to delete unit',
+        title: t('products.management.deleteFailed') + ' ' + t('products.management.units').toLowerCase(),
         description: error?.response?.data?.error || 'An error occurred',
         status: 'error',
         isClosable: true,
@@ -132,7 +134,7 @@ const UnitManagement: React.FC = () => {
           colorScheme="purple"
           onClick={handleAddClick}
         >
-          Add Unit
+          {t('products.management.addUnit')}
         </Button>
 
         <InputGroup maxW="300px">
@@ -140,7 +142,7 @@ const UnitManagement: React.FC = () => {
             <FiSearch color="gray.300" />
           </InputLeftElement>
           <Input
-            placeholder="Search units..."
+            placeholder={t('products.management.searchUnits')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -152,13 +154,13 @@ const UnitManagement: React.FC = () => {
         <Table variant="simple" size="sm">
           <Thead>
             <Tr>
-              <Th>Code</Th>
-              <Th>Name</Th>
-              <Th>Symbol</Th>
-              <Th>Type</Th>
-              <Th>Description</Th>
-              <Th>Status</Th>
-              <Th>Actions</Th>
+              <Th>{t('products.table.code')}</Th>
+              <Th>{t('products.table.name')}</Th>
+              <Th>{t('products.table.symbol')}</Th>
+              <Th>{t('products.table.type')}</Th>
+              <Th>{t('products.table.description')}</Th>
+              <Th>{t('products.table.status')}</Th>
+              <Th>{t('products.table.actions')}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -166,7 +168,7 @@ const UnitManagement: React.FC = () => {
               <Tr>
                 <Td colSpan={7} textAlign="center" py={8}>
                   <Text color="gray.500">
-                    {searchTerm ? 'No units found matching your search' : 'No units yet. Add your first unit!'}
+                    {searchTerm ? t('products.management.noUnitsFound') : t('products.management.noUnitsYet')}
                   </Text>
                 </Td>
               </Tr>
@@ -180,7 +182,7 @@ const UnitManagement: React.FC = () => {
                   <Td>{unit.description || '-'}</Td>
                   <Td>
                     <Badge colorScheme={unit.is_active ? 'green' : 'red'}>
-                      {unit.is_active ? 'Active' : 'Inactive'}
+                      {unit.is_active ? t('common.active') : t('common.inactive')}
                     </Badge>
                   </Td>
                   <Td>
@@ -192,7 +194,7 @@ const UnitManagement: React.FC = () => {
                         variant="ghost"
                         onClick={() => handleEditClick(unit)}
                       >
-                        Edit
+                        {t('common.edit')}
                       </Button>
                       <Button
                         size="sm"
@@ -201,7 +203,7 @@ const UnitManagement: React.FC = () => {
                         variant="ghost"
                         onClick={() => handleDeleteClick(unit)}
                       >
-                        Delete
+                        {t('common.delete')}
                       </Button>
                     </HStack>
                   </Td>
@@ -217,7 +219,7 @@ const UnitManagement: React.FC = () => {
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>
-            {selectedUnit ? 'Edit Unit' : 'Add Unit'}
+            {selectedUnit ? t('common.edit') + ' ' + t('products.unit') : t('common.add') + ' ' + t('products.unit')}
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
@@ -239,20 +241,20 @@ const UnitManagement: React.FC = () => {
         <AlertDialogOverlay>
           <AlertDialogContent>
             <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              Delete Unit
+              {t('products.management.deleteUnit')}
             </AlertDialogHeader>
 
             <AlertDialogBody>
-              Are you sure you want to delete <strong>{unitToDelete?.name}</strong>? 
-              This action cannot be undone.
+              {t('products.management.confirmDeleteUnit')} <strong>{unitToDelete?.name}</strong>? 
+              {t('products.management.cannotBeUndone')}
             </AlertDialogBody>
 
             <AlertDialogFooter>
               <Button ref={cancelRef} onClick={onDeleteClose}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button colorScheme="red" onClick={confirmDelete} ml={3}>
-                Delete
+                {t('common.delete')}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

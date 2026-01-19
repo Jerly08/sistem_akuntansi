@@ -340,7 +340,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
                   onClick={handleOpenManagement}
                   variant="outline"
                 >
-                  Manage Categories, Units & Locations
+                  {t('products.management.title')}
                 </Button>
                 <Button 
                   leftIcon={<FiPlus />} 
@@ -372,7 +372,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             
             {/* Category Filter */}
             <Select
-              placeholder="All Categories"
+              placeholder={t('common.filters.allCategories')}
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               maxW="200px"
@@ -386,7 +386,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 
             {/* Warehouse Location Filter */}
             <Select
-              placeholder="All Locations"
+              placeholder={t('common.filters.allLocations')}
               value={warehouseLocationFilter}
               onChange={(e) => setWarehouseLocationFilter(e.target.value)}
               maxW="200px"
@@ -400,7 +400,7 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             
             {/* Status Filter */}
             <Select
-              placeholder="All Status"
+              placeholder={t('common.filters.allStatus')}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               maxW="150px"
@@ -419,15 +419,15 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
               }}
               maxW="180px"
             >
-              <option value="name-asc">Name A-Z</option>
-              <option value="name-desc">Name Z-A</option>
-              <option value="code-asc">Code A-Z</option>
-              <option value="code-desc">Code Z-A</option>
-              <option value="category-asc">Category A-Z</option>
-              <option value="stock-desc">Stock High-Low</option>
-              <option value="stock-asc">Stock Low-High</option>
-              <option value="sale_price-desc">Price High-Low</option>
-              <option value="sale_price-asc">Price Low-High</option>
+              <option value="name-asc">{t('products.sort.nameAZ')}</option>
+              <option value="name-desc">{t('products.sort.nameZA')}</option>
+              <option value="code-asc">{t('products.sort.codeAZ')}</option>
+              <option value="code-desc">{t('products.sort.codeZA')}</option>
+              <option value="category-asc">{t('products.sort.categoryAZ')}</option>
+              <option value="stock-desc">{t('products.sort.stockHighLow')}</option>
+              <option value="stock-asc">{t('products.sort.stockLowHigh')}</option>
+              <option value="sale_price-desc">{t('products.sort.priceHighLow')}</option>
+              <option value="sale_price-asc">{t('products.sort.priceLowHigh')}</option>
             </Select>
             
             {/* Clear Filters */}
@@ -443,25 +443,25 @@ const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
               variant="outline"
               size="md"
             >
-              Clear Filters
+              {t('common.filters.clearFilters')}
             </Button>
           </Flex>
           
           {/* Results Summary */}
           <Text fontSize="sm" color="gray.600">
-Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.length !== 1 ? 's' : ''}
-{(searchTerm || categoryFilter || warehouseLocationFilter || statusFilter) ? ' (filtered)' : ''}
+{t('products.showing')} {filteredAndSortedProducts.length} {filteredAndSortedProducts.length !== 1 ? t('products.productsPlural') : t('products.product')}
+{(searchTerm || categoryFilter || warehouseLocationFilter || statusFilter) ? ` ${t('products.filtered')}` : ''}
           </Text>
         </Box>
 
         <Table variant="simple">
           <Thead>
             <Tr>
-              <Th>Product ID</Th>
-              <Th>Name</Th>
-              <Th>Category</Th>
-              <Th>Warehouse Location</Th>
-              <Th>Actions</Th>
+              <Th>{t('products.table.productId')}</Th>
+              <Th>{t('products.table.name')}</Th>
+              <Th>{t('products.table.category')}</Th>
+              <Th>{t('products.table.warehouseLocation')}</Th>
+              <Th>{t('products.table.actions')}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -470,7 +470,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                 <Td>{product.code}</Td>
                 <Td>{product.name}</Td>
                 <Td>{product.category?.name}</Td>
-                <Td>{product.warehouse_location?.name || 'No Location'}</Td>
+                <Td>{product.warehouse_location?.name || t('products.table.noLocation')}</Td>
                 <Td>
                   <Button 
                     size="sm" 
@@ -479,7 +479,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                     mr={2}
                     onClick={() => handleViewDetails(product)}
                   >
-                    View
+                    {t('common.view')}
                   </Button>
                   {canEdit && (
                     <>
@@ -490,7 +490,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                         mr={2}
                         onClick={() => handleEditProduct(product)}
                       >
-                        Edit
+                        {t('common.edit')}
                       </Button>
                       <Button 
                         size="sm" 
@@ -500,7 +500,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                         mr={2}
                         onClick={() => handleDeleteProduct(product)}
                       >
-                        Delete
+                        {t('common.delete')}
                       </Button>
                       <Input
                         type="file"
@@ -517,7 +517,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                         htmlFor={`file-upload-${product.id}`}
                         cursor="pointer"
                       >
-                        {product.image_path ? 'Update Image' : 'Upload Image'}
+                        {product.image_path ? t('products.imageUpload.updateImage') : t('products.imageUpload.uploadImage')}
                       </Button>
                     </>
                   )}
@@ -533,7 +533,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
           <ModalOverlay />
           <ModalContent>
             <ModalHeader>
-              {selectedProduct ? "Edit Product" : "Add Product"}
+              {selectedProduct ? t('products.editProduct') : t('products.addProduct')}
             </ModalHeader>
             <ModalCloseButton />
             <ModalBody pb={6}>
@@ -552,7 +552,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
           <ModalOverlay />
           <ModalContent>
             <ModalHeader>
-              Product Details - {detailProduct?.name}
+              {t('products.details.title')} - {detailProduct?.name}
             </ModalHeader>
             <ModalCloseButton />
             <ModalBody pb={6}>
@@ -593,39 +593,39 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                         justifyContent="center"
                         boxShadow="sm"
                       >
-                        <Text color="gray.400" fontSize="lg">Tidak ada gambar produk</Text>
+                        <Text color="gray.400" fontSize="lg">{t('products.details.noProductImage')}</Text>
                       </Box>
                     )}
                   </Flex>
 
                   {/* Basic Information */}
                   <Box mb={4}>
-                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">Basic Information</Text>
+                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">{t('products.details.basicInfo')}</Text>
                     <Grid templateColumns="repeat(2, 1fr)" gap={4}>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Product Code:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.productCode')}</Text>
                         <Text fontSize="md">{detailProduct.code}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Product Name:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.productName')}</Text>
                         <Text fontSize="md">{detailProduct.name}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Category:</Text>
-                        <Text fontSize="md">{detailProduct.category?.name || 'No Category'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.category')}</Text>
+                        <Text fontSize="md">{detailProduct.category?.name || t('products.details.noCategory')}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Unit:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.unit')}</Text>
                         <Text fontSize="md">{detailProduct.unit}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Warehouse Location:</Text>
-                        <Text fontSize="md">{detailProduct.warehouse_location?.name || 'No Location Assigned'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.warehouseLocation')}</Text>
+                        <Text fontSize="md">{detailProduct.warehouse_location?.name || t('products.details.noLocationAssigned')}</Text>
                       </Box>
                     </Grid>
                     {detailProduct.description && (
                       <Box mt={3}>
-                        <Text fontWeight="semibold" color="gray.600">Description:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.table.description')}</Text>
                         <Text fontSize="md">{detailProduct.description}</Text>
                       </Box>
                     )}
@@ -633,76 +633,76 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
 
                   {/* Product Details */}
                   <Box mb={4}>
-                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">Product Details</Text>
+                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">{t('products.details.productDetails')}</Text>
                     <Grid templateColumns="repeat(2, 1fr)" gap={4}>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Brand:</Text>
-                        <Text fontSize="md">{detailProduct.brand || 'Not specified'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.brand')}</Text>
+                        <Text fontSize="md">{detailProduct.brand || t('products.details.notSpecified')}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Model:</Text>
-                        <Text fontSize="md">{detailProduct.model || 'Not specified'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.model')}</Text>
+                        <Text fontSize="md">{detailProduct.model || t('products.details.notSpecified')}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">SKU:</Text>
-                        <Text fontSize="md">{detailProduct.sku || 'Not specified'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.sku')}</Text>
+                        <Text fontSize="md">{detailProduct.sku || t('products.details.notSpecified')}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Barcode:</Text>
-                        <Text fontSize="md">{detailProduct.barcode || 'Not specified'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.barcode')}</Text>
+                        <Text fontSize="md">{detailProduct.barcode || t('products.details.notSpecified')}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Weight:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.weight')}</Text>
                         <Text fontSize="md">{detailProduct.weight} kg</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Dimensions:</Text>
-                        <Text fontSize="md">{detailProduct.dimensions || 'Not specified'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.dimensions')}</Text>
+                        <Text fontSize="md">{detailProduct.dimensions || t('products.details.notSpecified')}</Text>
                       </Box>
                     </Grid>
                   </Box>
 
                   {/* Pricing */}
                   <Box mb={4}>
-                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">Pricing</Text>
+                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">{t('products.details.pricing')}</Text>
                     <Grid templateColumns="repeat(3, 1fr)" gap={4}>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Purchase Price:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.purchasePrice')}</Text>
                         <Text fontSize="md" color="green.600" fontWeight="bold">
                           {formatCurrencyDetailed(detailProduct.purchase_price || 0)}
                         </Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Sale Price:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.salePrice')}</Text>
                         <Text fontSize="md" color="blue.600" fontWeight="bold">
                           {formatCurrencyDetailed(detailProduct.sale_price || 0)}
                         </Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Pricing Tier:</Text>
-                        <Text fontSize="md">{detailProduct.pricing_tier || 'Standard'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.pricingTier')}</Text>
+                        <Text fontSize="md">{detailProduct.pricing_tier || t('products.details.standard')}</Text>
                       </Box>
                     </Grid>
                   </Box>
 
                   {/* Inventory */}
                   <Box mb={4}>
-                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">Inventory</Text>
+                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">{t('products.details.inventory')}</Text>
                     <Grid templateColumns="repeat(4, 1fr)" gap={4}>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Current Stock:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.currentStock')}</Text>
                         <Text fontSize="md" fontWeight="bold">{detailProduct.stock}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Min Stock:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.minStock')}</Text>
                         <Text fontSize="md">{detailProduct.min_stock}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Max Stock:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.maxStock')}</Text>
                         <Text fontSize="md">{detailProduct.max_stock}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Reorder Level:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.reorderLevel')}</Text>
                         <Text fontSize="md">{detailProduct.reorder_level}</Text>
                       </Box>
                     </Grid>
@@ -710,21 +710,21 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
 
                   {/* Settings */}
                   <Box mb={4}>
-                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">Settings</Text>
+                    <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">{t('products.details.settings')}</Text>
                     <Grid templateColumns="repeat(3, 1fr)" gap={4}>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Status:</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.statusLabel')}</Text>
                         <Text fontSize="md" color={detailProduct.is_active ? 'green.600' : 'red.600'}>
-                          {detailProduct.is_active ? 'Active' : 'Inactive'}
+                          {detailProduct.is_active ? t('products.active') : t('products.inactive')}
                         </Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Service Product:</Text>
-                        <Text fontSize="md">{detailProduct.is_service ? 'Yes' : 'No'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.serviceProduct')}</Text>
+                        <Text fontSize="md">{detailProduct.is_service ? t('products.details.yes') : t('products.details.no')}</Text>
                       </Box>
                       <Box>
-                        <Text fontWeight="semibold" color="gray.600">Taxable:</Text>
-                        <Text fontSize="md">{detailProduct.taxable ? 'Yes' : 'No'}</Text>
+                        <Text fontWeight="semibold" color="gray.600">{t('products.details.taxable')}</Text>
+                        <Text fontSize="md">{detailProduct.taxable ? t('products.details.yes') : t('products.details.no')}</Text>
                       </Box>
                     </Grid>
                   </Box>
@@ -732,7 +732,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                   {/* Notes */}
                   {detailProduct.notes && (
                     <Box>
-                      <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">Notes</Text>
+                      <Text fontSize="lg" fontWeight="bold" mb={2} color="blue.600">{t('products.details.notes')}</Text>
                       <Text fontSize="md" p={3} bg="gray.50" borderRadius="md">
                         {detailProduct.notes}
                       </Text>
@@ -750,7 +750,7 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
             <ModalOverlay />
             <ModalContent maxH="90vh">
               <ModalHeader>
-                Manage Categories, Units & Warehouse Locations
+                {t('products.management.title')}
               </ModalHeader>
               <ModalCloseButton />
               <ModalBody pb={6} overflowY="auto">
@@ -758,15 +758,15 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
                   <TabList>
                     <Tab>
                       <Icon as={FiGrid} mr={2} />
-                      Categories
+                      {t('products.management.categories')}
                     </Tab>
                     <Tab>
                       <Icon as={FiPackage} mr={2} />
-                      Units
+                      {t('products.management.units')}
                     </Tab>
                     <Tab>
                       <Icon as={FiMapPin} mr={2} />
-                      Warehouse Locations
+                      {t('products.management.warehouseLocations')}
                     </Tab>
                   </TabList>
 
@@ -796,19 +796,19 @@ Showing {filteredAndSortedProducts.length} product{filteredAndSortedProducts.len
           <AlertDialogOverlay>
             <AlertDialogContent>
               <AlertDialogHeader fontSize="lg" fontWeight="bold">
-                Update Product Image
+                {t('products.imageUpload.updateProductImage')}
               </AlertDialogHeader>
 
               <AlertDialogBody>
-                This product already has an image. Are you sure you want to replace it with the new image?
+                {t('products.imageUpload.confirmReplace')}
               </AlertDialogBody>
 
               <AlertDialogFooter>
                 <Button onClick={onAlertClose}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button colorScheme="blue" onClick={confirmImageUpdate} ml={3}>
-                  Update Image
+                  {t('products.imageUpload.updateImage')}
                 </Button>
               </AlertDialogFooter>
             </AlertDialogContent>

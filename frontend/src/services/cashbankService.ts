@@ -408,6 +408,34 @@ class CashBankService {
       throw error;
     }
   }
+
+  // Get available GL accounts for cash/bank creation
+  // Returns GL accounts that are:
+  // 1. Not already linked to any cash/bank account
+  // 2. Filtered by type (CASH shows accounts with "KAS" in name, BANK shows accounts with "BANK" in name)
+  async getAvailableGLAccounts(type: 'CASH' | 'BANK'): Promise<AvailableGLAccount[]> {
+    try {
+      const response = await api.get('/api/v1/cash-bank/available-gl-accounts', {
+        params: { type, _t: Date.now() },
+      });
+      // Backend returns { status, message, data } where data is the array
+      const result = response.data?.data ?? response.data ?? [];
+      // Ensure we always return an array
+      return Array.isArray(result) ? result : [];
+    } catch (error) {
+      console.error(`Error fetching available GL accounts for type ${type}:`, error);
+      throw error;
+    }
+  }
+}
+
+// Type for available GL accounts
+export interface AvailableGLAccount {
+  id: number;
+  code: string;
+  name: string;
+  balance: number;
+  category: string;
 }
 
 export default new CashBankService();

@@ -29,6 +29,15 @@ export interface Sale {
   pph: number;
   pph_percent: number;
   pph_type?: string;
+  // Enhanced tax configuration
+  ppn_rate?: number;
+  ppn_amount?: number;
+  other_tax_additions?: number;
+  pph21_rate?: number;
+  pph21_amount?: number;
+  pph23_rate?: number;
+  pph23_amount?: number;
+  other_tax_deductions?: number;
   total_tax: number;
   tax: number; // Backend legacy field
   total_amount: number;
@@ -150,6 +159,12 @@ export interface SaleCreateRequest {
   ppn_percent?: number;
   pph_percent?: number;
   pph_type?: string;
+  // Enhanced tax configuration
+  ppn_rate?: number;
+  other_tax_additions?: number;
+  pph21_rate?: number;
+  pph23_rate?: number;
+  other_tax_deductions?: number;
   payment_terms?: string;
   payment_method?: string;
   payment_method_type?: string; // CASH, BANK, CREDIT
@@ -187,6 +202,12 @@ export interface SaleUpdateRequest {
   ppn_percent?: number;
   pph_percent?: number;
   pph_type?: string;
+  // Enhanced tax configuration
+  ppn_rate?: number;
+  other_tax_additions?: number;
+  pph21_rate?: number;
+  pph23_rate?: number;
+  other_tax_deductions?: number;
   payment_terms?: string;
   payment_method?: string;
   payment_method_type?: string; // CASH, BANK, CREDIT

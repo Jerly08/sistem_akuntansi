@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 import {
   Modal,
   ModalOverlay,
@@ -86,6 +87,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
   mode
 }) => {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeTab, setActiveTab] = useState(0);
@@ -137,28 +139,45 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
 
   const watchedType = watch('type');
 
-  // Load available GL accounts (Asset accounts for cash/bank)
+  // Load available GL accounts based on selected type (CASH or BANK)
+  // This endpoint returns only GL accounts that:
+  // 1. Are not already linked to any cash/bank account
+  // 2. Match the type filter (KAS for CASH, BANK for BANK)
   useEffect(() => {
     const loadAccounts = async () => {
-      if (token && isOpen && mode === 'create') {
+      if (token && isOpen && mode === 'create' && watchedType) {
         try {
-          const allAccounts = await accountService.getAccounts(token, 'ASSET');
-          // Filter only asset accounts that are not headers (can be used for cash/bank)
-          const assetAccounts = allAccounts.filter(acc => 
-            acc.type === 'ASSET' && 
-            !acc.is_header && 
-            acc.is_active &&
-            (acc.category === 'CURRENT_ASSET' || !acc.category)
-          );
-          setAccounts(assetAccounts);
+          const availableAccounts = await cashbankService.getAvailableGLAccounts(watchedType);
+          // Ensure we have an array before mapping
+          if (!Array.isArray(availableAccounts)) {
+            console.warn('getAvailableGLAccounts did not return an array:', availableAccounts);
+            setAccounts([]);
+            return;
+          }
+          // Map to Account type for compatibility
+          const mappedAccounts = availableAccounts.map(acc => ({
+            id: acc.id,
+            code: acc.code,
+            name: acc.name,
+            balance: acc.balance,
+            type: 'ASSET' as const,
+            category: acc.category,
+            is_header: false,
+            is_active: true,
+          }));
+          setAccounts(mappedAccounts as Account[]);
+          
+          // Clear selected account when type changes (to prevent invalid selection)
+          setValue('account_id', undefined);
         } catch (error) {
-          console.error('Error loading accounts:', error);
+          console.error('Error loading available GL accounts:', error);
+          setAccounts([]);
         }
       }
     };
     
     loadAccounts();
-  }, [token, isOpen, mode]);
+  }, [token, isOpen, mode, watchedType, setValue]);
 
   // Initialize form data when editing or opening modal
   useEffect(() => {
@@ -202,16 +221,16 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
 
       // Basic Validation
       if (!data.name.trim()) {
-        throw new Error('Account name is required');
+        throw new Error(t('cashBank.form.errorAccountName'));
       }
 
       if (data.type === 'BANK' && !data.bank_name?.trim()) {
-        throw new Error('Bank name is required for bank accounts');
+        throw new Error(t('cashBank.form.errorBankName'));
       }
 
       // COA Integration Validation (only for create mode)
       if (mode === 'create' && !data.account_id) {
-        throw new Error('Please select a GL account from Chart of Accounts. You must create the COA account manually first.');
+        throw new Error(t('cashBank.form.errorGLAccount'));
       }
 
       // Prepare data for submission
@@ -220,8 +239,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
       if (mode === 'create') {
         await cashbankService.createCashBankAccount(submitData as CashBankCreateRequest);
         toast({
-          title: 'Success',
-          description: `${data.type === 'CASH' ? 'Cash' : 'Bank'} account created successfully`,
+          title: t('common.create'),
+          description: `${data.type === 'CASH' ? t('cashBank.form.cashAccount') : t('cashBank.form.bankAccount')} ${t('cashBank.form.successCreate')}`,
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -237,8 +256,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
         };
         await cashbankService.updateCashBankAccount(account.id, updateData);
         toast({
-          title: 'Success',
-          description: 'Account updated successfully',
+          title: t('common.create'),
+          description: t('cashBank.form.successUpdate'),
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -248,21 +267,48 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      // Log both the generic error and backend payload to aid diagnosis
+      // Enhanced error logging for debugging
       console.error('Error saving account:', err);
+      console.error('Error response:', err?.response);
+      console.error('Error status:', err?.response?.status);
       if (err?.response?.data) {
         console.error('Backend error payload:', err.response.data);
       }
+      
       const resp = err?.response?.data;
-      const message =
-        resp?.details ||
-        resp?.message ||
-        resp?.error ||
-        err?.message ||
-        'Failed to save account';
       const statusCode = err?.response?.status;
+      
+      // Extract error message with fallback handling
+      let message: string;
+      
+      // Check if response data exists and has content
+      if (resp && typeof resp === 'object' && Object.keys(resp).length > 0) {
+        // Try to extract the most specific error message
+        message = resp?.details || resp?.message || resp?.error || '';
+        
+        // If message is still empty, try to stringify the response
+        if (!message && resp) {
+          message = JSON.stringify(resp);
+        }
+      } else if (err?.message) {
+        // Use error message from the exception
+        message = err.message;
+      } else {
+        // Fallback for empty error payload
+        message = '';
+      }
+      
+      // Special handling for empty error payload or 500 errors
+      if (!message || message === '{}' || message === 'null') {
+        if (statusCode === 500) {
+          message = 'An unexpected server error occurred. Please check the server logs or contact support.';
+        } else {
+          message = t('cashBank.form.errorSave');
+        }
+      }
+      
       toast({
-        title: statusCode ? `Error (${statusCode})` : 'Error',
+        title: statusCode ? `${t('common.error')} (${statusCode})` : t('common.error'),
         description: typeof message === 'string' ? message : JSON.stringify(message),
         status: 'error',
         duration: 7000,
@@ -299,7 +345,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           borderTopRadius="md"
           py={4}
         >
-          {mode === 'create' ? 'Create Cash/Bank Account' : 'Edit Account'}
+          {mode === 'create' ? t('cashBank.form.createTitle') : t('cashBank.form.editTitle')}
         </ModalHeader>
         <ModalCloseButton color="white" />
 
@@ -330,8 +376,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
           >
             <Tabs index={activeTab} onChange={setActiveTab}>
               <TabList>
-                <Tab>Account Details</Tab>
-                {mode === 'create' && <Tab>COA Integration</Tab>}
+                <Tab>{t('cashBank.form.accountDetails')}</Tab>
+                {mode === 'create' && <Tab>{t('cashBank.form.coaIntegration')}</Tab>}
               </TabList>
 
               <TabPanels>
@@ -345,13 +391,13 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                           <FormLabel>
                             <HStack>
                               <FiSettings />
-                              <Text>Account Type</Text>
+                              <Text>{t('cashBank.form.accountType')}</Text>
                             </HStack>
                           </FormLabel>
                           <Controller
                             name="type"
                             control={control}
-                            rules={{ required: 'Account type is required' }}
+                            rules={{ required: t('cashBank.form.accountTypeRequired') }}
                             render={({ field }) => (
                               <RadioGroup
                                 {...field}
@@ -362,8 +408,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                     <HStack>
                                       <Text fontSize="2xl">💵</Text>
                                       <Box>
-                                        <Text>Cash Account</Text>
-                                        <Text fontSize="xs" color={mutedTextColor}>Physical money management</Text>
+                                        <Text>{t('cashBank.form.cashAccount')}</Text>
+                                        <Text fontSize="xs" color={mutedTextColor}>{t('cashBank.form.physicalMoneyManagement')}</Text>
                                       </Box>
                                     </HStack>
                                   </Radio>
@@ -371,8 +417,8 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                     <HStack>
                                       <Text fontSize="2xl">🏦</Text>
                                       <Box>
-                                        <Text>Bank Account</Text>
-                                        <Text fontSize="xs" color={mutedTextColor}>Electronic banking</Text>
+                                        <Text>{t('cashBank.form.bankAccount')}</Text>
+                                        <Text fontSize="xs" color={mutedTextColor}>{t('cashBank.form.electronicBanking')}</Text>
                                       </Box>
                                     </HStack>
                                   </Radio>
@@ -382,7 +428,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                           />
                           {mode === 'edit' && (
                             <Text fontSize="xs" color={warningTextColor} mt={2}>
-                              ⚠️ Account type cannot be changed after creation
+                              ⚠️ {t('cashBank.form.accountTypeCannotChange')}
                             </Text>
                           )}
                         </FormControl>
@@ -393,7 +439,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                     <Card>
                       <CardBody>
                         <Text fontWeight="bold" mb={4} color={textColor}>
-                          📋 Basic Information
+                          📋 {t('cashBank.form.basicInformation')}
                         </Text>
                         
                         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
@@ -401,15 +447,15 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                             <FormLabel>
                               <HStack>
                                 <FiFileText />
-                                <Text>Account Name</Text>
+                                <Text>{t('cashBank.form.accountName')}</Text>
                               </HStack>
                             </FormLabel>
                             <Input
                               {...register('name', {
-                                required: 'Account name is required',
-                                minLength: { value: 2, message: 'Account name must be at least 2 characters' }
+                                required: t('cashBank.form.accountNameRequired'),
+                                minLength: { value: 2, message: t('cashBank.form.accountNameMinLength') }
                               })}
-                              placeholder={watchedType === 'CASH' ? 'e.g., Petty Cash - Main Office' : 'e.g., BCA Main Account'}
+                              placeholder={watchedType === 'CASH' ? t('cashBank.form.accountNamePlaceholder') : t('cashBank.form.bankAccountNamePlaceholder')}
                             />
                             <FormErrorMessage>{errors.name?.message}</FormErrorMessage>
                           </FormControl>
@@ -418,27 +464,27 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                             <FormLabel>
                               <HStack>
                                 <FiDollarSign />
-                                <Text>Currency</Text>
+                                <Text>{t('cashBank.form.currency')}</Text>
                               </HStack>
                             </FormLabel>
                             <Input
-                              value="Indonesian Rupiah (IDR)"
+                              value={t('cashBank.form.indonesianRupiahIDR')}
                               isReadOnly
                               bg={readOnlyBg}
                               color={textColor}
                               fontWeight="medium"
                             />
                             <Text fontSize="xs" color={mutedTextColor} mt={1}>
-                              Currency is automatically set to Indonesian Rupiah
+                              {t('cashBank.form.currencyAutoSet')}
                             </Text>
                           </FormControl>
                         </SimpleGrid>
 
                         <FormControl mt={4}>
-                          <FormLabel>Description</FormLabel>
+                          <FormLabel>{t('cashBank.form.description')}</FormLabel>
                           <Textarea
                             {...register('description')}
-                            placeholder="Optional description for this account"
+                            placeholder={t('cashBank.form.descriptionPlaceholder')}
                             rows={3}
                             resize="vertical"
                           />
@@ -451,7 +497,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                       <Card>
                         <CardBody>
                           <Text fontWeight="bold" mb={4} color={textColor}>
-                            🏦 Bank Details
+                            🏦 {t('cashBank.form.bankDetails')}
                           </Text>
                           
                           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
@@ -459,48 +505,48 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                               <FormLabel>
                                 <HStack>
                                   <FiCreditCard />
-                                  <Text>Bank Name</Text>
+                                  <Text>{t('cashBank.form.bankName')}</Text>
                                 </HStack>
                               </FormLabel>
                               <Input
                                 {...register('bank_name', {
-                                  required: watchedType === 'BANK' ? 'Bank name is required for bank accounts' : false
+                                  required: watchedType === 'BANK' ? t('cashBank.form.bankNameRequired') : false
                                 })}
-                                placeholder="e.g., Bank Central Asia"
+                                placeholder={t('cashBank.form.bankNamePlaceholder')}
                               />
                               <FormErrorMessage>{errors.bank_name?.message}</FormErrorMessage>
                             </FormControl>
 
                             <FormControl>
-                              <FormLabel>Account Number</FormLabel>
+                              <FormLabel>{t('cashBank.form.accountNumber')}</FormLabel>
                               <Input
                                 {...register('account_no')}
-                                placeholder="e.g., 1234567890"
+                                placeholder={t('cashBank.form.accountNumberPlaceholder')}
                               />
                               <Text fontSize="xs" color={mutedTextColor} mt={1}>
-                                Optional: Bank account number for reference
+                                {t('cashBank.form.accountNumberOptional')}
                               </Text>
                             </FormControl>
 
                             <FormControl>
-                              <FormLabel>Atas Nama</FormLabel>
+                              <FormLabel>{t('cashBank.form.atasNama')}</FormLabel>
                               <Input
                                 {...register('account_holder_name')}
-                                placeholder="e.g., PT ABC Indonesia"
+                                placeholder={t('cashBank.form.atasNamaPlaceholder')}
                               />
                               <Text fontSize="xs" color={mutedTextColor} mt={1}>
-                                Optional: Account holder name
+                                {t('cashBank.form.atasNamaOptional')}
                               </Text>
                             </FormControl>
 
                             <FormControl>
-                              <FormLabel>Cabang</FormLabel>
+                              <FormLabel>{t('cashBank.form.cabang')}</FormLabel>
                               <Input
                                 {...register('branch')}
-                                placeholder="e.g., Jakarta Pusat"
+                                placeholder={t('cashBank.form.cabangPlaceholder')}
                               />
                               <Text fontSize="xs" color={mutedTextColor} mt={1}>
-                                Optional: Bank branch location
+                                {t('cashBank.form.cabangOptional')}
                               </Text>
                             </FormControl>
                           </SimpleGrid>
@@ -513,7 +559,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                       <Card>
                         <CardBody>
                           <Text fontWeight="bold" mb={4} color={textColor}>
-                            💰 Initial Setup
+                            💰 {t('cashBank.form.initialSetup')}
                           </Text>
                           
                           <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
@@ -521,7 +567,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                               <FormLabel>
                                 <HStack>
                                   <FiDollarSign />
-                                  <Text>Opening Balance</Text>
+                                  <Text>{t('cashBank.form.openingBalance')}</Text>
                                 </HStack>
                               </FormLabel>
                               <Controller
@@ -536,7 +582,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                       fontWeight="medium"
                                     />
                                     <Input
-                                      placeholder="0"
+                                      placeholder={t('cashBank.form.openingBalancePlaceholder')}
                                       value={openingBalanceDisplay}
                                       onChange={(e) => {
                                         const input = e.target.value;
@@ -568,7 +614,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                                 )}
                               />
                               <Text fontSize="xs" color={mutedTextColor} mt={1}>
-                                Initial balance when creating this account
+                                {t('cashBank.form.openingBalanceHelp')}
                               </Text>
                             </FormControl>
 
@@ -576,18 +622,18 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                               <FormLabel>
                                 <HStack>
                                   <FiCalendar />
-                                  <Text>Opening Date</Text>
+                                  <Text>{t('cashBank.form.openingDate')}</Text>
                                 </HStack>
                               </FormLabel>
                               <Input
                                 type="date"
                                 {...register('opening_date', {
-                                  required: 'Opening date is required',
+                                  required: t('cashBank.form.openingDateRequired'),
                                   validate: {
                                     notFuture: (value) => {
                                       const today = new Date();
                                       const inputDate = new Date(value);
-                                      return inputDate <= today || 'Opening date cannot be in the future';
+                                      return inputDate <= today || t('cashBank.form.openingDateNotFuture');
                                     },
                                   },
                                 })}
@@ -606,10 +652,10 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                           <HStack justify="space-between" align="center">
                             <Box>
                               <Text fontWeight="bold" color={cardInfoTextColor} mb={1}>
-                                📊 Chart of Accounts Integration
+                                📊 {t('cashBank.form.coaIntegrationTitle')}
                               </Text>
                               <Text fontSize="sm" color={cardInfoTextColor}>
-                                Configure how this account links to your Chart of Accounts
+                                {t('cashBank.form.coaIntegrationDesc')}
                               </Text>
                             </Box>
                             <Button
@@ -618,7 +664,7 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                               variant="outline"
                               onClick={() => setActiveTab(1)}
                             >
-                              Configure
+                              {t('cashBank.form.configure')}
                             </Button>
                           </HStack>
                         </CardBody>
@@ -635,10 +681,9 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                       <Alert status="info" borderRadius="md">
                         <AlertIcon />
                         <Box>
-                          <AlertTitle>Chart of Accounts Integration</AlertTitle>
+                          <AlertTitle>{t('cashBank.form.coaIntegrationTitle')}</AlertTitle>
                           <AlertDescription>
-                            Each cash/bank account must be linked to a GL account in your Chart of Accounts. 
-                            This ensures proper financial reporting and audit trails.
+                            {t('cashBank.form.coaIntegrationInfo')}
                           </AlertDescription>
                         </Box>
                       </Alert>
@@ -648,14 +693,13 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                         <AlertIcon />
                         <Box>
                           <AlertTitle fontSize="sm" fontWeight="bold">
-                            ⚠️ Manual COA Account Creation Required
+                            ⚠️ {t('cashBank.form.manualCOARequired')}
                           </AlertTitle>
                           <AlertDescription fontSize="xs">
-                            You must create a GL Account in the Chart of Accounts first before integrating it here. 
-                            Visit the <strong>Chart of Accounts</strong> page to create a new Asset account (Current Asset category, 1100-series code recommended).
+                            {t('cashBank.form.manualCOADesc')}
                             <br />
                             <br />
-                            <strong>Example:</strong> If you want to create a new bank account "Bank BCA", first create a GL account with code <strong>"1102-001"</strong> and name <strong>"Bank BCA"</strong> in the Chart of Accounts page, then select it here.
+                            <strong>{t('common.placeholders.manualEntry')}:</strong> {t('cashBank.form.manualCOAExample')}
                           </AlertDescription>
                         </Box>
                       </Alert>
@@ -666,25 +710,42 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                           <VStack align="stretch" spacing={4}>
                             <FormControl isRequired>
                               <FormLabel fontSize="sm">
-                                🎯 Select Existing GL Account (Asset Type Only)
+                                🎯 {watchedType === 'CASH' ? t('cashBank.form.selectCashGLAccount') || 'Pilih Akun GL Kas' : t('cashBank.form.selectBankGLAccount') || 'Pilih Akun GL Bank'}
                               </FormLabel>
-                              <Select
-                                placeholder="Choose GL account from Chart of Accounts..."
-                                {...register('account_id', {
-                                  setValueAs: value => value ? parseInt(value) : undefined,
-                                  required: 'GL Account selection is required'
-                                })}
-                                size="sm"
-                              >
-                                {accounts.map((acc) => (
-                                  <option key={acc.id} value={acc.id}>
-                                    [{acc.code}] {acc.name} - Balance: {accountService.formatBalance(acc.balance)}
-                                  </option>
-                                ))}
-                              </Select>
+                              {accounts.length === 0 ? (
+                                <Alert status="warning" size="sm">
+                                  <AlertIcon />
+                                  <Text fontSize="xs">
+                                    {watchedType === 'CASH' 
+                                      ? (t('cashBank.form.noCashGLAvailable') || 'Tidak ada akun GL Kas yang tersedia. Semua akun GL Kas sudah digunakan atau belum dibuat.')
+                                      : (t('cashBank.form.noBankGLAvailable') || 'Tidak ada akun GL Bank yang tersedia. Semua akun GL Bank sudah digunakan atau belum dibuat.')
+                                    }
+                                  </Text>
+                                </Alert>
+                              ) : (
+                                <Select
+                                  placeholder={watchedType === 'CASH' 
+                                    ? (t('cashBank.form.selectCashGLPlaceholder') || 'Pilih akun GL Kas...')
+                                    : (t('cashBank.form.selectBankGLPlaceholder') || 'Pilih akun GL Bank...')
+                                  }
+                                  {...register('account_id', {
+                                    setValueAs: value => value ? parseInt(value) : undefined,
+                                    required: t('cashBank.form.glAccountRequired')
+                                  })}
+                                  size="sm"
+                                >
+                                  {accounts.map((acc) => (
+                                    <option key={acc.id} value={acc.id}>
+                                      [{acc.code}] {acc.name} - Balance: {accountService.formatBalance(acc.balance)}
+                                    </option>
+                                  ))}
+                                </Select>
+                              )}
                               <Text fontSize="xs" color={mutedTextColor} mt={1}>
-                                Only active Asset accounts (Current Asset category) are shown. 
-                                If no accounts are available, please create one in the <strong>Chart of Accounts</strong> page first.
+                                {watchedType === 'CASH'
+                                  ? (t('cashBank.form.cashGLHelp') || 'Hanya menampilkan akun GL dengan nama mengandung "KAS" yang belum digunakan')
+                                  : (t('cashBank.form.bankGLHelp') || 'Hanya menampilkan akun GL dengan nama mengandung "BANK" yang belum digunakan')
+                                }
                               </Text>
                             </FormControl>
                           </VStack>
@@ -695,27 +756,27 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                       <Card bg={cardSuccessBg} borderColor={cardSuccessBorderColor}>
                         <CardBody>
                           <Text fontWeight="bold" color={cardSuccessTextColor} mb={3}>
-                            ✅ Benefits of COA Integration
+                            ✅ {t('cashBank.form.coaBenefits')}
                           </Text>
                           <VStack align="start" spacing={2}>
                             <HStack>
                               <Text fontSize="sm" color={cardSuccessTextColor}>
-                                📈 Automatic journal entries for all transactions
+                                📈 {t('cashBank.form.coaBenefit1')}
                               </Text>
                             </HStack>
                             <HStack>
                               <Text fontSize="sm" color={cardSuccessTextColor}>
-                                📊 Proper balance sheet and income statement reporting
+                                📊 {t('cashBank.form.coaBenefit2')}
                               </Text>
                             </HStack>
                             <HStack>
                               <Text fontSize="sm" color={cardSuccessTextColor}>
-                                🔍 Full audit trail and compliance readiness
+                                🔍 {t('cashBank.form.coaBenefit3')}
                               </Text>
                             </HStack>
                             <HStack>
                               <Text fontSize="sm" color={cardSuccessTextColor}>
-                                🔄 Real-time synchronization between cash/bank and GL
+                                🔄 {t('cashBank.form.coaBenefit4')}
                               </Text>
                             </HStack>
                           </VStack>
@@ -743,18 +804,18 @@ const CashBankForm: React.FC<CashBankFormProps> = ({
                 size={{ base: 'sm', md: 'md' }}
                 minW="80px"
               >
-                Cancel
+                {t('cashBank.form.cancel')}
               </Button>
               <Button
                 type="submit"
                 colorScheme="blue"
                 isLoading={isSubmitting || loading}
-                loadingText={mode === 'create' ? 'Creating...' : 'Updating...'}
+                loadingText={mode === 'create' ? t('cashBank.form.creating') : t('cashBank.form.updating')}
                 size={{ base: 'sm', md: 'md' }}
                 minW="140px"
                 leftIcon={watchedType === 'CASH' ? <FiDollarSign /> : <FiCreditCard />}
               >
-                {mode === 'create' ? 'Create Account' : 'Update Account'}
+                {mode === 'create' ? t('cashBank.form.createAccount') : t('cashBank.form.updateAccount')}
               </Button>
             </HStack>
           </ModalFooter>

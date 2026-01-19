@@ -9,7 +9,7 @@ export type Language = 'id' | 'en';
 interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, interpolations?: Record<string, string | number>) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -51,8 +51,8 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     }
   };
 
-  // Translation function
-  const t = (key: string): string => {
+  // Translation function with interpolation support
+  const t = (key: string, interpolations?: Record<string, string | number>): string => {
     // Support nested keys with dot notation
     const keys = key.split('.');
     let value: any = translations;
@@ -67,7 +67,16 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
       }
     }
     
-    return typeof value === 'string' ? value : key;
+    let result = typeof value === 'string' ? value : key;
+    
+    // Apply interpolations if provided
+    if (interpolations && typeof result === 'string') {
+      Object.entries(interpolations).forEach(([placeholder, replacement]) => {
+        result = result.replace(new RegExp(`{{${placeholder}}}`, 'g'), String(replacement));
+      });
+    }
+    
+    return result;
   };
 
   const value: LanguageContextType = {

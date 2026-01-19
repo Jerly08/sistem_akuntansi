@@ -168,10 +168,10 @@ const AssetsPage = () => {
       setAssets(response.data || []);
     } catch (error: any) {
       console.error('Error fetching assets:', error);
-      setError(error.response?.data?.message || 'Failed to load assets. Please try again.');
+      setError(error.response?.data?.message || t('assets.messages.fetchError'));
       toast({
-        title: 'Error',
-        description: 'Failed to load assets',
+        title: t('common.error'),
+        description: t('assets.messages.fetchError'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -260,8 +260,8 @@ const AssetsPage = () => {
     
     if (errors.length > 0) {
       toast({
-        title: 'Validation Error',
-        description: `Please fix ${errors.length} error(s) in the form`,
+        title: t('assets.messages.validationError'),
+        description: t('assets.messages.validationErrorDesc'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -301,8 +301,8 @@ const AssetsPage = () => {
       if (formData.id) {
         await assetService.updateAsset(formData.id, apiData);
         toast({
-          title: 'Success',
-          description: 'Asset updated successfully',
+          title: t('common.buttons.update'),
+          description: t('assets.messages.updateSuccess'),
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -310,8 +310,8 @@ const AssetsPage = () => {
       } else {
         await assetService.createAsset(apiData);
         toast({
-          title: 'Success',
-          description: 'Asset created successfully',
+          title: t('common.buttons.create'),
+          description: t('assets.messages.createSuccess'),
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -350,7 +350,7 @@ const AssetsPage = () => {
 
   // Handle asset deletion
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this asset?')) {
+    if (!window.confirm(t('assets.messages.confirmDelete'))) {
       return;
     }
     
@@ -358,8 +358,8 @@ const AssetsPage = () => {
       setError(null);
       await assetService.deleteAsset(id);
       toast({
-        title: 'Success',
-        description: 'Asset deleted successfully',
+        title: t('common.delete'),
+        description: t('assets.messages.deleteSuccess'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -368,11 +368,11 @@ const AssetsPage = () => {
       // Refresh assets list and summary
       await Promise.all([fetchAssets(), fetchAssetsSummary()]);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.details || error.response?.data?.message || 'Failed to delete asset';
+      const errorMsg = error.response?.data?.details || error.response?.data?.message || t('assets.messages.deleteError');
       setError(errorMsg);
       console.error('Error deleting asset:', error);
       toast({
-        title: 'Error',
+        title: t('common.error'),
         description: errorMsg,
         status: 'error',
         duration: 5000,
@@ -509,7 +509,7 @@ const AssetsPage = () => {
   // Table columns definition
   const columns = [
     { 
-      header: 'Code', 
+      header: t('assets.table.code'), 
       accessor: (asset: BackendAsset) => (
         <Text 
           fontWeight="medium" 
@@ -522,7 +522,7 @@ const AssetsPage = () => {
       )
     },
     { 
-      header: 'Name', 
+      header: t('assets.table.name'), 
       accessor: (asset: BackendAsset) => (
         <Text fontSize="sm" fontWeight="medium" noOfLines={1}>
           {asset.name}
@@ -530,7 +530,7 @@ const AssetsPage = () => {
       )
     },
     { 
-      header: 'Category', 
+      header: t('assets.table.category'), 
       accessor: (asset: BackendAsset) => (
         <Text fontSize="sm" noOfLines={1}>
           {asset.category}
@@ -538,7 +538,7 @@ const AssetsPage = () => {
       )
     },
     { 
-      header: 'Purchase Price', 
+      header: t('assets.table.purchasePrice'), 
       accessor: (asset: BackendAsset) => (
         <Text fontSize="sm" fontWeight="medium" whiteSpace="nowrap">
           {formatCurrency(asset.purchase_price)}
@@ -546,7 +546,7 @@ const AssetsPage = () => {
       )
     },
     { 
-      header: 'Book Value', 
+      header: t('assets.table.bookValue'), 
       accessor: (asset: BackendAsset) => (
         <Text fontSize="sm" fontWeight="medium" whiteSpace="nowrap">
           {formatCurrency(calculateBookValue(asset))}
@@ -554,7 +554,7 @@ const AssetsPage = () => {
       )
     },
     { 
-      header: 'Status', 
+      header: t('assets.table.status'), 
       accessor: (asset: BackendAsset) => (
         <Badge colorScheme={getStatusColor(asset.status)} variant="subtle" size="sm">
           {asset.status}
@@ -562,11 +562,11 @@ const AssetsPage = () => {
       )
     },
     { 
-      header: 'Location', 
+      header: t('assets.table.location'), 
       accessor: (asset: BackendAsset) => (
         <VStack align="start" spacing={1} maxW="180px">
           <Text noOfLines={1} fontSize="xs">
-            {asset.location || 'No location'}
+            {asset.location || t('assets.table.noLocation')}
           </Text>
           {asset.coordinates && (
             <HStack spacing={1}>
@@ -578,7 +578,7 @@ const AssetsPage = () => {
                 variant="ghost"
                 colorScheme="blue"
                 onClick={() => assetService.openInMaps(asset.coordinates!)}
-                title="View on Maps"
+                title={t('assets.details.viewOnMap')}
                 minW="auto"
                 p={1}
               >
@@ -619,7 +619,7 @@ const AssetsPage = () => {
         minW="auto"
         px={2}
       >
-        View
+        {t('common.view')}
       </Button>
       <Button
         size="xs"
@@ -629,7 +629,7 @@ const AssetsPage = () => {
         minW="auto"
         px={2}
       >
-        Edit
+        {t('common.edit')}
       </Button>
       <Button
         size="xs"
@@ -640,7 +640,7 @@ const AssetsPage = () => {
         minW="auto"
         px={2}
       >
-        Delete
+        {t('common.delete')}
       </Button>
       <Input
         type="file"
@@ -660,7 +660,7 @@ const AssetsPage = () => {
         px={2}
         whiteSpace="nowrap"
       >
-        {asset.image_path ? 'Update' : 'Upload'}
+        {asset.image_path ? t('common.update') : t('common.buttons.upload')}
       </Button>
     </>
   );
@@ -676,8 +676,8 @@ const AssetsPage = () => {
     } catch (error: any) {
       console.error('Error fetching asset details:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to load asset details',
+        title: t('common.error'),
+        description: t('assets.messages.detailsError'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -697,9 +697,9 @@ const AssetsPage = () => {
         accumulated_depreciation: res.data.accumulated_depreciation,
         depreciation_method: res.data.depreciation_method,
       });
-      toast({ title: 'Recalculated', status: 'success', duration: 2000, isClosable: true });
+      toast({ title: t('assets.messages.recalculated'), status: 'success', duration: 2000, isClosable: true });
     } catch (e) {
-      toast({ title: 'Failed to recalculate', status: 'error', duration: 3000, isClosable: true });
+      toast({ title: t('assets.messages.recalculateFailed'), status: 'error', duration: 3000, isClosable: true });
     } finally {
       setIsRecalcLoading(false);
     }
@@ -709,8 +709,8 @@ const AssetsPage = () => {
   const handleExport = () => {
     if (assets.length === 0) {
       toast({
-        title: 'No Data',
-        description: 'No assets to export',
+        title: t('assets.messages.exportNoData'),
+        description: t('assets.messages.exportNoDataDesc'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -720,8 +720,8 @@ const AssetsPage = () => {
     
     assetService.exportToCSV(assets);
     toast({
-      title: 'Export Started',
-      description: 'Assets data is being downloaded',
+      title: t('assets.messages.exportStarted'),
+      description: t('assets.messages.exportStartedDesc'),
       status: 'success',
       duration: 3000,
       isClosable: true,
@@ -769,7 +769,7 @@ const AssetsPage = () => {
       );
       
       toast({
-        title: 'Image uploaded successfully',
+        title: t('assets.messages.imageUploadSuccess'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -782,7 +782,7 @@ const AssetsPage = () => {
       }
     } catch (error) {
       toast({
-        title: 'Failed to upload image',
+        title: t('assets.messages.imageUploadFailed'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -803,8 +803,8 @@ const AssetsPage = () => {
     );
     
     toast({
-      title: 'Image Updated',
-      description: 'Asset image has been updated successfully',
+      title: t('assets.messages.imageUpdated'),
+      description: t('assets.messages.imageUpdatedDesc'),
       status: 'success',
       duration: 3000,
       isClosable: true,
@@ -829,8 +829,8 @@ const AssetsPage = () => {
   const handleAddCategory = async () => {
     if (!newCategoryName.trim()) {
       toast({
-        title: 'Error',
-        description: 'Category name cannot be empty',
+        title: t('common.error'),
+        description: t('assets.messages.categoryNameEmpty'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -840,8 +840,8 @@ const AssetsPage = () => {
 
     if (!newCategoryCode.trim()) {
       toast({
-        title: 'Error',
-        description: 'Category code/prefix cannot be empty',
+        title: t('common.error'),
+        description: t('assets.messages.categoryCodeEmpty'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -852,8 +852,8 @@ const AssetsPage = () => {
     const code = newCategoryCode.trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').substring(0, 10);
     if (code.length < 2) {
       toast({
-        title: 'Error',
-        description: 'Category code must be at least 2 characters',
+        title: t('common.error'),
+        description: t('assets.messages.categoryCodeMinLength'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -863,8 +863,8 @@ const AssetsPage = () => {
 
     if (customCategories.includes(newCategoryName.trim())) {
       toast({
-        title: 'Error',
-        description: 'Category already exists',
+        title: t('common.error'),
+        description: t('assets.messages.categoryExists'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -889,8 +889,8 @@ const AssetsPage = () => {
       setNewCategoryCode('');
       
       toast({
-        title: 'Success',
-        description: 'Category added and saved to database successfully',
+        title: t('common.buttons.create'),
+        description: t('assets.messages.categoryAdded'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -898,8 +898,8 @@ const AssetsPage = () => {
     } catch (error: any) {
       console.error('Error creating category:', error);
       toast({
-        title: 'Error',
-        description: error.response?.data?.error || 'Failed to create category',
+        title: t('common.error'),
+        description: error.response?.data?.error || t('assets.messages.categoryNameEmpty'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -936,8 +936,8 @@ const AssetsPage = () => {
   const handleUpdateCategory = () => {
     if (!newCategoryName.trim()) {
       toast({
-        title: 'Error',
-        description: 'Category name cannot be empty',
+        title: t('common.error'),
+        description: t('assets.messages.categoryNameEmpty'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -952,8 +952,8 @@ const AssetsPage = () => {
       setEditingCategoryIndex(null);
       setNewCategoryName('');
       toast({
-        title: 'Success',
-        description: 'Category updated successfully',
+        title: t('common.update'),
+        description: t('assets.messages.categoryUpdated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -968,8 +968,8 @@ const AssetsPage = () => {
     const isUsed = assets.some(asset => asset.category === categoryToDelete);
     if (isUsed) {
       toast({
-        title: 'Cannot Delete Category',
-        description: 'This category is being used by one or more assets. Please reassign those assets first.',
+        title: t('common.error'),
+        description: t('assets.messages.categoryInUse'),
         status: 'warning',
         duration: 5000,
         isClosable: true,
@@ -977,12 +977,12 @@ const AssetsPage = () => {
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete the category "${categoryToDelete}"?`)) {
+    if (window.confirm(`${t('assets.categories.confirmDelete')} "${categoryToDelete}"?`)) {
       const updatedCategories = customCategories.filter((_, i) => i !== index);
       setCustomCategories(updatedCategories);
       toast({
-        title: 'Success',
-        description: 'Category deleted successfully',
+        title: t('common.delete'),
+        description: t('assets.messages.categoryDeleted'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -1000,9 +1000,9 @@ const AssetsPage = () => {
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
           <Box>
-            <Heading size="lg">Asset Master</Heading>
+            <Heading size="lg">{t('assets.assetMaster')}</Heading>
             <Text color="gray.600" mt={1}>
-              Manage company assets and depreciation
+              {t('assets.manageDescription')}
             </Text>
           </Box>
           <Flex gap={3}>
@@ -1012,7 +1012,7 @@ const AssetsPage = () => {
               onClick={handleExport}
               isDisabled={assets.length === 0}
             >
-              Export
+              {t('assets.export')}
             </Button>
             <Button
               variant="outline"
@@ -1020,7 +1020,7 @@ const AssetsPage = () => {
               onClick={handleOpenCategoryModal}
               colorScheme="gray"
             >
-              Manage Categories
+              {t('assets.manageCategories')}
             </Button>
             <Button
               colorScheme="blue" 
@@ -1055,7 +1055,7 @@ const AssetsPage = () => {
               maxW="280px"
             />
             <Select
-              placeholder="All categories"
+              placeholder={t('assets.filters.allCategories')}
               value={filterCategory}
               onChange={(e) => { setFilterCategory(e.target.value); setCurrentPage(1); }}
               maxW="240px"
@@ -1065,17 +1065,17 @@ const AssetsPage = () => {
               ))}
             </Select>
             <Select
-              placeholder="All status"
+              placeholder={t('assets.filters.allStatus')}
               value={filterStatus}
               onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
               maxW="200px"
             >
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="INACTIVE">INACTIVE</option>
-              <option value="SOLD">SOLD</option>
+              <option value="ACTIVE">{t('assets.form.statusActive').toUpperCase()}</option>
+              <option value="INACTIVE">{t('assets.form.statusInactive').toUpperCase()}</option>
+              <option value="SOLD">{t('assets.form.statusSold').toUpperCase()}</option>
             </Select>
             <HStack spacing={2}>
-              <Text fontSize="sm" color="gray.600">Rows:</Text>
+              <Text fontSize="sm" color="gray.600">{t('assets.filters.rows')}:</Text>
               <Select value={pageSize} onChange={(e) => { setPageSize(parseInt(e.target.value) || 10); setCurrentPage(1); }} maxW="80px">
                 <option value={5}>5</option>
                 <option value={10}>10</option>
@@ -1111,17 +1111,17 @@ const AssetsPage = () => {
                 title={`Assets (${total})`}
                 actions={renderActions}
                 isLoading={isLoading}
-                emptyMessage="No assets found. Click 'Add Asset' to create your first asset."
+                emptyMessage={t('assets.noAssets')}
               />
               {/* Pagination Controls */}
               <HStack justify="space-between" mt={3}>
-                <Text fontSize="sm" color="gray.600">Showing {Math.min(total, start + 1)}–{Math.min(total, start + pageSize)} of {total}</Text>
+                <Text fontSize="sm" color="gray.600">{t('assets.pagination.showing')} {Math.min(total, start + 1)}–{Math.min(total, start + pageSize)} {t('assets.pagination.of')} {total}</Text>
                 <HStack>
-                  <Button size="sm" onClick={() => setCurrentPage(1)} isDisabled={page<=1}>First</Button>
-                  <Button size="sm" onClick={() => setCurrentPage(p => Math.max(1, p-1))} isDisabled={page<=1}>Prev</Button>
-                  <Text fontSize="sm">Page {page} / {totalPages}</Text>
-                  <Button size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} isDisabled={page>=totalPages}>Next</Button>
-                  <Button size="sm" onClick={() => setCurrentPage(totalPages)} isDisabled={page>=totalPages}>Last</Button>
+                  <Button size="sm" onClick={() => setCurrentPage(1)} isDisabled={page<=1}>{t('assets.pagination.first')}</Button>
+                  <Button size="sm" onClick={() => setCurrentPage(p => Math.max(1, p-1))} isDisabled={page<=1}>{t('assets.pagination.prev')}</Button>
+                  <Text fontSize="sm">{t('assets.pagination.page')} {page} / {totalPages}</Text>
+                  <Button size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))} isDisabled={page>=totalPages}>{t('assets.pagination.next')}</Button>
+                  <Button size="sm" onClick={() => setCurrentPage(totalPages)} isDisabled={page>=totalPages}>{t('assets.pagination.last')}</Button>
                 </HStack>
               </HStack>
             </>
@@ -1147,11 +1147,10 @@ const AssetsPage = () => {
                   <AlertIcon color="blue.500" />
                   <Box>
                     <AlertTitle color="blue.700" fontSize="sm" fontWeight="bold">
-                      📝 Manual Asset Entry
+                      📝 {t('assets.form.manualAssetEntry')}
                     </AlertTitle>
                     <AlertDescription color="blue.600" fontSize="xs" mt={1}>
-                      This form is for recording existing assets only (no financial transactions). 
-                      For new asset purchases, use the Purchases module to create purchase orders.
+                      {t('assets.form.manualAssetEntryDesc')}
                     </AlertDescription>
                   </Box>
                 </Alert>
@@ -1160,16 +1159,16 @@ const AssetsPage = () => {
                   {/* Basic Information Section */}
                   <Box w="full">
                     <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={4}>
-                      📋 Basic Information
+                      📋 {t('assets.form.basicInfo')}
                     </Text>
                     <VStack spacing={4}>
                       <HStack w="full" spacing={4}>
                         <FormControl isRequired isInvalid={hasFieldError(validationErrors, 'name')}>
-                          <FormLabel fontSize="sm" fontWeight="medium">Asset Name</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">{t('assets.assetName')}</FormLabel>
                           <Input
                             value={formData.name || ''}
                             onChange={(e) => handleInputChange('name', e.target.value)}
-                            placeholder="Enter asset name"
+                            placeholder={t('assets.form.enterAssetName')}
                             size="md"
                           />
                           {getFieldError(validationErrors, 'name') && (
@@ -1180,11 +1179,11 @@ const AssetsPage = () => {
                         </FormControl>
                         
                         <FormControl isRequired isInvalid={hasFieldError(validationErrors, 'category')}>
-                          <FormLabel fontSize="sm" fontWeight="medium">Category</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">{t('assets.category')}</FormLabel>
                           <Select
                             value={formData.category || ''}
                             onChange={(e) => handleInputChange('category', e.target.value)}
-                            placeholder="Select category"
+                            placeholder={t('assets.form.selectCategory')}
                             size="md"
                           >
                             {customCategories.map((category) => (
@@ -1203,31 +1202,31 @@ const AssetsPage = () => {
                       
                       <HStack w="full" spacing={4}>
                         <FormControl>
-                          <FormLabel fontSize="sm" fontWeight="medium">Serial Number</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">{t('assets.form.serialNumber')}</FormLabel>
                           <Input
                             value={formData.serialNumber || ''}
                             onChange={(e) => handleInputChange('serialNumber', e.target.value)}
-                            placeholder="Enter serial number"
+                            placeholder={t('assets.form.enterSerialNumber')}
                             size="md"
                           />
                         </FormControl>
                         
                         <FormControl>
-                          <FormLabel fontSize="sm" fontWeight="medium">Condition</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">{t('assets.form.condition')}</FormLabel>
                           <Select
                             value={formData.condition || 'Good'}
                             onChange={(e) => handleInputChange('condition', e.target.value)}
                             size="md"
                           >
-                            <option value="Excellent">Excellent</option>
-                            <option value="Good">Good</option>
-                            <option value="Fair">Fair</option>
-                            <option value="Poor">Poor</option>
+                            <option value="Excellent">{t('assets.form.conditionExcellent')}</option>
+                            <option value="Good">{t('assets.form.conditionGood')}</option>
+                            <option value="Fair">{t('assets.form.conditionFair')}</option>
+                            <option value="Poor">{t('assets.form.conditionPoor')}</option>
                           </Select>
                         </FormControl>
                         
                         <FormControl>
-                          <FormLabel fontSize="sm" fontWeight="medium">Status</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">{t('common.status')}</FormLabel>
                           <HStack spacing={4} pt={2}>
                             <Switch
                               isChecked={formData.isActive !== false}
@@ -1235,7 +1234,7 @@ const AssetsPage = () => {
                               colorScheme="green"
                             />
                             <Text fontSize="sm" color={formData.isActive ? 'green.600' : 'red.500'}>
-                              {formData.isActive ? 'Active' : 'Inactive'}
+                              {formData.isActive ? t('assets.form.statusActive') : t('assets.form.statusInactive')}
                             </Text>
                           </HStack>
                         </FormControl>
@@ -1246,12 +1245,12 @@ const AssetsPage = () => {
                   {/* Financial Information Section */}
                   <Box w="full">
                     <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={4}>
-                      💰 Financial Information
+                      💰 {t('assets.form.financialInfo')}
                     </Text>
                     <VStack spacing={4}>
                       <HStack w="full" spacing={4}>
                         <FormControl isRequired isInvalid={hasFieldError(validationErrors, 'purchaseDate')}>
-                          <FormLabel fontSize="sm" fontWeight="medium">Purchase Date</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">{t('assets.purchaseDate')}</FormLabel>
                           <Input
                             type="date"
                             value={formData.purchaseDate || ''}
@@ -1268,7 +1267,7 @@ const AssetsPage = () => {
                         <CurrencyInput
                           value={formData.purchasePrice || 0}
                           onChange={(value) => handleInputChange('purchasePrice', value)}
-                          label="Purchase Price"
+                          label={t('assets.purchasePrice')}
                           placeholder="Contoh: Rp 100.000.000"
                           isRequired={true}
                           isInvalid={hasFieldError(validationErrors, 'purchasePrice')}
@@ -1281,20 +1280,19 @@ const AssetsPage = () => {
                       <HStack w="full" spacing={4}>
                         <FormControl isInvalid={hasFieldError(validationErrors, 'salvageValue')}>
                           <HStack spacing={2} align="center">
-                            <FormLabel fontSize="sm" fontWeight="medium" mb={0}>Salvage Value</FormLabel>
+                            <FormLabel fontSize="sm" fontWeight="medium" mb={0}>{t('assets.form.salvageValue')}</FormLabel>
                             <Tooltip
                               label={
                                 <Box>
-                                  <Text fontWeight="semibold" mb={1}>💡 Salvage Value (Nilai Sisa)</Text>
+                                  <Text fontWeight="semibold" mb={1}>💡 {t('assets.form.salvageValue')}</Text>
                                   <Text fontSize="xs" lineHeight="1.4">
-                                    Perkiraan nilai asset di akhir masa manfaat.
+                                    {t('assets.form.salvageValueTooltip')}
                                   </Text>
                                   <Text fontSize="xs" lineHeight="1.4" mt={1}>
-                                    Contoh: Mobil Rp 100 juta, setelah 5 tahun masih 
-                                    bernilai Rp 20 juta = salvage value Rp 20 juta.
+                                    {t('assets.form.salvageValueExample')}
                                   </Text>
                                   <Text fontSize="xs" lineHeight="1.4" mt={1} fontWeight="medium">
-                                    Mempengaruhi perhitungan depresiasi bulanan.
+                                    {t('assets.form.salvageValueNote')}
                                   </Text>
                                 </Box>
                               }
@@ -1322,7 +1320,7 @@ const AssetsPage = () => {
                         </FormControl>
                         
                         <FormControl isInvalid={hasFieldError(validationErrors, 'usefulLife')}>
-                          <FormLabel fontSize="sm" fontWeight="medium">Useful Life (Years)</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">{t('assets.form.usefulLife')}</FormLabel>
                           <NumberInput
                             value={formData.usefulLife || 1}
                             onChange={(valueString) => handleInputChange('usefulLife', parseInt(valueString) || 1)}
@@ -1347,13 +1345,12 @@ const AssetsPage = () => {
                       <HStack w="full" spacing={4}>
                         <FormControl>
                           <HStack spacing={2} align="center">
-                            <FormLabel fontSize="sm" fontWeight="medium" mb={0}>Depreciation Method</FormLabel>
+                            <FormLabel fontSize="sm" fontWeight="medium" mb={0}>{t('assets.form.depreciationMethod')}</FormLabel>
                             <Tooltip
                               label={
                                 <Box>
-                                  <Text fontWeight="semibold" mb={1}>💡 Metode Depresiasi</Text>
-                                  <Text fontSize="xs">Straight Line: biaya depresiasi sama tiap periode.</Text>
-                                  <Text fontSize="xs">Declining Balance: biaya lebih besar di awal, makin kecil berikutnya.</Text>
+                                  <Text fontWeight="semibold" mb={1}>💡 {t('assets.form.depreciationMethod')}</Text>
+                                  <Text fontSize="xs">{t('assets.form.depreciationMethodTooltip')}</Text>
                                 </Box>
                               }
                               hasArrow
@@ -1377,15 +1374,15 @@ const AssetsPage = () => {
                         </FormControl>
                         
                         <FormControl>
-                          <FormLabel fontSize="sm" fontWeight="medium">Asset Status</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">{t('assets.form.assetStatus')}</FormLabel>
                           <Select
                             value={formData.status || 'ACTIVE'}
                             onChange={(e) => handleInputChange('status', e.target.value as 'ACTIVE' | 'INACTIVE' | 'SOLD')}
                             size="md"
                           >
-                            <option value="ACTIVE">🟢 Active</option>
-                            <option value="INACTIVE">⚪ Inactive</option>
-                            <option value="SOLD">🔴 Sold</option>
+                            <option value="ACTIVE">🟢 {t('assets.form.statusActive')}</option>
+                            <option value="INACTIVE">⚪ {t('assets.form.statusInactive')}</option>
+                            <option value="SOLD">🔴 {t('assets.form.statusSold')}</option>
                           </Select>
                         </FormControl>
                       </HStack>
@@ -1393,11 +1390,11 @@ const AssetsPage = () => {
                       {/* Asset and Depreciation Account Selection */}
                       <HStack w="full" spacing={4}>
                         <FormControl>
-                          <FormLabel fontSize="sm" fontWeight="medium">🏢 Fixed Asset Account</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">🏢 {t('assets.form.fixedAssetAccount')}</FormLabel>
                           <Select
                             value={formData.assetAccountId || ''}
                             onChange={(e) => handleInputChange('assetAccountId', e.target.value ? parseInt(e.target.value) : undefined)}
-                            placeholder="Choose fixed asset account"
+                            placeholder={t('assets.form.chooseFixedAssetAccount')}
                             size="md"
                             isDisabled={isLoadingAccounts}
                           >
@@ -1408,16 +1405,16 @@ const AssetsPage = () => {
                             ))}
                           </Select>
                           <Text fontSize="xs" color="gray.500" mt={1}>
-                            💡 This account will be debited (default: 1500 - Fixed Assets)
+                            💡 {t('assets.form.fixedAssetAccountNote')}
                           </Text>
                         </FormControl>
                         
                         <FormControl>
-                          <FormLabel fontSize="sm" fontWeight="medium">📉 Depreciation Expense Account</FormLabel>
+                          <FormLabel fontSize="sm" fontWeight="medium">📉 {t('assets.form.depreciationExpenseAccount')}</FormLabel>
                           <Select
                             value={formData.depreciationAccountId || ''}
                             onChange={(e) => handleInputChange('depreciationAccountId', e.target.value ? parseInt(e.target.value) : undefined)}
-                            placeholder="Choose depreciation expense account"
+                            placeholder={t('assets.form.chooseDepreciationAccount')}
                             size="md"
                             isDisabled={isLoadingAccounts}
                           >
@@ -1428,7 +1425,7 @@ const AssetsPage = () => {
                             ))}
                           </Select>
                           <Text fontSize="xs" color="gray.500" mt={1}>
-                            💡 For monthly depreciation entries (default: 6201 - Depreciation Expense)
+                            💡 {t('assets.form.depreciationAccountNote')}
                           </Text>
                         </FormControl>
                       </HStack>
@@ -1438,29 +1435,29 @@ const AssetsPage = () => {
                   {/* Location Information Section */}
                   <Box w="full">
                     <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={4}>
-                      📍 Location Information
+                      📍 {t('assets.form.locationInfo')}
                     </Text>
                     <VStack spacing={4}>
                       <FormControl>
-                        <FormLabel fontSize="sm" fontWeight="medium">Physical Location</FormLabel>
+                        <FormLabel fontSize="sm" fontWeight="medium">{t('assets.form.physicalLocation')}</FormLabel>
                         <Input
                           value={formData.location || ''}
                           onChange={(e) => handleInputChange('location', e.target.value)}
-                          placeholder="Enter asset physical location (e.g., Office Building Floor 2, Room 201)"
+                          placeholder={t('assets.form.enterPhysicalLocation')}
                           size="md"
                         />
                         <Text fontSize="xs" color="gray.500" mt={1}>
-                          💡 Describe where this asset is physically located
+                          💡 {t('assets.form.physicalLocationNote')}
                         </Text>
                       </FormControl>
                       
                       <FormControl>
-                        <FormLabel fontSize="sm" fontWeight="medium">GPS Coordinates (Optional)</FormLabel>
+                        <FormLabel fontSize="sm" fontWeight="medium">{t('assets.form.gpsCoordinates')}</FormLabel>
                         <HStack spacing={3}>
                           <Input
                             value={formData.coordinates || ''}
                             onChange={(e) => handleInputChange('coordinates', e.target.value)}
-                            placeholder="Click 'Select Location' to choose on map"
+                            placeholder={t('assets.form.selectOnMap')}
                             readOnly
                             flex={1}
                             bg="gray.50"
@@ -1474,7 +1471,7 @@ const AssetsPage = () => {
                             size="md"
                             flexShrink={0}
                           >
-                            Select on Map
+                            {t('assets.form.selectOnMap')}
                           </Button>
                           {formData.coordinates && (
                             <Button
@@ -1485,12 +1482,12 @@ const AssetsPage = () => {
                               size="md"
                               flexShrink={0}
                             >
-                              View
+                              {t('assets.form.viewOnMap')}
                             </Button>
                           )}
                         </HStack>
                         <Text fontSize="xs" color="gray.500" mt={1}>
-                          🗺️ Pinpoint exact location on map for better asset tracking
+                          🗺️ {t('assets.form.gpsNote')}
                         </Text>
                       </FormControl>
                     </VStack>
@@ -1499,7 +1496,7 @@ const AssetsPage = () => {
                   {/* Asset Image Section */}
                   <Box w="full">
                     <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={4}>
-                      📸 Asset Image
+                      📸 {t('assets.form.assetImage')}
                     </Text>
                     {selectedAsset && selectedAsset.id ? (
                       /* Edit Mode - Full upload functionality */
@@ -1530,11 +1527,10 @@ const AssetsPage = () => {
                             <Icon as={FiEdit} boxSize={6} color="blue.500" />
                           </Box>
                           <Text fontSize="md" fontWeight="medium" color="gray.700">
-                            Save Asset First to Upload Image
+                            {t('assets.form.saveAssetFirst')}
                           </Text>
                           <Text fontSize="sm" color="gray.500" textAlign="center">
-                            You can upload an image after creating this asset.
-                            Click "Create Asset" button to save, then edit the asset to add an image.
+                            {t('assets.form.saveAssetFirstDesc')}
                           </Text>
                         </VStack>
                       </Box>
@@ -1544,14 +1540,14 @@ const AssetsPage = () => {
                   {/* Additional Notes Section */}
                   <Box w="full">
                     <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={4}>
-                      📝 Additional Information
+                      📝 {t('assets.form.additionalInfo')}
                     </Text>
                     <FormControl>
-                      <FormLabel fontSize="sm" fontWeight="medium">Notes</FormLabel>
+                      <FormLabel fontSize="sm" fontWeight="medium">{t('assets.form.notes')}</FormLabel>
                       <Textarea
                         value={formData.notes || ''}
                         onChange={(e) => handleInputChange('notes', e.target.value)}
-                        placeholder="Add any additional notes, maintenance history, or important information about this asset..."
+                        placeholder={t('assets.form.enterNotes')}
                         rows={4}
                         resize="vertical"
                         size="md"
@@ -1568,16 +1564,16 @@ const AssetsPage = () => {
                     onClick={handleCloseModal}
                     variant="outline"
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
                   <Button
                     leftIcon={selectedAsset?.id ? <FiEdit /> : <FiPlus />}
                     type="submit"
                     colorScheme="blue"
                     isLoading={isSubmitting}
-                    loadingText={selectedAsset?.id ? 'Updating...' : 'Creating...'}
+                    loadingText={selectedAsset?.id ? t('common.updating') : t('common.creating')}
                   >
-                    {selectedAsset?.id ? 'Update Asset' : 'Create Asset'}
+                    {selectedAsset?.id ? t('assets.updateAsset') : t('assets.createAsset')}
                   </Button>
                 </HStack>
               </ModalFooter>
@@ -1597,7 +1593,7 @@ const AssetsPage = () => {
             address: '',
             coordinates: formData.coordinates || ''
           }}
-          title={selectedAsset ? `Select Location - ${selectedAsset.name}` : "Select Asset Location"}
+          title={selectedAsset ? `${t('assets.form.selectOnMap')} - ${selectedAsset.name}` : t('assets.form.selectOnMap')}
         />
 
         {/* Image Update Confirmation Dialog */}
@@ -1609,19 +1605,19 @@ const AssetsPage = () => {
           <AlertDialogOverlay>
             <AlertDialogContent>
               <AlertDialogHeader fontSize="lg" fontWeight="bold">
-                Update Asset Image
+                {t('assets.imageUpload.title')}
               </AlertDialogHeader>
 
               <AlertDialogBody>
-                This asset already has an image. Are you sure you want to replace it with the new image?
+                {t('assets.imageUpload.confirmReplace')}
               </AlertDialogBody>
 
               <AlertDialogFooter>
                 <Button onClick={onAlertClose}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button colorScheme="blue" onClick={confirmImageUpdate} ml={3}>
-                  Update Image
+                  {t('assets.imageUpload.updateImage')}
                 </Button>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -1635,7 +1631,7 @@ const AssetsPage = () => {
             <ModalHeader>
               <HStack spacing={3}>
                 <Icon as={FiEye} color="blue.500" />
-                <Text>Asset Details</Text>
+                <Text>{t('assets.assetDetails')}</Text>
               </HStack>
             </ModalHeader>
             <ModalCloseButton />
@@ -1667,7 +1663,7 @@ const AssetsPage = () => {
                             mx="auto"
                           >
                             <Text color="gray.500" fontSize="lg">
-                              Failed to load image
+                              {t('assets.details.failedToLoadImage')}
                             </Text>
                           </Box>
                         }
@@ -1684,7 +1680,7 @@ const AssetsPage = () => {
                         mx="auto"
                       >
                         <Text color="gray.500" fontSize="lg">
-                          No Image Available
+                          {t('assets.details.noImageAvailable')}
                         </Text>
                       </Box>
                     )}
@@ -1693,25 +1689,25 @@ const AssetsPage = () => {
                   {/* Basic Information */}
                   <Box>
                     <Text fontSize="xl" fontWeight="bold" mb={4} color="gray.700">
-                      📋 Basic Information
+                      📋 {t('assets.details.basicInfo')}
                     </Text>
                     <Grid templateColumns="repeat(2, 1fr)" gap={6}>
                       <GridItem>
                         <VStack align="start" spacing={4}>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Asset Code</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.assetCode')}</Text>
                             <Text fontSize="lg" fontWeight="semibold" color="blue.600">
                               {detailAsset.code}
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Asset Name</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.assetName')}</Text>
                             <Text fontSize="md" fontWeight="medium">
                               {detailAsset.name}
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Category</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.category')}</Text>
                             <Badge colorScheme="purple" size="lg" px={3} py={1} fontSize="sm">
                               {detailAsset.category}
                             </Badge>
@@ -1721,25 +1717,25 @@ const AssetsPage = () => {
                       <GridItem>
                         <VStack align="start" spacing={4}>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Serial Number</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.serialNumber')}</Text>
                             <Text fontSize="md">
-                              {detailAsset.serial_number || 'Not specified'}
+                              {detailAsset.serial_number || t('assets.details.notSpecified')}
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Condition</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.condition')}</Text>
                             <Text fontSize="md">
                               {detailAsset.condition || 'Good'}
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Status</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.status')}</Text>
                             <HStack spacing={3}>
                               <Badge colorScheme={getStatusColor(detailAsset.status)} size="lg" px={3} py={1}>
                                 {detailAsset.status}
                               </Badge>
                               <Badge colorScheme={detailAsset.is_active ? 'green' : 'red'} size="lg" px={3} py={1}>
-                                {detailAsset.is_active ? 'Active' : 'Inactive'}
+                                {detailAsset.is_active ? t('assets.form.statusActive') : t('assets.form.statusInactive')}
                               </Badge>
                             </HStack>
                           </Box>
@@ -1751,21 +1747,21 @@ const AssetsPage = () => {
               {/* Financial Information */}
               <Box>
                 <Text fontSize="xl" fontWeight="bold" mb={4} color="gray.700">
-                  💰 Financial Information
+                  💰 {t('assets.details.financialInfo')}
                 </Text>
                 
                 {/* Recalculate as of date */}
                 <Box mb={4}>
                   <HStack spacing={3} align="center">
-                    <Text fontSize="sm" color="gray.600">Recalculate as of</Text>
+                    <Text fontSize="sm" color="gray.600">{t('assets.details.recalculateAsOf')}</Text>
                     <Input type="date" size="sm" value={recalcDate} onChange={(e) => setRecalcDate(e.target.value)} maxW="200px" />
-                    <Button size="sm" colorScheme="blue" isLoading={isRecalcLoading} onClick={handleRecalculate}>Recalculate</Button>
+                    <Button size="sm" colorScheme="blue" isLoading={isRecalcLoading} onClick={handleRecalculate}>{t('assets.details.recalculate')}</Button>
                   </HStack>
                   {recalcResult && (
                     <HStack spacing={6} mt={3}>
-                      <Badge colorScheme="teal">Book Value: {formatCurrency(recalcResult.current_book_value)}</Badge>
-                      <Badge colorScheme="orange">Accumulated: {formatCurrency(recalcResult.accumulated_depreciation)}</Badge>
-                      <Badge colorScheme="purple">Method: {recalcResult.depreciation_method.replace('_',' ')}</Badge>
+                      <Badge colorScheme="teal">{t('assets.details.currentBookValue')}: {formatCurrency(recalcResult.current_book_value)}</Badge>
+                      <Badge colorScheme="orange">{t('assets.details.accumulatedDepreciation')}: {formatCurrency(recalcResult.accumulated_depreciation)}</Badge>
+                      <Badge colorScheme="purple">{t('assets.details.depreciationMethod')}: {recalcResult.depreciation_method.replace('_',' ')}</Badge>
                     </HStack>
                   )}
                 </Box>
@@ -1773,7 +1769,7 @@ const AssetsPage = () => {
                       <GridItem>
                         <VStack align="start" spacing={4}>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Purchase Date</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.purchaseDate')}</Text>
                             <Text fontSize="md">
                               {new Date(detailAsset.purchase_date).toLocaleDateString('id-ID', {
                                 year: 'numeric',
@@ -1783,13 +1779,13 @@ const AssetsPage = () => {
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Purchase Price</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.purchasePrice')}</Text>
                             <Text fontSize="lg" fontWeight="semibold" color="green.600">
                               {formatCurrency(detailAsset.purchase_price)}
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Salvage Value</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.salvageValue')}</Text>
                             <Text fontSize="md">
                               {formatCurrency(detailAsset.salvage_value)}
                             </Text>
@@ -1799,19 +1795,19 @@ const AssetsPage = () => {
                       <GridItem>
                         <VStack align="start" spacing={4}>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Useful Life</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.usefulLife')}</Text>
                             <Text fontSize="md">
-                              {detailAsset.useful_life} years
+                              {detailAsset.useful_life} {t('assets.details.years')}
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Accumulated Depreciation</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.accumulatedDepreciation')}</Text>
                             <Text fontSize="lg" fontWeight="semibold" color="orange.600">
                               {formatCurrency(detailAsset.accumulated_depreciation)}
                             </Text>
                           </Box>
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Current Book Value</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.currentBookValue')}</Text>
                             <Text fontSize="lg" fontWeight="bold" color="blue.600">
                               {formatCurrency(calculateBookValue(detailAsset))}
                             </Text>
@@ -1820,7 +1816,7 @@ const AssetsPage = () => {
                       </GridItem>
                     </Grid>
                     <Box mt={4}>
-                      <Text fontSize="sm" color="gray.500" fontWeight="medium">Depreciation Method</Text>
+                      <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.depreciationMethod')}</Text>
                       <Badge colorScheme="teal" size="lg" px={3} py={1}>
                         {DEPRECIATION_METHOD_LABELS[detailAsset.depreciation_method as keyof typeof DEPRECIATION_METHOD_LABELS]}
                       </Badge>
@@ -1831,12 +1827,12 @@ const AssetsPage = () => {
                   {(detailAsset.location || detailAsset.coordinates) && (
                     <Box>
                       <Text fontSize="xl" fontWeight="bold" mb={4} color="gray.700">
-                        📍 Location Information
+                        📍 {t('assets.details.locationInfo')}
                       </Text>
                       <VStack align="start" spacing={3}>
                         {detailAsset.location && (
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">Physical Location</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.physicalLocation')}</Text>
                             <Text fontSize="md">
                               {detailAsset.location}
                             </Text>
@@ -1844,7 +1840,7 @@ const AssetsPage = () => {
                         )}
                         {detailAsset.coordinates && (
                           <Box>
-                            <Text fontSize="sm" color="gray.500" fontWeight="medium">GPS Coordinates</Text>
+                            <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.gpsCoordinates')}</Text>
                             <HStack spacing={3}>
                               <Text fontSize="md" fontFamily="mono">
                                 {detailAsset.coordinates}
@@ -1856,7 +1852,7 @@ const AssetsPage = () => {
                                 colorScheme="blue"
                                 variant="outline"
                               >
-                                View on Map
+                                {t('assets.details.viewOnMap')}
                               </Button>
                             </HStack>
                           </Box>
@@ -1869,7 +1865,7 @@ const AssetsPage = () => {
                   {detailAsset.notes && (
                     <Box>
                       <Text fontSize="xl" fontWeight="bold" mb={4} color="gray.700">
-                        📝 Notes
+                        📝 {t('assets.details.notes')}
                       </Text>
                       <Box
                         p={4}
@@ -1888,12 +1884,12 @@ const AssetsPage = () => {
                   {/* Timestamps */}
                   <Box>
                     <Text fontSize="lg" fontWeight="semibold" mb={3} color="gray.600">
-                      📅 Record Information
+                      📅 {t('assets.details.recordInfo')}
                     </Text>
                     <Grid templateColumns="repeat(2, 1fr)" gap={4}>
                       <GridItem>
                         <Box>
-                          <Text fontSize="sm" color="gray.500" fontWeight="medium">Created At</Text>
+                          <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.createdAt')}</Text>
                           <Text fontSize="sm">
                             {new Date(detailAsset.created_at).toLocaleString('id-ID')}
                           </Text>
@@ -1901,7 +1897,7 @@ const AssetsPage = () => {
                       </GridItem>
                       <GridItem>
                         <Box>
-                          <Text fontSize="sm" color="gray.500" fontWeight="medium">Last Updated</Text>
+                          <Text fontSize="sm" color="gray.500" fontWeight="medium">{t('assets.details.lastUpdated')}</Text>
                           <Text fontSize="sm">
                             {new Date(detailAsset.updated_at).toLocaleString('id-ID')}
                           </Text>
@@ -1926,10 +1922,10 @@ const AssetsPage = () => {
                   colorScheme="blue"
                   variant="outline"
                 >
-                  Edit Asset
+                  {t('assets.editAsset')}
                 </Button>
                 <Button onClick={onDetailClose}>
-                  Close
+                  {t('common.close')}
                 </Button>
               </HStack>
             </ModalFooter>
@@ -1943,7 +1939,7 @@ const AssetsPage = () => {
             <ModalHeader>
               <HStack spacing={3}>
                 <Icon as={FiSettings} color="gray.500" />
-                <Text>Manage Asset Categories</Text>
+                <Text>{t('assets.categories.title')}</Text>
               </HStack>
             </ModalHeader>
             <ModalCloseButton />
@@ -1953,21 +1949,21 @@ const AssetsPage = () => {
                 {/* Add New Category Section */}
                 <Box>
                   <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={4}>
-                    ➕ Add New Category
+                    ➕ {t('assets.categories.addNew')}
                   </Text>
                   <HStack spacing={3}>
                     <FormControl flex={1}>
                       <Input
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
-                        placeholder="Enter category name"
+                        placeholder={t('assets.categories.enterCategoryName')}
                       />
                     </FormControl>
                     <FormControl w="160px">
                       <Input
                         value={newCategoryCode}
                         onChange={(e) => setNewCategoryCode(e.target.value.toUpperCase())}
-                        placeholder="Code"
+                        placeholder={t('assets.categories.code')}
                         maxLength={10}
                       />
                     </FormControl>
@@ -1978,13 +1974,13 @@ const AssetsPage = () => {
                           onClick={handleUpdateCategory}
                           isDisabled={!newCategoryName.trim()}
                         >
-                          Update
+                          {t('common.update')}
                         </Button>
                         <Button
                           variant="outline"
                           onClick={cancelEdit}
                         >
-                          Cancel
+                          {t('common.cancel')}
                         </Button>
                       </>
                     ) : (
@@ -1994,19 +1990,19 @@ const AssetsPage = () => {
                         onClick={handleAddCategory}
                         isDisabled={!newCategoryName.trim()}
                       >
-                        Add
+                        {t('common.add')}
                       </Button>
                     )}
                   </HStack>
                   <Text fontSize="xs" color="gray.500" mt={2}>
-                    💡 Provide a short code/prefix (e.g., RE, IT, VEH). This prefix will be used for asset codes.
+                    💡 {t('assets.categories.codeNote')}
                   </Text>
                 </Box>
 
                 {/* Existing Categories List */}
                 <Box>
                   <Text fontSize="md" fontWeight="semibold" color="gray.700" mb={4}>
-                    📋 Existing Categories ({customCategories.length})
+                    📋 {t('assets.categories.existingCategories')} ({customCategories.length})
                   </Text>
                   <VStack spacing={2} align="stretch" maxH="300px" overflowY="auto">
                     {customCategories.map((category, index) => {
@@ -2037,12 +2033,12 @@ const AssetsPage = () => {
                             <HStack spacing={2}>
                               {isDefault && (
                                 <Badge colorScheme="gray" size="sm" fontSize="xs">
-                                  Default
+                                  {t('assets.categories.default')}
                                 </Badge>
                               )}
                               {isUsed && (
                                 <Badge colorScheme="green" size="sm" fontSize="xs">
-                                  In Use
+                                  {t('assets.categories.inUse')}
                                 </Badge>
                               )}
                             </HStack>
@@ -2056,7 +2052,7 @@ const AssetsPage = () => {
                               onClick={() => handleEditCategory(index)}
                               isDisabled={editingCategoryIndex !== null && editingCategoryIndex !== index}
                             >
-                              Edit
+                              {t('common.edit')}
                             </Button>
                             <Button
                               size="sm"
@@ -2065,9 +2061,9 @@ const AssetsPage = () => {
                               leftIcon={<FiTrash2 />}
                               onClick={() => handleDeleteCategory(index)}
                               isDisabled={isUsed || isDefault}
-                              title={isUsed ? 'Cannot delete: Category is in use' : isDefault ? 'Cannot delete: Default category' : ''}
+                              title={isUsed ? t('assets.categories.cannotDeleteInUse') : isDefault ? t('assets.categories.cannotDeleteDefault') : ''}
                             >
-                              Delete
+                              {t('common.delete')}
                             </Button>
                           </HStack>
                         </HStack>
@@ -2084,7 +2080,7 @@ const AssetsPage = () => {
                         borderColor="gray.300"
                       >
                         <Text color="gray.500">
-                          No categories available. Add your first category above.
+                          {t('assets.noAssets')}
                         </Text>
                       </Box>
                     )}
@@ -2095,7 +2091,7 @@ const AssetsPage = () => {
             
             <ModalFooter>
               <Button onClick={handleCloseCategoryModal}>
-                Close
+                {t('common.close')}
               </Button>
             </ModalFooter>
           </ModalContent>

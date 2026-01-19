@@ -29,6 +29,7 @@ import salesService, { Sale, SalePaymentRequest } from '@/services/salesService'
 import cashbankService from '@/services/cashbankService';
 import accountService from '@/services/accountService';
 import { Account as GLAccount } from '@/types/account';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface PaymentFormProps {
   isOpen: boolean;
@@ -53,6 +54,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   sale,
   onSave
 }) => {
+  const { t } = useTranslation();
   const { token, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -135,8 +137,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     // Check if user is authenticated and has required permissions
     if (!token || !user) {
       toast({
-        title: 'Authentication Required',
-        description: 'Please log in to access payment accounts.',
+        title: t('sales.messages.authRequired'),
+        description: t('sales.messages.pleaseLogin'),
         status: 'error',
         duration: 5000
       });
@@ -147,8 +149,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
     const allowedRoles = ['admin', 'finance', 'director', 'employee'];
     if (!allowedRoles.includes(user.role.toLowerCase())) {
       toast({
-        title: 'Access Denied',
-        description: 'You do not have permission to view payment accounts.',
+        title: t('sales.messages.accessDenied'),
+        description: t('messages.toast.accessDeniedDesc'),
         status: 'error',
         duration: 5000
       });
@@ -164,8 +166,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
 
       if (paymentAccounts.length === 0) {
         toast({
-          title: 'No Payment Accounts',
-          description: 'No cash or bank accounts available for payments. Please contact your administrator.',
+          title: t('common.noData'),
+          description: t('common.noData'),
           status: 'warning',
           duration: 5000
         });
@@ -178,18 +180,18 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       setAccounts([]);
       
       // Provide more specific error messages based on the error
-      let errorMessage = 'Could not load payment accounts. Please contact your administrator.';
+      let errorMessage = t('messages.toast.serverErrorDesc');
       
       if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
-        errorMessage = 'You do not have permission to view payment accounts.';
+        errorMessage = t('messages.toast.accessDeniedDesc');
       } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
-        errorMessage = 'Your session has expired. Please log in again.';
+        errorMessage = t('messages.toast.sessionExpiredDesc');
       } else if (error.message?.includes('Network')) {
-        errorMessage = 'Network error. Please check your connection and try again.';
+        errorMessage = t('messages.toast.networkErrorDesc');
       }
       
       toast({
-        title: 'Error Loading Payment Accounts',
+        title: t('messages.toast.error'),
         description: errorMessage,
         status: 'error',
         duration: 5000
@@ -206,7 +208,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       setLoadingCreditAccounts(true);
       
       // Try catalog endpoint first for EMPLOYEE role, fallback to regular endpoint
-      if (user?.role === 'EMPLOYEE') {
+      if (user?.role === 'employee') {
         try {
           const catalogData = await accountService.getAccountCatalog(token, 'LIABILITY');
           const formattedAccounts: GLAccount[] = catalogData.map(item => ({
@@ -247,7 +249,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       setCreditAccounts([]);
       
       // Only show warning for non-EMPLOYEE users or if it's not a permission error
-      if (user?.role !== 'EMPLOYEE' || !err.message?.includes('Insufficient permissions')) {
+      if (user?.role !== 'employee' || !err.message?.includes('Insufficient permissions')) {
         toast({
           title: 'Limited Access',
           description: 'Unable to load credit accounts list. Credit card payment will use default liability account.',
@@ -270,8 +272,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       // Validate required fields
       if (!data.account_id || data.account_id === 0) {
         toast({
-          title: 'Validation Error',
-          description: 'Please select a payment account',
+          title: t('messages.toast.validationError'),
+          description: t('purchases.payment.selectAccountRequired'),
           status: 'error',
           duration: 3000
         });
@@ -297,8 +299,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       await salesService.createIntegratedPayment(sale.id, paymentData);
 
       toast({
-        title: 'Payment Recorded',
-        description: 'Payment has been recorded successfully and will appear in Payment Management',
+        title: t('messages.toast.saveSuccess'),
+        description: t('messages.toast.saveSuccessDesc'),
         status: 'success',
         duration: 3000
       });
@@ -308,8 +310,8 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
       onClose();
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.response?.data?.message || 'Failed to record payment',
+        title: t('messages.toast.error'),
+        description: error.response?.data?.message || t('messages.toast.serverErrorDesc'),
         status: 'error',
         duration: 5000
       });
@@ -324,19 +326,19 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
   };
 
   const paymentMethods = [
-    { value: 'CASH', label: 'Cash' },
-    { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
-    { value: 'CHECK', label: 'Check' },
-    { value: 'CREDIT_CARD', label: 'Credit Card' },
-    { value: 'DEBIT_CARD', label: 'Debit Card' },
-    { value: 'OTHER', label: 'Other' }
+    { value: 'CASH', label: t('purchases.payment.cash') },
+    { value: 'BANK_TRANSFER', label: t('purchases.payment.bankTransfer') },
+    { value: 'CHECK', label: t('purchases.payment.check') },
+    { value: 'CREDIT_CARD', label: t('purchases.payment.creditCard') },
+    { value: 'DEBIT_CARD', label: t('purchases.payment.debitCard') },
+    { value: 'OTHER', label: t('common.other') }
   ];
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} size="lg">
       <ModalOverlay />
       <ModalContent>
-        <ModalHeader>Record Payment</ModalHeader>
+        <ModalHeader>{t('purchases.payment.title')}</ModalHeader>
         <ModalCloseButton />
         
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -345,30 +347,30 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
               <Box mb={6} p={4} bg="gray.50" borderRadius="md">
                 <VStack align="stretch" spacing={2}>
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.600">Sale Code:</Text>
+                    <Text fontSize="sm" color="gray.600">{t('sales.form.code')}:</Text>
                     <Text fontWeight="medium">{sale.code}</Text>
                   </HStack>
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.600">Invoice Number:</Text>
+                    <Text fontSize="sm" color="gray.600">{t('sales.invoice')}:</Text>
                     <Text fontWeight="medium">{sale.invoice_number || 'N/A'}</Text>
                   </HStack>
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.600">Customer:</Text>
+                    <Text fontSize="sm" color="gray.600">{t('sales.customer')}:</Text>
                     <Text fontWeight="medium">{sale.customer?.name || 'N/A'}</Text>
                   </HStack>
                   <Divider />
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.600">Total Amount:</Text>
+                    <Text fontSize="sm" color="gray.600">{t('purchases.payment.totalAmount')}:</Text>
                     <Text fontWeight="bold">
                       {salesService.formatCurrency(sale.total_amount)}
                     </Text>
                   </HStack>
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.600">Paid Amount:</Text>
+                    <Text fontSize="sm" color="gray.600">{t('purchases.payment.paidAmount')}:</Text>
                     <Text>{salesService.formatCurrency(sale.paid_amount)}</Text>
                   </HStack>
                   <HStack justify="space-between">
-                    <Text fontSize="sm" color="gray.600">Outstanding:</Text>
+                    <Text fontSize="sm" color="gray.600">{t('purchases.payment.outstanding')}:</Text>
                     <Text fontWeight="bold" color="orange.600">
                       {salesService.formatCurrency(sale.outstanding_amount)}
                     </Text>
@@ -381,7 +383,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
             {sale?.sale_payments && sale.sale_payments.length > 0 && (
               <Box mb={4} p={4} bg="blue.50" borderRadius="md" borderLeft="4px" borderColor="blue.400">
                 <Text fontSize="sm" fontWeight="bold" color="blue.700" mb={2}>
-                  📋 Previous Payments
+                  📋 {t('purchases.payment.previousPayments')}
                 </Text>
                 <VStack spacing={2} align="stretch">
                   {sale.sale_payments.slice(-3).map((payment, index) => (
@@ -397,7 +399,7 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                   ))}
                   {sale.sale_payments.length > 3 && (
                     <Text fontSize="xs" color="gray.500" textAlign="center">
-                      ... and {sale.sale_payments.length - 3} more payments
+                      ... {t('purchases.payment.andMorePayments', { count: sale.sale_payments.length - 3 })}
                     </Text>
                   )}
                 </VStack>
@@ -407,17 +409,17 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
             <VStack spacing={4} align="stretch">
               <HStack spacing={4}>
                 <FormControl isRequired isInvalid={!!errors.date}>
-                  <FormLabel>Payment Date *</FormLabel>
+                  <FormLabel>{t('purchases.payment.paymentDate')} *</FormLabel>
                   <Input
                     type="date"
                     max={new Date().toISOString().split('T')[0]} // Prevent future dates
                     {...register('date', {
-                      required: 'Payment date is required',
+                      required: t('validation.required'),
                       validate: {
                         notFuture: (value) => {
                           const today = new Date();
                           const inputDate = new Date(value);
-                          return inputDate <= today || 'Payment date cannot be in the future';
+                          return inputDate <= today || t('purchases.payment.dateCannotBeFuture');
                         }
                       }
                     })}
@@ -426,26 +428,26 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                 </FormControl>
 
                 <FormControl isRequired isInvalid={!!errors.amount}>
-                  <FormLabel>Amount *</FormLabel>
+                  <FormLabel>{t('purchases.payment.amount')} *</FormLabel>
                   <Box position="relative">
                     <Input
                       placeholder="Rp 0"
                       value={`Rp ${displayAmount}`}
-                      onChange={handleAmountChange}
                       textAlign="right"
                       fontWeight="medium"
                       fontSize="md"
                       pl={8}
                       {...register('amount', {
-                        required: 'Amount is required',
-                        min: { value: 0.01, message: 'Amount must be greater than 0' },
+                        required: t('validation.required'),
+                        min: { value: 0.01, message: t('purchases.payment.amountMustBeGreaterThanZero') },
                         max: {
                           value: sale?.outstanding_amount || 0,
-                          message: 'Amount cannot exceed outstanding amount'
+                          message: t('purchases.payment.amountExceedsOutstanding')
                         },
                         validate: {
-                          notZero: (value) => value > 0 || 'Amount must be greater than zero'
-                        }
+                          notZero: (value) => value > 0 || t('purchases.payment.amountMustBeGreaterThanZero')
+                        },
+                        onChange: handleAmountChange
                       })}
                     />
                   </Box>
@@ -453,17 +455,17 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                   {/* Amount Info Display */}
                   {watchAmount > 0 && (
                     <Text fontSize="sm" color="gray.600" mt={1}>
-                      💰 Payment: <Text as="span" fontWeight="bold" color="green.600">
+                      💰 {t('purchases.payment.payment')}: <Text as="span" fontWeight="bold" color="green.600">
                         Rp {formatRupiah(watchAmount)}
                       </Text>
                       {sale && watchAmount < sale.outstanding_amount && (
                         <Text as="span" color="orange.500">
-                          {' • '} Remaining: Rp {formatRupiah(sale.outstanding_amount - watchAmount)}
+                          {' • '} {t('purchases.payment.remaining')}: Rp {formatRupiah(sale.outstanding_amount - watchAmount)}
                         </Text>
                       )}
                       {sale && watchAmount === sale.outstanding_amount && (
                         <Text as="span" color="green.500">
-                          {' • '} ✅ Full Payment
+                          {' • '} ✅ {t('purchases.payment.fullPayment')}
                         </Text>
                       )}
                     </Text>
@@ -518,24 +520,24 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                       }}
                       disabled={!sale?.outstanding_amount}
                     >
-                      Full Payment
+                      {t('purchases.payment.fullPayment')}
                     </Button>
                   </HStack>
                   
                   <FormErrorMessage>{errors.amount?.message}</FormErrorMessage>
                   {watchAmount > (sale?.outstanding_amount || 0) && (
                     <Text fontSize="sm" color="red.500" mt={1}>
-                      ⚠️ Amount exceeds outstanding balance of {salesService.formatCurrency(sale?.outstanding_amount || 0)}
+                      ⚠️ {t('purchases.payment.amountExceedsBalance', { amount: salesService.formatCurrency(sale?.outstanding_amount || 0) })}
                     </Text>
                   )}
                   {watchAmount > 0 && watchAmount <= (sale?.outstanding_amount || 0) && (
                     <Text fontSize="sm" color="green.600" mt={1}>
-                      ✓ Remaining balance: {salesService.formatCurrency((sale?.outstanding_amount || 0) - watchAmount)}
+                      ✓ {t('purchases.payment.remainingBalance')}: {salesService.formatCurrency((sale?.outstanding_amount || 0) - watchAmount)}
                     </Text>
                   )}
                   {watchAmount === (sale?.outstanding_amount || 0) && watchAmount > 0 && (
                     <Text fontSize="sm" color="blue.600" mt={1} fontWeight="medium">
-                      🎉 This will fully pay the invoice!
+                      🎉 {t('purchases.payment.willFullyPay')}
                     </Text>
                   )}
                 </FormControl>
@@ -543,13 +545,13 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
 
               <HStack spacing={4}>
                 <FormControl isRequired isInvalid={!!errors.method}>
-                  <FormLabel>Payment Method</FormLabel>
+                  <FormLabel>{t('purchases.payment.paymentMethod')}</FormLabel>
                   <Select
                     {...register('method', {
-                      required: 'Payment method is required'
+                      required: t('validation.required')
                     })}
                   >
-                    <option value="">Select payment method</option>
+                    <option value="">{t('purchases.payment.selectPaymentMethod')}</option>
                     {paymentMethods.map(method => (
                       <option key={method.value} value={method.value}>
                         {method.label}
@@ -563,26 +565,26 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                 {watch('method') && (
                   <FormControl isRequired isInvalid={!!errors.account_id}>
                     <FormLabel>
-                      {watch('method') === 'CASH' ? 'Cash Account *' : 
-                       watch('method') === 'CREDIT_CARD' ? 'Credit Card Account *' : 'Bank Account *'}
+                      {watch('method') === 'CASH' ? t('purchases.payment.cashAccount') : 
+                       watch('method') === 'CREDIT_CARD' ? t('purchases.payment.creditCardAccount') : t('purchases.payment.bankAccount')} *
                     </FormLabel>
                     <Select
                       {...register('account_id', {
-                        required: watch('method') === 'CASH' ? 'Cash account is required' :
-                                 watch('method') === 'CREDIT_CARD' ? 'Credit card account is required' : 'Bank account is required',
+                        required: watch('method') === 'CASH' ? t('purchases.payment.cashAccountRequired') :
+                                 watch('method') === 'CREDIT_CARD' ? t('purchases.payment.creditCardAccountRequired') : t('purchases.payment.bankAccountRequired'),
                         setValueAs: value => parseInt(value) || 0
                       })}
                       disabled={accountsLoading || accounts.length === 0}
                     >
                       {accountsLoading ? (
-                        <option value="">Loading accounts...</option>
+                        <option value="">{t('common.loading')}</option>
                       ) : accounts.length === 0 ? (
-                        <option value="">No accounts available</option>
+                        <option value="">{t('purchases.payment.noAccountsAvailable')}</option>
                       ) : (
                         <>
                           <option value="">
-                            {watch('method') === 'CASH' ? 'Select cash account' :
-                             watch('method') === 'CREDIT_CARD' ? 'Select credit card account' : 'Select bank account'}
+                            {watch('method') === 'CASH' ? t('purchases.payment.selectCashAccount') :
+                             watch('method') === 'CREDIT_CARD' ? t('purchases.payment.selectCreditCardAccount') : t('purchases.payment.selectBankAccount')}
                           </option>
                           {accounts
                             .filter(account => {
@@ -626,24 +628,26 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
                       if (currentAmount > 0) {
                         return (
                           <Text fontSize="sm" color="green.600" mt={2}>
-                            💰 <strong>Receiving Payment</strong><br/>
-                            Current Balance: {salesService.formatCurrency(selectedAccount.balance)} |
-                            After Payment: {salesService.formatCurrency(newBalance)}
+                            💰 <strong>{t('purchases.payment.receivingPayment')}</strong><br/>
+                            {t('purchases.payment.currentBalance')}: {salesService.formatCurrency(selectedAccount.balance)} |
+                            {t('purchases.payment.afterPayment')}: {salesService.formatCurrency(newBalance)}
                           </Text>
                         );
                       }
                       
                       return (
                         <Text fontSize="sm" color="blue.600" mt={2}>
-                          💰 <strong>Account Balance:</strong> {salesService.formatCurrency(selectedAccount.balance)}
+                          💰 <strong>{t('purchases.payment.accountBalance')}:</strong> {salesService.formatCurrency(selectedAccount.balance)}
                         </Text>
                       );
                     })()}
                     
                     {accounts.length === 0 && !accountsLoading && (
                       <Text fontSize="xs" color="orange.500" mt={1}>
-                        ⚠️ No {watch('method') === 'CASH' ? 'cash' : 
-                                watch('method') === 'CREDIT_CARD' ? 'credit card' : 'bank'} accounts loaded. Contact your administrator if this persists.
+                        ⚠️ {t('purchases.payment.noAccountsLoaded', { 
+                          type: watch('method') === 'CASH' ? t('purchases.payment.cash').toLowerCase() : 
+                                watch('method') === 'CREDIT_CARD' ? t('purchases.payment.creditCard').toLowerCase() : t('purchases.payment.bank').toLowerCase() 
+                        })}
                       </Text>
                     )}
                   </FormControl>
@@ -651,17 +655,17 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
               </HStack>
 
               <FormControl>
-                <FormLabel>Reference Number</FormLabel>
+                <FormLabel>{t('purchases.payment.reference')}</FormLabel>
                 <Input
-                  placeholder="Transaction reference number"
+                  placeholder={t('common.placeholders.referenceNumber')}
                   {...register('reference')}
                 />
               </FormControl>
 
               <FormControl>
-                <FormLabel>Notes</FormLabel>
+                <FormLabel>{t('purchases.payment.notes')}</FormLabel>
                 <Textarea
-                  placeholder="Additional notes about this payment"
+                  placeholder={t('purchases.payment.additionalNotes')}
                   {...register('notes')}
                 />
               </FormControl>
@@ -670,16 +674,16 @@ const PaymentForm: React.FC<PaymentFormProps> = ({
 
           <ModalFooter>
             <Button variant="ghost" mr={3} onClick={handleClose}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"
               colorScheme="blue"
               isLoading={loading}
-              loadingText="Recording Payment..."
+              loadingText={t('purchases.payment.processing')}
               isDisabled={loading}
             >
-              {loading ? 'Recording Payment...' : 'Record Payment'}
+              {loading ? t('purchases.payment.processing') : t('purchases.payment.recordPayment')}
             </Button>
           </ModalFooter>
         </form>

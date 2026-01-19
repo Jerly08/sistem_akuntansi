@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -64,47 +65,69 @@ func (s *CashBankService) GetCashBankByID(id uint) (*models.CashBank, error) {
 }
 
 // CreateCashBankAccount creates a new cash or bank account
-func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, userID uint) (*models.CashBank, error) {
+func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, userID uint) (result *models.CashBank, err error) {
+	// Log method entry with parameters
+	log.Printf("🔄 [CASHBANK SERVICE] Creating cash bank account: Name=%s, Type=%s, AccountID=%d, OpeningBalance=%.2f, UserID=%d",
+		request.Name, request.Type, request.AccountID, request.OpeningBalance, userID)
+	
 	// Start transaction
 	tx := s.db.Begin()
 	
+	// Panic recovery with transaction rollback
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			stackTrace := string(debug.Stack())
+			log.Printf("❌ [CASHBANK SERVICE] PANIC in CreateCashBankAccount: %v", r)
+			log.Printf("❌ [CASHBANK SERVICE] Stack trace:\n%s", stackTrace)
+			err = fmt.Errorf("internal error during cash bank account creation: %v", r)
+			result = nil
+		}
+	}()
+	
 	// Validate GL account if provided
+	log.Printf("🔍 [CASHBANK SERVICE] Step 1: Validating GL account (AccountID=%d)", request.AccountID)
 	var glAccount *models.Account
 	if request.AccountID > 0 {
-		account, err := s.accountRepo.FindByID(context.Background(), request.AccountID)
-		if err != nil {
+		account, findErr := s.accountRepo.FindByID(context.Background(), request.AccountID)
+		if findErr != nil {
 			tx.Rollback()
-			return nil, errors.New("GL account not found")
+			log.Printf("❌ [CASHBANK SERVICE] GL account validation failed for ID %d: %v", request.AccountID, findErr)
+			return nil, fmt.Errorf("GL account validation failed for ID %d: GL account not found", request.AccountID)
 		}
 		
 	// ✅ FIX ROOT CAUSE: Prevent multiple cash/bank accounts sharing same GL
 	// Check if this GL is already linked to another cash/bank account
+	log.Printf("🔍 [CASHBANK SERVICE] Checking if GL account %d is already linked", request.AccountID)
 	var existingCashBank models.CashBank
-	err = tx.Where("account_id = ? AND deleted_at IS NULL", request.AccountID).Limit(1).Find(&existingCashBank).Error
-	if err != nil {
+	findErr = tx.Where("account_id = ? AND deleted_at IS NULL", request.AccountID).Limit(1).Find(&existingCashBank).Error
+	if findErr != nil {
 		// Unexpected database error
 		tx.Rollback()
-		return nil, fmt.Errorf("failed to check GL account linkage: %v", err)
+		log.Printf("❌ [CASHBANK SERVICE] Failed to check GL account linkage: %v", findErr)
+		return nil, fmt.Errorf("failed to check GL account linkage: %v", findErr)
 	}
 	if existingCashBank.ID != 0 {
 		// GL already linked to another cash/bank account
 		tx.Rollback()
+		log.Printf("❌ [CASHBANK SERVICE] GL account %s is already linked to cash/bank account %s", account.Code, existingCashBank.Name)
 		return nil, fmt.Errorf("GL account '%s - %s' is already linked to cash/bank account '%s'. Each cash/bank account must have its own unique GL account for proper balance tracking", 
 			account.Code, account.Name, existingCashBank.Name)
 	}
 		// GL is available, proceed
 		glAccount = account
-		log.Printf("✅ Using provided GL account %s - %s (verified unique)", account.Code, account.Name)
+		log.Printf("✅ [CASHBANK SERVICE] GL account validated: %s - %s (verified unique)", account.Code, account.Name)
 	} else {
 		// ✅ FIX ROOT CAUSE: Always create UNIQUE GL account for each cash/bank
 		// Never reuse existing GL to prevent balance confusion
+		log.Printf("🔨 [CASHBANK SERVICE] Step 2: Creating new GL account for cash/bank: %s", request.Name)
 		ctx := context.Background()
 		
 		// Generate UNIQUE account code with timestamp to ensure uniqueness
 		baseCode := s.generateAccountCode(request.Type)
 		accountCode := s.generateUniqueAccountCode(baseCode, request.Name)
 		
-		log.Printf("Creating unique GL account for cash/bank: %s", accountCode)
+		log.Printf("📋 [CASHBANK SERVICE] Generated GL account code: %s", accountCode)
 		// Create unique GL account
 		isHeader := false
 		accountRequest := &models.AccountCreateRequest{
@@ -117,28 +140,32 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 			OpeningBalance: 0,
 		}
 		
-		createdAccount, err := s.accountRepo.Create(ctx, accountRequest)
-		if err != nil {
+		createdAccount, createGLErr := s.accountRepo.Create(ctx, accountRequest)
+		if createGLErr != nil {
 			// If duplicate, retry with even more unique code
-			if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
+			if strings.Contains(createGLErr.Error(), "already exists") || strings.Contains(createGLErr.Error(), "duplicate") {
+				log.Printf("⚠️ [CASHBANK SERVICE] GL account code collision, retrying with unique code")
 				// Retry with nano timestamp
 				accountCode = fmt.Sprintf("%s-%d", baseCode, time.Now().UnixNano()%100000)
 				accountRequest.Code = accountCode
-				createdAccount, err = s.accountRepo.Create(ctx, accountRequest)
-				if err != nil {
+				createdAccount, createGLErr = s.accountRepo.Create(ctx, accountRequest)
+				if createGLErr != nil {
 					tx.Rollback()
-					return nil, fmt.Errorf("failed to create unique GL account after retry: %v", err)
+					log.Printf("❌ [CASHBANK SERVICE] GL account creation failed after retry: %v", createGLErr)
+					return nil, fmt.Errorf("GL account creation failed: failed to create unique GL account after retry: %v", createGLErr)
 				}
 			} else {
 				tx.Rollback()
-				return nil, fmt.Errorf("failed to create GL account: %v", err)
+				log.Printf("❌ [CASHBANK SERVICE] GL account creation failed: %v", createGLErr)
+				return nil, fmt.Errorf("GL account creation failed: %v", createGLErr)
 			}
 		}
 		glAccount = createdAccount
-		log.Printf("✅ Created unique GL account: %s - %s for cash/bank: %s", glAccount.Code, glAccount.Name, request.Name)
+		log.Printf("✅ [CASHBANK SERVICE] GL account created: %s - %s", glAccount.Code, glAccount.Name)
 	}
 	
 	// Generate code and create account with retry to avoid unique constraint conflicts
+	log.Printf("🔨 [CASHBANK SERVICE] Step 3: Creating cash bank record")
 	var cashBank *models.CashBank
 	var createErr error
 	for retry := 0; retry < 10; retry++ {
@@ -150,6 +177,8 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 			randomSuffix := time.Now().UnixNano() % 1000
 			code = fmt.Sprintf("%s-R%d-%03d", code, retry, randomSuffix)
 		}
+		
+		log.Printf("📋 [CASHBANK SERVICE] Attempting to create cash bank with code: %s (attempt %d)", code, retry+1)
 		
 		cashBank = &models.CashBank{
 			Code:              code,
@@ -168,44 +197,60 @@ func (s *CashBankService) CreateCashBankAccount(request CashBankCreateRequest, u
 		
 		createErr = tx.Create(cashBank).Error;
 		if createErr == nil {
-			log.Printf("✅ Cash bank account created successfully with code: %s (attempt %d)", code, retry+1)
+			log.Printf("✅ [CASHBANK SERVICE] Cash bank record created: ID=%d, Code=%s", cashBank.ID, code)
 			break
 		}
 		
 		// Check if it's a duplicate code error
 		errMsg := createErr.Error()
 		if strings.Contains(errMsg, "uni_cash_banks_code") || strings.Contains(errMsg, "duplicate key") || strings.Contains(errMsg, "23505") {
-			log.Printf("⚠️ Duplicate code detected: %s (attempt %d), retrying...", code, retry+1)
+			log.Printf("⚠️ [CASHBANK SERVICE] Duplicate code detected: %s (attempt %d), retrying...", code, retry+1)
 			// Add small delay to reduce collision probability
 			time.Sleep(time.Millisecond * time.Duration(10*(retry+1)))
 			continue
 		}
 		
 		// Other errors: abort immediately
-		log.Printf("❌ Non-duplicate error occurred: %v", createErr)
+		log.Printf("❌ [CASHBANK SERVICE] Cash bank creation failed: %v", createErr)
 		tx.Rollback()
-		return nil, createErr
+		return nil, fmt.Errorf("cash bank record creation failed: %v", createErr)
 	}
 	
 	if createErr != nil {
 		tx.Rollback()
-		return nil, fmt.Errorf("failed to generate unique cash-bank code after %d retries: %w", 10, createErr)
+		log.Printf("❌ [CASHBANK SERVICE] Failed to generate unique cash-bank code after 10 retries")
+		return nil, fmt.Errorf("cash bank record creation failed: failed to generate unique code after 10 retries: %w", createErr)
 	}
 	
 	// Create opening balance transaction if provided
 	if request.OpeningBalance > 0 {
+		log.Printf("💰 [CASHBANK SERVICE] Step 4: Creating opening balance transaction: Amount=%.2f", request.OpeningBalance)
 		openingDate := request.OpeningDate.ToTime()
 		if openingDate.IsZero() {
 			openingDate = time.Now() // Use current time if no date provided
 		}
-		err := s.createOpeningBalanceTransaction(tx, cashBank, request.OpeningBalance, openingDate, userID)
-		if err != nil {
+		openingErr := s.createOpeningBalanceTransaction(tx, cashBank, request.OpeningBalance, openingDate, userID)
+		if openingErr != nil {
 			tx.Rollback()
-			return nil, err
+			log.Printf("❌ [CASHBANK SERVICE] Opening balance creation failed: %v", openingErr)
+			return nil, fmt.Errorf("opening balance creation failed: %v", openingErr)
 		}
+		log.Printf("✅ [CASHBANK SERVICE] Opening balance transaction created successfully")
+	} else {
+		log.Printf("ℹ️ [CASHBANK SERVICE] No opening balance specified, skipping opening balance transaction")
 	}
 	
-	return cashBank, tx.Commit().Error
+	// Commit transaction
+	log.Printf("💾 [CASHBANK SERVICE] Step 5: Committing transaction")
+	if commitErr := tx.Commit().Error; commitErr != nil {
+		log.Printf("❌ [CASHBANK SERVICE] Transaction commit failed: %v", commitErr)
+		return nil, fmt.Errorf("transaction commit failed: %v", commitErr)
+	}
+	
+	log.Printf("🎉 [CASHBANK SERVICE] Cash bank account created successfully: ID=%d, Code=%s, Name=%s, Balance=%.2f",
+		cashBank.ID, cashBank.Code, cashBank.Name, cashBank.Balance)
+	
+	return cashBank, nil
 }
 
 // UpdateCashBankAccount updates cash/bank account details
@@ -1039,13 +1084,20 @@ func (s *CashBankService) generateTransferNumber() string {
 }
 
 func (s *CashBankService) createOpeningBalanceTransaction(tx *gorm.DB, cashBank *models.CashBank, amount float64, date time.Time, userID uint) error {
-	// Update balance
+	log.Printf("🔄 [OPENING BALANCE] Creating opening balance transaction: CashBankID=%d, Amount=%.2f, Date=%s, UserID=%d",
+		cashBank.ID, amount, date.Format("2006-01-02"), userID)
+	
+	// Step 1: Update cash bank balance
+	log.Printf("💰 [OPENING BALANCE] Step 1: Updating cash bank balance to %.2f", amount)
 	cashBank.Balance = amount
 	if err := tx.Save(cashBank).Error; err != nil {
-		return err
+		log.Printf("❌ [OPENING BALANCE] Failed to update cash bank balance: %v", err)
+		return fmt.Errorf("failed to update cash bank balance: %v", err)
 	}
+	log.Printf("✅ [OPENING BALANCE] Cash bank balance updated successfully")
 	
-	// Create transaction record
+	// Step 2: Create transaction record
+	log.Printf("📝 [OPENING BALANCE] Step 2: Creating transaction record")
 	transaction := &models.CashBankTransaction{
 		CashBankID:      cashBank.ID,
 		ReferenceType:   TransactionTypeOpeningBalance,
@@ -1057,10 +1109,13 @@ func (s *CashBankService) createOpeningBalanceTransaction(tx *gorm.DB, cashBank 
 	}
 	
 	if err := tx.Create(transaction).Error; err != nil {
-		return err
+		log.Printf("❌ [OPENING BALANCE] Failed to create transaction record: %v", err)
+		return fmt.Errorf("failed to create transaction record: %v", err)
 	}
+	log.Printf("✅ [OPENING BALANCE] Transaction record created: ID=%d", transaction.ID)
 	
-	// Create SSOT journal entries for opening balance
+	// Step 3: Create SSOT journal entries for opening balance
+	log.Printf("📋 [OPENING BALANCE] Step 3: Creating SSOT journal entry")
 	journalRequest := &CashBankJournalRequest{
 		TransactionType: TransactionTypeOpeningBalance,
 		CashBankID:      uint64(cashBank.ID),
@@ -1072,12 +1127,21 @@ func (s *CashBankService) createOpeningBalanceTransaction(tx *gorm.DB, cashBank 
 		CreatedBy:       uint64(userID),
 	}
 	
-	_, err := s.sSOTJournalAdapter.CreateOpeningBalanceJournalEntryWithTx(
+	journalEntry, err := s.sSOTJournalAdapter.CreateOpeningBalanceJournalEntryWithTx(
 		tx, cashBank, transaction, journalRequest)
 	if err != nil {
-		return fmt.Errorf("failed to create SSOT opening balance journal entry: %v", err)
+		log.Printf("❌ [OPENING BALANCE] SSOT journal entry creation failed: %v", err)
+		return fmt.Errorf("SSOT journal entry creation failed: %v", err)
 	}
 	
+	if journalEntry != nil {
+		log.Printf("✅ [OPENING BALANCE] SSOT journal entry created: ID=%d, EntryNumber=%s", 
+			journalEntry.ID, journalEntry.EntryNumber)
+	} else {
+		log.Printf("✅ [OPENING BALANCE] SSOT journal entry created successfully")
+	}
+	
+	log.Printf("🎉 [OPENING BALANCE] Opening balance transaction completed successfully")
 	return nil
 }
 
@@ -1328,4 +1392,61 @@ type ReconciliationItem struct {
 	Notes            string `gorm:"type:text"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+}
+
+// AvailableGLAccount represents a GL account available for cash/bank linking
+type AvailableGLAccount struct {
+	ID       uint    `json:"id"`
+	Code     string  `json:"code"`
+	Name     string  `json:"name"`
+	Balance  float64 `json:"balance"`
+	Category string  `json:"category"`
+}
+
+// GetAvailableGLAccounts returns GL accounts that are:
+// 1. Not already linked to any cash/bank account
+// 2. Filtered by type (CASH shows accounts with "KAS" in name, BANK shows accounts with "BANK" in name)
+// 3. Only ASSET type accounts
+// 4. Only active, non-header accounts
+func (s *CashBankService) GetAvailableGLAccounts(accountType string) ([]AvailableGLAccount, error) {
+	log.Printf("🔍 [CASHBANK SERVICE] Getting available GL accounts for type: %s", accountType)
+	
+	// Build query to get ASSET accounts that are:
+	// - Not headers
+	// - Active
+	// - Not already linked to any cash_banks record
+	// - Match the type filter (KAS for CASH, BANK for BANK)
+	
+	var nameFilter string
+	if accountType == "CASH" {
+		nameFilter = "KAS"
+	} else {
+		nameFilter = "BANK"
+	}
+	
+	query := `
+		SELECT a.id, a.code, a.name, a.balance, a.category
+		FROM accounts a
+		WHERE a.type = 'ASSET'
+		  AND a.is_active = true
+		  AND (a.is_header = false OR a.is_header IS NULL)
+		  AND a.deleted_at IS NULL
+		  AND UPPER(a.name) LIKE ?
+		  AND a.id NOT IN (
+			SELECT cb.account_id 
+			FROM cash_banks cb 
+			WHERE cb.deleted_at IS NULL AND cb.account_id IS NOT NULL
+		  )
+		ORDER BY a.code ASC
+	`
+	
+	var accounts []AvailableGLAccount
+	err := s.db.Raw(query, "%"+nameFilter+"%").Scan(&accounts).Error
+	if err != nil {
+		log.Printf("❌ [CASHBANK SERVICE] Failed to get available GL accounts: %v", err)
+		return nil, fmt.Errorf("failed to get available GL accounts: %v", err)
+	}
+	
+	log.Printf("✅ [CASHBANK SERVICE] Found %d available GL accounts for type %s", len(accounts), accountType)
+	return accounts, nil
 }

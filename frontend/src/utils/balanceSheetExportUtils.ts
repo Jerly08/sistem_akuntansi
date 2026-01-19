@@ -274,8 +274,8 @@ export function exportBalanceSheetToPDF(
       // Detailed breakdown
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-    doc.text('DETAILED BREAKDOWN', 20, yPosition);
-    yPosition += 10;
+      doc.text('DETAILED BREAKDOWN', 20, yPosition);
+      yPosition += 10;
     
     // Assets section
     if (data.assets) {
@@ -468,6 +468,7 @@ export function exportBalanceSheetToPDF(
       
       yPosition = (doc as any).lastAutoTable.finalY + 10;
     }
+    } // End of includeAccountDetails
     
     // Footer
     const footerY = pageHeight - 20;

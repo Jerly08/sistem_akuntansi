@@ -87,72 +87,72 @@ import cashFlowExportService from '../../src/services/cashFlowExportService';
 // Import Closing History Modal
 import ClosingHistoryModal from '../../src/components/reports/ClosingHistoryModal';
 
-// Define reports data matching the UI design
-const getAvailableReports = (t: any) => [
-  {
-    id: 'profit-loss',
-    name: t('reports.profitLossStatement'),
-    description: 'Comprehensive profit and loss statement with enhanced analysis. Automatically integrates journal entry data for accurate revenue, COGS, and expense reporting with detailed financial metrics.',
-    type: 'FINANCIAL',
-    icon: FiTrendingUp
-  },
-  {
-    id: 'balance-sheet',
-    name: t('reports.balanceSheet'),
-    description: t('reports.description.balanceSheet'),
-    type: 'FINANCIAL', 
-    icon: FiBarChart
-  },
-  {
-    id: 'cash-flow',
-    name: t('reports.cashFlowStatement'),
-    description: t('reports.description.cashFlow'),
-    type: 'FINANCIAL',
-    icon: FiActivity
-  },
-  {
-    id: 'sales-summary',
-    name: t('reports.salesSummaryReport'),
-    description: t('reports.description.salesSummary'),
-    type: 'OPERATIONAL',
-    icon: FiShoppingCart
-  },
-  {
-    id: 'purchase-report',
-    name: t('reports.purchaseReport'),
-    description: 'Comprehensive purchase analysis with credible vendor transactions, payment history, and performance metrics. Real-time data from SSOT journal integration.',
-    type: 'OPERATIONAL',
-    icon: FiShoppingCart
-  },
-  {
-    id: 'trial-balance',
-    name: t('reports.trialBalance'),
-    description: t('reports.description.trialBalance') || 'Summary of all account balances to ensure debits equal credits and verify accounting equation',
-    type: 'FINANCIAL',
-    icon: FiList
-  },
-  {
-    id: 'general-ledger',
-    name: t('reports.generalLedger'),
-    description: t('reports.description.generalLedger'),
-    type: 'FINANCIAL',
-    icon: FiBook
-  },
-  {
-    id: 'customer-history',
-    name: 'Customer History',
-    description: 'Complete record of customer activities including sales transactions and payment history. Filter by customer name to view detailed transaction timeline.',
-    type: 'OPERATIONAL',
-    icon: FiUsers
-  },
-  {
-    id: 'vendor-history',
-    name: 'Vendor History',
-    description: 'Complete record of vendor activities including purchase transactions and payment history. Filter by vendor name to view detailed transaction timeline.',
-    type: 'OPERATIONAL',
-    icon: FiTruck
-  }
-];
+  // Define reports data matching the UI design
+  const getAvailableReports = (t: any) => [
+    {
+      id: 'profit-loss',
+      name: t('reports.profitLossStatement'),
+      description: t('reports.description.profitLoss'),
+      type: 'FINANCIAL',
+      icon: FiTrendingUp
+    },
+    {
+      id: 'balance-sheet',
+      name: t('reports.balanceSheet'),
+      description: t('reports.description.balanceSheet'),
+      type: 'FINANCIAL', 
+      icon: FiBarChart
+    },
+    {
+      id: 'cash-flow',
+      name: t('reports.cashFlowStatement'),
+      description: t('reports.description.cashFlow'),
+      type: 'FINANCIAL',
+      icon: FiActivity
+    },
+    {
+      id: 'sales-summary',
+      name: t('reports.salesSummaryReport'),
+      description: t('reports.description.salesSummary'),
+      type: 'OPERATIONAL',
+      icon: FiShoppingCart
+    },
+    {
+      id: 'purchase-report',
+      name: t('reports.purchaseReport'),
+      description: t('reports.description.purchaseReport'),
+      type: 'OPERATIONAL',
+      icon: FiShoppingCart
+    },
+    {
+      id: 'trial-balance',
+      name: t('reports.trialBalance'),
+      description: t('reports.description.trialBalance'),
+      type: 'FINANCIAL',
+      icon: FiList
+    },
+    {
+      id: 'general-ledger',
+      name: t('reports.generalLedger'),
+      description: t('reports.description.generalLedger'),
+      type: 'FINANCIAL',
+      icon: FiBook
+    },
+    {
+      id: 'customer-history',
+      name: t('reports.customerHistory'),
+      description: t('reports.description.customerHistory'),
+      type: 'OPERATIONAL',
+      icon: FiUsers
+    },
+    {
+      id: 'vendor-history',
+      name: t('reports.vendorHistory'),
+      description: t('reports.description.vendorHistory'),
+      type: 'OPERATIONAL',
+      icon: FiTruck
+    }
+  ];
 
 // Helpers to compute fiscal year range from Settings.fiscal_year_start
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -383,8 +383,8 @@ const ReportsPage: React.FC = () => {
         console.error('Failed to load contacts:', error);
         console.error('Error details:', error.response?.data || error.message);
         toast({
-          title: 'Error Loading Contacts',
-          description: 'Failed to load customers and vendors list',
+          title: t('reports.messages.errorLoadingContacts'),
+          description: t('reports.messages.failedToLoadContacts'),
           status: 'error',
           duration: 5000,
           isClosable: true,
@@ -410,17 +410,17 @@ const ReportsPage: React.FC = () => {
       setSSOTSSData(salesSummaryData);
       
       toast({
-        title: 'Success',
-        description: 'SSOT Sales Summary generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.salesSummaryGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
-      setSSOTSSError(error.message || 'Failed to generate sales summary');
+      setSSOTSSError(error.message || t('reports.messages.failedToGenerateSalesSummary'));
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to generate sales summary',
+        title: t('reports.messages.error'),
+        description: error.message || t('reports.messages.failedToGenerateSalesSummary'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -446,17 +446,17 @@ const ReportsPage: React.FC = () => {
       setSSOTPRData(data);
       
       toast({
-        title: 'Success',
-        description: 'Purchase Report generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.purchaseReportGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
-      setSSOTPRError(error.message || 'Failed to generate purchase report');
+      setSSOTPRError(error.message || t('reports.messages.failedToGeneratePurchaseReport'));
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to generate purchase report',
+        title: t('reports.messages.error'),
+        description: error.message || t('reports.messages.failedToGeneratePurchaseReport'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -481,17 +481,17 @@ const ReportsPage: React.FC = () => {
       setSSOTTBData(trialBalanceData);
       
       toast({
-        title: 'Success',
-        description: 'SSOT Trial Balance generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.trialBalanceGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
-      setSSOTTBError(error.message || 'Failed to generate trial balance');
+      setSSOTTBError(error.message || t('reports.messages.failedToGenerateTrialBalance'));
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to generate trial balance',
+        title: t('reports.messages.error'),
+        description: error.message || t('reports.messages.failedToGenerateTrialBalance'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -506,8 +506,8 @@ const ReportsPage: React.FC = () => {
     // Validasi input
     if (!customerHistoryCustomerId) {
       toast({
-        title: 'Validation Error',
-        description: 'Please select a customer',
+        title: t('reports.messages.validationError'),
+        description: t('reports.messages.pleaseSelectCustomer'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -517,8 +517,8 @@ const ReportsPage: React.FC = () => {
 
     if (!customerHistoryStartDate || !customerHistoryEndDate) {
       toast({
-        title: 'Validation Error',
-        description: 'Start Date and End Date are required',
+        title: t('reports.messages.validationError'),
+        description: t('reports.messages.startEndDateRequired'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -529,8 +529,8 @@ const ReportsPage: React.FC = () => {
     // Validasi start date tidak boleh lebih besar dari end date
     if (new Date(customerHistoryStartDate) > new Date(customerHistoryEndDate)) {
       toast({
-        title: 'Validation Error',
-        description: 'Start Date cannot be greater than End Date',
+        title: t('reports.messages.validationError'),
+        description: t('reports.messages.startDateCannotBeGreater'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -555,17 +555,17 @@ const ReportsPage: React.FC = () => {
       setCustomerHistoryData(response.data.data || response.data);
       
       toast({
-        title: 'Success',
-        description: 'Customer History generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.customerHistoryGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to generate customer history';
+      const errorMessage = error.response?.data?.message || error.message || t('reports.messages.failedToGenerateCustomerHistory');
       setCustomerHistoryError(errorMessage);
       toast({
-        title: 'Error',
+        title: t('reports.messages.error'),
         description: errorMessage,
         status: 'error',
         duration: 5000,
@@ -581,8 +581,8 @@ const ReportsPage: React.FC = () => {
     // Validasi input
     if (!vendorHistoryVendorId) {
       toast({
-        title: 'Validation Error',
-        description: 'Please select a vendor',
+        title: t('reports.messages.validationError'),
+        description: t('reports.messages.pleaseSelectVendor'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -592,8 +592,8 @@ const ReportsPage: React.FC = () => {
 
     if (!vendorHistoryStartDate || !vendorHistoryEndDate) {
       toast({
-        title: 'Validation Error',
-        description: 'Start Date and End Date are required',
+        title: t('reports.messages.validationError'),
+        description: t('reports.messages.startEndDateRequired'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -604,8 +604,8 @@ const ReportsPage: React.FC = () => {
     // Validasi start date tidak boleh lebih besar dari end date
     if (new Date(vendorHistoryStartDate) > new Date(vendorHistoryEndDate)) {
       toast({
-        title: 'Validation Error',
-        description: 'Start Date cannot be greater than End Date',
+        title: t('reports.messages.validationError'),
+        description: t('reports.messages.startDateCannotBeGreater'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -630,17 +630,17 @@ const ReportsPage: React.FC = () => {
       setVendorHistoryData(response.data.data || response.data);
       
       toast({
-        title: 'Success',
-        description: 'Vendor History generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.vendorHistoryGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to generate vendor history';
+      const errorMessage = error.response?.data?.message || error.message || t('reports.messages.failedToGenerateVendorHistory');
       setVendorHistoryError(errorMessage);
       toast({
-        title: 'Error',
+        title: t('reports.messages.error'),
         description: errorMessage,
         status: 'error',
         duration: 5000,
@@ -656,8 +656,8 @@ const ReportsPage: React.FC = () => {
     // Validasi input
     if (!ssotGLStartDate || !ssotGLEndDate) {
       toast({
-        title: 'Validation Error',
-        description: 'Start Date and End Date are required for General Ledger',
+        title: t('reports.messages.validationError'),
+        description: t('reports.messages.startEndDateRequiredForGL'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -668,8 +668,8 @@ const ReportsPage: React.FC = () => {
     // Validasi start date tidak boleh lebih besar dari end date
     if (new Date(ssotGLStartDate) > new Date(ssotGLEndDate)) {
       toast({
-        title: 'Validation Error',
-        description: 'Start Date cannot be greater than End Date',
+        title: t('reports.messages.validationError'),
+        description: t('reports.messages.startDateCannotBeGreater'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -692,17 +692,17 @@ const ReportsPage: React.FC = () => {
       setSSOTGLData(generalLedgerData);
       
       toast({
-        title: 'Success',
-        description: 'SSOT General Ledger generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.generalLedgerGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || 'Failed to generate general ledger';
+      const errorMessage = error.response?.data?.message || error.message || t('reports.messages.failedToGenerateGeneralLedger');
       setSSOTGLError(errorMessage);
       toast({
-        title: 'Error',
+        title: t('reports.messages.error'),
         description: errorMessage,
         status: 'error',
         duration: 5000,
@@ -837,8 +837,8 @@ const ReportsPage: React.FC = () => {
       setSSOTBSData(balanceSheetData);
       
       toast({
-        title: 'Success',
-        description: 'SSOT Balance Sheet generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.balanceSheetGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -846,11 +846,11 @@ const ReportsPage: React.FC = () => {
       
     } catch (error) {
       console.error('Error fetching SSOT Balance Sheet report:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      const errorMessage = error instanceof Error ? error.message : t('reports.messages.unknownError');
       setSSOTBSError(errorMessage);
       
       toast({
-        title: 'Error',
+        title: t('reports.messages.error'),
         description: errorMessage,
         status: 'error',
         duration: 5000,
@@ -882,8 +882,8 @@ const ReportsPage: React.FC = () => {
       setSSOTCFData(cashFlowData as SSOTCashFlowData);
       
       toast({
-        title: 'Success',
-        description: 'SSOT Cash Flow Statement generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.cashFlowGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -891,11 +891,11 @@ const ReportsPage: React.FC = () => {
       
     } catch (error) {
       console.error('Error fetching SSOT Cash Flow report:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      const errorMessage = error instanceof Error ? error.message : t('reports.messages.unknownError');
       setSSOTCFError(errorMessage);
       
       toast({
-        title: 'Error',
+        title: t('reports.messages.error'),
         description: errorMessage,
         status: 'error',
         duration: 5000,
@@ -922,8 +922,8 @@ const ReportsPage: React.FC = () => {
       setSSOTPLData(result);
       
       toast({
-        title: 'Success',
-        description: 'SSOT P&L report generated successfully',
+        title: t('reports.messages.success'),
+        description: t('reports.messages.profitLossGenerated'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -931,11 +931,11 @@ const ReportsPage: React.FC = () => {
       
     } catch (error) {
       console.error('Error fetching SSOT P&L report:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+      const errorMessage = error instanceof Error ? error.message : t('reports.messages.unknownError');
       setSSOTPLError(errorMessage);
       
       toast({
-        title: 'Error',
+        title: t('reports.messages.error'),
         description: errorMessage,
         status: 'error',
         duration: 5000,
@@ -950,8 +950,8 @@ const ReportsPage: React.FC = () => {
   const handleSSOTProfitLossExport = async (format: 'pdf' | 'csv') => {
     if (!ssotPLData) {
       toast({
-        title: 'Error',
-        description: 'No data available to export',
+        title: t('reports.messages.error'),
+        description: t('reports.messages.noDataToExport'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -990,8 +990,8 @@ const ReportsPage: React.FC = () => {
       window.URL.revokeObjectURL(url);
 
       toast({
-        title: 'Success',
-        description: `${format.toUpperCase()} export completed successfully`,
+        title: t('reports.messages.success'),
+        description: t('reports.messages.exportCompleted', { format: format.toUpperCase() }),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -999,8 +999,8 @@ const ReportsPage: React.FC = () => {
     } catch (error) {
       console.error(`Error exporting SSOT P&L as ${format}:`, error);
       toast({
-        title: 'Export Error',
-        description: `Failed to export as ${format.toUpperCase()}`,
+        title: t('reports.messages.error'),
+        description: t('reports.messages.exportFailed', { format: format.toUpperCase() }),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1168,16 +1168,16 @@ const ReportsPage: React.FC = () => {
       URL.revokeObjectURL(url);
       
       toast({
-        title: 'CSV Export Successful',
-        description: 'Enhanced Balance Sheet has been downloaded as CSV',
+        title: t('reports.messages.csvExportSuccessful'),
+        description: t('reports.messages.balanceSheetDownloadedCSV'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
       toast({
-        title: 'CSV Export Failed',
-        description: error.message || 'Failed to export CSV',
+        title: t('reports.messages.csvExportFailed'),
+        description: error.message || t('reports.messages.csvExportError'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1204,16 +1204,16 @@ const ReportsPage: React.FC = () => {
       window.URL.revokeObjectURL(url);
       
       toast({
-        title: 'PDF Export Successful',
-        description: 'Enhanced Balance Sheet has been downloaded as PDF',
+        title: t('reports.messages.pdfExportSuccessful'),
+        description: t('reports.messages.balanceSheetDownloadedPDF'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
       toast({
-        title: 'PDF Export Failed',
-        description: error.message || 'Failed to export PDF',
+        title: t('reports.messages.pdfExportFailed'),
+        description: error.message || t('reports.messages.pdfExportError'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1242,16 +1242,16 @@ const ReportsPage: React.FC = () => {
       });
       
       toast({
-        title: 'CSV Export Successful',
-        description: 'Cash Flow Statement has been downloaded as CSV',
+        title: t('reports.messages.csvExportSuccessful'),
+        description: t('reports.messages.cashFlowDownloadedCSV'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
       toast({
-        title: 'CSV Export Failed',
-        description: error.message || 'Failed to export CSV',
+        title: t('reports.messages.csvExportFailed'),
+        description: error.message || t('reports.messages.csvExportError'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1264,8 +1264,8 @@ const ReportsPage: React.FC = () => {
   const handleCashFlowPDFExport = async () => {
     if (!ssotCFData || !ssotCFStartDate || !ssotCFEndDate) {
       toast({
-        title: 'Export Failed',
-        description: 'No Cash Flow data available or missing date parameters',
+        title: t('reports.messages.exportFailed'),
+        description: t('reports.messages.noCashFlowData'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -1281,16 +1281,16 @@ const ReportsPage: React.FC = () => {
       });
       
       toast({
-        title: 'PDF Export Successful',
-        description: 'Cash Flow Statement has been downloaded as PDF',
+        title: t('reports.messages.pdfExportSuccessful'),
+        description: t('reports.messages.cashFlowDownloadedPDF'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
       toast({
-        title: 'PDF Export Failed',
-        description: error.message || 'Failed to export PDF',
+        title: t('reports.messages.pdfExportFailed'),
+        description: error.message || t('reports.messages.pdfExportError'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1304,8 +1304,8 @@ const ReportsPage: React.FC = () => {
   const handleTrialBalanceExport = async (format: 'pdf' | 'csv') => {
     if (!ssotTBData || !ssotTBAsOfDate) {
       toast({
-        title: 'Export Failed',
-        description: 'No Trial Balance data available or missing date parameter',
+        title: t('reports.messages.exportFailed'),
+        description: t('reports.messages.noTrialBalanceData'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -1326,16 +1326,16 @@ const ReportsPage: React.FC = () => {
       }
       
       toast({
-        title: 'Export Successful',
-        description: `Trial Balance has been downloaded as ${format.toUpperCase()}`,
+        title: t('reports.messages.exportSuccessful'),
+        description: t('reports.messages.reportDownloaded', { reportName: 'Trial Balance', format: format.toUpperCase() }),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
       toast({
-        title: 'Export Failed',
-        description: error.message || `Failed to export ${format.toUpperCase()}`,
+        title: t('reports.messages.exportFailed'),
+        description: error.message || t('reports.messages.exportError', { format: format.toUpperCase() }),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1349,8 +1349,8 @@ const ReportsPage: React.FC = () => {
   const handleGeneralLedgerExport = async (format: 'pdf' | 'csv') => {
     if (!ssotGLData || !ssotGLStartDate || !ssotGLEndDate) {
       toast({
-        title: 'Export Failed',
-        description: 'No General Ledger data available or missing date parameters',
+        title: t('reports.messages.exportFailed'),
+        description: t('reports.messages.noGeneralLedgerData'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -1375,16 +1375,16 @@ const ReportsPage: React.FC = () => {
       }
       
       toast({
-        title: 'Export Successful',
-        description: `General Ledger has been downloaded as ${format.toUpperCase()}`,
+        title: t('reports.messages.exportSuccessful'),
+        description: t('reports.messages.reportDownloaded', { reportName: 'General Ledger', format: format.toUpperCase() }),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
       toast({
-        title: 'Export Failed',
-        description: error.message || `Failed to export ${format.toUpperCase()}`,
+        title: t('reports.messages.exportFailed'),
+        description: error.message || t('reports.messages.exportError', { format: format.toUpperCase() }),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1398,8 +1398,8 @@ const ReportsPage: React.FC = () => {
   const handleCustomerHistoryExport = async (format: 'pdf' | 'csv') => {
     if (!customerHistoryData || !customerHistoryCustomerId || !customerHistoryStartDate || !customerHistoryEndDate) {
       toast({
-        title: 'Export Failed',
-        description: 'No Customer History data available or missing parameters',
+        title: t('reports.messages.exportFailed'),
+        description: t('reports.messages.noCustomerHistoryData'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -1435,13 +1435,13 @@ const ReportsPage: React.FC = () => {
         const csvLines: string[] = [];
         
         // Header
-        csvLines.push('Customer History Report');
-        csvLines.push(`Period: ${customerHistoryStartDate} to ${customerHistoryEndDate}`);
-        csvLines.push(`Customer: ${data.customer?.name || 'N/A'}`);
+        csvLines.push(t('reports.csv.customerHistoryReport'));
+        csvLines.push(`${t('reports.csv.period')}: ${customerHistoryStartDate} to ${customerHistoryEndDate}`);
+        csvLines.push(`${t('reports.csv.customer')}: ${data.customer?.name || 'N/A'}`);
         csvLines.push('');
         
         // Transactions
-        csvLines.push('Date,Type,Code,Description,Reference,Amount,Paid,Outstanding,Status');
+        csvLines.push(`${t('reports.csv.headers.date')},${t('reports.csv.headers.type')},${t('reports.csv.headers.code')},${t('reports.csv.headers.description')},${t('reports.csv.headers.reference')},${t('reports.csv.headers.amount')},${t('reports.csv.headers.paid')},${t('reports.csv.headers.outstanding')},${t('reports.csv.headers.status')}`);
         if (data.transactions && Array.isArray(data.transactions)) {
           data.transactions.forEach((tx: any) => {
             csvLines.push([
@@ -1460,11 +1460,11 @@ const ReportsPage: React.FC = () => {
         
         // Summary
         csvLines.push('');
-        csvLines.push('Summary');
-        csvLines.push(`Total Transactions,${data.summary?.total_transactions || 0}`);
-        csvLines.push(`Total Amount,${data.summary?.total_amount || 0}`);
-        csvLines.push(`Total Paid,${data.summary?.total_paid || 0}`);
-        csvLines.push(`Total Outstanding,${data.summary?.total_outstanding || 0}`);
+        csvLines.push(t('reports.csv.summary'));
+        csvLines.push(`${t('reports.csv.totalTransactions')},${data.summary?.total_transactions || 0}`);
+        csvLines.push(`${t('reports.csv.totalAmount')},${data.summary?.total_amount || 0}`);
+        csvLines.push(`${t('reports.csv.totalPaid')},${data.summary?.total_paid || 0}`);
+        csvLines.push(`${t('reports.csv.totalOutstanding')},${data.summary?.total_outstanding || 0}`);
         
         const csvContent = csvLines.join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1479,16 +1479,16 @@ const ReportsPage: React.FC = () => {
       }
 
       toast({
-        title: 'Export Successful',
-        description: `Customer History has been downloaded as ${format.toUpperCase()}`,
+        title: t('reports.messages.exportSuccessful'),
+        description: t('reports.messages.reportDownloaded', { reportName: 'Customer History', format: format.toUpperCase() }),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
       toast({
-        title: 'Export Failed',
-        description: error.message || `Failed to export ${format.toUpperCase()}`,
+        title: t('reports.messages.exportFailed'),
+        description: error.message || t('reports.messages.exportError', { format: format.toUpperCase() }),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1502,8 +1502,8 @@ const ReportsPage: React.FC = () => {
   const handleVendorHistoryExport = async (format: 'pdf' | 'csv') => {
     if (!vendorHistoryData || !vendorHistoryVendorId || !vendorHistoryStartDate || !vendorHistoryEndDate) {
       toast({
-        title: 'Export Failed',
-        description: 'No Vendor History data available or missing parameters',
+        title: t('reports.messages.exportFailed'),
+        description: t('reports.messages.noVendorHistoryData'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -1539,13 +1539,13 @@ const ReportsPage: React.FC = () => {
         const csvLines: string[] = [];
         
         // Header
-        csvLines.push('Vendor History Report');
-        csvLines.push(`Period: ${vendorHistoryStartDate} to ${vendorHistoryEndDate}`);
-        csvLines.push(`Vendor: ${data.vendor?.name || 'N/A'}`);
+        csvLines.push(t('reports.csv.vendorHistoryReport'));
+        csvLines.push(`${t('reports.csv.period')}: ${vendorHistoryStartDate} to ${vendorHistoryEndDate}`);
+        csvLines.push(`${t('reports.csv.vendor')}: ${data.vendor?.name || 'N/A'}`);
         csvLines.push('');
         
         // Transactions
-        csvLines.push('Date,Type,Code,Description,Reference,Amount,Paid,Outstanding,Status');
+        csvLines.push(`${t('reports.csv.headers.date')},${t('reports.csv.headers.type')},${t('reports.csv.headers.code')},${t('reports.csv.headers.description')},${t('reports.csv.headers.reference')},${t('reports.csv.headers.amount')},${t('reports.csv.headers.paid')},${t('reports.csv.headers.outstanding')},${t('reports.csv.headers.status')}`);
         if (data.transactions && Array.isArray(data.transactions)) {
           data.transactions.forEach((tx: any) => {
             csvLines.push([
@@ -1564,11 +1564,11 @@ const ReportsPage: React.FC = () => {
         
         // Summary
         csvLines.push('');
-        csvLines.push('Summary');
-        csvLines.push(`Total Transactions,${data.summary?.total_transactions || 0}`);
-        csvLines.push(`Total Amount,${data.summary?.total_amount || 0}`);
-        csvLines.push(`Total Paid,${data.summary?.total_paid || 0}`);
-        csvLines.push(`Total Outstanding,${data.summary?.total_outstanding || 0}`);
+        csvLines.push(t('reports.csv.summary'));
+        csvLines.push(`${t('reports.csv.totalTransactions')},${data.summary?.total_transactions || 0}`);
+        csvLines.push(`${t('reports.csv.totalAmount')},${data.summary?.total_amount || 0}`);
+        csvLines.push(`${t('reports.csv.totalPaid')},${data.summary?.total_paid || 0}`);
+        csvLines.push(`${t('reports.csv.totalOutstanding')},${data.summary?.total_outstanding || 0}`);
         
         const csvContent = csvLines.join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1583,16 +1583,16 @@ const ReportsPage: React.FC = () => {
       }
 
       toast({
-        title: 'Export Successful',
-        description: `Vendor History has been downloaded as ${format.toUpperCase()}`,
+        title: t('reports.messages.exportSuccessful'),
+        description: t('reports.messages.reportDownloaded', { reportName: 'Vendor History', format: format.toUpperCase() }),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error: any) {
       toast({
-        title: 'Export Failed',
-        description: error.message || `Failed to export ${format.toUpperCase()}`,
+        title: t('reports.messages.exportFailed'),
+        description: error.message || t('reports.messages.exportError', { format: format.toUpperCase() }),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1606,8 +1606,8 @@ const ReportsPage: React.FC = () => {
   const handlePurchaseReportExport = async (format: 'pdf' | 'csv') => {
     if (!ssotPRData || !ssotPRStartDate || !ssotPREndDate) {
       toast({
-        title: 'Export Failed',
-        description: 'No Purchase Report data available or missing date parameters',
+        title: t('reports.messages.exportFailed'),
+        description: t('reports.messages.noPurchaseReportData'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -1649,22 +1649,22 @@ const ReportsPage: React.FC = () => {
         window.URL.revokeObjectURL(url);
         
         toast({
-          title: 'Export Successful',
-          description: `Purchase Report has been downloaded as ${format.toUpperCase()}`,
+          title: t('reports.messages.exportSuccessful'),
+          description: t('reports.messages.reportDownloaded', { reportName: 'Purchase Report', format: format.toUpperCase() }),
           status: 'success',
           duration: 3000,
           isClosable: true,
         });
       } else {
-        throw new Error('Empty file received from server');
+        throw new Error(t('reports.messages.emptyFileReceived'));
       }
       
     } catch (error: any) {
       console.error('Purchase Report export error:', error);
       
       toast({
-        title: 'Export Failed',
-        description: error.message || `Failed to export Purchase Report as ${format.toUpperCase()}`,
+        title: t('reports.messages.exportFailed'),
+        description: error.message || t('reports.messages.exportError', { format: format.toUpperCase() }),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1705,8 +1705,8 @@ const ReportsPage: React.FC = () => {
       console.error('Failed to load SSOT report:', error);
       
       toast({
-        title: 'Report Load Error',
-        description: error instanceof Error ? error.message : 'Failed to load report',
+        title: t('reports.messages.reportLoadError'),
+        description: error instanceof Error ? error.message : t('reports.messages.failedToLoadReport'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -1724,8 +1724,8 @@ const ReportsPage: React.FC = () => {
       // For customer-history and vendor-history, show message to use View Report first
       if (report.id === 'customer-history' || report.id === 'vendor-history') {
         toast({
-          title: 'Action Required',
-          description: `Please use "View Report" to select ${report.id === 'customer-history' ? 'customer' : 'vendor'} and date range, then export from there.`,
+          title: t('reports.messages.actionRequired'),
+          description: t('reports.messages.useViewReportFirst', { entity: report.id === 'customer-history' ? t('reports.modal.customer') : t('reports.modal.vendor') }),
           status: 'info',
           duration: 6000,
           isClosable: true,
@@ -1767,8 +1767,8 @@ const ReportsPage: React.FC = () => {
         await reportService.downloadReport(result, fileName);
         
         toast({
-          title: 'Download Successful',
-          description: `${report.name} has been downloaded as ${format.toUpperCase()}`,
+          title: t('reports.messages.downloadSuccessful'),
+          description: t('reports.messages.reportDownloaded', { reportName: report.name, format: format.toUpperCase() }),
           status: 'success',
           duration: 3000,
           isClosable: true,
@@ -2076,19 +2076,19 @@ const ReportsPage: React.FC = () => {
       // Validate required parameters
       if (['profit-loss', 'cash-flow', 'sales-summary', 'purchase-summary', 'purchase-report', 'general-ledger'].includes(selectedReport.id)) {
         if (!reportParams.start_date || !reportParams.end_date) {
-          throw new Error('Start date and end date are required for this report');
+          throw new Error(t('reports.messages.startDateEndDateRequired'));
         }
       }
       
       if (['balance-sheet', 'trial-balance'].includes(selectedReport.id)) {
         if (!reportParams.as_of_date) {
-          throw new Error('As of date is required for this report');
+          throw new Error(t('reports.messages.asOfDateRequired'));
         }
       }
       
       if (selectedReport.id === 'general-ledger') {
         if (!reportParams.account_id) {
-          throw new Error('Account ID is required for General Ledger report');
+          throw new Error(t('reports.messages.accountIdRequired'));
         }
       }
       
@@ -2096,35 +2096,35 @@ const ReportsPage: React.FC = () => {
       const result = await reportService.generateReport(selectedReport.id, reportParams);
       
       if (!result) {
-        throw new Error('No data received from server');
+        throw new Error(t('reports.messages.noDataReceived'));
       }
       
       // Check if result is a Blob (for file downloads)
       if (result instanceof Blob) {
         if (result.size === 0) {
-          throw new Error('Empty file received from server');
+          throw new Error(t('reports.messages.emptyFileReceived'));
         }
         
         // Handle the result - Download file
         const fileName = `${selectedReport.id}_report_${new Date().toISOString().split('T')[0]}.${reportParams.format}`;
         await reportService.downloadReport(result, fileName);
         toast({
-          title: 'Report Downloaded',
-          description: `${selectedReport.name} has been downloaded successfully.`,
+          title: t('reports.messages.downloadSuccessful'),
+          description: t('reports.messages.reportDownloadedSuccess', { reportName: selectedReport.name }),
           status: 'success',
           duration: 5000,
           isClosable: true,
         });
       } else {
         console.error('Unexpected result format:', typeof result, result);
-        throw new Error('Invalid response format from server');
+        throw new Error(t('reports.messages.invalidResponseFormat'));
       }
       
       onClose();
     } catch (error) {
       console.error('Failed to generate report:', error);
       
-      let errorMessage = 'Unknown error occurred';
+      let errorMessage = t('reports.messages.unknownError');
       if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
@@ -2132,7 +2132,7 @@ const ReportsPage: React.FC = () => {
       }
       
       toast({
-        title: 'Report Generation Failed',
+        title: t('reports.messages.reportGenerationFailed'),
         description: errorMessage,
         status: 'error',
         duration: 8000,
@@ -2150,7 +2150,7 @@ const ReportsPage: React.FC = () => {
           <VStack align="start" spacing={4}>
             <Flex justify="space-between" align="center" w="full">
               <Heading as="h1" size="xl" color={headingColor} fontWeight="medium">
-                Financial Reports
+                {t('reports.financialReports')}
               </Heading>
             </Flex>
           </VStack>
@@ -2299,7 +2299,7 @@ const ReportsPage: React.FC = () => {
                         isLoading={loading}
                         leftIcon={<FiEye />}
                       >
-                        View Report
+                        {t('reports.viewReport')}
                       </Button>
                       <VStack spacing={1} flex="1">
                         <Button
@@ -2311,7 +2311,7 @@ const ReportsPage: React.FC = () => {
                           leftIcon={<FiFilePlus />}
                           onClick={() => handleQuickDownload(report, 'pdf')}
                         >
-                          PDF
+                          {t('reports.pdf')}
                         </Button>
                         <Button
                           colorScheme="green"
@@ -2322,7 +2322,7 @@ const ReportsPage: React.FC = () => {
                           leftIcon={<FiFileText />}
                           onClick={() => handleQuickDownload(report, 'csv')}
                         >
-                          CSV
+                          {t('reports.csv')}
                         </Button>
                         <Button
                           colorScheme="gray"
@@ -2333,7 +2333,7 @@ const ReportsPage: React.FC = () => {
                           leftIcon={<FiDownload />}
                           onClick={() => handleGenerateReport(report)}
                         >
-                          More...
+                          {t('reports.more')}
                         </Button>
                       </VStack>
                     </HStack>
@@ -2359,7 +2359,7 @@ const ReportsPage: React.FC = () => {
                 {selectedReport.id === 'balance-sheet' && (
                   <>
                     <FormControl isRequired>
-                      <FormLabel>As of Date</FormLabel>
+                      <FormLabel>{t('reports.modal.asOfDate')}</FormLabel>
                       <Input 
                         type="date" 
                         name="as_of_date" 
@@ -2374,7 +2374,7 @@ const ReportsPage: React.FC = () => {
                 {(selectedReport.id === 'profit-loss' || selectedReport.id === 'cash-flow') && (
                   <>
                     <FormControl isRequired>
-                      <FormLabel>Start Date</FormLabel>
+                      <FormLabel>{t('reports.modal.startDate')}</FormLabel>
                       <Input 
                         type="date" 
                         name="start_date" 
@@ -2383,7 +2383,7 @@ const ReportsPage: React.FC = () => {
                       />
                     </FormControl>
                     <FormControl isRequired>
-                      <FormLabel>End Date</FormLabel>
+                      <FormLabel>{t('reports.modal.endDate')}</FormLabel>
                       <Input 
                         type="date" 
                         name="end_date" 
@@ -2577,10 +2577,10 @@ const ReportsPage: React.FC = () => {
               <Icon as={FiTrendingUp} color="purple.500" />
               <VStack align="start" spacing={0}>
                 <Text fontSize="lg" fontWeight="bold">
-                  SSOT Profit & Loss Statement
+                  {t('reports.modal.profitLossTitle')}
                 </Text>
                 <Text fontSize="sm" color={previewPeriodTextColor}>
-                  Enhanced Revenue Analysis with Real-time SSOT Integration
+                  {t('reports.modal.enhancedRevenueAnalysis')}
                 </Text>
               </VStack>
             </HStack>
@@ -2595,14 +2595,14 @@ const ReportsPage: React.FC = () => {
                   <FormLabel fontSize="sm">
                     <HStack spacing={2}>
                       <Icon as={FiCalendar} />
-                      <Text>Period Closed History</Text>
-                      <Tooltip label="Select a closed period to view historical P&L report" placement="top">
+                      <Text>{t('reports.modal.periodClosedHistory')}</Text>
+                      <Tooltip label={t('reports.modal.selectClosedPeriodTooltip')} placement="top">
                         <Box><Icon as={FiInfo} color="gray.500" /></Box>
                       </Tooltip>
                     </HStack>
                   </FormLabel>
                   <Select
-                    placeholder="Select closed period (optional)"
+                    placeholder={t('reports.modal.selectClosedPeriodOptional')}
                     size="md"
                     onChange={(e) => {
                       if (e.target.value) {
@@ -2636,7 +2636,7 @@ const ReportsPage: React.FC = () => {
                         </option>
                       ))
                     ) : (
-                      <option disabled>No closed periods available</option>
+                      <option disabled>{t('reports.modal.noClosedPeriodsAvailable')}</option>
                     )}
                   </Select>
                 </FormControl>
@@ -2652,8 +2652,8 @@ const ReportsPage: React.FC = () => {
                         const periods = buildUniqueClosedPeriods(response.data.data);
                         setSSOTPLClosedPeriods(periods);
                         toast({
-                          title: 'Success',
-                          description: `Loaded ${periods.length} closed periods`,
+                          title: t('messages.toast.success'),
+                          description: t('reports.modal.loadedClosedPeriods', { count: periods.length }),
                           status: 'success',
                           duration: 2000
                         });
@@ -2668,7 +2668,7 @@ const ReportsPage: React.FC = () => {
                   leftIcon={<FiClock />}
                   mt={7}
                 >
-                  Load History
+                  {t('reports.modal.loadHistory')}
                 </Button>
               </HStack>
 
@@ -2676,7 +2676,7 @@ const ReportsPage: React.FC = () => {
 
               <HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
-                  <FormLabel>Start Date</FormLabel>
+                  <FormLabel>{t('reports.modal.startDate')}</FormLabel>
                   <Input 
                     type="date" 
                     value={ssotStartDate} 
@@ -2684,7 +2684,7 @@ const ReportsPage: React.FC = () => {
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>End Date</FormLabel>
+                  <FormLabel>{t('reports.modal.endDate')}</FormLabel>
                   <Input 
                     type="date" 
                     value={ssotEndDate} 
@@ -2700,7 +2700,7 @@ leftIcon={<FiTrendingUp />}
                   mt={8}
                   whiteSpace="nowrap"
                 >
-                  Generate Report
+                  {t('reports.modal.generateReport')}
                 </Button>
               </HStack>
             </Box>
@@ -2711,10 +2711,10 @@ leftIcon={<FiTrendingUp />}
                   <Spinner size="xl" thickness="4px" speed="0.65s" color="green.500" />
                   <VStack spacing={2}>
                     <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                      Generating SSOT P&L Report
+                      {t('reports.modal.generatingProfitLoss')}
                     </Text>
                     <Text fontSize="sm" color={descriptionColor}>
-                      Fetching real-time data from SSOT journal system...
+                      {t('reports.modal.analyzingRevenueExpenses')}
                     </Text>
                   </VStack>
                 </VStack>
@@ -2731,7 +2731,7 @@ leftIcon={<FiTrendingUp />}
                   variant="outline"
                   onClick={fetchSSOTPLReport}
                 >
-                  Retry
+                  {t('reports.modal.retry')}
                 </Button>
               </Box>
             )}
@@ -2759,10 +2759,10 @@ leftIcon={<FiTrendingUp />}
                       </VStack>
                       <VStack align="end" spacing={1}>
                         <Text fontSize="sm" color="purple.600">
-                          Currency: {ssotPLData.currency || 'IDR'}
+                          {t('reports.modal.currency')}: {ssotPLData.currency || 'IDR'}
                         </Text>
                         <Text fontSize="xs" color="purple.500">
-                          Generated: {ssotPLData.generated_at ? new Date(ssotPLData.generated_at).toLocaleString('id-ID') : 'N/A'}
+                          {t('reports.modal.generated')}: {ssotPLData.generated_at ? new Date(ssotPLData.generated_at).toLocaleString('id-ID') : 'N/A'}
                         </Text>
                       </VStack>
                     </HStack>
@@ -2772,13 +2772,13 @@ leftIcon={<FiTrendingUp />}
                 {/* Report Header */}
                 <Box textAlign="center" bg={summaryBg} p={4} borderRadius="md">
                   <Heading size="md" color={headingColor}>
-                    {ssotPLData.title || 'Profit and Loss Statement'}
+                    {ssotPLData.title || t('reports.modal.profitLossTitle')}
                   </Heading>
                   <Text fontSize="sm" color={descriptionColor}>
-                    Period: {ssotPLData.period || `${ssotStartDate} - ${ssotEndDate}`}
+                    {t('reports.modal.period')}: {ssotPLData.period || `${ssotStartDate} - ${ssotEndDate}`}
                   </Text>
                   <Text fontSize="xs" color={descriptionColor} mt={1}>
-                    Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
+                    {t('reports.modal.generated')}: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
                   </Text>
                 </Box>
 
@@ -2786,7 +2786,7 @@ leftIcon={<FiTrendingUp />}
                 {ssotPLData.message && (
                   <Box bg="blue.50" p={4} borderRadius="md" border="1px" borderColor="blue.200">
                     <Text fontSize="sm" color="blue.800">
-                      <strong>Analysis:</strong> {ssotPLData.message}
+                      <strong>{t('reports.modal.analysis')}:</strong> {ssotPLData.message}
                     </Text>
                   </Box>
                 )}
@@ -2797,25 +2797,25 @@ leftIcon={<FiTrendingUp />}
                     <Text fontSize="2xl" fontWeight="bold" color="purple.600">
                       {formatCurrency(ssotPLData.total_revenue || 0)}
                     </Text>
-                    <Text fontSize="sm" color="purple.800">Total Revenue</Text>
+                    <Text fontSize="sm" color="purple.800">{t('reports.modal.totalRevenue')}</Text>
                   </Box>
                   <Box bg="blue.50" p={4} borderRadius="md" textAlign="center">
                     <Text fontSize="2xl" fontWeight="bold" color="blue.600">
                       {formatCurrency(ssotPLData.total_expenses || 0)}
                     </Text>
-                    <Text fontSize="sm" color="blue.800">Total Expenses</Text>
+                    <Text fontSize="sm" color="blue.800">{t('reports.modal.totalExpenses')}</Text>
                   </Box>
                   <Box bg="orange.50" p={4} borderRadius="md" textAlign="center">
                     <Text fontSize="2xl" fontWeight="bold" color="orange.600">
                       {formatCurrency(ssotPLData.net_profit || 0)}
                     </Text>
-                    <Text fontSize="sm" color="orange.800">Net Profit</Text>
+                    <Text fontSize="sm" color="orange.800">{t('reports.modal.netProfit')}</Text>
                   </Box>
                   <Box bg="green.50" p={4} borderRadius="md" textAlign="center">
                     <Text fontSize="2xl" fontWeight="bold" color="green.600">
                       {formatCurrency(ssotPLData.net_loss || 0)}
                     </Text>
-                    <Text fontSize="sm" color="green.800">Net Loss</Text>
+                    <Text fontSize="sm" color="green.800">{t('reports.modal.netLoss')}</Text>
                   </Box>
                 </SimpleGrid>
 
@@ -2823,20 +2823,20 @@ leftIcon={<FiTrendingUp />}
                 {ssotPLData.revenue_details && ssotPLData.revenue_details.length > 0 && (
                   <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
                     <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                      Revenue Details
+                      {t('reports.modal.revenueDetails')}
                     </Text>
                     <SimpleGrid columns={[1, 2, 3]} spacing={4}>
                       {ssotPLData.revenue_details.map((revenue: any) => (
                         <Box key={revenue.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
                           <VStack align="start" spacing={0}>
                             <Text fontSize="sm" color="gray.700">
-                              Account ID: {revenue.account_id}
+                              {t('reports.modal.accountId')}: {revenue.account_id}
                             </Text>
                             <Text fontSize="sm" color="gray.700">
-                              Account Name: {revenue.account_name || 'Unnamed Account'}
+                              {t('reports.modal.accountName')}: {revenue.account_name || 'Unnamed Account'}
                             </Text>
                             <Text fontSize="sm" color="gray.700">
-                              Amount: {formatCurrency(revenue.amount || 0)}
+                              {t('reports.modal.amount')}: {formatCurrency(revenue.amount || 0)}
                             </Text>
                           </VStack>
                         </Box>
@@ -2849,20 +2849,20 @@ leftIcon={<FiTrendingUp />}
                 {ssotPLData.expense_details && ssotPLData.expense_details.length > 0 && (
                   <Box bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
                     <Text fontSize="md" fontWeight="bold" color={headingColor} mb={3}>
-                      Expense Details
+                      {t('reports.modal.expenseDetails')}
                     </Text>
                     <SimpleGrid columns={[1, 2, 3]} spacing={4}>
                       {ssotPLData.expense_details.map((expense: any) => (
                         <Box key={expense.account_id} bg="white" p={4} borderRadius="md" border="1px" borderColor={borderColor}>
                           <VStack align="start" spacing={0}>
                             <Text fontSize="sm" color="gray.700">
-                              Account ID: {expense.account_id}
+                              {t('reports.modal.accountId')}: {expense.account_id}
                             </Text>
                             <Text fontSize="sm" color="gray.700">
-                              Account Name: {expense.account_name || 'Unnamed Account'}
+                              {t('reports.modal.accountName')}: {expense.account_name || 'Unnamed Account'}
                             </Text>
                             <Text fontSize="sm" color="gray.700">
-                              Amount: {formatCurrency(expense.amount || 0)}
+                              {t('reports.modal.amount')}: {formatCurrency(expense.amount || 0)}
                             </Text>
                           </VStack>
                         </Box>
@@ -2875,24 +2875,24 @@ leftIcon={<FiTrendingUp />}
                 {ssotPLData.financialMetrics && (
                   <Box bg="green.50" p={4} borderRadius="md" border="1px" borderColor="green.200">
                     <Text fontSize="md" fontWeight="bold" color="green.800" mb={3}>
-                      Key Financial Metrics
+                      {t('reports.modal.keyFinancialMetrics')}
                     </Text>
                     <SimpleGrid columns={[1, 2]} spacing={3}>
                       <VStack spacing={2}>
                         <HStack justify="space-between" w="full">
-                          <Text fontSize="sm" color="green.700">Gross Profit:</Text>
+                          <Text fontSize="sm" color="green.700">{t('reports.modal.grossProfit')}:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
                             {formatCurrency(ssotPLData.financialMetrics.grossProfit || 0)}
                           </Text>
                         </HStack>
                         <HStack justify="space-between" w="full">
-                          <Text fontSize="sm" color="green.700">Gross Margin:</Text>
+                          <Text fontSize="sm" color="green.700">{t('reports.modal.grossMargin')}:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
                             {(ssotPLData.financialMetrics.grossProfitMargin || 0).toFixed(1)}%
                           </Text>
                         </HStack>
                         <HStack justify="space-between" w="full">
-                          <Text fontSize="sm" color="green.700">Operating Income:</Text>
+                          <Text fontSize="sm" color="green.700">{t('reports.modal.operatingIncome')}:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
                             {formatCurrency(ssotPLData.financialMetrics.operatingIncome || 0)}
                           </Text>
@@ -2900,19 +2900,19 @@ leftIcon={<FiTrendingUp />}
                       </VStack>
                       <VStack spacing={2}>
                         <HStack justify="space-between" w="full">
-                          <Text fontSize="sm" color="green.700">Operating Margin:</Text>
+                          <Text fontSize="sm" color="green.700">{t('reports.modal.operatingMargin')}:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
                             {(ssotPLData.financialMetrics.operatingMargin || 0).toFixed(1)}%
                           </Text>
                         </HStack>
                         <HStack justify="space-between" w="full">
-                          <Text fontSize="sm" color="green.700">Net Income:</Text>
+                          <Text fontSize="sm" color="green.700">{t('reports.modal.netIncome')}:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
                             {formatCurrency(ssotPLData.financialMetrics.netIncome || 0)}
                           </Text>
                         </HStack>
                         <HStack justify="space-between" w="full">
-                          <Text fontSize="sm" color="green.700">Net Margin:</Text>
+                          <Text fontSize="sm" color="green.700">{t('reports.modal.netMargin')}:</Text>
                           <Text fontSize="sm" fontWeight="semibold">
                             {(ssotPLData.financialMetrics.netIncomeMargin || 0).toFixed(1)}%
                           </Text>
@@ -2926,7 +2926,7 @@ leftIcon={<FiTrendingUp />}
                 {ssotPLData.sections && ssotPLData.sections.length > 0 && (
                   <VStack spacing={4} align="stretch">
                     <Text fontSize="lg" fontWeight="bold" color={headingColor}>
-                      Detailed Breakdown
+                      {t('reports.modal.detailedBreakdown')}
                     </Text>
                     {ssotPLData.sections.map((section: any, index: number) => (
                       <Box key={index} bg={cardBg} p={4} borderRadius="md" border="1px" borderColor={borderColor}>
@@ -2969,13 +2969,13 @@ leftIcon={<FiTrendingUp />}
                   <Box bg="yellow.50" p={6} borderRadius="md" textAlign="center">
                     <Icon as={FiTrendingUp} boxSize={12} color="yellow.400" mb={4} />
                     <Text fontSize="lg" fontWeight="semibold" color="yellow.800" mb={2}>
-                      No Data Available
+                      {t('reports.modal.noDataAvailable')}
                     </Text>
                     <Text fontSize="sm" color="yellow.700">
-                      No P&L relevant transactions found for this period. The journal entries contain mainly asset purchases, payments, and deposits which affect the Balance Sheet rather than P&L.
+                      {t('reports.modal.noPLDataMessage')}
                     </Text>
                     <Text fontSize="sm" color="yellow.700" mt={2}>
-                      To generate meaningful P&L data, record sales transactions, operating expenses, and cost of goods sold.
+                      {t('reports.modal.noPLDataHint')}
                     </Text>
                   </Box>
                 )}
@@ -2993,7 +2993,7 @@ leftIcon={<FiTrendingUp />}
                     leftIcon={<FiFilePlus />}
                     onClick={() => handleSSOTProfitLossExport('pdf')}
                   >
-                    Export PDF
+                    {t('reports.exportPDF')}
                   </Button>
                   <Button
                     colorScheme="green"
@@ -3002,13 +3002,13 @@ leftIcon={<FiTrendingUp />}
                     leftIcon={<FiFileText />}
                     onClick={() => handleSSOTProfitLossExport('csv')}
                   >
-                    Export CSV
+                    {t('reports.exportCSV')}
                   </Button>
                 </>
               )}
             </HStack>
             <Button variant="ghost" onClick={() => setSSOTPLOpen(false)}>
-              Close
+              {t('reports.close')}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -3399,7 +3399,7 @@ leftIcon={<FiTrendingUp />}
                     leftIcon={<FiFilePlus />}
                     onClick={() => handleEnhancedPDFExport(ssotBSData)}
                   >
-                    Export PDF
+                    {t('reports.exportPDF')}
                   </Button>
                   <Button
                     colorScheme="green"
@@ -3408,13 +3408,13 @@ leftIcon={<FiTrendingUp />}
                     leftIcon={<FiFileText />}
                     onClick={() => handleEnhancedCSVExport(ssotBSData)}
                   >
-                    Export CSV
+                    {t('reports.exportCSV')}
                   </Button>
                 </>
               )}
             </HStack>
             <Button variant="ghost" onClick={() => setSSOTBSOpen(false)}>
-              Close
+              {t('reports.close')}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -3429,7 +3429,7 @@ leftIcon={<FiTrendingUp />}
               <Icon as={FiActivity} color="blue.500" />
               <VStack align="start" spacing={0}>
                 <Text fontSize="lg" fontWeight="bold">
-                  SSOT Cash Flow Statement
+                  {t('reports.cashFlow.ssotTitle')}
                 </Text>
                 <Text fontSize="sm" color={previewPeriodTextColor}>
                   {ssotCFStartDate} - {ssotCFEndDate} | SSOT Journal Integration
@@ -3446,14 +3446,14 @@ leftIcon={<FiTrendingUp />}
                   <FormLabel fontSize="sm">
                     <HStack spacing={2}>
                       <Icon as={FiCalendar} />
-                      <Text>Period Closed History</Text>
-                      <Tooltip label="Select a closed period to view historical Cash Flow report" placement="top">
+                      <Text>{t('reports.cashFlow.periodClosedHistory')}</Text>
+                      <Tooltip label={t('reports.cashFlow.tooltips.periodClosedHistory')} placement="top">
                         <Box><Icon as={FiInfo} color="gray.500" /></Box>
                       </Tooltip>
                     </HStack>
                   </FormLabel>
                   <Select
-                    placeholder="Select closed period (optional)"
+                    placeholder={t('reports.cashFlow.selectClosedPeriod')}
                     size="md"
                     onChange={(e) => {
                       if (e.target.value) {
@@ -3487,7 +3487,7 @@ leftIcon={<FiTrendingUp />}
                         </option>
                       ))
                     ) : (
-                      <option disabled>No closed periods available</option>
+                      <option disabled>{t('reports.cashFlow.noClosedPeriodsAvailable')}</option>
                     )}
                   </Select>
                 </FormControl>
@@ -3503,8 +3503,8 @@ leftIcon={<FiTrendingUp />}
                         const periods = buildUniqueClosedPeriods(response.data.data);
                         setSSOTCFClosedPeriods(periods);
                         toast({
-                          title: 'Success',
-                          description: `Loaded ${periods.length} closed periods`,
+                          title: t('common.labels.loading'),
+                          description: t('reports.cashFlow.loadedClosedPeriods', { count: periods.length }),
                           status: 'success',
                           duration: 2000
                         });
@@ -3519,7 +3519,7 @@ leftIcon={<FiTrendingUp />}
                   leftIcon={<FiClock />}
                   mt={7}
                 >
-                  Load History
+                  {t('reports.cashFlow.loadHistory')}
                 </Button>
               </HStack>
 
@@ -3527,7 +3527,7 @@ leftIcon={<FiTrendingUp />}
 
               <HStack spacing={4} mb={4} flexWrap="wrap">
                 <FormControl>
-                  <FormLabel>Start Date</FormLabel>
+                  <FormLabel>{t('reports.cashFlow.startDate')}</FormLabel>
                   <Input 
                     type="date" 
                     value={ssotCFStartDate} 
@@ -3535,7 +3535,7 @@ leftIcon={<FiTrendingUp />}
                   />
                 </FormControl>
                 <FormControl>
-                  <FormLabel>End Date</FormLabel>
+                  <FormLabel>{t('reports.cashFlow.endDate')}</FormLabel>
                   <Input 
                     type="date" 
                     value={ssotCFEndDate} 
@@ -3551,7 +3551,7 @@ leftIcon={<FiTrendingUp />}
                   mt={8}
                   whiteSpace="nowrap"
                 >
-                  Generate Report
+                  {t('reports.cashFlow.generateReport')}
                 </Button>
               </HStack>
             </Box>
@@ -3562,10 +3562,10 @@ leftIcon={<FiTrendingUp />}
                   <Spinner size="xl" thickness="4px" speed="0.65s" color="blue.500" />
                   <VStack spacing={2}>
                     <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                      Generating SSOT Cash Flow Statement
+                      {t('reports.cashFlow.generating')}
                     </Text>
                     <Text fontSize="sm" color={descriptionColor}>
-                      Analyzing journal entries for cash flow activities...
+                      {t('reports.cashFlow.analyzingJournalEntries')}
                     </Text>
                   </VStack>
                 </VStack>
@@ -3574,7 +3574,7 @@ leftIcon={<FiTrendingUp />}
 
             {ssotCFError && (
               <Box bg="red.50" p={4} borderRadius="md" mb={4}>
-                <Text color="red.600" fontWeight="medium">Error: {ssotCFError}</Text>
+                <Text color="red.600" fontWeight="medium">{t('reports.cashFlow.error')}: {ssotCFError}</Text>
                 <Button
                   mt={2}
                   size="sm"
@@ -3582,7 +3582,7 @@ leftIcon={<FiTrendingUp />}
                   variant="outline"
                   onClick={fetchSSOTCashFlowReport}
                 >
-                  Retry
+                  {t('reports.cashFlow.retry')}
                 </Button>
               </Box>
             )}
@@ -3594,19 +3594,19 @@ leftIcon={<FiTrendingUp />}
                   <HStack justify="space-between">
                     <VStack align="start" spacing={1}>
                       <Text fontSize="lg" fontWeight="bold" color={headingColor}>
-                        Cash Position Summary
+                        {t('reports.cashFlow.cashPositionSummary')}
                       </Text>
                       <Text fontSize="sm" color={descriptionColor}>
                         {ssotCFData.start_date} to {ssotCFData.end_date}
                       </Text>
                     </VStack>
                     <VStack align="end" spacing={1}>
-                      <Text fontSize="sm" color={descriptionColor}>Net Cash Flow</Text>
+                      <Text fontSize="sm" color={descriptionColor}>{t('reports.cashFlow.netCashFlow')}</Text>
                       <Text fontSize="xl" fontWeight="bold" color={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.600' : 'red.600'}>
                         {formatCurrency(ssotCFData.net_cash_flow || 0)}
                       </Text>
                       <Text fontSize="xs" color={descriptionColor} fontStyle="italic">
-                        = Operating + Investing + Financing
+                        {t('reports.cashFlow.formula.netCashFlow')}
                       </Text>
                     </VStack>
                   </HStack>
@@ -3615,19 +3615,19 @@ leftIcon={<FiTrendingUp />}
                 {/* Cash Balance Details */}
                 <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
                   <Box bg="blue.50" p={4} borderRadius="md" borderWidth="1px" borderColor="blue.200">
-                    <Text fontSize="sm" color="gray.600" mb={2}>Beginning Cash</Text>
+                    <Text fontSize="sm" color="gray.600" mb={2}>{t('reports.cashFlow.beginningCash')}</Text>
                     <Text fontSize="2xl" fontWeight="bold" color="blue.600">
                       {formatCurrency(ssotCFData.cash_at_beginning || 0)}
                     </Text>
                   </Box>
                   <Box bg={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.50' : 'red.50'} p={4} borderRadius="md" borderWidth="1px" borderColor={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.200' : 'red.200'}>
-                    <Text fontSize="sm" color="gray.600" mb={2}>Net Change</Text>
+                    <Text fontSize="sm" color="gray.600" mb={2}>{t('reports.cashFlow.netChange')}</Text>
                     <Text fontSize="2xl" fontWeight="bold" color={(ssotCFData.net_cash_flow || 0) >= 0 ? 'green.600' : 'red.600'}>
                       {(ssotCFData.net_cash_flow || 0) >= 0 ? '+' : ''}{formatCurrency(ssotCFData.net_cash_flow || 0)}
                     </Text>
                   </Box>
                   <Box bg="purple.50" p={4} borderRadius="md" borderWidth="1px" borderColor="purple.200">
-                    <Text fontSize="sm" color="gray.600" mb={2}>Ending Cash</Text>
+                    <Text fontSize="sm" color="gray.600" mb={2}>{t('reports.cashFlow.endingCash')}</Text>
                     <Text fontSize="2xl" fontWeight="bold" color="purple.600">
                       {formatCurrency(ssotCFData.cash_at_end || 0)}
                     </Text>
@@ -3638,18 +3638,18 @@ leftIcon={<FiTrendingUp />}
                 {ssotCFData.operating_activities && (
                   <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
                     <Text fontSize="lg" fontWeight="bold" color="green.600" mb={3}>
-                      💼 Operating Activities
+                      💼 {t('reports.cashFlow.operatingActivities')}
                     </Text>
                     <VStack align="stretch" spacing={2}>
                       <HStack justify="space-between" bg="gray.50" p={2} borderRadius="md">
                         <Tooltip 
-                          label={"Net Income dari Profit & Loss Statement. Jika Rp 0, kemungkinan periode ini sudah tutup buku dan laba/rugi sudah dipindahkan ke Laba Ditahan."}
+                          label={t('reports.cashFlow.tooltips.netIncome')}
                           fontSize="sm"
                           placement="top"
                           hasArrow
                         >
                           <Text fontSize="sm" fontWeight="medium" cursor="help" borderBottom="1px dotted" borderColor="gray.400">
-                            Net Income ℹ️
+                            {t('reports.cashFlow.netIncome')} ℹ️
                           </Text>
                         </Tooltip>
                         <Text fontSize="sm" fontWeight="bold" color={(ssotCFData.operating_activities?.net_income || 0) >= 0 ? 'green.600' : 'red.600'}>
@@ -3659,17 +3659,17 @@ leftIcon={<FiTrendingUp />}
                       {(ssotCFData.operating_activities?.adjustments?.total_adjustments || 0) !== 0 && (
                         <Box mt={2}>
                           <Tooltip 
-                            label={"Adjustments mencakup item non-cash seperti depresiasi, amortisasi, dan perubahan retained earnings. Setelah tutup buku, laba ditahan yang berubah akan muncul di sini."}
+                            label={t('reports.cashFlow.tooltips.adjustments')}
                             fontSize="sm"
                             placement="top"
                             hasArrow
                           >
                             <Text fontSize="sm" fontWeight="medium" color="gray.600" mb={2} cursor="help" borderBottom="1px dotted" borderColor="gray.400" display="inline-block">
-                              Adjustments (Non-cash items) ℹ️:
+                              {t('reports.cashFlow.adjustments')} ℹ️:
                             </Text>
                           </Tooltip>
                           <HStack justify="space-between" pl={4} py={1} bg="orange.50" borderRadius="md">
-                            <Text fontSize="sm" color="gray.700">Total Adjustments</Text>
+                            <Text fontSize="sm" color="gray.700">{t('reports.cashFlow.totalAdjustments')}</Text>
                             <Text fontSize="sm" fontWeight="medium" color={(ssotCFData.operating_activities?.adjustments?.total_adjustments || 0) >= 0 ? 'green.600' : 'red.600'}>
                               {formatCurrency(ssotCFData.operating_activities?.adjustments?.total_adjustments || 0)}
                             </Text>
@@ -3679,13 +3679,13 @@ leftIcon={<FiTrendingUp />}
                       {ssotCFData.operating_activities?.working_capital_changes?.items?.length > 0 && (
                         <Box mt={2}>
                           <Tooltip 
-                            label={"Perubahan modal kerja mencakup perubahan piutang, utang, persediaan, dan akun lancar lainnya yang mempengaruhi kas."}
+                            label={t('reports.cashFlow.tooltips.workingCapitalChanges')}
                             fontSize="sm"
                             placement="top"
                             hasArrow
                           >
                             <Text fontSize="sm" fontWeight="medium" color="gray.600" mb={2} cursor="help" borderBottom="1px dotted" borderColor="gray.400" display="inline-block">
-                              Working Capital Changes ℹ️:
+                              {t('reports.cashFlow.workingCapitalChanges')} ℹ️:
                             </Text>
                           </Tooltip>
                           {ssotCFData.operating_activities.working_capital_changes.items.map((item: any, idx: number) => (
@@ -3702,17 +3702,17 @@ leftIcon={<FiTrendingUp />}
                       <HStack justify="space-between" bg="green.50" p={2} borderRadius="md">
                         <VStack align="start" spacing={0}>
                           <Tooltip 
-                            label={"Total kas yang dihasilkan dari aktivitas operasional perusahaan. Ini menunjukkan kemampuan perusahaan menghasilkan kas dari bisnis intinya."}
+                            label={t('reports.cashFlow.tooltips.totalOperatingCashFlow')}
                             fontSize="sm"
                             placement="top"
                             hasArrow
                           >
                             <Text fontWeight="bold" color="green.700" cursor="help" borderBottom="1px dotted" borderColor="green.600">
-                              Total Operating Cash Flow ℹ️
+                              {t('reports.cashFlow.totalOperatingCashFlow')} ℹ️
                             </Text>
                           </Tooltip>
                           <Text fontSize="xs" color="green.600" fontStyle="italic">
-                            = Net Income + Adjustments + Working Capital Changes
+                            {t('reports.cashFlow.formula.operatingCashFlow')}
                           </Text>
                         </VStack>
                         <VStack align="end" spacing={0}>
@@ -3736,7 +3736,7 @@ leftIcon={<FiTrendingUp />}
                 {ssotCFData.investing_activities?.items?.length > 0 && (
                   <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
                     <Text fontSize="lg" fontWeight="bold" color="blue.600" mb={3}>
-                      📊 Investing Activities
+                      📊 {t('reports.cashFlow.investingActivities')}
                     </Text>
                     <VStack align="stretch" spacing={2}>
                       {ssotCFData.investing_activities.items.map((item: any, idx: number) => (
@@ -3750,9 +3750,9 @@ leftIcon={<FiTrendingUp />}
                       <Divider />
                       <HStack justify="space-between" bg="blue.50" p={2} borderRadius="md">
                         <VStack align="start" spacing={0}>
-                          <Text fontWeight="bold" color="blue.700">Total Investing Cash Flow</Text>
+                          <Text fontWeight="bold" color="blue.700">{t('reports.cashFlow.totalInvestingCashFlow')}</Text>
                           <Text fontSize="xs" color="blue.600" fontStyle="italic">
-                            = Sum of all investing activities
+                            {t('reports.cashFlow.formula.investingCashFlow')}
                           </Text>
                         </VStack>
                         <Text fontWeight="bold" color="blue.700">
@@ -3767,7 +3767,7 @@ leftIcon={<FiTrendingUp />}
                 {ssotCFData.financing_activities?.items?.length > 0 && (
                   <Box bg={cardBg} p={4} borderRadius="md" borderWidth="1px" borderColor={borderColor}>
                     <Text fontSize="lg" fontWeight="bold" color="purple.600" mb={3}>
-                      🏦 Financing Activities
+                      🏦 {t('reports.cashFlow.financingActivities')}
                     </Text>
                     <VStack align="stretch" spacing={2}>
                       {ssotCFData.financing_activities.items.map((item: any, idx: number) => (
@@ -3781,9 +3781,9 @@ leftIcon={<FiTrendingUp />}
                       <Divider />
                       <HStack justify="space-between" bg="purple.50" p={2} borderRadius="md">
                         <VStack align="start" spacing={0}>
-                          <Text fontWeight="bold" color="purple.700">Total Financing Cash Flow</Text>
+                          <Text fontWeight="bold" color="purple.700">{t('reports.cashFlow.totalFinancingCashFlow')}</Text>
                           <Text fontSize="xs" color="purple.600" fontStyle="italic">
-                            = Sum of all financing activities
+                            {t('reports.cashFlow.formula.financingCashFlow')}
                           </Text>
                         </VStack>
                         <Text fontWeight="bold" color="purple.700">
@@ -3845,7 +3845,7 @@ leftIcon={<FiTrendingUp />}
                     onClick={() => handleCashFlowPDFExport()}
                     isLoading={loading}
                   >
-                    Export PDF
+                    {t('reports.exportPDF')}
                   </Button>
                   <Button
                     colorScheme="green"
@@ -3855,13 +3855,13 @@ leftIcon={<FiTrendingUp />}
                     onClick={() => handleCashFlowCSVExport()}
                     isLoading={loading}
                   >
-                    Export CSV
+                    {t('reports.exportCSV')}
                   </Button>
                 </>
               )}
             </HStack>
             <Button variant="ghost" onClick={() => setSSOTCFOpen(false)}>
-              Close
+              {t('reports.close')}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -3972,8 +3972,8 @@ leftIcon={<FiTrendingUp />}
           } catch (error) {
             console.error('Export failed:', error);
             toast({
-              title: 'Export Failed',
-              description: error instanceof Error ? error.message : 'Failed to export report',
+              title: t('reports.messages.exportFailed'),
+              description: error instanceof Error ? error.message : t('reports.messages.exportReportError'),
               status: 'error',
               duration: 5000,
               isClosable: true,
@@ -4085,8 +4085,8 @@ leftIcon={<FiTrendingUp />}
           } catch (error) {
             console.error('Export failed:', error);
             toast({
-              title: 'Export Failed',
-              description: error instanceof Error ? error.message : 'Failed to export report',
+              title: t('reports.messages.exportFailed'),
+              description: error instanceof Error ? error.message : t('reports.messages.exportReportError'),
               status: 'error',
               duration: 5000,
               isClosable: true,
@@ -4405,7 +4405,7 @@ As of: {ssotTBAsOfDate}
                     onClick={() => handleTrialBalanceExport('pdf')}
                     isLoading={loading}
                   >
-                    Export PDF
+                    {t('reports.exportPDF')}
                   </Button>
                   <Button
                     colorScheme="green"
@@ -4415,13 +4415,13 @@ As of: {ssotTBAsOfDate}
                     onClick={() => handleTrialBalanceExport('csv')}
                     isLoading={loading}
                   >
-                    Export CSV
+                    {t('reports.exportCSV')}
                   </Button>
                 </>
               )}
             </HStack>
             <Button variant="ghost" onClick={() => setSSOTTBOpen(false)}>
-              Close
+              {t('reports.close')}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -4672,7 +4672,7 @@ As of: {ssotTBAsOfDate}
                     onClick={() => handleCustomerHistoryExport('pdf')}
                     isLoading={loading}
                   >
-                    Export PDF
+                    {t('reports.exportPDF')}
                   </Button>
                   <Button
                     colorScheme="green"
@@ -4682,13 +4682,13 @@ As of: {ssotTBAsOfDate}
                     onClick={() => handleCustomerHistoryExport('csv')}
                     isLoading={loading}
                   >
-                    Export CSV
+                    {t('reports.exportCSV')}
                   </Button>
                 </>
               )}
             </HStack>
             <Button variant="ghost" onClick={() => setCustomerHistoryOpen(false)}>
-              Close
+              {t('reports.close')}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -4936,7 +4936,7 @@ As of: {ssotTBAsOfDate}
                     onClick={() => handleVendorHistoryExport('pdf')}
                     isLoading={loading}
                   >
-                    Export PDF
+                    {t('reports.exportPDF')}
                   </Button>
                   <Button
                     colorScheme="green"
@@ -4946,13 +4946,13 @@ As of: {ssotTBAsOfDate}
                     onClick={() => handleVendorHistoryExport('csv')}
                     isLoading={loading}
                   >
-                    Export CSV
+                    {t('reports.exportCSV')}
                   </Button>
                 </>
               )}
             </HStack>
             <Button variant="ghost" onClick={() => setVendorHistoryOpen(false)}>
-              Close
+              {t('reports.close')}
             </Button>
           </ModalFooter>
         </ModalContent>
@@ -5386,7 +5386,7 @@ As of: {ssotTBAsOfDate}
                     onClick={() => handleGeneralLedgerExport('pdf')}
                     isLoading={loading}
                   >
-                    Export PDF
+                    {t('reports.exportPDF')}
                   </Button>
                   <Button
                     colorScheme="green"
@@ -5396,13 +5396,13 @@ As of: {ssotTBAsOfDate}
                     onClick={() => handleGeneralLedgerExport('csv')}
                     isLoading={loading}
                   >
-                    Export CSV
+                    {t('reports.exportCSV')}
                   </Button>
                 </>
               )}
             </HStack>
             <Button variant="ghost" onClick={() => setSSOTGLOpen(false)}>
-              Close
+              {t('reports.close')}
             </Button>
           </ModalFooter>
         </ModalContent>

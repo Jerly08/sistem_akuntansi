@@ -22,6 +22,7 @@ import { FiEdit, FiTrash2 } from 'react-icons/fi';
 import { Account } from '@/types/account';
 import { useModulePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import accountService from '@/services/accountService';
 
 interface AccountsTableProps {
@@ -35,6 +36,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
   // Permission checking
   const { canEdit, canDelete } = useModulePermissions('accounts');
   const { user } = useAuth();
+  const { t } = useTranslation();
   const isAdmin = user?.role?.toLowerCase() === 'admin';
   
   // Theme-aware colors
@@ -85,7 +87,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
               py={4}
               borderColor={borderColor}
             >
-              Code
+              {t('common.labels.code')}
             </Th>
             <Th 
               color={textColor}
@@ -96,7 +98,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
               py={4}
               borderColor={borderColor}
             >
-              Name
+              {t('common.name')}
             </Th>
             <Th 
               color={textColor}
@@ -107,7 +109,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
               py={4}
               borderColor={borderColor}
             >
-              Type
+              {t('common.type')}
             </Th>
             <Th 
               color={textColor}
@@ -118,7 +120,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
               py={4}
               borderColor={borderColor}
             >
-              Balance
+              {t('common.labels.balance')}
             </Th>
             <Th 
               color={textColor}
@@ -129,7 +131,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
               py={4}
               borderColor={borderColor}
             >
-              Status
+              {t('common.status')}
             </Th>
             <Th 
               color={textColor}
@@ -141,7 +143,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
               borderColor={borderColor}
               textAlign="center"
             >
-              Actions
+              {t('common.actions')}
             </Th>
           </Tr>
         </Thead>
@@ -167,7 +169,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
               </Td>
               <Td px={6} py={4} borderColor={borderColor}>
                 <Text fontSize="sm" color={textColor}>
-                  {accountService.getAccountTypeLabel(account.type, true)}
+                  {t(`accounts.types.${account.type.toLowerCase()}`)}
                 </Text>
               </Td>
               <Td px={6} py={4} borderColor={borderColor}>
@@ -195,7 +197,7 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
                   py={1}
                   borderRadius="md"
                 >
-                  {account.is_active ? 'ACTIVE' : 'INACTIVE'}
+                  {account.is_active ? t('common.active') : t('common.inactive')}
                 </Badge>
               </Td>
               <Td px={6} py={4} borderColor={borderColor}>
@@ -252,12 +254,12 @@ const AccountsTable: React.FC<AccountsTableProps> = ({ accounts, onEdit, onDelet
                 {/* No actions available */}
                 {(!account.is_header && !canEdit && !canDelete) && (
                   <Text fontSize="xs" color="gray.400" textAlign="center">
-                    No actions available
+                    {t('accounts.noActionsAvailable')}
                   </Text>
                 )}
                 {(account.is_header && !isAdmin) && (
                   <Text fontSize="xs" color="gray.400" textAlign="center">
-                    Admin only
+                    {t('accounts.adminOnly')}
                   </Text>
                 )}
               </Td>

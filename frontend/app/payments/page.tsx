@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import SimpleLayout from '@/components/layout/SimpleLayout';
 import { DataTable } from '@/components/common/DataTable';
 import {
@@ -108,6 +109,7 @@ const formatCurrency = (amount: number) => {
 
 const PaymentsPage: React.FC = () => {
   const { token, user } = useAuth();
+  const { t } = useTranslation();
   const toast = useToast();
   
   // Theme colors for dark mode support
@@ -203,8 +205,8 @@ const PaymentsPage: React.FC = () => {
     // Check if PPN payment - cannot be edited
     if (payment.payment_type?.startsWith('TAX_PPN') || payment.code?.startsWith('SETOR-PPN')) {
       toast({
-        title: 'Cannot Edit PPN Payment',
-        description: 'PPN payments cannot be edited. Please delete and create new if needed.',
+        title: t('payments.messages.cannotEditPPN'),
+        description: t('payments.messages.cannotEditPPNDesc'),
         status: 'warning',
         duration: 5000,
       });
@@ -246,48 +248,52 @@ const PaymentsPage: React.FC = () => {
 
   const columns = [
   {
-    header: 'Code',
+    header: t('payments.code'),
     accessor: (row: Payment) => (
       <Text fontWeight="medium" color={statColors.blue}>{row.code}</Text>
     )
   },
   { 
-    header: 'Contact',
+    header: t('payments.contact'),
     accessor: (row: Payment) => {
       // For PPN tax payments, show "Negara" instead of contact name
       if (row.payment_type === 'TAX_PPN' || 
           row.payment_type === 'TAX_PPN_INPUT' || 
           row.payment_type === 'TAX_PPN_OUTPUT' ||
           row.code?.startsWith('SETOR-PPN')) {
-        return 'Negara';
+        return t('payments.negara');
       }
       return row.contact?.name || '-';
     }
   },
   {
-    header: 'Date',
+    header: t('payments.date'),
     accessor: (row: Payment) => formatDate(row.date)
   },
   {
-    header: 'Amount',
+    header: t('payments.amount'),
     accessor: (row: Payment) => (
       <Text fontWeight="medium">{formatCurrency(row.amount)}</Text>
     )
   },
   {
-    header: 'Method',
+    header: t('payments.method'),
     accessor: (row: Payment) => paymentService.getMethodDisplayName(row.method)
   },
   {
-    header: 'Status',
-    accessor: (row: Payment) => (
-      <Badge colorScheme={paymentService.getStatusColorScheme(row.status)} variant="subtle">
-        {row.status}
-      </Badge>
-    )
+    header: t('payments.status'),
+    accessor: (row: Payment) => {
+      const statusKey = row.status.toLowerCase();
+      const translationKey = `payments.statuses.${statusKey}`;
+      return (
+        <Badge colorScheme={paymentService.getStatusColorScheme(row.status)} variant="subtle">
+          {t(translationKey)}
+        </Badge>
+      );
+    }
   },
   {
-    header: 'Actions',
+    header: t('payments.actions'),
     accessor: (row: Payment) => (
       <Menu strategy="fixed" placement="bottom-end">
         <MenuButton 
@@ -295,28 +301,28 @@ const PaymentsPage: React.FC = () => {
           icon={<FiMoreVertical />} 
           variant="ghost" 
           size="sm"
-          aria-label="Actions"
+          aria-label={t('payments.actions')}
         />
         <MenuList zIndex={9999}>
           <MenuItem icon={<FiEye />} onClick={() => handleViewPayment(row)}>
-            View Details
+            {t('payments.viewDetails')}
           </MenuItem>
           {canEdit && (
             <MenuItem icon={<FiEdit />} onClick={() => handleEditPayment(row)}>
-              Edit
+              {t('payments.edit')}
             </MenuItem>
           )}
           <MenuItem 
             icon={<FiFilePlus />} 
             onClick={() => paymentService.downloadPaymentDetailPDF(row.id, row.code)}
           >
-            Export PDF
+            {t('payments.exportPDF')}
           </MenuItem>
           {canDelete && (
             <>
               <MenuDivider />
               <MenuItem icon={<FiTrash2 />} color="red.500" onClick={() => handleDeletePayment(row)}>
-                Delete
+                {t('payments.delete')}
               </MenuItem>
             </>
           )}
@@ -573,8 +579,8 @@ const resetFilters = () => {
     try {
       await paymentService.deletePayment(selectedPayment.id);
       toast({
-        title: 'Success',
-        description: 'Payment has been deleted successfully',
+        title: t('common.messages.toast.success'),
+        description: t('payments.messages.deleteSuccess'),
         status: 'success',
         duration: 3000
       });
@@ -584,8 +590,8 @@ const resetFilters = () => {
     } catch (error: any) {
       console.error('Error deleting payment:', error);
       toast({
-        title: 'Error deleting payment',
-        description: error.message || 'Failed to delete payment',
+        title: t('common.messages.toast.error'),
+        description: t('payments.messages.deleteError'),
         status: 'error',
         duration: 3000
       });
@@ -663,16 +669,16 @@ const resetFilters = () => {
       );
       
       toast({
-        title: 'Success',
-        description: 'Payment report has been downloaded',
+        title: t('common.messages.toast.success'),
+        description: t('payments.messages.exportSuccess'),
         status: 'success',
         duration: 3000
       });
     } catch (error: any) {
       console.error('Error exporting payments to PDF:', error);
       toast({
-        title: 'Export failed',
-        description: 'Failed to export payment report',
+        title: t('common.messages.toast.error'),
+        description: t('payments.messages.exportError'),
         status: 'error',
         duration: 3000
       });
@@ -704,7 +710,7 @@ const resetFilters = () => {
       <SimpleLayout allowedRoles={['admin', 'finance', 'director', 'employee', 'inventory_manager']}>
         <Box display="flex" justifyContent="center" alignItems="center" height="400px">
           <Spinner size="xl" thickness="4px" speed="0.65s" color="brand.500" />
-          <Text ml={4} fontSize="lg">Loading payments...</Text>
+          <Text ml={4} fontSize="lg">{t('payments.loading')}</Text>
         </Box>
       </SimpleLayout>
     );
@@ -720,38 +726,38 @@ const resetFilters = () => {
             <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Stat>
-                  <StatLabel>Total Payments</StatLabel>
+                  <StatLabel>{t('payments.summary.totalPayments')}</StatLabel>
                   <StatNumber>{summary.total_payments}</StatNumber>
-                  <StatHelpText>This period</StatHelpText>
+                  <StatHelpText>{t('payments.summary.thisPeriod')}</StatHelpText>
                 </Stat>
               </CardBody>
             </Card>
             <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Stat>
-                  <StatLabel>Total Amount</StatLabel>
+                  <StatLabel>{t('payments.summary.totalAmount')}</StatLabel>
                   <StatNumber>{formatCurrency(summary.total_amount)}</StatNumber>
-                  <StatHelpText>Gross amount</StatHelpText>
+                  <StatHelpText>{t('payments.summary.grossAmount')}</StatHelpText>
                 </Stat>
               </CardBody>
             </Card>
             <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Stat>
-                  <StatLabel>Completed</StatLabel>
+                  <StatLabel>{t('payments.summary.completed')}</StatLabel>
                   <StatNumber color={statColors.green}>
                     {formatCurrency(summary.completed_amount)}
                   </StatNumber>
-                  <StatHelpText>{summary.completed_count} payments</StatHelpText>
+                  <StatHelpText>{summary.completed_count} {t('payments.summary.payments')}</StatHelpText>
                 </Stat>
               </CardBody>
             </Card>
             <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
               <CardBody>
                 <Stat>
-                  <StatLabel>Avg Payment Value</StatLabel>
+                  <StatLabel>{t('payments.summary.avgPaymentValue')}</StatLabel>
                   <StatNumber>{formatCurrency(summary.avg_payment_value)}</StatNumber>
-                  <StatHelpText>Per transaction</StatHelpText>
+                  <StatHelpText>{t('payments.summary.perTransaction')}</StatHelpText>
                 </Stat>
               </CardBody>
             </Card>
@@ -761,8 +767,8 @@ const resetFilters = () => {
         {/* Header */}
         <Flex justify="space-between" align="center">
           <Box>
-            <Heading as="h1" size="xl" mb={2} color={headingColor}>Payment Management</Heading>
-            <Text color={textSecondary}>Manage your payment transactions</Text>
+            <Heading as="h1" size="xl" mb={2} color={headingColor}>{t('payments.title')}</Heading>
+            <Text color={textSecondary}>{t('payments.managePayments')}</Text>
           </Box>
           <HStack spacing={3}>
             <Button
@@ -772,7 +778,7 @@ const resetFilters = () => {
               onClick={handleRefreshData}
               isLoading={loading}
             >
-              Refresh
+              {t('payments.refresh')}
             </Button>
             {canExport && (
               <Menu>
@@ -783,11 +789,11 @@ const resetFilters = () => {
                   variant="outline"
                   size="md"
                 >
-                  Export Report
+                  {t('payments.exportReport')}
                 </MenuButton>
                 <MenuList>
                   <MenuItem icon={<FiFileText />} onClick={handleBulkExport}>
-                    Export PDF Report
+                    {t('payments.exportPDFReport')}
                   </MenuItem>
                   <MenuItem icon={<FiDownload />} onClick={async () => {
                     try {
@@ -807,22 +813,22 @@ const resetFilters = () => {
                       );
                       
                       toast({
-                        title: 'Success',
-                        description: 'Payment report has been downloaded as Excel',
+                        title: t('common.messages.toast.success'),
+                        description: t('payments.messages.exportSuccess'),
                         status: 'success',
                         duration: 3000
                       });
                     } catch (error: any) {
                       console.error('Error exporting payments to Excel:', error);
                       toast({
-                        title: 'Export failed',
-                        description: 'Failed to export payment report as Excel',
+                        title: t('common.messages.toast.error'),
+                        description: t('payments.messages.exportError'),
                         status: 'error',
                         duration: 3000
                       });
                     }
                   }}>
-                    Export Excel Report
+                    {t('payments.exportExcelReport')}
                   </MenuItem>
                 </MenuList>
               </Menu>
@@ -836,33 +842,33 @@ const resetFilters = () => {
                   colorScheme="blue"
                   size="md"
                 >
-                  Create Payment
+                  {t('payments.createPayment')}
                 </MenuButton>
                 <MenuList>
                   <MenuItem 
                     icon={<FiArrowDown />} 
                     onClick={() => handleNewPayment('receivable')}
                   >
-                    Receivable Payment (from Customer)
+                    {t('payments.receivablePayment')}
                   </MenuItem>
                   <MenuItem 
                     icon={<FiArrowRight />} 
                     onClick={() => handleNewPayment('payable')}
                   >
-                    Payable Payment (to Vendor)
+                    {t('payments.payablePayment')}
                   </MenuItem>
                   <MenuDivider />
                   <MenuItem 
                     icon={<FiDollarSign />} 
                     onClick={() => handlePPNPayment()}
                   >
-                    Setor PPN (Tax Remittance)
+                    {t('payments.setorPPN')}
                   </MenuItem>
                   <MenuItem 
                     icon={<FiBriefcase />} 
                     onClick={() => setShowExpensePayment(true)}
                   >
-                    Expense Payment (from COA)
+                    {t('payments.expensePayment')}
                   </MenuItem>
                 </MenuList>
               </Menu>
@@ -879,7 +885,7 @@ const resetFilters = () => {
                   <FiSearch color={searchIconColor} />
                 </InputLeftElement>
                 <Input 
-                  placeholder="Search by payment code or contact..."
+                  placeholder={t('payments.searchPlaceholder')}
                   value={searchInput}
                   onChange={(e) => handleSearch(e.target.value)}
                   bg={inputBg}
@@ -889,36 +895,36 @@ const resetFilters = () => {
               
               <Select 
                 maxW="200px" 
-                placeholder="All Status"
+                placeholder={t('payments.filters.allStatus')}
                 value={statusFilter}
                 onChange={(e) => handleFilterChange('status', e.target.value)}
                 bg={inputBg}
                 borderColor={borderColor}
               >
-                <option value="PENDING">Pending</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="FAILED">Failed</option>
+                <option value="PENDING">{t('payments.filters.pending')}</option>
+                <option value="COMPLETED">{t('payments.filters.completed')}</option>
+                <option value="FAILED">{t('payments.filters.failed')}</option>
               </Select>
               
               <Select
                 maxW="200px"
-                placeholder="All Methods"
+                placeholder={t('payments.filters.allMethods')}
                 value={methodFilter}
                 onChange={(e) => handleFilterChange('method', e.target.value)}
                 bg={inputBg}
                 borderColor={borderColor}
               >
-                <option value="CASH">Cash</option>
-                <option value="BANK_TRANSFER">Bank Transfer</option>
-                <option value="CHECK">Check</option>
-                <option value="CREDIT_CARD">Credit Card</option>
-                <option value="DEBIT_CARD">Debit Card</option>
+                <option value="CASH">{t('payments.filters.cash')}</option>
+                <option value="BANK_TRANSFER">{t('payments.filters.bankTransfer')}</option>
+                <option value="CHECK">{t('payments.filters.check')}</option>
+                <option value="CREDIT_CARD">{t('payments.filters.creditCard')}</option>
+                <option value="DEBIT_CARD">{t('payments.filters.debitCard')}</option>
               </Select>
               
               <Input
                 type="date"
                 maxW="200px"
-                placeholder="Start Date"
+                placeholder={t('payments.filters.startDate')}
                 value={startDate}
                 onChange={(e) => handleFilterChange('start_date', e.target.value)}
                 bg={inputBg}
@@ -928,7 +934,7 @@ const resetFilters = () => {
               <Input
                 type="date"
                 maxW="200px"
-                placeholder="End Date"
+                placeholder={t('payments.filters.endDate')}
                 value={endDate}
                 onChange={(e) => handleFilterChange('end_date', e.target.value)}
                 bg={inputBg}
@@ -941,7 +947,7 @@ const resetFilters = () => {
                 onClick={resetFilters}
                 colorScheme="gray"
               >
-                Clear Filters
+                {t('payments.clearFilters')}
               </Button>
             </HStack>
           </CardBody>
@@ -959,7 +965,7 @@ const resetFilters = () => {
         <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
           <CardHeader>
             <Flex justify="space-between" align="center">
-              <Heading size="md" color={headingColor}>Payment Transactions ({payments?.length || 0})</Heading>
+              <Heading size="md" color={headingColor}>{t('payments.paymentTransactions')} ({payments?.length || 0})</Heading>
             </Flex>
           </CardHeader>
           <CardBody>
@@ -1002,26 +1008,26 @@ const resetFilters = () => {
         <AlertDialogOverlay>
           <AlertDialogContent bg={cardBg}>
             <AlertDialogHeader fontSize="lg" fontWeight="bold" color={headingColor}>
-              Delete Payment
+              {t('payments.deletePayment')}
             </AlertDialogHeader>
 
             <AlertDialogBody color={textPrimary}>
-              Are you sure you want to delete this payment?
+              {t('payments.deleteConfirmation')}
               {selectedPayment && (
                 <Box mt={3} p={3} bg={alertBg} borderRadius="md">
-                  <Text fontSize="sm" fontWeight="bold" color={textPrimary}>Payment: {selectedPayment.code}</Text>
-                  <Text fontSize="sm" color={textPrimary}>Amount: {formatCurrency(selectedPayment.amount)}</Text>
-                  <Text fontSize="sm" color={alertTextColor}>This action cannot be undone.</Text>
+                  <Text fontSize="sm" fontWeight="bold" color={textPrimary}>{t('payments.code')}: {selectedPayment.code}</Text>
+                  <Text fontSize="sm" color={textPrimary}>{t('payments.amount')}: {formatCurrency(selectedPayment.amount)}</Text>
+                  <Text fontSize="sm" color={alertTextColor}>{t('payments.deleteWarning')}</Text>
                 </Box>
               )}
             </AlertDialogBody>
 
             <AlertDialogFooter>
               <Button onClick={() => setShowConfirmDelete(false)}>
-                Cancel
+                {t('payments.cancel')}
               </Button>
               <Button colorScheme="red" onClick={confirmDeletePayment} ml={3}>
-                Delete
+                {t('payments.delete')}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -1046,8 +1052,8 @@ const resetFilters = () => {
           setShowPPNPayment(false);
           loadPayments();
           toast({
-            title: 'Success',
-            description: 'PPN remittance (Setor PPN) has been processed successfully',
+            title: t('common.messages.toast.success'),
+            description: t('payments.messages.ppnSuccess'),
             status: 'success',
             duration: 3000,
           });
@@ -1062,8 +1068,8 @@ const resetFilters = () => {
           setShowExpensePayment(false);
           loadPayments();
           toast({
-            title: 'Success',
-            description: 'Expense payment has been created successfully',
+            title: t('common.messages.toast.success'),
+            description: t('payments.messages.expenseSuccess'),
             status: 'success',
             duration: 3000,
           });

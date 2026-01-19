@@ -29,6 +29,7 @@ import { FiSave, FiX, FiUpload, FiTrash2 } from 'react-icons/fi';
 import ProductService, { Product, Category, ProductUnit, WarehouseLocation } from '@/services/productService';
 import CurrencyInput from '@/components/common/CurrencyInput';
 import { getProductImageUrl, debugImageUrl } from '@/utils/imageUrl';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ProductFormProps {
   product?: Product;
@@ -37,6 +38,7 @@ interface ProductFormProps {
 }
 
 const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState<Partial<Product>>({
     code: '',
     name: '',
@@ -88,7 +90,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
       setCategories(data.data);
     } catch (error) {
       toast({
-        title: 'Failed to fetch categories',
+        title: t('products.messages.fetchCategoriesFailed'),
         status: 'error',
         isClosable: true,
       });
@@ -101,7 +103,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
       setUnits(data.data);
     } catch (error) {
       toast({
-        title: 'Failed to fetch units',
+        title: t('products.messages.fetchUnitsFailed'),
         status: 'error',
         isClosable: true,
       });
@@ -148,7 +150,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
   const handleImageUpload = async () => {
     if (!selectedImage || !formData.id) {
       toast({
-        title: 'Please save the product first before uploading an image',
+        title: t('products.form.saveProductFirst'),
         status: 'warning',
         isClosable: true,
       });
@@ -162,14 +164,14 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
       setImagePreview(null);
       
       toast({
-        title: 'Image uploaded successfully',
+        title: t('products.messages.imageUploadSuccess'),
         status: 'success',
         isClosable: true,
       });
     } catch (error: any) {
       console.error('Image upload error:', error);
-      let errorMessage = 'Failed to upload image';
-      let errorDetail = 'An unknown error occurred';
+      let errorMessage = t('products.messages.imageUploadFailed');
+      let errorDetail = t('messages.toast.unknownErrorDesc');
       
       if (error.response?.data?.error) {
         errorDetail = error.response.data.error;
@@ -200,7 +202,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
       }
       
       toast({
-        title: `Product ${product?.id ? 'updated' : 'created'} successfully`,
+        title: product?.id ? t('products.messages.updateSuccess') : t('products.messages.createSuccess'),
         status: 'success',
         isClosable: true,
       });
@@ -208,8 +210,8 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
       onSave(result.data);
     } catch (error: any) {
       toast({
-        title: `Failed to ${product?.id ? 'update' : 'create'} product`,
-        description: error.response?.data?.error || 'An error occurred',
+        title: product?.id ? t('products.messages.updateFailed') : t('products.messages.createFailed'),
+        description: error.response?.data?.error || t('messages.toast.unknownErrorDesc'),
         status: 'error',
         isClosable: true,
       });
@@ -227,45 +229,45 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
       <VStack spacing={6} align="stretch">
         {/* Basic Information */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Informasi Dasar</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.form.basicInfo')}</Text>
           <Grid templateColumns="repeat(4, 1fr)" gap={4}>
             <GridItem colSpan={2}>
               <FormControl isRequired>
-                <FormLabel>Kode Produk</FormLabel>
+                <FormLabel>{t('products.productCode')}</FormLabel>
                 <Input
                   value={formData.code}
                   onChange={(e) => handleInputChange('code', e.target.value)}
-                  placeholder="Masukkan kode produk"
+                  placeholder={t('products.form.enterProductCode')}
                 />
               </FormControl>
             </GridItem>
             <GridItem colSpan={2}>
               <FormControl isRequired>
-                <FormLabel>Nama Produk</FormLabel>
+                <FormLabel>{t('products.productName')}</FormLabel>
                 <Input
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  placeholder="Masukkan nama produk"
+                  placeholder={t('products.form.enterProductName')}
                 />
               </FormControl>
             </GridItem>
             <GridItem colSpan={4}>
               <FormControl>
-                <FormLabel>Deskripsi</FormLabel>
+                <FormLabel>{t('products.description')}</FormLabel>
                 <Textarea
                   value={formData.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="Masukkan deskripsi produk"
+                  placeholder={t('products.form.enterDescription')}
                 />
               </FormControl>
             </GridItem>
             <GridItem>
               <FormControl>
-                <FormLabel>Kategori</FormLabel>
+                <FormLabel>{t('products.category')}</FormLabel>
                 <Select
                   value={formData.category_id || ''}
                   onChange={(e) => handleInputChange('category_id', e.target.value ? Number(e.target.value) : undefined)}
-                  placeholder="Pilih kategori"
+                  placeholder={t('products.form.selectCategory')}
                 >
                   {categories.map(category => (
                     <option key={category.id} value={category.id}>
@@ -277,11 +279,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             </GridItem>
             <GridItem>
               <FormControl>
-                <FormLabel>Lokasi Gudang</FormLabel>
+                <FormLabel>{t('products.form.warehouseLocation')}</FormLabel>
                 <Select
                   value={formData.warehouse_location_id || ''}
                   onChange={(e) => handleInputChange('warehouse_location_id', e.target.value ? Number(e.target.value) : undefined)}
-                  placeholder="Pilih lokasi gudang"
+                  placeholder={t('products.form.selectWarehouse')}
                 >
                   {warehouseLocations.map(location => (
                     <option key={location.id} value={location.id}>
@@ -293,11 +295,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             </GridItem>
             <GridItem colSpan={2}>
               <FormControl isRequired>
-                <FormLabel>Unit</FormLabel>
+                <FormLabel>{t('products.unit')}</FormLabel>
                 <Select
                   value={formData.unit}
                   onChange={(e) => handleInputChange('unit', e.target.value)}
-                  placeholder="Pilih unit"
+                  placeholder={t('products.form.selectUnit')}
                 >
                   {units.map(unit => (
                     <option key={unit.code} value={unit.code}>
@@ -314,51 +316,51 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
 
         {/* Product Details */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Detail Produk</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.form.productDetails')}</Text>
           <Grid templateColumns="repeat(4, 1fr)" gap={4}>
             <GridItem colSpan={2}>
               <FormControl>
-                <FormLabel>Merek</FormLabel>
+                <FormLabel>{t('products.form.brand')}</FormLabel>
                 <Input
                   value={formData.brand}
                   onChange={(e) => handleInputChange('brand', e.target.value)}
-                  placeholder="Masukkan merek"
+                  placeholder={t('products.form.enterBrand')}
                 />
               </FormControl>
             </GridItem>
             <GridItem colSpan={2}>
               <FormControl>
-                <FormLabel>Model</FormLabel>
+                <FormLabel>{t('products.form.model')}</FormLabel>
                 <Input
                   value={formData.model}
                   onChange={(e) => handleInputChange('model', e.target.value)}
-                  placeholder="Masukkan model"
+                  placeholder={t('products.form.enterModel')}
                 />
               </FormControl>
             </GridItem>
             <GridItem colSpan={2}>
               <FormControl>
-                <FormLabel>Barcode</FormLabel>
+                <FormLabel>{t('products.form.barcode')}</FormLabel>
                 <Input
                   value={formData.barcode}
                   onChange={(e) => handleInputChange('barcode', e.target.value)}
-                  placeholder="Masukkan barcode"
+                  placeholder={t('products.form.enterBarcode')}
                 />
               </FormControl>
             </GridItem>
             <GridItem colSpan={2}>
               <FormControl>
-                <FormLabel>SKU</FormLabel>
+                <FormLabel>{t('products.form.sku')}</FormLabel>
                 <Input
                   value={formData.sku}
                   onChange={(e) => handleInputChange('sku', e.target.value)}
-                  placeholder="Masukkan SKU"
+                  placeholder={t('products.form.enterSKU')}
                 />
               </FormControl>
             </GridItem>
             <GridItem>
               <FormControl>
-                <FormLabel>Berat (kg)</FormLabel>
+                <FormLabel>{t('products.form.weight')}</FormLabel>
                 <NumberInput
                   value={formData.weight || 0}
                   onChange={(_, value) => handleInputChange('weight', isNaN(value) ? 0 : value)}
@@ -375,7 +377,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             </GridItem>
             <GridItem>
               <FormControl>
-                <FormLabel>Dimensi</FormLabel>
+                <FormLabel>{t('products.form.dimensions')}</FormLabel>
                 <Input
                   value={formData.dimensions}
                   onChange={(e) => handleInputChange('dimensions', e.target.value)}
@@ -390,13 +392,13 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
 
         {/* Pricing */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Harga</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.form.pricing')}</Text>
           <Grid templateColumns="repeat(3, 1fr)" gap={4}>
             <GridItem>
               <CurrencyInput
                 value={formData.purchase_price || 0}
                 onChange={(value) => handleInputChange('purchase_price', value)}
-                label="Harga Beli"
+                label={t('products.purchasePrice')}
                 placeholder="Contoh: Rp 50.000"
                 isRequired={true}
                 size="md"
@@ -407,7 +409,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
               <CurrencyInput
                 value={formData.cost_price || 0}
                 onChange={(value) => handleInputChange('cost_price', value)}
-                label="Harga Pokok (COGS)"
+                label={t('products.costPrice')}
                 placeholder="Contoh: Rp 300.000"
                 isRequired={true}
                 size="md"
@@ -418,7 +420,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
               <CurrencyInput
                 value={formData.sale_price || 0}
                 onChange={(value) => handleInputChange('sale_price', value)}
-                label="Harga Jual"
+                label={t('products.salePrice')}
                 placeholder="Contoh: Rp 1.200.000"
                 isRequired={true}
                 size="md"
@@ -427,11 +429,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             </GridItem>
             <GridItem colSpan={3}>
               <FormControl>
-                <FormLabel>Tingkat Harga</FormLabel>
+                <FormLabel>{t('products.pricingTier')}</FormLabel>
                 <Select
                   value={formData.pricing_tier}
                   onChange={(e) => handleInputChange('pricing_tier', e.target.value)}
-                  placeholder="Pilih tingkat harga"
+                  placeholder={t('products.form.selectPricingTier')}
                 >
                   {pricingTiers.map(tier => (
                     <option key={tier} value={tier}>{tier}</option>
@@ -446,11 +448,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
 
         {/* Inventory */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Inventaris</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.form.inventory')}</Text>
           <Grid templateColumns="repeat(4, 1fr)" gap={4}>
             <GridItem>
               <FormControl>
-                <FormLabel>Stok Saat Ini</FormLabel>
+                <FormLabel>{t('products.currentStock')}</FormLabel>
                 <NumberInput
                   value={formData.stock || 0}
                   onChange={(_, value) => handleInputChange('stock', isNaN(value) ? 0 : value)}
@@ -466,7 +468,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             </GridItem>
             <GridItem>
               <FormControl>
-                <FormLabel>Stok Minimum</FormLabel>
+                <FormLabel>{t('products.minStock')}</FormLabel>
                 <NumberInput
                   value={formData.min_stock || 0}
                   onChange={(_, value) => handleInputChange('min_stock', isNaN(value) ? 0 : value)}
@@ -482,7 +484,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             </GridItem>
             <GridItem>
               <FormControl>
-                <FormLabel>Stok Maksimum</FormLabel>
+                <FormLabel>{t('products.maxStock')}</FormLabel>
                 <NumberInput
                   value={formData.max_stock || 0}
                   onChange={(_, value) => handleInputChange('max_stock', isNaN(value) ? 0 : value)}
@@ -498,7 +500,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             </GridItem>
             <GridItem>
               <FormControl>
-                <FormLabel>Tingkat Pemesanan Ulang</FormLabel>
+                <FormLabel>{t('products.reorderLevel')}</FormLabel>
                 <NumberInput
                   value={formData.reorder_level || 0}
                   onChange={(_, value) => handleInputChange('reorder_level', isNaN(value) ? 0 : value)}
@@ -519,12 +521,12 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
 
         {/* Product Image */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Gambar Produk</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.form.productImage')}</Text>
           <Grid templateColumns="repeat(3, 1fr)" gap={4}>
             {/* Current Image */}
             <GridItem>
               <FormControl>
-                <FormLabel>Gambar Saat Ini</FormLabel>
+                <FormLabel>{t('products.form.currentImage')}</FormLabel>
                 {formData.image_path ? (
                   <Image 
                     src={getProductImageUrl(formData.image_path) || ''} 
@@ -552,7 +554,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
                     alignItems="center" 
                     justifyContent="center"
                   >
-                    <Text color="gray.500">Tidak ada gambar</Text>
+                    <Text color="gray.500">{t('products.form.noImage')}</Text>
                   </Box>
                 )}
               </FormControl>
@@ -561,7 +563,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             {/* Image Upload */}
             <GridItem>
               <FormControl>
-                <FormLabel>Upload Gambar Baru</FormLabel>
+                <FormLabel>{t('products.form.uploadNewImage')}</FormLabel>
                 <Input
                   type="file"
                   accept="image/*"
@@ -586,18 +588,18 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             {/* Upload Button */}
             <GridItem>
               <FormControl>
-                <FormLabel>Aksi</FormLabel>
+                <FormLabel>{t('common.actions')}</FormLabel>
                 <Button
                   onClick={handleImageUpload}
                   colorScheme="blue"
                   isDisabled={!selectedImage || !formData.id}
                   size="sm"
                 >
-                  Upload Gambar
+                  {t('products.form.uploadImage')}
                 </Button>
                 {!formData.id && (
                   <Text fontSize="xs" color="gray.500" mt={2}>
-                    Simpan produk terlebih dahulu untuk mengupload gambar
+                    {t('products.form.saveProductFirst')}
                   </Text>
                 )}
               </FormControl>
@@ -609,12 +611,12 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
 
         {/* Settings */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Pengaturan</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.form.settings')}</Text>
           <VStack spacing={4} align="stretch">
             <HStack>
               <FormControl display="flex" alignItems="center">
                 <FormLabel htmlFor="is_active" mb="0">
-                  Aktif
+                  {t('products.form.isActive')}
                 </FormLabel>
                 <Switch
                   id="is_active"
@@ -624,7 +626,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
               </FormControl>
               <FormControl display="flex" alignItems="center">
                 <FormLabel htmlFor="is_service" mb="0">
-                  Produk Jasa
+                  {t('products.form.isService')}
                 </FormLabel>
                 <Switch
                   id="is_service"
@@ -634,7 +636,7 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
               </FormControl>
               <FormControl display="flex" alignItems="center">
                 <FormLabel htmlFor="taxable" mb="0">
-                  Dapat Dikenakan Pajak
+                  {t('products.form.taxable')}
                 </FormLabel>
                 <Switch
                   id="taxable"
@@ -644,11 +646,11 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
               </FormControl>
             </HStack>
             <FormControl>
-              <FormLabel>Catatan</FormLabel>
+              <FormLabel>{t('common.notes')}</FormLabel>
               <Textarea
                 value={formData.notes}
                 onChange={(e) => handleInputChange('notes', e.target.value)}
-                placeholder="Catatan tambahan tentang produk"
+                placeholder={t('products.form.additionalNotes')}
               />
             </FormControl>
           </VStack>
@@ -661,16 +663,16 @@ const ProductForm: React.FC<ProductFormProps> = ({ product, onSave, onCancel }) 
             onClick={onCancel}
             variant="outline"
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             leftIcon={<FiSave />}
             type="submit"
             colorScheme="blue"
             isLoading={isLoading}
-            loadingText={product?.id ? 'Updating...' : 'Creating...'}
+            loadingText={product?.id ? t('common.updating') : t('common.creating')}
           >
-            {product?.id ? 'Update Product' : 'Create Product'}
+            {product?.id ? t('products.updateProduct') : t('products.createProduct')}
           </Button>
         </HStack>
       </VStack>

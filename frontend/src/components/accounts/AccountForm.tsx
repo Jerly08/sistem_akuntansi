@@ -20,6 +20,7 @@ import { FiInfo, FiLock, FiUnlock } from 'react-icons/fi';
 
 import { Account, AccountCreateRequest, AccountUpdateRequest } from '@/types/account';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface AccountFormProps {
   account?: Account;
@@ -129,6 +130,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
   isHeaderMode = false,
 }) => {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const isAdmin = user?.role?.toLowerCase() === 'admin';
   
   // Admin can override opening balance restrictions
@@ -236,15 +238,15 @@ const AccountForm: React.FC<AccountFormProps> = ({
     const newErrors: Record<string, string> = {};
     
     // Validate required fields
-    if (!formData.code) newErrors.code = 'Account code is required';
-    if (!formData.name) newErrors.name = 'Account name is required';
-    if (!formData.type) newErrors.type = 'Account type is required';
+    if (!formData.code) newErrors.code = t('accounts.validation.codeRequired');
+    if (!formData.name) newErrors.name = t('accounts.validation.nameRequired');
+    if (!formData.type) newErrors.type = t('accounts.validation.typeRequired');
     
     // Validate code format: allow XXXX (main) or XXXX-XXX (child)
     if (formData.code) {
       const codePattern = /^\d{4}(-\d{3})?$/; // PSAK-style: 4 digits or 4 digits + dash + 3 digits
       if (!codePattern.test(formData.code)) {
-        newErrors.code = 'Invalid account code format. Use XXXX or XXXX-XXX (e.g., 1101 or 1101-004)';
+        newErrors.code = t('accounts.validation.invalidCodeFormat');
       } else if (formData.parent_id) {
         // If a parent is selected, enforce different rules for header vs non-header
         const parent = parentAccounts.find(p => p.id === formData.parent_id);
@@ -256,14 +258,14 @@ const AccountForm: React.FC<AccountFormProps> = ({
             // Header under a parent may use 4-digit code (e.g., 1106 under 1100)
             // If user chooses child format, still require correct prefix
             if (isChildFormat && !formData.code.startsWith(`${parent.code}-`)) {
-              newErrors.code = `Child code must start with parent code: ${parent.code}-XXX`;
+              newErrors.code = `${t('accounts.validation.childCodePrefix')} ${parent.code}-XXX`;
             }
             // Otherwise 4-digit is acceptable; no error
           } else {
             // Non-header child can use either format - 4-digit or dashed child format
             // Only validate that if using dashed format, it must start with parent code
             if (isChildFormat && !formData.code.startsWith(`${parent.code}-`)) {
-              newErrors.code = `Child code must start with parent code: ${parent.code}-XXX`;
+              newErrors.code = `${t('accounts.validation.childCodePrefix')} ${parent.code}-XXX`;
             }
             // For 4-digit format, we allow more flexibility as long as the account type matches
             // The main constraint is that child accounts should logically relate to parent
@@ -299,10 +301,9 @@ const AccountForm: React.FC<AccountFormProps> = ({
         <Alert status="info" mb={4} borderRadius="md">
           <AlertIcon />
           <Box>
-            <AlertTitle fontSize="sm">Creating Header Account</AlertTitle>
+            <AlertTitle fontSize="sm">{t('accounts.form.creatingHeader')}</AlertTitle>
             <AlertDescription fontSize="xs">
-              Header accounts are used to group other accounts in a hierarchy. 
-              They cannot have transactions or opening balance.
+              {t('accounts.form.creatingHeaderDesc')}
             </AlertDescription>
           </Box>
         </Alert>
@@ -310,10 +311,10 @@ const AccountForm: React.FC<AccountFormProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormField
           id="code"
-          label="Account Code"
+          label={t('accounts.accountCode')}
           value={formData.code || ''}
           onChange={handleChange}
-          placeholder="Enter account code"
+          placeholder={t('accounts.form.enterAccountCode')}
           required
           error={errors.code}
           name="code"
@@ -321,10 +322,10 @@ const AccountForm: React.FC<AccountFormProps> = ({
         
         <FormField
           id="name"
-          label="Account Name"
+          label={t('accounts.accountName')}
           value={formData.name || ''}
           onChange={handleChange}
-          placeholder="Enter account name"
+          placeholder={t('accounts.form.enterAccountName')}
           required
           error={errors.name}
           name="name"
@@ -332,18 +333,18 @@ const AccountForm: React.FC<AccountFormProps> = ({
         
         <FormField
           id="type"
-          label="Account Type"
+          label={t('accounts.accountType')}
           type="select"
           value={formData.type || ''}
           onChange={handleChange}
           required
           error={errors.type}
           options={[
-            { value: 'ASSET', label: 'Asset' },
-            { value: 'LIABILITY', label: 'Liability' },
-            { value: 'EQUITY', label: 'Equity' },
-            { value: 'REVENUE', label: 'Revenue' },
-            { value: 'EXPENSE', label: 'Expense' },
+            { value: 'ASSET', label: t('accounts.types.asset') },
+            { value: 'LIABILITY', label: t('accounts.types.liability') },
+            { value: 'EQUITY', label: t('accounts.types.equity') },
+            { value: 'REVENUE', label: t('accounts.types.revenue') },
+            { value: 'EXPENSE', label: t('accounts.types.expense') },
           ]}
           name="type"
         />
@@ -351,12 +352,12 @@ const AccountForm: React.FC<AccountFormProps> = ({
         
         <FormField
           id="parent_id"
-          label="Parent Account"
+          label={t('accounts.parentAccount')}
           type="select"
           value={formData.parent_id || ''}
           onChange={handleChange}
           options={[
-            { value: '', label: 'No Parent (Top Level)' },
+            { value: '', label: t('accounts.form.noParent') },
             ...parentAccounts
               .filter(parent => {
                 // Don't show the current account itself as a parent option
@@ -373,7 +374,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               })
               .map((parent) => ({
                 value: parent.id.toString(),
-                label: `${parent.code} - ${parent.name}${parent.is_header ? ' (Header)' : ''}`,
+                label: `${parent.code} - ${parent.name}${parent.is_header ? ` (${t('accounts.form.header')})` : ''}`,
                 disabled: parent.type !== formData.type && !parent.is_header
               })),
           ]}
@@ -382,9 +383,9 @@ const AccountForm: React.FC<AccountFormProps> = ({
         
         <Box>
           <HStack mb={2}>
-            <Text fontSize="sm" fontWeight="medium">Opening Balance</Text>
+            <Text fontSize="sm" fontWeight="medium">{t('accounts.form.openingBalance')}</Text>
             <Tooltip 
-              label="Opening balance is the initial balance when creating the account. It can only be edited if there are no transactions yet."
+              label={t('accounts.form.openingBalanceTooltip')}
               hasArrow
             >
               <span>
@@ -398,9 +399,9 @@ const AccountForm: React.FC<AccountFormProps> = ({
                 variant="subtle"
               >
                 <Icon as={canEditOpeningBalance ? FiUnlock : FiLock} mr={1} />
-                {canEditOpeningBalance ? 'EDITABLE' : 'EDIT RESTRICTED'}
+                {canEditOpeningBalance ? t('accounts.form.editable') : t('accounts.form.editRestricted')}
                 {isAdmin && account?.id && (
-                  <Text as="span" ml={1} fontSize="xs">(ADMIN OVERRIDE)</Text>
+                  <Text as="span" ml={1} fontSize="xs">({t('accounts.form.adminOverride')})</Text>
                 )}
               </Badge>
             )}
@@ -408,7 +409,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
             <CurrencyInput
               value={formData.opening_balance || 0}
               onChange={(value) => setFormData((prev) => ({ ...prev, opening_balance: value }))}
-              placeholder="Contoh: Rp 1.000.000"
+              placeholder={t('accounts.form.openingBalancePlaceholder')}
               size="md"
               min={0}
               isDisabled={!canEditOpeningBalance || formData.is_header}
@@ -417,10 +418,9 @@ const AccountForm: React.FC<AccountFormProps> = ({
             <Alert status="warning" size="sm" mt={2}>
               <AlertIcon boxSize={3} />
               <Box fontSize="xs">
-                <Text fontWeight="medium">Opening balance is locked after account creation</Text>
+                <Text fontWeight="medium">{t('accounts.form.openingBalanceLocked')}</Text>
                 <Text color="gray.600">
-                  Opening balance cannot be changed after account creation. Use 
-                  <Text as="span" fontWeight="semibold" color="orange.600">journal entries</Text> to adjust balance.
+                  {t('accounts.form.openingBalanceLockedDesc')}
                 </Text>
               </Box>
             </Alert>
@@ -429,10 +429,9 @@ const AccountForm: React.FC<AccountFormProps> = ({
             <Alert status="info" size="sm" mt={2}>
               <AlertIcon boxSize={3} />
               <Box fontSize="xs">
-                <Text fontWeight="medium" color="blue.600">Admin Override Active</Text>
+                <Text fontWeight="medium" color="blue.600">{t('accounts.form.adminOverrideActive')}</Text>
                 <Text color="blue.600">
-                  You can edit opening balance as an admin. Use this feature carefully 
-                  as it may affect financial reports.
+                  {t('accounts.form.adminOverrideDesc')}
                 </Text>
               </Box>
             </Alert>
@@ -441,9 +440,9 @@ const AccountForm: React.FC<AccountFormProps> = ({
             <Alert status="warning" size="sm" mt={2}>
               <AlertIcon boxSize={3} />
               <Box fontSize="xs">
-                <Text fontWeight="medium" color="orange.600">Header Account Restriction</Text>
+                <Text fontWeight="medium" color="orange.600">{t('accounts.form.headerRestriction')}</Text>
                 <Text color="orange.600">
-                  Header accounts cannot have opening balance. The opening balance has been set to zero.
+                  {t('accounts.form.headerRestrictionDesc')}
                 </Text>
               </Box>
             </Alert>
@@ -453,11 +452,11 @@ const AccountForm: React.FC<AccountFormProps> = ({
         <div className="md:col-span-2">
           <FormField
             id="description"
-            label="Description"
+            label={t('accounts.description')}
             type="textarea"
             value={formData.description || ''}
             onChange={handleChange}
-            placeholder="Enter account description"
+            placeholder={t('accounts.form.enterDescription')}
             name="description"
           />
         </div>
@@ -473,7 +472,7 @@ const AccountForm: React.FC<AccountFormProps> = ({
               name="is_active"
             />
             <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700">
-              Active
+              {t('accounts.isActive')}
             </label>
           </div>
           
@@ -488,15 +487,15 @@ const AccountForm: React.FC<AccountFormProps> = ({
               disabled={isHeaderMode && !account} // Disable in header mode for new accounts
             />
             <label htmlFor="is_header" className="ml-2 block text-sm text-gray-700">
-              Header Account
+              {t('accounts.form.headerAccount')}
             </label>
             {isHeaderMode && !account && (
               <Badge colorScheme="blue" size="sm" ml={2}>
-                FORCED ON
+                {t('accounts.form.forcedOn')}
               </Badge>
             )}
             <Tooltip 
-              label="Header accounts are used to group other accounts. They cannot have transactions or opening balance."
+              label={t('accounts.form.headerAccountTooltip')}
               hasArrow
             >
               <span className="ml-2">
@@ -512,22 +511,22 @@ const AccountForm: React.FC<AccountFormProps> = ({
         <Alert status="info" variant="left-accent" mt={4}>
           <AlertIcon />
           <Box>
-            <AlertTitle fontSize="sm">Smart Category Assignment</AlertTitle>
+            <AlertTitle fontSize="sm">{t('accounts.form.smartCategory')}</AlertTitle>
             <AlertDescription fontSize="xs">
               <HStack spacing={2} mt={2}>
-                <Text>Category will be:</Text>
+                <Text>{t('accounts.form.categoryWillBe')}</Text>
                 <Badge colorScheme="blue" variant="solid">
                   {getSmartCategory(formData.type, parentAccounts, formData.parent_id, formData.code, formData.name).replace(/_/g, ' ')}
                 </Badge>
               </HStack>
               <Tooltip 
-                label="Categories help organize accounts for financial reporting. They are automatically assigned based on the account type and parent account to ensure consistency."
+                label={t('accounts.form.categoryTooltip')}
                 hasArrow
                 placement="top"
               >
                 <HStack spacing={1} mt={2} cursor="help">
                   <Icon as={FiInfo} color="blue.600" boxSize={3} />
-                  <Text color="blue.600">What is Category?</Text>
+                  <Text color="blue.600">{t('accounts.form.whatIsCategory')}</Text>
                 </HStack>
               </Tooltip>
             </AlertDescription>
@@ -542,14 +541,14 @@ const AccountForm: React.FC<AccountFormProps> = ({
           onClick={onCancel}
           isDisabled={isSubmitting}
         >
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button
           type="submit"
           colorScheme="brand"
           isLoading={isSubmitting}
         >
-          {account?.id ? 'Update Account' : 'Create Account'}
+          {account?.id ? t('accounts.updateAccount') : t('accounts.createAccount')}
         </Button>
       </div>
     </form>

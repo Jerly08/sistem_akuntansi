@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslation } from '@/hooks/useTranslation';
 import UnifiedLayout from '@/components/layout/UnifiedLayout';
 import salesService, { Sale } from '@/services/salesService';
 import PaymentForm from '@/components/sales/PaymentForm';
@@ -51,6 +52,7 @@ import {
 } from 'react-icons/fi';
 
 const SaleDetailPage: React.FC = () => {
+  const { t } = useTranslation();
   const params = useParams();
   const router = useRouter();
   const toast = useToast();
@@ -80,10 +82,10 @@ const SaleDetailPage: React.FC = () => {
       const saleData = await salesService.getSale(parseInt(saleId));
       setSale(saleData);
     } catch (error: any) {
-      setError(error.response?.data?.message || 'Failed to load sale details');
+      setError(error.response?.data?.message || t('sales.detail.loadingError'));
       toast({
-        title: 'Error loading sale',
-        description: error.response?.data?.message || 'Failed to load sale details',
+        title: t('common.error'),
+        description: error.response?.data?.message || t('sales.detail.loadingError'),
         status: 'error',
         duration: 3000
       });
@@ -106,18 +108,18 @@ const SaleDetailPage: React.FC = () => {
       if (action === 'confirm') {
         await salesService.confirmSale(sale.id);
         toast({
-          title: 'Sale Confirmed',
-          description: 'Sale has been confirmed successfully',
+          title: t('sales.detail.confirmSuccess'),
+          description: t('sales.detail.confirmSuccess'),
           status: 'success',
           duration: 3000
         });
       } else if (action === 'cancel') {
-        const reason = window.prompt('Please provide a reason for cancellation:');
+        const reason = window.prompt(t('sales.detail.cancelReason'));
         if (reason) {
           await salesService.cancelSale(sale.id, reason);
           toast({
-            title: 'Sale Cancelled',
-            description: 'Sale has been cancelled successfully',
+            title: t('sales.detail.cancelSuccess'),
+            description: t('sales.detail.cancelSuccess'),
             status: 'success',
             duration: 3000
           });
@@ -129,8 +131,8 @@ const SaleDetailPage: React.FC = () => {
       loadSale(); // Reload to get updated status
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.response?.data?.message || `Failed to ${action} sale`,
+        title: t('common.error'),
+        description: error.response?.data?.message || t(`sales.detail.${action}Error`),
         status: 'error',
         duration: 3000
       });
@@ -147,16 +149,16 @@ const SaleDetailPage: React.FC = () => {
       setActionLoading(true);
       await salesService.createInvoiceFromSale(sale.id);
       toast({
-        title: 'Invoice Created',
-        description: 'Invoice has been created successfully',
+        title: t('sales.detail.invoiceSuccess'),
+        description: t('sales.detail.invoiceSuccess'),
         status: 'success',
         duration: 3000
       });
       loadSale(); // Reload to get updated data
     } catch (error: any) {
       toast({
-        title: 'Error creating invoice',
-        description: error.response?.data?.message || 'Failed to create invoice',
+        title: t('common.error'),
+        description: error.response?.data?.message || t('sales.detail.invoiceError'),
         status: 'error',
         duration: 3000
       });
@@ -201,7 +203,7 @@ const SaleDetailPage: React.FC = () => {
       <UnifiedLayout>
         <Alert status="error">
           <AlertIcon />
-          {error || 'Sale not found'}
+          {error || t('sales.detail.saleNotFound')}
         </Alert>
       </UnifiedLayout>
     );
@@ -217,23 +219,23 @@ const SaleDetailPage: React.FC = () => {
               icon={<FiArrowLeft />}
               variant="outline"
               onClick={handleGoBack}
-              aria-label="Go back to Sales"
+              aria-label={t('sales.detail.goBack')}
               _hover={{ 
                 bg: 'var(--bg-tertiary)', 
                 transform: 'translateX(-2px)',
                 borderColor: 'var(--accent-color)'
               }}
               size="md"
-              title="Go back to Sales"
+              title={t('sales.detail.goBack')}
               borderColor="var(--border-color)"
               color="var(--text-primary)"
               bg="var(--bg-secondary)"
               cursor="pointer"
             />
             <VStack align="start" spacing={1}>
-              <Heading as="h1" size="xl">Sale Detail</Heading>
+              <Heading as="h1" size="xl">{t('sales.detail.title')}</Heading>
               <HStack spacing={2}>
-                <Text color="gray.600">Code: {sale.code}</Text>
+                <Text color="gray.600">{t('sales.detail.code')}: {sale.code}</Text>
                 <Badge colorScheme={getStatusColor(sale.status)} variant="subtle">
                   {salesService.getStatusLabel(sale.status)}
                 </Badge>
@@ -247,7 +249,7 @@ const SaleDetailPage: React.FC = () => {
               variant="outline"
               onClick={() => salesService.downloadInvoicePDF(sale.id, sale.invoice_number || sale.code)}
             >
-              Download PDF
+              {t('sales.detail.downloadPDF')}
             </Button>
             
             <Menu>
@@ -259,7 +261,7 @@ const SaleDetailPage: React.FC = () => {
                     onClick={() => handleStatusAction('confirm')}
                     isDisabled={actionLoading}
                   >
-                    Confirm Sale
+                    {t('sales.detail.confirmSale')}
                   </MenuItem>
                 )}
                 {sale.status === 'CONFIRMED' && (
@@ -268,7 +270,7 @@ const SaleDetailPage: React.FC = () => {
                     onClick={handleCreateInvoice}
                     isDisabled={actionLoading}
                   >
-                    Create Invoice
+                    {t('sales.detail.createInvoice')}
                   </MenuItem>
                 )}
                 {sale.outstanding_amount > 0 && (
@@ -276,14 +278,14 @@ const SaleDetailPage: React.FC = () => {
                     icon={<FiDollarSign />} 
                     onClick={onPaymentOpen}
                   >
-                    Record Payment
+                    {t('sales.detail.recordPayment')}
                   </MenuItem>
                 )}
                 <MenuItem 
                   icon={<FiEdit />} 
                   onClick={() => router.push(`/sales?edit=${sale.id}`)}
                 >
-                  Edit Sale
+                  {t('sales.detail.editSale')}
                 </MenuItem>
                 <Divider />
                 {sale.status !== 'CANCELLED' && (
@@ -293,7 +295,7 @@ const SaleDetailPage: React.FC = () => {
                     onClick={() => handleStatusAction('cancel')}
                     isDisabled={actionLoading}
                   >
-                    Cancel Sale
+                    {t('sales.detail.cancelSale')}
                   </MenuItem>
                 )}
               </MenuList>
@@ -305,46 +307,46 @@ const SaleDetailPage: React.FC = () => {
         {/* Basic Information */}
         <Card>
           <CardHeader>
-            <Heading size="md">Sale Information</Heading>
+            <Heading size="md">{t('sales.detail.saleInformation')}</Heading>
           </CardHeader>
           <CardBody>
             <Grid templateColumns="repeat(3, 1fr)" gap={6}>
               <GridItem>
                 <VStack align="start" spacing={2}>
-                  <Text fontSize="sm" color="gray.600">Customer</Text>
-                  <Text fontWeight="medium">{sale.customer ? sale.customer.name : 'N/A'}</Text>
+                  <Text fontSize="sm" color="gray.600">{t('sales.detail.customer')}</Text>
+                  <Text fontWeight="medium">{sale.customer ? sale.customer.name : t('sales.detail.notAvailable')}</Text>
                 </VStack>
               </GridItem>
               <GridItem>
                 <VStack align="start" spacing={2}>
-                  <Text fontSize="sm" color="gray.600">Invoice Number</Text>
-                  <Text fontWeight="medium">{sale.invoice_number ? sale.invoice_number : '-'}</Text>
+                  <Text fontSize="sm" color="gray.600">{t('sales.detail.invoiceNumber')}</Text>
+                  <Text fontWeight="medium">{sale.invoice_number ? sale.invoice_number : t('sales.detail.noInvoiceNumber')}</Text>
                 </VStack>
               </GridItem>
               <GridItem>
                 <VStack align="start" spacing={2}>
-                  <Text fontSize="sm" color="gray.600">Sales Person</Text>
-                  <Text fontWeight="medium">{sale.sales_person ? sale.sales_person.name : 'N/A'}</Text>
+                  <Text fontSize="sm" color="gray.600">{t('sales.detail.salesPerson')}</Text>
+                  <Text fontWeight="medium">{sale.sales_person ? sale.sales_person.name : t('sales.detail.notAvailable')}</Text>
                 </VStack>
               </GridItem>
               <GridItem>
                 <VStack align="start" spacing={2}>
-                  <Text fontSize="sm" color="gray.600">Date</Text>
+                  <Text fontSize="sm" color="gray.600">{t('sales.detail.date')}</Text>
                   <Text fontWeight="medium">{salesService.formatDate(sale.date)}</Text>
                 </VStack>
               </GridItem>
               <GridItem>
                 <VStack align="start" spacing={2}>
-                  <Text fontSize="sm" color="gray.600">Due Date</Text>
+                  <Text fontSize="sm" color="gray.600">{t('sales.detail.dueDate')}</Text>
                   <Text fontWeight="medium">
-                    {sale.due_date && sale.due_date !== '0001-01-01T00:00:00Z' ? salesService.formatDate(sale.due_date) : '-'}
+                    {sale.due_date && sale.due_date !== '0001-01-01T00:00:00Z' ? salesService.formatDate(sale.due_date) : t('sales.detail.noDueDate')}
                   </Text>
                 </VStack>
               </GridItem>
               <GridItem>
                 <VStack align="start" spacing={2}>
-                  <Text fontSize="sm" color="gray.600">Payment Terms</Text>
-                  <Text fontWeight="medium">{sale.payment_terms ? sale.payment_terms : 'N/A'}</Text>
+                  <Text fontSize="sm" color="gray.600">{t('sales.detail.paymentTerms')}</Text>
+                  <Text fontWeight="medium">{sale.payment_terms ? sale.payment_terms : t('sales.detail.notAvailable')}</Text>
                 </VStack>
               </GridItem>
             </Grid>
@@ -354,32 +356,32 @@ const SaleDetailPage: React.FC = () => {
         {/* Items */}
         <Card>
           <CardHeader>
-            <Heading size="md">Sale Items</Heading>
+            <Heading size="md">{t('sales.detail.saleItems')}</Heading>
           </CardHeader>
           <CardBody>
             <TableContainer>
               <Table variant="simple">
                 <Thead>
                   <Tr>
-                    <Th>Product</Th>
-                    <Th>Description</Th>
-                    <Th isNumeric>Quantity</Th>
-                    <Th isNumeric>Unit Price</Th>
-                    <Th isNumeric>Discount</Th>
-                    <Th isNumeric>Total</Th>
+                    <Th>{t('sales.detail.product')}</Th>
+                    <Th>{t('sales.detail.description')}</Th>
+                    <Th isNumeric>{t('sales.detail.quantity')}</Th>
+                    <Th isNumeric>{t('sales.detail.unitPrice')}</Th>
+                    <Th isNumeric>{t('sales.detail.discount')}</Th>
+                    <Th isNumeric>{t('sales.detail.total')}</Th>
                   </Tr>
                 </Thead>
                 <Tbody>
                   {sale.sale_items?.map((item, index) => (
                     <Tr key={index}>
                       <Td fontWeight="medium">
-                        {item.product?.name || 'N/A'}
+                        {item.product?.name || t('sales.detail.notAvailable')}
                       </Td>
-                      <Td>{item.description || '-'}</Td>
+                      <Td>{item.description || t('sales.detail.noInvoiceNumber')}</Td>
                       <Td isNumeric>{item.quantity || 0}</Td>
                       <Td isNumeric>{salesService.formatCurrency(item.unit_price || 0)}</Td>
                       <Td isNumeric>
-                        {item.discount_percent ? `${item.discount_percent}%` : '-'}
+                        {item.discount_percent ? `${item.discount_percent}%` : t('sales.detail.noDiscount')}
                       </Td>
                       <Td isNumeric fontWeight="medium">
                         {salesService.formatCurrency(item.line_total || item.total_price)}
@@ -395,49 +397,103 @@ const SaleDetailPage: React.FC = () => {
         {/* Financial Summary */}
         <Card>
           <CardHeader>
-            <Heading size="md">Financial Summary</Heading>
+            <Heading size="md">{t('sales.detail.financialSummary')}</Heading>
           </CardHeader>
           <CardBody>
             <VStack spacing={4} align="stretch">
+              {/* Subtotal */}
               <Flex justify="space-between">
-                <Text>Subtotal:</Text>
+                <Text>{t('sales.detail.subtotal')}:</Text>
                 <Text fontWeight="medium">
                   {salesService.formatCurrency(sale.subtotal || 0)}
                 </Text>
               </Flex>
-              <Flex justify="space-between">
-                <Text>Discount ({sale.discount_percent || 0}%):</Text>
-                <Text fontWeight="medium">
-                  {salesService.formatCurrency(sale.discount_amount || 0)}
-                </Text>
-              </Flex>
-              <Flex justify="space-between">
-                <Text>Shipping Cost:</Text>
-                <Text fontWeight="medium">
-                  {salesService.formatCurrency(sale.shipping_cost || 0)}
-                </Text>
-              </Flex>
-              <Flex justify="space-between">
-                <Text>PPN ({sale.ppn_percent || 0}%):</Text>
-                <Text fontWeight="medium">
-                  {salesService.formatCurrency(sale.ppn_amount || sale.ppn || 0)}
-                </Text>
-              </Flex>
+              
+              {/* Global Discount - only show if > 0 */}
+              {(sale.discount_percent > 0 || sale.discount_amount > 0) && (
+                <Flex justify="space-between">
+                  <Text color="red.500">{t('sales.detail.discountLabel')} ({sale.discount_percent || 0}%):</Text>
+                  <Text fontWeight="medium" color="red.500">
+                    - {salesService.formatCurrency(sale.discount_amount || 0)}
+                  </Text>
+                </Flex>
+              )}
+              
+              {/* PPN - only show if > 0 */}
+              {((sale.ppn_rate || sale.ppn_percent || 0) > 0 || (sale.ppn_amount || sale.ppn || 0) > 0) && (
+                <Flex justify="space-between">
+                  <Text color="blue.500">{t('sales.detail.ppn')} ({sale.ppn_rate || sale.ppn_percent || 0}%):</Text>
+                  <Text fontWeight="medium" color="blue.500">
+                    + {salesService.formatCurrency(sale.ppn_amount || sale.ppn || 0)}
+                  </Text>
+                </Flex>
+              )}
+              
+              {/* Other Tax Additions - only show if > 0 */}
+              {(sale.other_tax_additions || 0) > 0 && (
+                <Flex justify="space-between">
+                  <Text color="blue.500">{t('sales.detail.otherTaxAdditions')}:</Text>
+                  <Text fontWeight="medium" color="blue.500">
+                    + {salesService.formatCurrency(sale.other_tax_additions || 0)}
+                  </Text>
+                </Flex>
+              )}
+              
+              {/* PPh21 - only show if > 0 */}
+              {((sale.pph21_rate || 0) > 0 || (sale.pph21_amount || 0) > 0) && (
+                <Flex justify="space-between">
+                  <Text color="orange.500">{t('sales.detail.pph21')} ({sale.pph21_rate || 0}%):</Text>
+                  <Text fontWeight="medium" color="orange.500">
+                    - {salesService.formatCurrency(sale.pph21_amount || 0)}
+                  </Text>
+                </Flex>
+              )}
+              
+              {/* PPh23 - only show if > 0 */}
+              {((sale.pph23_rate || 0) > 0 || (sale.pph23_amount || 0) > 0) && (
+                <Flex justify="space-between">
+                  <Text color="orange.500">{t('sales.detail.pph23')} ({sale.pph23_rate || 0}%):</Text>
+                  <Text fontWeight="medium" color="orange.500">
+                    - {salesService.formatCurrency(sale.pph23_amount || 0)}
+                  </Text>
+                </Flex>
+              )}
+              
+              {/* Other Tax Deductions - only show if > 0 */}
+              {(sale.other_tax_deductions || 0) > 0 && (
+                <Flex justify="space-between">
+                  <Text color="orange.500">{t('sales.detail.otherTaxDeductions')}:</Text>
+                  <Text fontWeight="medium" color="orange.500">
+                    - {salesService.formatCurrency(sale.other_tax_deductions || 0)}
+                  </Text>
+                </Flex>
+              )}
+              
+              {/* Shipping Cost - only show if > 0 */}
+              {(sale.shipping_cost || 0) > 0 && (
+                <Flex justify="space-between">
+                  <Text>{t('sales.detail.shippingCost')}:</Text>
+                  <Text fontWeight="medium">
+                    + {salesService.formatCurrency(sale.shipping_cost || 0)}
+                  </Text>
+                </Flex>
+              )}
+              
               <Divider />
               <Flex justify="space-between" fontSize="lg">
-                <Text fontWeight="bold">Total Amount:</Text>
+                <Text fontWeight="bold">{t('sales.detail.totalAmount')}:</Text>
                 <Text fontWeight="bold" color="blue.600">
                   {salesService.formatCurrency(sale.total_amount || 0)}
                 </Text>
               </Flex>
               <Flex justify="space-between">
-                <Text color="green.600">Paid Amount:</Text>
+                <Text color="green.600">{t('sales.detail.paidAmount')}:</Text>
                 <Text fontWeight="medium" color="green.600">
                   {salesService.formatCurrency(sale.paid_amount || 0)}
                 </Text>
               </Flex>
               <Flex justify="space-between" fontSize="lg">
-                <Text fontWeight="bold" color="orange.600">Outstanding:</Text>
+                <Text fontWeight="bold" color="orange.600">{t('sales.detail.outstanding')}:</Text>
                 <Text fontWeight="bold" color="orange.600">
                   {salesService.formatCurrency(sale.outstanding_amount || 0)}
                 </Text>
@@ -450,19 +506,19 @@ const SaleDetailPage: React.FC = () => {
         {(sale.notes || sale.internal_notes) && (
           <Card>
             <CardHeader>
-              <Heading size="md">Notes</Heading>
+              <Heading size="md">{t('sales.detail.notes')}</Heading>
             </CardHeader>
             <CardBody>
               <VStack spacing={4} align="stretch">
                 {sale.notes && (
                   <Box>
-                    <Text fontSize="sm" color="gray.600" mb={2}>Customer Notes:</Text>
+                    <Text fontSize="sm" color="gray.600" mb={2}>{t('sales.detail.customerNotes')}:</Text>
                     <Text>{sale.notes}</Text>
                   </Box>
                 )}
                 {sale.internal_notes && (
                   <Box>
-                    <Text fontSize="sm" color="gray.600" mb={2}>Internal Notes:</Text>
+                    <Text fontSize="sm" color="gray.600" mb={2}>{t('sales.detail.internalNotes')}:</Text>
                     <Text>{sale.internal_notes}</Text>
                   </Box>
                 )}

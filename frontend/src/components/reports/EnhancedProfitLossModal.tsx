@@ -44,6 +44,7 @@ import {
 import { FiDownload, FiTrendingUp, FiDollarSign, FiPieChart } from 'react-icons/fi';
 import { formatCurrency } from '../../utils/formatters';
 import JournalDrilldownButton from './JournalDrilldownButton';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface EnhancedProfitLossModalProps {
   isOpen: boolean;
@@ -60,6 +61,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
   onJournalDrilldown,
   onExport
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'statement' | 'metrics' | 'analysis'>('statement');
   const toast = useToast();
   
@@ -87,8 +89,8 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
       onExport(format);
     } else {
       toast({
-        title: 'Export Feature',
-        description: `${format.toUpperCase()} export will be implemented soon`,
+        title: t('reports.profitLoss.exportFeature'),
+        description: t('reports.profitLoss.exportComingSoon', { format: format.toUpperCase() }),
         status: 'info',
         duration: 3000,
         isClosable: true,
@@ -108,9 +110,9 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
             <CardBody>
               <Stat>
                 <HStack spacing={1}>
-                  <StatLabel>Gross Profit</StatLabel>
+                  <StatLabel>{t('reports.profitLoss.grossProfit')}</StatLabel>
                   <Tooltip 
-                    label="📈 LABA KOTOR: Pendapatan dikurangi HPP/COGS. Margin ini menunjukkan efisiensi produksi/pembelian. Semakin tinggi, semakin baik!"
+                    label={t('reports.profitLoss.tooltips.grossProfit')}
                     fontSize="sm"
                     maxW="300px"
                     hasArrow
@@ -136,9 +138,9 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
             <CardBody>
               <Stat>
                 <HStack spacing={1}>
-                  <StatLabel>Operating Income</StatLabel>
+                  <StatLabel>{t('reports.profitLoss.operatingIncome')}</StatLabel>
                   <Tooltip 
-                    label="💼 LABA OPERASIONAL: Laba kotor dikurangi biaya operasional. Menunjukkan profitabilitas dari aktivitas bisnis inti sebelum bunga dan pajak."
+                    label={t('reports.profitLoss.tooltips.operatingIncome')}
                     fontSize="sm"
                     maxW="300px"
                     hasArrow
@@ -164,9 +166,9 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
             <CardBody>
               <Stat>
                 <HStack spacing={1}>
-                  <StatLabel>EBITDA</StatLabel>
+                  <StatLabel>{t('reports.profitLoss.ebitda')}</StatLabel>
                   <Tooltip 
-                    label="📊 EBITDA (Earnings Before Interest, Tax, Depreciation & Amortization): Laba operasional sebelum bunga, pajak, depresiasi, dan amortisasi. Menunjukkan cash-generating ability bisnis."
+                    label={t('reports.profitLoss.tooltips.ebitda')}
                     fontSize="sm"
                     maxW="300px"
                     hasArrow
@@ -192,9 +194,9 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
             <CardBody>
               <Stat>
                 <HStack spacing={1}>
-                  <StatLabel>Net Income</StatLabel>
+                  <StatLabel>{t('reports.profitLoss.netIncome')}</StatLabel>
                   <Tooltip 
-                    label="✨ LABA BERSIH: Keuntungan final (bottom line) setelah semua biaya, pajak, bunga. Ini menunjukkan profitabilitas sesungguhnya dan berapa banyak yang bisa ditahan/dibagikan ke pemilik."
+                    label={t('reports.profitLoss.tooltips.netIncome')}
                     fontSize="sm"
                     maxW="300px"
                     hasArrow
@@ -220,24 +222,68 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
 
   // ✅ Helper function untuk tooltip penjelasan istilah akuntansi
   const getSectionTooltip = (sectionName: string): string => {
-    const tooltips: Record<string, string> = {
-      'REVENUE': '💰 PENDAPATAN: Total uang yang diterima dari penjualan barang/jasa kepada pelanggan. Ini adalah sumber utama pemasukan perusahaan sebelum dikurangi biaya-biaya.',
-      'COST OF GOODS SOLD': '📦 HARGA POKOK PENJUALAN (HPP/COGS): Biaya langsung untuk memproduksi atau membeli barang yang dijual. Termasuk biaya bahan baku, tenaga kerja langsung, dan overhead produksi.',
-      'GROSS PROFIT': '📈 LABA KOTOR: Pendapatan dikurangi HPP. Menunjukkan berapa banyak keuntungan dari penjualan sebelum dikurangi biaya operasional (gaji, sewa, listrik, dll).',
-      'OPERATING INCOME': '💼 LABA OPERASIONAL: Laba kotor dikurangi biaya operasional (operating expenses). Menunjukkan keuntungan dari aktivitas bisnis utama sebelum bunga dan pajak.',
-      'NET INCOME': '✨ LABA BERSIH: Keuntungan final setelah semua biaya, pajak, bunga, dan pendapatan lain-lain. Ini adalah "bottom line" yang menunjukkan profitabilitas sesungguhnya.',
-      'OPERATING EXPENSES': '🏢 BIAYA OPERASIONAL: Biaya untuk menjalankan bisnis sehari-hari seperti gaji karyawan, sewa kantor, listrik, marketing, administrasi. Tidak termasuk HPP.',
-      'OTHER INCOME': '🎁 PENDAPATAN LAIN-LAIN: Pendapatan di luar bisnis utama, seperti bunga deposito, keuntungan penjualan aset, atau pendapatan sewa.',
-      'OTHER EXPENSES': '📉 BIAYA LAIN-LAIN: Biaya di luar operasional normal, seperti bunga pinjaman, kerugian penjualan aset, atau denda.'
+    const tooltipKeys: Record<string, string> = {
+      'REVENUE': 'reports.profitLoss.tooltips.revenue',
+      'COST OF GOODS SOLD': 'reports.profitLoss.tooltips.cogs',
+      'GROSS PROFIT': 'reports.profitLoss.tooltips.grossProfit',
+      'OPERATING INCOME': 'reports.profitLoss.tooltips.operatingIncome',
+      'NET INCOME': 'reports.profitLoss.tooltips.netIncome',
+      'OPERATING EXPENSES': 'reports.profitLoss.tooltips.operatingExpenses',
+      'OTHER INCOME': 'reports.profitLoss.tooltips.otherIncome',
+      'OTHER EXPENSES': 'reports.profitLoss.tooltips.otherExpenses'
     };
     
-    return tooltips[sectionName] || '';
+    const key = tooltipKeys[sectionName];
+    return key ? t(key) : '';
+  };
+
+  // Helper function to translate section names
+  const getTranslatedSectionName = (sectionName: string): string => {
+    const sectionKeys: Record<string, string> = {
+      'REVENUE': 'reports.profitLoss.revenue',
+      'COST OF GOODS SOLD': 'reports.profitLoss.costOfGoodsSold',
+      'GROSS PROFIT': 'reports.profitLoss.grossProfit',
+      'OPERATING INCOME': 'reports.profitLoss.operatingIncome',
+      'NET INCOME': 'reports.profitLoss.netIncome',
+      'OPERATING EXPENSES': 'reports.profitLoss.operatingExpenses',
+      'OTHER INCOME': 'reports.profitLoss.otherIncome',
+      'OTHER EXPENSES': 'reports.profitLoss.otherExpenses',
+      'NET PROFIT': 'reports.profitLoss.netProfit',
+      'NET LOSS': 'reports.profitLoss.netLoss'
+    };
+    
+    const key = sectionKeys[sectionName];
+    return key ? t(key) : sectionName;
+  };
+
+  // Helper function to translate item names
+  const getTranslatedItemName = (itemName: string): string => {
+    const itemKeys: Record<string, string> = {
+      'Gross Profit': 'reports.profitLoss.grossProfit',
+      'Gross Profit Margin (%)': 'reports.profitLoss.items.grossProfitMargin',
+      'Operating Income': 'reports.profitLoss.operatingIncome',
+      'Operating Margin (%)': 'reports.profitLoss.items.operatingMargin',
+      'Net Income': 'reports.profitLoss.netIncome',
+      'Net Income Margin (%)': 'reports.profitLoss.items.netIncomeMargin',
+      'Income Before Tax': 'reports.profitLoss.items.incomeBeforeTax',
+      'Tax Expense (25%)': 'reports.profitLoss.items.taxExpense',
+      'EBITDA': 'reports.profitLoss.ebitda',
+      'EBITDA Margin (%)': 'reports.profitLoss.items.ebitdaMargin',
+      'Total Revenue': 'reports.profitLoss.items.totalRevenue',
+      'Total Expenses': 'reports.profitLoss.items.totalExpenses',
+      'Total COGS': 'reports.profitLoss.items.totalCogs',
+      'Total Operating Expenses': 'reports.profitLoss.items.totalOperatingExpenses'
+    };
+    
+    const key = itemKeys[itemName];
+    return key ? t(key) : itemName;
   };
 
   const renderSection = (section: any, index: number) => {
     const isCalculated = section.isCalculated;
     const hasSubsections = section.subsections && section.subsections.length > 0;
     const tooltipText = getSectionTooltip(section.name);
+    const translatedName = getTranslatedSectionName(section.name);
     
     // 🔍 DEBUG: Log section name and tooltip availability
     console.log(`[PL Modal] Section: "${section.name}", Has Tooltip: ${!!tooltipText}`);
@@ -248,11 +294,11 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
           <Flex justify="space-between" align="center" mb={3}>
             <HStack spacing={2}>
               <Heading size="md" color={textColor}>
-                {section.name}
+                {translatedName}
               </Heading>
               {/* Always render tooltip icon for testing */}
               <Tooltip 
-                label={tooltipText || `Info for ${section.name}`}
+                label={tooltipText || `Info for ${translatedName}`}
                 fontSize="sm"
                 maxW="400px"
                 hasArrow
@@ -328,7 +374,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 <HStack key={itemIndex} justify="space-between">
                   <HStack>
                     <Text color={secondaryTextColor}>
-                      {item.name}
+                      {getTranslatedItemName(item.name)}
                     </Text>
                     {onJournalDrilldown && item.accountCode && (
                       <JournalDrilldownButton
@@ -354,7 +400,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
       return (
         <Box textAlign="center" py={8}>
           <Text color={secondaryTextColor}>
-            Financial analysis not available for this report format
+            {t('reports.profitLoss.analysisNotAvailable')}
           </Text>
         </Box>
       );
@@ -366,56 +412,56 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
       <VStack spacing={6} align="stretch">
         <Card>
           <CardHeader>
-            <Heading size="sm">Profitability Analysis</Heading>
+            <Heading size="sm">{t('reports.profitLoss.profitabilityAnalysis')}</Heading>
           </CardHeader>
           <CardBody>
             <Table size="sm">
               <Thead>
                 <Tr>
-                  <Th>Metric</Th>
-                  <Th isNumeric>Value</Th>
-                  <Th isNumeric>Percentage</Th>
-                  <Th>Assessment</Th>
+                  <Th>{t('reports.profitLoss.metric')}</Th>
+                  <Th isNumeric>{t('reports.profitLoss.value')}</Th>
+                  <Th isNumeric>{t('reports.profitLoss.percentage')}</Th>
+                  <Th>{t('reports.profitLoss.assessment')}</Th>
                 </Tr>
               </Thead>
               <Tbody>
                 <Tr>
-                  <Td>Gross Profit</Td>
+                  <Td>{t('reports.profitLoss.grossProfit')}</Td>
                   <Td isNumeric>{formatCurrency(metrics.grossProfit)}</Td>
                   <Td isNumeric>{metrics.grossProfitMargin.toFixed(1)}%</Td>
                   <Td>
                     <Badge colorScheme={metrics.grossProfitMargin > 20 ? 'green' : metrics.grossProfitMargin > 10 ? 'yellow' : 'red'}>
-                      {metrics.grossProfitMargin > 20 ? 'Excellent' : metrics.grossProfitMargin > 10 ? 'Good' : 'Needs Improvement'}
+                      {metrics.grossProfitMargin > 20 ? t('reports.profitLoss.assessments.excellent') : metrics.grossProfitMargin > 10 ? t('reports.profitLoss.assessments.good') : t('reports.profitLoss.assessments.needsImprovement')}
                     </Badge>
                   </Td>
                 </Tr>
                 <Tr>
-                  <Td>Operating Income</Td>
+                  <Td>{t('reports.profitLoss.operatingIncome')}</Td>
                   <Td isNumeric>{formatCurrency(metrics.operatingIncome)}</Td>
                   <Td isNumeric>{metrics.operatingMargin.toFixed(1)}%</Td>
                   <Td>
                     <Badge colorScheme={metrics.operatingMargin > 15 ? 'green' : metrics.operatingMargin > 5 ? 'yellow' : 'red'}>
-                      {metrics.operatingMargin > 15 ? 'Strong' : metrics.operatingMargin > 5 ? 'Moderate' : 'Weak'}
+                      {metrics.operatingMargin > 15 ? t('reports.profitLoss.assessments.strong') : metrics.operatingMargin > 5 ? t('reports.profitLoss.assessments.moderate') : t('reports.profitLoss.assessments.weak')}
                     </Badge>
                   </Td>
                 </Tr>
                 <Tr>
-                  <Td>EBITDA</Td>
+                  <Td>{t('reports.profitLoss.ebitda')}</Td>
                   <Td isNumeric>{formatCurrency(metrics.ebitda)}</Td>
                   <Td isNumeric>{metrics.ebitdaMargin.toFixed(1)}%</Td>
                   <Td>
                     <Badge colorScheme={metrics.ebitdaMargin > 20 ? 'green' : metrics.ebitdaMargin > 10 ? 'yellow' : 'red'}>
-                      {metrics.ebitdaMargin > 20 ? 'Excellent' : metrics.ebitdaMargin > 10 ? 'Good' : 'Poor'}
+                      {metrics.ebitdaMargin > 20 ? t('reports.profitLoss.assessments.excellent') : metrics.ebitdaMargin > 10 ? t('reports.profitLoss.assessments.good') : t('reports.profitLoss.assessments.poor')}
                     </Badge>
                   </Td>
                 </Tr>
                 <Tr>
-                  <Td>Net Income</Td>
+                  <Td>{t('reports.profitLoss.netIncome')}</Td>
                   <Td isNumeric>{formatCurrency(metrics.netIncome)}</Td>
                   <Td isNumeric>{metrics.netIncomeMargin.toFixed(1)}%</Td>
                   <Td>
                     <Badge colorScheme={metrics.netIncomeMargin > 10 ? 'green' : metrics.netIncomeMargin > 3 ? 'yellow' : 'red'}>
-                      {metrics.netIncomeMargin > 10 ? 'Profitable' : metrics.netIncomeMargin > 3 ? 'Marginal' : 'Unprofitable'}
+                      {metrics.netIncomeMargin > 10 ? t('reports.profitLoss.assessments.profitable') : metrics.netIncomeMargin > 3 ? t('reports.profitLoss.assessments.marginal') : t('reports.profitLoss.assessments.unprofitable')}
                     </Badge>
                   </Td>
                 </Tr>
@@ -426,18 +472,18 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
         
         <Card>
           <CardHeader>
-            <Heading size="sm">Key Insights</Heading>
+            <Heading size="sm">{t('reports.profitLoss.keyInsights')}</Heading>
           </CardHeader>
           <CardBody>
             <VStack spacing={3} align="stretch">
               <Text fontSize="sm">
-                🎯 <strong>Profitability:</strong> {metrics.netIncomeMargin > 0 ? 'The company is generating positive returns' : 'The company is experiencing losses'}
+                🎯 <strong>{t('reports.profitLoss.insights.profitability')}:</strong> {metrics.netIncomeMargin > 0 ? t('reports.profitLoss.insights.profitabilityPositive') : t('reports.profitLoss.insights.profitabilityNegative')}
               </Text>
               <Text fontSize="sm">
-                📊 <strong>Operating Efficiency:</strong> {metrics.operatingMargin > 10 ? 'Strong operational performance' : 'Room for operational improvement'}
+                📊 <strong>{t('reports.profitLoss.insights.operatingEfficiency')}:</strong> {metrics.operatingMargin > 10 ? t('reports.profitLoss.insights.operatingEfficiencyStrong') : t('reports.profitLoss.insights.operatingEfficiencyWeak')}
               </Text>
               <Text fontSize="sm">
-                💰 <strong>Cash Generation:</strong> EBITDA margin of {metrics.ebitdaMargin.toFixed(1)}% indicates {metrics.ebitdaMargin > 15 ? 'strong' : 'moderate'} cash generation ability
+                💰 <strong>{t('reports.profitLoss.insights.cashGeneration')}:</strong> {t('reports.profitLoss.insights.ebitdaMarginIndicates', { margin: metrics.ebitdaMargin.toFixed(1), strength: metrics.ebitdaMargin > 15 ? t('reports.profitLoss.insights.cashGenerationStrong') : t('reports.profitLoss.insights.cashGenerationModerate') })}
               </Text>
             </VStack>
           </CardBody>
@@ -455,7 +501,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
             <HStack justify="space-between">
               <VStack align="start" spacing={0}>
                 <Text fontSize="xl" fontWeight="bold">
-                  {data.title || 'Enhanced Profit and Loss Statement'}
+                  {t('reports.profitLoss.enhancedTitle')}
                 </Text>
                 <Text fontSize="sm" color={secondaryTextColor}>
                   {data.period}
@@ -468,7 +514,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
               </VStack>
               {data.enhanced && (
                 <Badge colorScheme="blue" variant="solid">
-                  Enhanced
+                  {t('reports.profitLoss.enhanced')}
                 </Badge>
               )}
             </HStack>
@@ -480,7 +526,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                 onClick={() => setActiveTab('statement')}
                 leftIcon={<FiDollarSign />}
               >
-                Statement
+                {t('reports.profitLoss.statement')}
               </Button>
               {data.enhanced && (
                 <>
@@ -490,7 +536,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                     onClick={() => setActiveTab('metrics')}
                     leftIcon={<FiTrendingUp />}
                   >
-                    Metrics
+                    {t('reports.profitLoss.metrics')}
                   </Button>
                   <Button
                     size="sm"
@@ -498,7 +544,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
                     onClick={() => setActiveTab('analysis')}
                     leftIcon={<FiPieChart />}
                   >
-                    Analysis
+                    {t('reports.profitLoss.analysis')}
                   </Button>
                 </>
               )}
@@ -528,7 +574,7 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
               variant="outline"
               onClick={() => handleExport('pdf')}
             >
-              Export PDF
+              {t('reports.profitLoss.exportPDF')}
             </Button>
             <Button
               leftIcon={<FiDownload />}
@@ -536,10 +582,10 @@ const EnhancedProfitLossModal: React.FC<EnhancedProfitLossModalProps> = ({
               variant="outline"
               onClick={() => handleExport('excel')}
             >
-              Export Excel
+              {t('reports.profitLoss.exportExcel')}
             </Button>
             <Button onClick={onClose} size="sm">
-              Close
+              {t('reports.profitLoss.close')}
             </Button>
           </HStack>
         </ModalFooter>

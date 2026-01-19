@@ -25,6 +25,7 @@ import {
 } from 'react-icons/fi';
 import api from '../../services/api';
 import { API_ENDPOINTS } from '@/config/api';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface FinanceDashboardData {
   invoices_pending_payment: number;
@@ -36,6 +37,7 @@ interface FinanceDashboardData {
 
 export const FinanceDashboard = () => {
   const router = useRouter();
+  const { t } = useTranslation();
   const [data, setData] = useState<FinanceDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export const FinanceDashboard = () => {
       });
     } catch (error: any) {
       console.error('Error fetching finance dashboard data:', error);
-      setError(error.response?.data?.error || 'Failed to load dashboard data');
+      setError(error.response?.data?.error || t('messages.operationFailed'));
     } finally {
       setLoading(false);
     }
@@ -77,7 +79,7 @@ export const FinanceDashboard = () => {
     return (
       <Box>
         <Heading as="h2" size="xl" mb={6} color="gray.800">
-          Dasbor Keuangan
+          {t('navigation.dashboard')} - {t('users.finance')}
         </Heading>
         <Flex justify="center" align="center" h="200px">
           <Spinner size="xl" color="blue.500" />
@@ -90,7 +92,7 @@ export const FinanceDashboard = () => {
     return (
       <Box>
         <Heading as="h2" size="xl" mb={6} color="gray.800">
-          Dasbor Keuangan
+          {t('navigation.dashboard')} - {t('users.finance')}
         </Heading>
         <Alert status="error">
           <AlertIcon />
@@ -104,11 +106,11 @@ export const FinanceDashboard = () => {
     return (
       <Box>
         <Heading as="h2" size="xl" mb={6} color="gray.800">
-          Dasbor Keuangan
+          {t('navigation.dashboard')} - {t('users.finance')}
         </Heading>
         <Alert status="info">
           <AlertIcon />
-          No data available
+          {t('common.noData')}
         </Alert>
       </Box>
     );
@@ -117,30 +119,30 @@ export const FinanceDashboard = () => {
   return (
     <Box>
       <Heading as="h2" size="xl" mb={6} color="gray.800">
-        Dasbor Keuangan
+        {t('navigation.dashboard')} - {t('users.finance')}
       </Heading>
     
       <Flex gap={4} flexWrap="wrap" mt={4}>
         <Box bg="white" p={4} borderRadius="lg" boxShadow="sm" flex="1" minW="220px">
-          <Heading as="h3" size="sm" mb={2} color="orange.600">Invoice Perlu Dibayar</Heading>
+          <Heading as="h3" size="sm" mb={2} color="orange.600">{t('dashboard.stats.accountsReceivable')}</Heading>
           <Text fontSize="2xl" fontWeight="bold" color="orange.600">{data.invoices_pending_payment}</Text>
           <Text fontSize="sm" color="gray.500" mt={1}>
-            Total Piutang: {formatCurrency(data.outstanding_receivables)}
+            {t('common.labels.total')}: {formatCurrency(data.outstanding_receivables)}
           </Text>
         </Box>
         
         <Box bg="white" p={4} borderRadius="lg" boxShadow="sm" flex="1" minW="220px">
-          <Heading as="h3" size="sm" mb={2} color="red.600">Invoice Belum Lunas</Heading>
+          <Heading as="h3" size="sm" mb={2} color="red.600">{t('dashboard.stats.accountsPayable')}</Heading>
           <Text fontSize="2xl" fontWeight="bold" color="red.600">{data.invoices_not_paid}</Text>
           <Text fontSize="sm" color="gray.500" mt={1}>
-            Total Utang: {formatCurrency(data.outstanding_payables)}
+            {t('common.labels.total')}: {formatCurrency(data.outstanding_payables)}
           </Text>
         </Box>
         
         <Box bg="white" p={4} borderRadius="lg" boxShadow="sm" flex="1" minW="220px">
-          <Heading as="h3" size="sm" mb={2} color="blue.600">Jurnal Perlu di-Posting</Heading>
+          <Heading as="h3" size="sm" mb={2} color="blue.600">{t('dashboard.pendingApprovals')}</Heading>
           <Text fontSize="2xl" fontWeight="bold" color="blue.600">{data.journals_need_posting}</Text>
-          <Text fontSize="sm" color="gray.500" mt={1}>Jurnal draft</Text>
+          <Text fontSize="sm" color="gray.500" mt={1}>{t('sales.draft')}</Text>
         </Box>
       </Flex>
 
@@ -148,7 +150,7 @@ export const FinanceDashboard = () => {
         <CardHeader>
           <Heading size="md" display="flex" alignItems="center">
             <Icon as={FiPlus} mr={2} color="blue.500" />
-            Akses Cepat
+            {t('dashboard.quickAccess.title')}
           </Heading>
         </CardHeader>
         <CardBody>
@@ -160,7 +162,7 @@ export const FinanceDashboard = () => {
               onClick={() => router.push('/sales')}
               size="md"
             >
-              Tambah Penjualan
+              {t('dashboard.quickAccess.addSale')}
             </Button>
             <Button
               leftIcon={<FiShoppingCart />}
@@ -169,7 +171,7 @@ export const FinanceDashboard = () => {
               onClick={() => router.push('/purchases')}
               size="md"
             >
-              Tambah Pembelian
+              {t('dashboard.quickAccess.addPurchase')}
             </Button>
             <Button
               leftIcon={<FiBarChart2 />}
@@ -178,7 +180,7 @@ export const FinanceDashboard = () => {
               onClick={() => router.push('/reports')}
               size="md"
             >
-              Laporan Keuangan
+              {t('dashboard.quickAccess.financialReports')}
             </Button>
           </HStack>
         </CardBody>

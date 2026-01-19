@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/config/api';
+import { useTranslation } from '@/hooks/useTranslation';
 import { 
   Box, 
   Heading, 
@@ -86,6 +87,7 @@ interface EmployeeDashboardData {
 
 export const EmployeeDashboard = () => {
   const router = useRouter();
+  const { t } = useTranslation();
   const [employeeData, setEmployeeData] = useState<EmployeeDashboardData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +101,7 @@ export const EmployeeDashboard = () => {
         setError(null);
       } catch (e: any) {
         console.error('Employee dashboard fetch error:', e);
-        setError(e?.response?.data?.error || e?.message || 'Gagal memuat dashboard karyawan');
+        setError(e?.response?.data?.error || e?.message || t('messages.operationFailed'));
       } finally {
         setLoading(false);
       }
@@ -110,7 +112,7 @@ export const EmployeeDashboard = () => {
   return (
     <Box>
       <Heading as="h2" size="xl" mb={6} color="gray.800">
-        Dasbor Saya
+        {t('navigation.dashboard')} - {t('users.employee')}
       </Heading>
 
       {loading ? (
@@ -131,7 +133,7 @@ export const EmployeeDashboard = () => {
               <CardHeader>
                 <Heading size="md" display="flex" alignItems="center">
                   <Icon as={FiBell} mr={2} color="orange.500" />
-                  Notifikasi Approval
+                  {t('dashboard.pendingApprovals')}
                 </Heading>
               </CardHeader>
               <CardBody>
@@ -167,7 +169,7 @@ export const EmployeeDashboard = () => {
               <CardHeader>
                 <Heading size="md" display="flex" alignItems="center">
                   <Icon as={FiFileText} mr={2} color="blue.500" />
-                  Purchase Requests Saya
+                  {t('purchases.purchaseOrder')}
                 </Heading>
               </CardHeader>
               <CardBody>
@@ -181,7 +183,7 @@ export const EmployeeDashboard = () => {
                           {req.approval_step} • Rp {req.total_amount?.toLocaleString('id-ID') || '0'}
                         </Text>
                         <Text fontSize="xs" color="gray.500">
-                          {req.days_pending && `${req.days_pending} hari tertunda`}
+                          {req.days_pending && `${req.days_pending} ${t('common.labels.date')}`}
                         </Text>
                       </Box>
                       <Badge 
@@ -203,7 +205,7 @@ export const EmployeeDashboard = () => {
               <CardHeader>
                 <Heading size="md" display="flex" alignItems="center">
                   <Icon as={FiActivity} mr={2} color="purple.500" />
-                  Approval Workflows
+                  {t('dashboard.pendingApprovals')}
                 </Heading>
               </CardHeader>
               <CardBody>
@@ -214,7 +216,7 @@ export const EmployeeDashboard = () => {
                       <Box flex="1">
                         <Text fontWeight="medium">{workflow.name}</Text>
                         <Text fontSize="sm" color="gray.600">
-                          Step {workflow.current_step} dari {workflow.total_steps}
+                          Step {workflow.current_step} / {workflow.total_steps}
                         </Text>
                       </Box>
                       <Badge 
@@ -235,13 +237,10 @@ export const EmployeeDashboard = () => {
             <CardHeader>
               <Heading size="md" display="flex" alignItems="center">
                 <Icon as={FiPlus} mr={2} color="blue.500" />
-                Akses Cepat
+                {t('dashboard.quickAccess.title')}
               </Heading>
             </CardHeader>
             <CardBody>
-              <Text mb={4} color="gray.600">
-                Akses fitur-fitur employee dashboard dan approval workflow.
-              </Text>
               <HStack spacing={4} flexWrap="wrap">
                 <Button
                   leftIcon={<FiFileText />}
@@ -250,7 +249,7 @@ export const EmployeeDashboard = () => {
                   onClick={() => router.push('/purchases')}
                   size="md"
                 >
-                  Purchase Requests
+                  {t('purchases.purchaseOrder')}
                 </Button>
                 <Button
                   leftIcon={<FiActivity />}
@@ -259,7 +258,7 @@ export const EmployeeDashboard = () => {
                   onClick={() => window.location.reload()}
                   size="md"
                 >
-                  Refresh Dashboard
+                  {t('common.refresh')}
                 </Button>
               </HStack>
             </CardBody>

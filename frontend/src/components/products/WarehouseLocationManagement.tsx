@@ -33,8 +33,10 @@ import {
 import { FiEdit, FiTrash2, FiPlus, FiSearch } from 'react-icons/fi';
 import ProductService, { WarehouseLocation } from '@/services/productService';
 import WarehouseLocationForm from './WarehouseLocationForm';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const WarehouseLocationManagement: React.FC = () => {
+  const { t } = useTranslation();
   const [locations, setLocations] = useState<WarehouseLocation[]>([]);
   const [filteredLocations, setFilteredLocations] = useState<WarehouseLocation[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,7 +70,7 @@ const WarehouseLocationManagement: React.FC = () => {
       setLocations(data.data || []);
     } catch (error) {
       toast({
-        title: 'Failed to fetch warehouse locations',
+        title: t('products.management.fetchFailed') + ' ' + t('products.management.warehouseLocations').toLowerCase(),
         status: 'error',
         isClosable: true,
       });
@@ -96,7 +98,7 @@ const WarehouseLocationManagement: React.FC = () => {
     try {
       await ProductService.deleteWarehouseLocation(locationToDelete.id);
       toast({
-        title: 'Warehouse location deleted successfully',
+        title: t('products.management.locationDeleted'),
         status: 'success',
         isClosable: true,
       });
@@ -104,7 +106,7 @@ const WarehouseLocationManagement: React.FC = () => {
       onDeleteClose();
     } catch (error: any) {
       toast({
-        title: 'Failed to delete warehouse location',
+        title: t('products.management.deleteFailed') + ' ' + t('products.management.warehouseLocations').toLowerCase(),
         description: error?.response?.data?.error || 'An error occurred',
         status: 'error',
         isClosable: true,
@@ -132,7 +134,7 @@ const WarehouseLocationManagement: React.FC = () => {
           colorScheme="orange"
           onClick={handleAddClick}
         >
-          Add Warehouse Location
+          {t('products.management.addWarehouseLocation')}
         </Button>
 
         <InputGroup maxW="300px">
@@ -140,7 +142,7 @@ const WarehouseLocationManagement: React.FC = () => {
             <FiSearch color="gray.300" />
           </InputLeftElement>
           <Input
-            placeholder="Search locations..."
+            placeholder={t('products.management.searchLocations')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -152,12 +154,12 @@ const WarehouseLocationManagement: React.FC = () => {
         <Table variant="simple" size="sm">
           <Thead>
             <Tr>
-              <Th>Code</Th>
-              <Th>Name</Th>
-              <Th>Address</Th>
-              <Th>Description</Th>
-              <Th>Status</Th>
-              <Th>Actions</Th>
+              <Th>{t('products.table.code')}</Th>
+              <Th>{t('products.table.name')}</Th>
+              <Th>{t('products.table.address')}</Th>
+              <Th>{t('products.table.description')}</Th>
+              <Th>{t('products.table.status')}</Th>
+              <Th>{t('products.table.actions')}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -165,7 +167,7 @@ const WarehouseLocationManagement: React.FC = () => {
               <Tr>
                 <Td colSpan={6} textAlign="center" py={8}>
                   <Text color="gray.500">
-                    {searchTerm ? 'No warehouse locations found matching your search' : 'No warehouse locations yet. Add your first location!'}
+                    {searchTerm ? t('products.management.noLocationsFound') : t('products.management.noLocationsYet')}
                   </Text>
                 </Td>
               </Tr>
@@ -178,7 +180,7 @@ const WarehouseLocationManagement: React.FC = () => {
                   <Td>{location.description || '-'}</Td>
                   <Td>
                     <Badge colorScheme={location.is_active ? 'green' : 'red'}>
-                      {location.is_active ? 'Active' : 'Inactive'}
+                      {location.is_active ? t('common.active') : t('common.inactive')}
                     </Badge>
                   </Td>
                   <Td>
@@ -190,7 +192,7 @@ const WarehouseLocationManagement: React.FC = () => {
                         variant="ghost"
                         onClick={() => handleEditClick(location)}
                       >
-                        Edit
+                        {t('common.edit')}
                       </Button>
                       <Button
                         size="sm"
@@ -199,7 +201,7 @@ const WarehouseLocationManagement: React.FC = () => {
                         variant="ghost"
                         onClick={() => handleDeleteClick(location)}
                       >
-                        Delete
+                        {t('common.delete')}
                       </Button>
                     </HStack>
                   </Td>
@@ -215,7 +217,7 @@ const WarehouseLocationManagement: React.FC = () => {
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>
-            {selectedLocation ? 'Edit Warehouse Location' : 'Add Warehouse Location'}
+            {selectedLocation ? t('common.edit') + ' ' + t('products.management.warehouseLocations') : t('products.management.addWarehouseLocation')}
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
@@ -237,20 +239,20 @@ const WarehouseLocationManagement: React.FC = () => {
         <AlertDialogOverlay>
           <AlertDialogContent>
             <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              Delete Warehouse Location
+              {t('products.management.deleteWarehouseLocation')}
             </AlertDialogHeader>
 
             <AlertDialogBody>
-              Are you sure you want to delete <strong>{locationToDelete?.name}</strong>? 
-              This action cannot be undone.
+              {t('products.management.confirmDeleteLocation')} <strong>{locationToDelete?.name}</strong>? 
+              {t('products.management.cannotBeUndone')}
             </AlertDialogBody>
 
             <AlertDialogFooter>
               <Button ref={cancelRef} onClick={onDeleteClose}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button colorScheme="red" onClick={confirmDelete} ml={3}>
-                Delete
+                {t('common.delete')}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

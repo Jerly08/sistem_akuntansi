@@ -20,6 +20,7 @@ import {
   Text,
 } from '@chakra-ui/react';
 import { Contact } from '@/types/contact';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ContactFormProps {
   contact?: Contact | null;
@@ -34,6 +35,7 @@ export default function ContactForm({
   onCancel, 
   isLoading = false 
 }: ContactFormProps) {
+  const { t } = useTranslation();
   const toast = useToast();
   const [formData, setFormData] = useState<Partial<Contact>>({
     name: '',
@@ -69,21 +71,21 @@ export default function ContactForm({
 
     // Required fields validation
     if (!formData.name?.trim()) {
-      newErrors.name = 'Contact name is required';
+      newErrors.name = t('contacts.validation.nameRequired');
     }
 
     if (!formData.type) {
-      newErrors.type = 'Contact type is required';
+      newErrors.type = t('contacts.validation.typeRequired');
     }
 
     // Email validation if provided
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+      newErrors.email = t('validation.email');
     }
 
     // Phone validation if provided
     if (formData.phone && formData.phone.length < 10) {
-      newErrors.phone = 'Phone number should be at least 10 digits';
+      newErrors.phone = t('contacts.validation.phoneMinLength');
     }
 
 
@@ -96,8 +98,8 @@ export default function ContactForm({
     
     if (!validateForm()) {
       toast({
-        title: 'Validation Error',
-        description: 'Please fix the errors in the form',
+        title: t('messages.toast.validationError'),
+        description: t('messages.toast.validationErrorDesc'),
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -110,8 +112,8 @@ export default function ContactForm({
     } catch (error) {
       console.error('Error submitting contact form:', error);
       toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to save contact',
+        title: t('messages.toast.error'),
+        description: error instanceof Error ? error.message : t('contacts.messages.saveFailed'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -143,15 +145,15 @@ export default function ContactForm({
       <VStack spacing={6} align="stretch">
         {/* Basic Information */}
         <Box>
-          <Text fontSize="lg" fontWeight="semibold" mb={4}>Basic Information</Text>
+          <Text fontSize="lg" fontWeight="semibold" mb={4}>{t('contacts.form.basicInfo')}</Text>
           <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={4}>
             <GridItem>
               <FormControl isRequired isInvalid={!!errors.name}>
-                <FormLabel>Contact Name</FormLabel>
+                <FormLabel>{t('contacts.contactName')}</FormLabel>
                 <Input
                   value={formData.name || ''}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  placeholder="Enter contact name"
+                  placeholder={t('common.placeholders.enterName')}
                 />
                 <FormErrorMessage>{errors.name}</FormErrorMessage>
               </FormControl>
@@ -159,14 +161,14 @@ export default function ContactForm({
 
             <GridItem>
               <FormControl isRequired isInvalid={!!errors.type}>
-                <FormLabel>Contact Type</FormLabel>
+                <FormLabel>{t('contacts.type')}</FormLabel>
                 <Select
                   value={formData.type || 'CUSTOMER'}
                   onChange={(e) => handleInputChange('type', e.target.value)}
                 >
-                  <option value="CUSTOMER">Customer</option>
-                  <option value="VENDOR">Vendor</option>
-                  <option value="EMPLOYEE">Employee</option>
+                  <option value="CUSTOMER">{t('contacts.customer')}</option>
+                  <option value="VENDOR">{t('contacts.vendor')}</option>
+                  <option value="EMPLOYEE">{t('contacts.employee')}</option>
                 </Select>
                 <FormErrorMessage>{errors.type}</FormErrorMessage>
               </FormControl>
@@ -174,11 +176,11 @@ export default function ContactForm({
 
             <GridItem>
               <FormControl>
-                <FormLabel>External ID</FormLabel>
+                <FormLabel>{t('contacts.externalId')}</FormLabel>
                 <Input
                   value={formData.external_id || ''}
                   onChange={(e) => handleInputChange('external_id', e.target.value)}
-                  placeholder="Enter external reference ID"
+                  placeholder={t('contacts.form.enterExternalId')}
                 />
               </FormControl>
             </GridItem>
@@ -187,11 +189,11 @@ export default function ContactForm({
             {formData.type !== 'EMPLOYEE' && (
               <GridItem>
                 <FormControl>
-                  <FormLabel>Person in Charge (PIC)</FormLabel>
+                  <FormLabel>{t('contacts.picName')}</FormLabel>
                   <Input
                     value={formData.pic_name || ''}
                     onChange={(e) => handleInputChange('pic_name', e.target.value)}
-                    placeholder="Enter PIC name"
+                    placeholder={t('contacts.form.enterPicName')}
                   />
                 </FormControl>
               </GridItem>
@@ -203,16 +205,16 @@ export default function ContactForm({
 
         {/* Contact Information */}
         <Box>
-          <Text fontSize="lg" fontWeight="semibold" mb={4}>Contact Information</Text>
+          <Text fontSize="lg" fontWeight="semibold" mb={4}>{t('contacts.form.contactInfo')}</Text>
           <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={4}>
             <GridItem>
               <FormControl isInvalid={!!errors.email}>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{t('contacts.email')}</FormLabel>
                 <Input
                   type="email"
                   value={formData.email || ''}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  placeholder="Enter email address"
+                  placeholder={t('common.placeholders.enterEmail')}
                 />
                 <FormErrorMessage>{errors.email}</FormErrorMessage>
               </FormControl>
@@ -220,11 +222,11 @@ export default function ContactForm({
 
             <GridItem>
               <FormControl isInvalid={!!errors.phone}>
-                <FormLabel>Phone</FormLabel>
+                <FormLabel>{t('contacts.phone')}</FormLabel>
                 <Input
                   value={formData.phone || ''}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
-                  placeholder="Enter phone number"
+                  placeholder={t('common.placeholders.enterPhone')}
                 />
                 <FormErrorMessage>{errors.phone}</FormErrorMessage>
               </FormControl>
@@ -232,11 +234,11 @@ export default function ContactForm({
 
             <GridItem colSpan={{ base: 1, md: 2 }}>
               <FormControl>
-                <FormLabel>Address</FormLabel>
+                <FormLabel>{t('contacts.address')}</FormLabel>
                 <Textarea
                   value={formData.address || ''}
                   onChange={(e) => handleInputChange('address', e.target.value)}
-                  placeholder="Enter complete address"
+                  placeholder={t('common.placeholders.enterAddress')}
                   rows={3}
                 />
               </FormControl>
@@ -249,7 +251,7 @@ export default function ContactForm({
         {/* Status */}
         <FormControl display="flex" alignItems="center">
           <FormLabel htmlFor="is-active" mb="0">
-            Active Status
+            {t('contacts.form.activeStatus')}
           </FormLabel>
           <Switch
             id="is-active"
@@ -265,10 +267,10 @@ export default function ContactForm({
             type="submit"
             colorScheme="blue"
             isLoading={isLoading}
-            loadingText={contact ? 'Updating...' : 'Creating...'}
+            loadingText={contact ? t('common.updating') : t('common.creating')}
             flex={1}
           >
-            {contact ? 'Update Contact' : 'Create Contact'}
+            {contact ? t('contacts.editContact') : t('contacts.createContact')}
           </Button>
           <Button
             variant="outline"
@@ -276,7 +278,7 @@ export default function ContactForm({
             isDisabled={isLoading}
             flex={1}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
         </HStack>
       </VStack>

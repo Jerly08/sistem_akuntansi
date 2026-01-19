@@ -353,4 +353,3 @@ export default {
   validateAPIConfiguration,
   getApplicationHealth
 };
-</invoke>

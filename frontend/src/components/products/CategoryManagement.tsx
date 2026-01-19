@@ -33,8 +33,10 @@ import {
 import { FiEdit, FiTrash2, FiPlus, FiSearch } from 'react-icons/fi';
 import ProductService, { Category } from '@/services/productService';
 import CategoryForm from './CategoryForm';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const CategoryManagement: React.FC = () => {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<Category[]>([]);
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -67,7 +69,7 @@ const CategoryManagement: React.FC = () => {
       setCategories(data.data || []);
     } catch (error) {
       toast({
-        title: 'Failed to fetch categories',
+        title: t('products.management.fetchFailed') + ' ' + t('products.management.categories').toLowerCase(),
         status: 'error',
         isClosable: true,
       });
@@ -95,7 +97,7 @@ const CategoryManagement: React.FC = () => {
     try {
       await ProductService.deleteCategory(categoryToDelete.id);
       toast({
-        title: 'Category deleted successfully',
+        title: t('products.management.categoryDeleted'),
         status: 'success',
         isClosable: true,
       });
@@ -103,7 +105,7 @@ const CategoryManagement: React.FC = () => {
       onDeleteClose();
     } catch (error: any) {
       toast({
-        title: 'Failed to delete category',
+        title: t('products.management.deleteFailed') + ' ' + t('products.management.categories').toLowerCase(),
         description: error?.response?.data?.error || 'An error occurred',
         status: 'error',
         isClosable: true,
@@ -131,7 +133,7 @@ const CategoryManagement: React.FC = () => {
           colorScheme="green"
           onClick={handleAddClick}
         >
-          Add Category
+          {t('products.management.addCategory')}
         </Button>
 
         <InputGroup maxW="300px">
@@ -139,7 +141,7 @@ const CategoryManagement: React.FC = () => {
             <FiSearch color="gray.300" />
           </InputLeftElement>
           <Input
-            placeholder="Search categories..."
+            placeholder={t('products.management.searchCategories')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -151,12 +153,12 @@ const CategoryManagement: React.FC = () => {
         <Table variant="simple" size="sm">
           <Thead>
             <Tr>
-              <Th>Code</Th>
-              <Th>Name</Th>
-              <Th>Description</Th>
-              <Th>Parent</Th>
-              <Th>Status</Th>
-              <Th>Actions</Th>
+              <Th>{t('products.table.code')}</Th>
+              <Th>{t('products.table.name')}</Th>
+              <Th>{t('products.table.description')}</Th>
+              <Th>{t('products.table.parent')}</Th>
+              <Th>{t('products.table.status')}</Th>
+              <Th>{t('products.table.actions')}</Th>
             </Tr>
           </Thead>
           <Tbody>
@@ -164,7 +166,7 @@ const CategoryManagement: React.FC = () => {
               <Tr>
                 <Td colSpan={6} textAlign="center" py={8}>
                   <Text color="gray.500">
-                    {searchTerm ? 'No categories found matching your search' : 'No categories yet. Add your first category!'}
+                    {searchTerm ? t('products.management.noCategoriesFound') : t('products.management.noCategoriesYet')}
                   </Text>
                 </Td>
               </Tr>
@@ -177,7 +179,7 @@ const CategoryManagement: React.FC = () => {
                   <Td>{category.parent?.name || '-'}</Td>
                   <Td>
                     <Badge colorScheme={category.is_active ? 'green' : 'red'}>
-                      {category.is_active ? 'Active' : 'Inactive'}
+                      {category.is_active ? t('common.active') : t('common.inactive')}
                     </Badge>
                   </Td>
                   <Td>
@@ -189,7 +191,7 @@ const CategoryManagement: React.FC = () => {
                         variant="ghost"
                         onClick={() => handleEditClick(category)}
                       >
-                        Edit
+                        {t('common.edit')}
                       </Button>
                       <Button
                         size="sm"
@@ -198,7 +200,7 @@ const CategoryManagement: React.FC = () => {
                         variant="ghost"
                         onClick={() => handleDeleteClick(category)}
                       >
-                        Delete
+                        {t('common.delete')}
                       </Button>
                     </HStack>
                   </Td>
@@ -214,7 +216,7 @@ const CategoryManagement: React.FC = () => {
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>
-            {selectedCategory ? 'Edit Category' : 'Add Category'}
+            {selectedCategory ? t('products.category.editCategory') : t('products.category.addCategory')}
           </ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
@@ -236,20 +238,20 @@ const CategoryManagement: React.FC = () => {
         <AlertDialogOverlay>
           <AlertDialogContent>
             <AlertDialogHeader fontSize="lg" fontWeight="bold">
-              Delete Category
+              {t('products.management.deleteCategory')}
             </AlertDialogHeader>
 
             <AlertDialogBody>
-              Are you sure you want to delete <strong>{categoryToDelete?.name}</strong>? 
-              This action cannot be undone.
+              {t('products.management.confirmDeleteCategory')} <strong>{categoryToDelete?.name}</strong>? 
+              {t('products.management.cannotBeUndone')}
             </AlertDialogBody>
 
             <AlertDialogFooter>
               <Button ref={cancelRef} onClick={onDeleteClose}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button colorScheme="red" onClick={confirmDelete} ml={3}>
-                Delete
+                {t('common.delete')}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

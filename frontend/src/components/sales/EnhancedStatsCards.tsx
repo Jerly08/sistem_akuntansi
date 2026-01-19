@@ -23,6 +23,7 @@ import {
   FiBarChart2,
   FiTrendingUp
 } from 'react-icons/fi';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface SalesStats {
   total_sales: number;
@@ -41,6 +42,8 @@ const EnhancedStatsCards: React.FC<EnhancedStatsCardsProps> = ({
   stats,
   formatCurrency
 }) => {
+  const { t } = useTranslation();
+  
   // Calculate percentage of paid vs outstanding if we have total_paid
   const paidPercentage = stats.total_paid
     ? Math.round((stats.total_paid / (stats.total_amount || 1)) * 100)
@@ -88,13 +91,13 @@ const EnhancedStatsCards: React.FC<EnhancedStatsCardsProps> = ({
               <Icon as={FiShoppingBag} boxSize={6} />
               <Box>
                 <StatLabel fontSize="sm" opacity={0.9}>
-                  Total Sales
+                  {t('sales.stats.totalSales')}
                 </StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
                   {stats.total_sales}
                 </StatNumber>
                 <StatHelpText fontSize="xs" opacity={0.8}>
-                  Transactions this period
+                  {t('sales.stats.transactionsThisPeriod')}
                 </StatHelpText>
               </Box>
             </HStack>
@@ -116,13 +119,13 @@ const EnhancedStatsCards: React.FC<EnhancedStatsCardsProps> = ({
               <Icon as={FiDollarSign} boxSize={6} />
               <Box>
                 <StatLabel fontSize="sm" opacity={0.9}>
-                  Total Revenue
+                  {t('sales.stats.totalRevenue')}
                 </StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
                   {formatCurrency(stats.total_amount)}
                 </StatNumber>
                 <StatHelpText fontSize="xs" opacity={0.8}>
-                  Gross revenue
+                  {t('sales.stats.grossRevenue')}
                 </StatHelpText>
               </Box>
             </HStack>
@@ -144,13 +147,13 @@ const EnhancedStatsCards: React.FC<EnhancedStatsCardsProps> = ({
               <Icon as={FiAlertCircle} boxSize={6} />
               <Box>
                 <StatLabel fontSize="sm" opacity={0.9}>
-                  Outstanding
+                  {t('sales.stats.outstanding')}
                 </StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
                   {formatCurrency(stats.total_outstanding)}
                 </StatNumber>
                 <StatHelpText fontSize="xs" opacity={0.8}>
-                  Unpaid invoices
+                  {t('sales.stats.unpaidInvoices')}
                 </StatHelpText>
               </Box>
             </HStack>
@@ -172,13 +175,13 @@ const EnhancedStatsCards: React.FC<EnhancedStatsCardsProps> = ({
               <Icon as={FiBarChart2} boxSize={6} />
               <Box>
                 <StatLabel fontSize="sm" opacity={0.9}>
-                  Avg Order Value
+                  {t('sales.stats.avgOrderValue')}
                 </StatLabel>
                 <StatNumber fontSize="3xl" fontWeight="bold">
                   {formatCurrency(stats.avg_order_value)}
                 </StatNumber>
                 <StatHelpText fontSize="xs" opacity={0.8}>
-                  Per transaction
+                  {t('sales.stats.perTransaction')}
                 </StatHelpText>
               </Box>
             </HStack>

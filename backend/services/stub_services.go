@@ -320,6 +320,7 @@ type PDFServiceInterface interface {
 	GeneratePurchaseOrderPDF(purchase *models.Purchase) ([]byte, error)
 	GeneratePurchaseReceiptPDF(receipt *models.PurchaseReceipt) ([]byte, error)
 	GenerateInvoicePDF(invoice interface{}) ([]byte, error)
+	GenerateInvoicePDFWithLanguage(invoice interface{}, lang string) ([]byte, error)
 	GeneratePaymentReportPDF(data interface{}) ([]byte, error)
 	GeneratePaymentDetailPDF(payment interface{}) ([]byte, error)
 	GenerateReceiptPDF(receipt interface{}) ([]byte, error)
@@ -554,8 +555,12 @@ func (s *CashBankSSOTJournalAdapter) createActualTransferJournalEntry(tx *gorm.D
 }
 
 func (s *CashBankSSOTJournalAdapter) createActualOpeningBalanceJournalEntry(tx *gorm.DB, cashBank *models.CashBank, transaction *models.CashBankTransaction, request *CashBankJournalRequest) (*models.SSOTJournalEntry, error) {
-	// Create SSOT journal entry for opening balance and lines (Debit Cash/Bank, Credit Equity)
+	log.Printf("🔄 [SSOT ADAPTER] Creating opening balance journal entry: CashBankID=%d, Amount=%s, AccountID=%d",
+		cashBank.ID, request.Amount.String(), cashBank.AccountID)
+	
+	// Step 1: Create SSOT journal entry for opening balance and lines (Debit Cash/Bank, Credit Equity)
 	// Insert as DRAFT first to avoid trigger validation before lines are created
+	log.Printf("📝 [SSOT ADAPTER] Step 1: Creating journal entry record (DRAFT status)")
 	journal := &models.SSOTJournalEntry{
 		EntryNumber:   fmt.Sprintf("OPB-%d", time.Now().Unix()),
 		EntryDate:     request.Date,
@@ -568,19 +573,30 @@ func (s *CashBankSSOTJournalAdapter) createActualOpeningBalanceJournalEntry(tx *
 		CreatedAt:     time.Now(),
 	}
 	if err := tx.Create(journal).Error; err != nil {
-		return nil, fmt.Errorf("failed to create opening balance journal entry: %v", err)
+		log.Printf("❌ [SSOT ADAPTER] Failed to create journal entry record: %v", err)
+		return nil, fmt.Errorf("failed to create journal entry record: %v", err)
 	}
-	// Equity credit
+	log.Printf("✅ [SSOT ADAPTER] Journal entry created: ID=%d, EntryNumber=%s", journal.ID, journal.EntryNumber)
+	
+	// Step 2: Determine equity account for credit side
+	log.Printf("🔍 [SSOT ADAPTER] Step 2: Looking up equity account for credit side")
 	var equityID uint64
 	if request.CounterAccountID != nil && *request.CounterAccountID > 0 {
 		equityID = *request.CounterAccountID
+		log.Printf("✅ [SSOT ADAPTER] Using provided equity account: ID=%d", equityID)
 	} else {
+		log.Printf("🔍 [SSOT ADAPTER] No counter account provided, looking for default equity account")
 		if id, err := findDefaultEquityAccountID(tx); err == nil {
 			equityID = id
+			log.Printf("✅ [SSOT ADAPTER] Found default equity account: ID=%d", equityID)
 		} else {
-			return nil, fmt.Errorf("failed to resolve equity account: %v", err)
+			log.Printf("❌ [SSOT ADAPTER] Equity account lookup failed: %v", err)
+			return nil, fmt.Errorf("equity account lookup failed: %v. Please create an equity account with code 3101 or provide a counter account ID", err)
 		}
 	}
+	
+	// Step 3: Create debit line (Cash/Bank account)
+	log.Printf("📝 [SSOT ADAPTER] Step 3: Creating debit journal line for account %d", cashBank.AccountID)
 	debitLine := &models.SSOTJournalLine{
 		JournalID:   journal.ID,
 		AccountID:   uint64(cashBank.AccountID),
@@ -589,6 +605,14 @@ func (s *CashBankSSOTJournalAdapter) createActualOpeningBalanceJournalEntry(tx *
 		DebitAmount: request.Amount,
 		CreditAmount: decimal.Zero,
 	}
+	if err := tx.Create(debitLine).Error; err != nil {
+		log.Printf("❌ [SSOT ADAPTER] Failed to create debit journal line for account %d: %v", cashBank.AccountID, err)
+		return nil, fmt.Errorf("failed to create debit journal line for account %d: %v", cashBank.AccountID, err)
+	}
+	log.Printf("✅ [SSOT ADAPTER] Debit line created: AccountID=%d, Amount=%s", cashBank.AccountID, request.Amount.String())
+	
+	// Step 4: Create credit line (Equity account)
+	log.Printf("📝 [SSOT ADAPTER] Step 4: Creating credit journal line for equity account %d", equityID)
 	creditLine := &models.SSOTJournalLine{
 		JournalID:   journal.ID,
 		AccountID:   equityID,
@@ -597,36 +621,44 @@ func (s *CashBankSSOTJournalAdapter) createActualOpeningBalanceJournalEntry(tx *
 		DebitAmount: decimal.Zero,
 		CreditAmount: request.Amount,
 	}
-	if err := tx.Create(debitLine).Error; err != nil {
-		return nil, fmt.Errorf("failed to create opening balance debit line: %v", err)
-	}
 	if err := tx.Create(creditLine).Error; err != nil {
-		return nil, fmt.Errorf("failed to create opening balance credit line: %v", err)
+		log.Printf("❌ [SSOT ADAPTER] Failed to create credit journal line for equity account %d: %v", equityID, err)
+		return nil, fmt.Errorf("failed to create credit journal line for equity account %d: %v", equityID, err)
 	}
+	log.Printf("✅ [SSOT ADAPTER] Credit line created: AccountID=%d, Amount=%s", equityID, request.Amount.String())
 	
-	// Now update status to POSTED after lines are created
+	// Step 5: Now update status to POSTED after lines are created
+	log.Printf("📝 [SSOT ADAPTER] Step 5: Posting journal entry (updating status to POSTED)")
 	if err := tx.Model(journal).Update("status", "POSTED").Error; err != nil {
-		return nil, fmt.Errorf("failed to post opening balance journal entry: %v", err)
+		log.Printf("❌ [SSOT ADAPTER] Failed to post journal entry %d: %v", journal.ID, err)
+		return nil, fmt.Errorf("failed to post journal entry %d: %v", journal.ID, err)
 	}
 	journal.Status = "POSTED" // Update in-memory object
+	log.Printf("✅ [SSOT ADAPTER] Journal entry posted: ID=%d", journal.ID)
 	
-	// ✅ FIX: Update accounts.balance since journal is POSTED
+	// Step 6: Update accounts.balance since journal is POSTED
+	log.Printf("💰 [SSOT ADAPTER] Step 6: Updating account balances")
+	
 	// Update Cash/Bank Account (Debit = increase for Asset)
 	if err := tx.Model(&models.Account{}).
 		Where("id = ?", cashBank.AccountID).
 		UpdateColumn("balance", gorm.Expr("balance + ?", request.Amount.InexactFloat64())).Error; err != nil {
-		return nil, fmt.Errorf("failed to update cash/bank account balance: %v", err)
+		log.Printf("❌ [SSOT ADAPTER] Failed to update cash/bank account %d balance: %v", cashBank.AccountID, err)
+		return nil, fmt.Errorf("failed to update cash/bank account %d balance: %v", cashBank.AccountID, err)
 	}
+	log.Printf("✅ [SSOT ADAPTER] Cash/Bank account %d balance updated (+%.2f)", cashBank.AccountID, request.Amount.InexactFloat64())
 	
 	// Update Equity Account (Credit = increase for Equity)
 	if err := tx.Model(&models.Account{}).
 		Where("id = ?", equityID).
 		UpdateColumn("balance", gorm.Expr("balance + ?", request.Amount.InexactFloat64())).Error; err != nil {
-		return nil, fmt.Errorf("failed to update equity account balance: %v", err)
+		log.Printf("❌ [SSOT ADAPTER] Failed to update equity account %d balance: %v", equityID, err)
+		return nil, fmt.Errorf("failed to update equity account %d balance: %v", equityID, err)
 	}
+	log.Printf("✅ [SSOT ADAPTER] Equity account %d balance updated (+%.2f)", equityID, request.Amount.InexactFloat64())
 	
-	log.Printf("✅ Updated accounts.balance: Cash/Bank Account %d +%.2f, Equity Account %d +%.2f", 
-		cashBank.AccountID, request.Amount.InexactFloat64(), equityID, request.Amount.InexactFloat64())
+	log.Printf("🎉 [SSOT ADAPTER] Opening balance journal entry completed successfully: JournalID=%d, EntryNumber=%s", 
+		journal.ID, journal.EntryNumber)
 	
 	return journal, nil
 }
@@ -863,18 +895,27 @@ type JournalEntryRequest struct {
 
 // Helpers to resolve default accounts for cash/bank journals
 func findDefaultEquityAccountID(tx *gorm.DB) (uint64, error) {
+	log.Printf("🔍 [EQUITY LOOKUP] Looking for default equity account (code 3101)")
+	
 	// Try code 3101 first
-	type row struct{ ID uint64; Code string; Type string }
+	type row struct{ ID uint64; Code string; Type string; Name string }
 	var r row
-	if err := tx.Raw("SELECT id, code, type FROM accounts WHERE deleted_at IS NULL AND code = '3101' LIMIT 1").Scan(&r).Error; err == nil && r.ID > 0 {
+	if err := tx.Raw("SELECT id, code, type, name FROM accounts WHERE deleted_at IS NULL AND code = '3101' LIMIT 1").Scan(&r).Error; err == nil && r.ID > 0 {
+		log.Printf("✅ [EQUITY LOOKUP] Found equity account 3101: ID=%d, Name=%s", r.ID, r.Name)
 		return r.ID, nil
 	}
+	
+	log.Printf("⚠️ [EQUITY LOOKUP] Equity account 3101 not found, looking for any EQUITY account")
+	
 	// Fallback: any EQUITY account
 	r = row{}
-	if err := tx.Raw("SELECT id, code, type FROM accounts WHERE deleted_at IS NULL AND type = 'EQUITY' ORDER BY code LIMIT 1").Scan(&r).Error; err == nil && r.ID > 0 {
+	if err := tx.Raw("SELECT id, code, type, name FROM accounts WHERE deleted_at IS NULL AND type = 'EQUITY' ORDER BY code LIMIT 1").Scan(&r).Error; err == nil && r.ID > 0 {
+		log.Printf("✅ [EQUITY LOOKUP] Found fallback equity account: ID=%d, Code=%s, Name=%s", r.ID, r.Code, r.Name)
 		return r.ID, nil
 	}
-	return 0, fmt.Errorf("no default EQUITY account found")
+	
+	log.Printf("❌ [EQUITY LOOKUP] No equity account found in the system")
+	return 0, fmt.Errorf("no equity account found. Please create an equity account with code 3101 (Owner's Equity) in the Chart of Accounts before creating cash/bank accounts with opening balances")
 }
 
 func findDefaultExpenseAccountID(tx *gorm.DB) (uint64, error) {

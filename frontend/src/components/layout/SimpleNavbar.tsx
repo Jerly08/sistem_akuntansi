@@ -3,6 +3,7 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/SimpleThemeContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import SimpleThemeToggle from '@/components/common/SimpleThemeToggle';
 import UnifiedNotifications from '@/components/notification/UnifiedNotifications';
 import {
@@ -31,6 +32,7 @@ interface SimpleNavbarProps {
 const SimpleNavbar: React.FC<SimpleNavbarProps> = ({ onMenuClick, isMenuOpen = false }) => {
   const { user, logout } = useAuth();
   const { theme } = useTheme();
+  const { t } = useTranslation();
   const { colorMode, setColorMode } = useColorMode();
   
   // Dynamic colors based on theme
@@ -67,14 +69,14 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({ onMenuClick, isMenuOpen = f
           display={{ base: 'flex', md: 'none' }}
           onClick={onMenuClick}
           variant="outline"
-          aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+          aria-label={isMenuOpen ? t('navigation.navbar.closeMenu') : t('navigation.navbar.openMenu')}
           icon={<FiMenu />}
         />
       )}
 
       {/* Title - visible on mobile when no sidebar */}
       <Text fontSize="lg" fontWeight="semibold" color={textColor} display={{ base: onMenuClick ? 'none' : 'block', md: 'none' }}>
-        Accounting System
+        {t('navigation.navbar.systemTitle')}
       </Text>
 
       {/* Spacer for desktop */}
@@ -106,7 +108,7 @@ const SimpleNavbar: React.FC<SimpleNavbarProps> = ({ onMenuClick, isMenuOpen = f
             </MenuButton>
             <MenuList>
               <MenuItem icon={<FiLogOut />} onClick={logout}>
-                Sign out
+                {t('navigation.navbar.signOut')}
               </MenuItem>
             </MenuList>
           </Menu>

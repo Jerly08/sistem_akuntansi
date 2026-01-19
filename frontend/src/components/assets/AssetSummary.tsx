@@ -17,6 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { FiDollarSign, FiTrendingUp, FiTrendingDown, FiPackage } from 'react-icons/fi';
 import { AssetsSummary } from '@/types/asset';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface AssetSummaryProps {
   summary: AssetsSummary | null;
@@ -33,6 +34,8 @@ const formatCurrency = (amount: number) => {
 };
 
 const AssetSummaryComponent: React.FC<AssetSummaryProps> = ({ summary, isLoading }) => {
+  const { t } = useTranslation();
+  
   if (isLoading) {
     return (
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6} mb={8}>
@@ -51,7 +54,7 @@ const AssetSummaryComponent: React.FC<AssetSummaryProps> = ({ summary, isLoading
                 </Box>
                 <Box>
                   <Text fontSize="sm" color="gray.500" mb={2}>
-                    Loading...
+                    {t('common.loading')}
                   </Text>
                   <Text fontSize="2xl" fontWeight="bold" color="gray.300">
                     ---
@@ -75,32 +78,32 @@ const AssetSummaryComponent: React.FC<AssetSummaryProps> = ({ summary, isLoading
 
   const summaryCards = [
     {
-      label: 'Total Assets',
+      label: t('assets.summary.totalAssets'),
       value: summary.total_assets.toString(),
       icon: FiPackage,
       color: 'blue',
-      helpText: `${summary.active_assets} active assets`,
+      helpText: `${summary.active_assets} ${t('assets.summary.activeAssets')}`,
     },
     {
-      label: 'Total Value',
+      label: t('assets.summary.totalValue'),
       value: formatCurrency(summary.total_value),
       icon: FiDollarSign,
       color: 'green',
-      helpText: 'Original purchase value',
+      helpText: t('assets.summary.originalPurchaseValue'),
     },
     {
-      label: 'Net Book Value',
+      label: t('assets.summary.netBookValue'),
       value: formatCurrency(summary.net_book_value),
       icon: FiTrendingUp,
       color: 'purple',
-      helpText: 'Current book value',
+      helpText: t('assets.summary.currentBookValue'),
     },
     {
-      label: 'Total Depreciation',
+      label: t('assets.summary.totalDepreciation'),
       value: formatCurrency(summary.total_depreciation),
       icon: FiTrendingDown,
       color: 'red',
-      helpText: `${depreciationPercentage.toFixed(1)}% depreciated`,
+      helpText: `${depreciationPercentage.toFixed(1)}% ${t('assets.summary.depreciated')}`,
     },
   ];
 

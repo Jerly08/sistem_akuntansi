@@ -50,6 +50,7 @@ import { ssotJournalService } from '@/services/ssotJournalService';
 import { cogsService } from '@/services/cogsService';
 import { BalanceWebSocketClient } from '@/services/balanceWebSocketService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from '@/hooks/useTranslation';
 import EnhancedProfitLossModal from './EnhancedProfitLossModal';
 import { JournalDrilldownModal } from './JournalDrilldownModal';
 
@@ -87,6 +88,7 @@ interface JournalDrilldownRequest {
 
 const EnhancedPLReportPage: React.FC = () => {
   const { token } = useAuth();
+  const { t } = useTranslation();
   const toast = useToast();
   const [loading, setLoading] = useState(false);
   const [plData, setPLData] = useState<EnhancedPLData | null>(null);
@@ -226,8 +228,8 @@ const EnhancedPLReportPage: React.FC = () => {
       );
 
       toast({
-        title: 'COGS Backfill Complete',
-        description: `Successfully processed ${result.sales_processed} sales transactions. COGS entries have been created.`,
+        title: t('reports.profitLoss.page.cogsWarning.backfillComplete'),
+        description: t('reports.profitLoss.page.cogsWarning.backfillCompleteDesc', { count: result.sales_processed }),
         status: 'success',
         duration: 5000,
         isClosable: true,
@@ -240,8 +242,8 @@ const EnhancedPLReportPage: React.FC = () => {
     } catch (error) {
       console.error('Error backfilling COGS:', error);
       toast({
-        title: 'Backfill Failed',
-        description: error instanceof Error ? error.message : 'Failed to backfill COGS',
+        title: t('reports.profitLoss.page.cogsWarning.backfillFailed'),
+        description: error instanceof Error ? error.message : t('reports.profitLoss.page.cogsWarning.backfillFailed'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -254,8 +256,8 @@ const EnhancedPLReportPage: React.FC = () => {
   const generateEnhancedPL = async () => {
     if (!reportParams.start_date || !reportParams.end_date) {
       toast({
-        title: 'Missing Parameters',
-        description: 'Please provide start date and end date',
+        title: t('reports.profitLoss.page.missingParameters'),
+        description: t('reports.profitLoss.page.missingParametersDesc'),
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -288,8 +290,9 @@ const EnhancedPLReportPage: React.FC = () => {
       console.log('SSOT P&L data received:', ssotData);
 
       // Convert SSOT data to the format expected by EnhancedProfitLossModal
+      // Note: title will be translated in the modal component itself
       const formattedData: EnhancedPLData = {
-        title: ssotData.title || 'Enhanced Profit and Loss Statement',
+        title: '', // Will be translated in modal using t('reports.profitLoss.enhancedTitle')
         period: ssotData.period || `${new Date(reportParams.start_date).toLocaleDateString()} - ${new Date(reportParams.end_date).toLocaleDateString()}`,
         company: ssotData.company || { name: 'Company Name Not Set' },
         enhanced: ssotData.enhanced || true,
@@ -313,8 +316,8 @@ const EnhancedPLReportPage: React.FC = () => {
     } catch (error) {
       console.error('Error generating enhanced P&L:', error);
       toast({
-        title: 'Generation Failed',
-        description: error instanceof Error ? error.message : 'Failed to generate enhanced P&L report',
+        title: t('reports.profitLoss.page.generationFailed'),
+        description: error instanceof Error ? error.message : t('reports.profitLoss.page.generationFailedDesc'),
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -528,10 +531,10 @@ const EnhancedPLReportPage: React.FC = () => {
             </Box>
             <VStack align="start" spacing={1}>
               <Text fontSize="2xl" fontWeight="bold" color="gray.700">
-                Enhanced Profit & Loss Report
+                {t('reports.profitLoss.page.title')}
               </Text>
               <Text fontSize="md" color="gray.600">
-                Generate comprehensive P&L statements with journal entry drilldown capabilities
+                {t('reports.profitLoss.page.description')}
               </Text>
             </VStack>
           </HStack>
@@ -542,18 +545,18 @@ const EnhancedPLReportPage: React.FC = () => {
           <CardBody>
             <VStack spacing={4} align="stretch">
               <Flex justify="space-between" align="center">
-                <Text fontSize="lg" fontWeight="semibold">Report Parameters</Text>
+                <Text fontSize="lg" fontWeight="semibold">{t('reports.profitLoss.page.reportParameters')}</Text>
                 
                 {/* Real-time Updates Control */}
                 <HStack spacing={3}>
-                  <Text fontSize="sm" color="gray.600">Real-time Updates</Text>
+                  <Text fontSize="sm" color="gray.600">{t('reports.profitLoss.page.realTimeUpdates')}</Text>
                   <Switch
                     isChecked={realTimeUpdates}
                     onChange={(e) => setRealTimeUpdates(e.target.checked)}
                     colorScheme="green"
                   />
                   {isConnectedToBalanceService && (
-                    <Tooltip label="Connected to real-time balance service" fontSize="xs">
+                    <Tooltip label={t('reports.profitLoss.page.connected')} fontSize="xs">
                       <Badge
                         colorScheme="green"
                         variant="subtle"
@@ -563,13 +566,13 @@ const EnhancedPLReportPage: React.FC = () => {
                         gap={1}
                       >
                         <FiActivity size={10} />
-                        LIVE
+                        {t('reports.profitLoss.page.connected')}
                       </Badge>
                     </Tooltip>
                   )}
                   {lastUpdateTime && (
                     <Text fontSize="xs" color="gray.500">
-                      Last update: {lastUpdateTime.toLocaleTimeString()}
+                      {t('reports.profitLoss.page.lastUpdate')}: {lastUpdateTime.toLocaleTimeString()}
                     </Text>
                   )}
                 </HStack>
@@ -578,7 +581,7 @@ const EnhancedPLReportPage: React.FC = () => {
               <Grid templateColumns="repeat(2, 1fr)" gap={4}>
                 <GridItem>
                   <FormControl isRequired>
-                    <FormLabel>Start Date</FormLabel>
+                    <FormLabel>{t('reports.profitLoss.page.startDate')}</FormLabel>
                     <Input
                       type="date"
                       name="start_date"
@@ -589,7 +592,7 @@ const EnhancedPLReportPage: React.FC = () => {
                 </GridItem>
                 <GridItem>
                   <FormControl isRequired>
-                    <FormLabel>End Date</FormLabel>
+                    <FormLabel>{t('reports.profitLoss.page.endDate')}</FormLabel>
                     <Input
                       type="date"
                       name="end_date"
@@ -611,16 +614,16 @@ const EnhancedPLReportPage: React.FC = () => {
             leftIcon={<FiEye />}
             onClick={generateEnhancedPL}
             isLoading={loading}
-            loadingText="Generating..."
+            loadingText={t('reports.profitLoss.page.generating')}
           >
-            Generate Enhanced P&L
+            {t('reports.profitLoss.page.generateButton')}
           </Button>
           
           {/* Manual Refresh Button - visible when we have existing data */}
           {plData && (
-            <Tooltip label="Refresh with latest data" fontSize="xs">
+            <Tooltip label={t('reports.profitLoss.page.refreshTooltip')} fontSize="xs">
               <IconButton
-                aria-label="Refresh P&L data"
+                aria-label={t('reports.profitLoss.page.refreshTooltip')}
                 icon={<FiRefreshCw />}
                 size="lg"
                 variant="outline"
@@ -639,7 +642,7 @@ const EnhancedPLReportPage: React.FC = () => {
             onClick={() => handlePLExport('pdf')}
             isDisabled={loading}
           >
-            Export PDF
+            {t('reports.profitLoss.page.exportPDF')}
           </Button>
           <Button
             variant="outline"
@@ -648,7 +651,7 @@ const EnhancedPLReportPage: React.FC = () => {
             onClick={() => handlePLExport('excel')}
             isDisabled={loading}
           >
-            Export CSV
+            {t('reports.profitLoss.page.exportCSV')}
           </Button>
         </HStack>
 
@@ -659,7 +662,7 @@ const EnhancedPLReportPage: React.FC = () => {
               <Card>
                 <CardBody>
                   <Stat>
-                    <StatLabel>Gross Profit</StatLabel>
+                    <StatLabel>{t('reports.profitLoss.grossProfit')}</StatLabel>
                     <StatNumber color={plData.financialMetrics.grossProfit >= 0 ? 'green.600' : 'red.600'}>
                       {formatCurrency(plData.financialMetrics.grossProfit)}
                     </StatNumber>
@@ -675,7 +678,7 @@ const EnhancedPLReportPage: React.FC = () => {
               <Card>
                 <CardBody>
                   <Stat>
-                    <StatLabel>Operating Income</StatLabel>
+                    <StatLabel>{t('reports.profitLoss.operatingIncome')}</StatLabel>
                     <StatNumber color={plData.financialMetrics.operatingIncome >= 0 ? 'green.600' : 'red.600'}>
                       {formatCurrency(plData.financialMetrics.operatingIncome)}
                     </StatNumber>
@@ -691,7 +694,7 @@ const EnhancedPLReportPage: React.FC = () => {
               <Card>
                 <CardBody>
                   <Stat>
-                    <StatLabel>EBITDA</StatLabel>
+                    <StatLabel>{t('reports.profitLoss.ebitda')}</StatLabel>
                     <StatNumber color={plData.financialMetrics.ebitda >= 0 ? 'green.600' : 'red.600'}>
                       {formatCurrency(plData.financialMetrics.ebitda)}
                     </StatNumber>
@@ -707,7 +710,7 @@ const EnhancedPLReportPage: React.FC = () => {
               <Card>
                 <CardBody>
                   <Stat>
-                    <StatLabel>Net Income</StatLabel>
+                    <StatLabel>{t('reports.profitLoss.netIncome')}</StatLabel>
                     <StatNumber color={plData.financialMetrics.netIncome >= 0 ? 'green.600' : 'red.600'}>
                       {formatCurrency(plData.financialMetrics.netIncome)}
                     </StatNumber>
@@ -726,31 +729,31 @@ const EnhancedPLReportPage: React.FC = () => {
         <Card>
           <CardBody>
             <VStack spacing={4} align="stretch">
-              <Text fontSize="lg" fontWeight="semibold">Features</Text>
+              <Text fontSize="lg" fontWeight="semibold">{t('reports.profitLoss.page.features')}</Text>
               <VStack spacing={3} align="start">
                 <HStack>
-                  <Badge colorScheme="green">Enhanced</Badge>
-                  <Text fontSize="sm">Journal entry-based calculations for accurate financial metrics</Text>
+                  <Badge colorScheme="green">{t('reports.profitLoss.enhanced')}</Badge>
+                  <Text fontSize="sm">{t('reports.profitLoss.page.featureEnhanced')}</Text>
                 </HStack>
                 <HStack>
-                  <Badge colorScheme="blue">Interactive</Badge>
-                  <Text fontSize="sm">Click any line item to drill down to supporting journal entries</Text>
+                  <Badge colorScheme="blue">{t('common.interactive')}</Badge>
+                  <Text fontSize="sm">{t('reports.profitLoss.page.featureInteractive')}</Text>
                 </HStack>
                 <HStack>
-                  <Badge colorScheme="purple">Comprehensive</Badge>
-                  <Text fontSize="sm">Includes gross profit, operating income, EBITDA, and net income with margins</Text>
+                  <Badge colorScheme="purple">{t('common.comprehensive')}</Badge>
+                  <Text fontSize="sm">{t('reports.profitLoss.page.featureComprehensive')}</Text>
                 </HStack>
                 <HStack>
-                  <Badge colorScheme="orange">Export Ready</Badge>
-                  <Text fontSize="sm">Export to PDF or CSV with detailed formatting</Text>
+                  <Badge colorScheme="orange">{t('common.exportReady')}</Badge>
+                  <Text fontSize="sm">{t('reports.profitLoss.page.featureExportReady')}</Text>
                 </HStack>
                 <HStack>
-                  <Badge colorScheme="teal">Real-time</Badge>
-                  <Text fontSize="sm">Enable auto-refresh when account balances change via WebSocket</Text>
+                  <Badge colorScheme="teal">{t('common.realTime')}</Badge>
+                  <Text fontSize="sm">{t('reports.profitLoss.page.featureRealTime')}</Text>
                 </HStack>
                 <HStack>
-                  <Badge colorScheme="yellow">Live Data</Badge>
-                  <Text fontSize="sm">Get instant notifications when underlying journal entries are updated</Text>
+                  <Badge colorScheme="yellow">{t('common.liveData')}</Badge>
+                  <Text fontSize="sm">{t('reports.profitLoss.page.featureLiveData')}</Text>
                 </HStack>
               </VStack>
             </VStack>
@@ -786,7 +789,7 @@ const EnhancedPLReportPage: React.FC = () => {
           <ModalHeader>
             <HStack spacing={2}>
               <FiAlertTriangle color="orange" />
-              <Text>COGS Data Missing</Text>
+              <Text>{t('reports.profitLoss.page.cogsWarning.title')}</Text>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />
@@ -797,7 +800,7 @@ const EnhancedPLReportPage: React.FC = () => {
                   <Alert status="warning">
                     <AlertIcon />
                     <VStack align="start" spacing={1}>
-                      <AlertTitle>Cost of Goods Sold (COGS) entries are missing</AlertTitle>
+                      <AlertTitle>{t('reports.profitLoss.page.cogsWarning.description')}</AlertTitle>
                       <AlertDescription>
                         {cogsHealth.message}
                       </AlertDescription>
@@ -807,21 +810,21 @@ const EnhancedPLReportPage: React.FC = () => {
                   <Card>
                     <CardBody>
                       <VStack spacing={3} align="stretch">
-                        <Text fontWeight="semibold">COGS Status:</Text>
+                        <Text fontWeight="semibold">{t('reports.profitLoss.page.cogsWarning.status')}</Text>
                         <HStack justify="space-between">
-                          <Text fontSize="sm">Total Sales:</Text>
+                          <Text fontSize="sm">{t('reports.profitLoss.page.cogsWarning.totalSales')}</Text>
                           <Badge colorScheme="blue">{cogsHealth.total_sales}</Badge>
                         </HStack>
                         <HStack justify="space-between">
-                          <Text fontSize="sm">Sales WITH COGS:</Text>
+                          <Text fontSize="sm">{t('reports.profitLoss.page.cogsWarning.salesWithCOGS')}</Text>
                           <Badge colorScheme="green">{cogsHealth.sales_with_cogs}</Badge>
                         </HStack>
                         <HStack justify="space-between">
-                          <Text fontSize="sm">Sales WITHOUT COGS:</Text>
+                          <Text fontSize="sm">{t('reports.profitLoss.page.cogsWarning.salesWithoutCOGS')}</Text>
                           <Badge colorScheme="red">{cogsHealth.sales_without_cogs}</Badge>
                         </HStack>
                         <HStack justify="space-between">
-                          <Text fontSize="sm">Completeness:</Text>
+                          <Text fontSize="sm">{t('reports.profitLoss.page.cogsWarning.completeness')}</Text>
                           <Badge colorScheme={cogsHealth.completeness_percentage >= 95 ? 'green' : 'red'}>
                             {cogsHealth.completeness_percentage.toFixed(1)}%
                           </Badge>
@@ -833,10 +836,9 @@ const EnhancedPLReportPage: React.FC = () => {
                   <Alert status="info">
                     <AlertIcon />
                     <VStack align="start" spacing={1} fontSize="sm">
-                      <Text fontWeight="semibold">What is COGS?</Text>
+                      <Text fontWeight="semibold">{t('reports.profitLoss.page.cogsWarning.whatIsCOGS')}</Text>
                       <Text>
-                        COGS (Cost of Goods Sold) represents the direct costs of producing goods sold by a company.
-                        Without COGS entries, your P&L report will show incorrect Net Profit.
+                        {t('reports.profitLoss.page.cogsWarning.cogsExplanation')}
                       </Text>
                     </VStack>
                   </Alert>
@@ -844,7 +846,7 @@ const EnhancedPLReportPage: React.FC = () => {
                   <Divider />
 
                   <VStack spacing={2} align="stretch">
-                    <Text fontWeight="semibold" fontSize="sm">Options:</Text>
+                    <Text fontWeight="semibold" fontSize="sm">{t('reports.profitLoss.page.cogsWarning.options')}</Text>
                     <Button
                       colorScheme="green"
                       leftIcon={backfillingCOGS ? <Spinner size="sm" /> : <FiCheckCircle />}
@@ -854,12 +856,12 @@ const EnhancedPLReportPage: React.FC = () => {
                         await generateEnhancedPL();
                       }}
                       isLoading={backfillingCOGS}
-                      loadingText="Creating COGS entries..."
+                      loadingText={t('reports.profitLoss.page.cogsWarning.creatingCOGS')}
                     >
-                      Auto-Create COGS Entries (Recommended)
+                      {t('reports.profitLoss.page.cogsWarning.autoCreate')}
                     </Button>
                     <Text fontSize="xs" color="gray.600" px={2}>
-                      This will automatically create COGS journal entries for all sales without them.
+                      {t('reports.profitLoss.page.cogsWarning.autoCreateDesc')}
                     </Text>
 
                     <Divider />
@@ -878,7 +880,7 @@ const EnhancedPLReportPage: React.FC = () => {
                             format: 'json'
                           });
                           const formattedData: EnhancedPLData = {
-                            title: ssotData.title || 'Enhanced Profit and Loss Statement',
+                            title: '', // Will be translated in modal using t('reports.profitLoss.enhancedTitle')
                             period: ssotData.period || `${new Date(reportParams.start_date).toLocaleDateString()} - ${new Date(reportParams.end_date).toLocaleDateString()}`,
                             company: ssotData.company || { name: 'Company Name Not Set' },
                             enhanced: ssotData.enhanced || true,
@@ -899,8 +901,8 @@ const EnhancedPLReportPage: React.FC = () => {
                         } catch (error) {
                           console.error('Error:', error);
                           toast({
-                            title: 'Generation Failed',
-                            description: 'Failed to generate P&L report',
+                            title: t('reports.profitLoss.page.generationFailed'),
+                            description: t('reports.profitLoss.page.generationFailedDesc'),
                             status: 'error',
                             duration: 5000,
                             isClosable: true,
@@ -910,10 +912,10 @@ const EnhancedPLReportPage: React.FC = () => {
                         }
                       }}
                     >
-                      Continue Anyway (Not Recommended)
+                      {t('reports.profitLoss.page.cogsWarning.continueAnyway')}
                     </Button>
                     <Text fontSize="xs" color="gray.600" px={2}>
-                      Generate P&L without COGS. The report will show Expenses = 0 and incorrect Net Profit.
+                      {t('reports.profitLoss.page.cogsWarning.continueAnywayDesc')}
                     </Text>
                   </VStack>
                 </>
@@ -922,7 +924,7 @@ const EnhancedPLReportPage: React.FC = () => {
           </ModalBody>
           <ModalFooter>
             <Button variant="ghost" onClick={onCOGSModalClose}>
-              Cancel
+              {t('reports.profitLoss.page.cogsWarning.cancel')}
             </Button>
           </ModalFooter>
         </ModalContent>

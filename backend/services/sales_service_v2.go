@@ -357,7 +357,68 @@ func (s *SalesServiceV2) UpdateSale(saleID uint, request models.SaleUpdateReques
 	if request.CashBankID != nil {
 		sale.CashBankID = request.CashBankID
 	}
-	// Update other fields...
+	
+	// Update legacy tax fields
+	if request.PPNPercent != nil {
+		sale.PPNPercent = *request.PPNPercent
+	}
+	if request.PPhPercent != nil {
+		sale.PPhPercent = *request.PPhPercent
+	}
+	if request.PPhType != nil {
+		sale.PPhType = *request.PPhType
+	}
+	
+	// Update enhanced tax fields
+	if request.PPNRate != nil {
+		sale.PPNRate = *request.PPNRate
+		// Also sync to legacy field for backward compatibility
+		sale.PPNPercent = *request.PPNRate
+	}
+	if request.OtherTaxAdditions != nil {
+		sale.OtherTaxAdditions = *request.OtherTaxAdditions
+	}
+	if request.PPh21Rate != nil {
+		sale.PPh21Rate = *request.PPh21Rate
+	}
+	if request.PPh23Rate != nil {
+		sale.PPh23Rate = *request.PPh23Rate
+	}
+	if request.OtherTaxDeductions != nil {
+		sale.OtherTaxDeductions = *request.OtherTaxDeductions
+	}
+	
+	// Update other fields
+	if request.DiscountPercent != nil {
+		sale.DiscountPercent = *request.DiscountPercent
+	}
+	if request.PaymentTerms != nil {
+		sale.PaymentTerms = *request.PaymentTerms
+	}
+	if request.PaymentMethod != nil {
+		sale.PaymentMethod = *request.PaymentMethod
+	}
+	if request.ShippingMethod != nil {
+		sale.ShippingMethod = *request.ShippingMethod
+	}
+	if request.ShippingCost != nil {
+		sale.ShippingCost = *request.ShippingCost
+	}
+	if request.BillingAddress != nil {
+		sale.BillingAddress = *request.BillingAddress
+	}
+	if request.ShippingAddress != nil {
+		sale.ShippingAddress = *request.ShippingAddress
+	}
+	if request.Notes != nil {
+		sale.Notes = *request.Notes
+	}
+	if request.InternalNotes != nil {
+		sale.InternalNotes = *request.InternalNotes
+	}
+	if request.Reference != nil {
+		sale.Reference = *request.Reference
+	}
 
 	// Recalculate if items are updated
 	if request.Items != nil {
@@ -417,7 +478,12 @@ func (s *SalesServiceV2) UpdateSale(saleID uint, request models.SaleUpdateReques
 			item.LineTotal = lineTotal - discountAmount
 			
 			if item.Taxable {
-				item.PPNAmount = item.LineTotal * (sale.PPNPercent / 100)
+				// Use PPNRate if available, otherwise fall back to PPNPercent
+				ppnRate := sale.PPNRate
+				if ppnRate == 0 {
+					ppnRate = sale.PPNPercent
+				}
+				item.PPNAmount = item.LineTotal * (ppnRate / 100)
 				item.PPhAmount = item.LineTotal * (sale.PPhPercent / 100)
 				totalPPN += item.PPNAmount
 				totalPPH += item.PPhAmount
@@ -455,9 +521,13 @@ func (s *SalesServiceV2) UpdateSale(saleID uint, request models.SaleUpdateReques
 		// Calculate enhanced tax fields
 		if sale.PPh21Rate > 0 {
 			sale.PPh21Amount = sale.TaxableAmount * (sale.PPh21Rate / 100)
+		} else {
+			sale.PPh21Amount = 0
 		}
 		if sale.PPh23Rate > 0 {
 			sale.PPh23Amount = sale.TaxableAmount * (sale.PPh23Rate / 100)
+		} else {
+			sale.PPh23Amount = 0
 		}
 		
 		sale.PPh = totalPPH
@@ -471,6 +541,49 @@ func (s *SalesServiceV2) UpdateSale(saleID uint, request models.SaleUpdateReques
 		sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
 		
 		log.Printf("📊 [UPDATE] TotalAmount=%.2f, Outstanding=%.2f", sale.TotalAmount, sale.OutstandingAmount)
+	} else {
+		// ✅ FIX: Recalculate totals even if items didn't change (tax fields may have changed)
+		// This ensures PPh23, PPh21, and other tax fields are properly applied
+		
+		// Recalculate from existing subtotal
+		sale.DiscountAmount = sale.Subtotal * (sale.DiscountPercent / 100)
+		sale.TaxableAmount = sale.Subtotal - sale.DiscountAmount
+		sale.NetBeforeTax = sale.TaxableAmount
+		
+		// Recalculate PPN
+		if sale.PPNPercent > 0 || sale.PPNRate > 0 {
+			ppnRate := sale.PPNPercent
+			if ppnRate == 0 {
+				ppnRate = sale.PPNRate
+			}
+			sale.PPN = sale.TaxableAmount * (ppnRate / 100)
+			sale.PPNAmount = sale.PPN
+		}
+		
+		// Recalculate enhanced tax fields
+		if sale.PPh21Rate > 0 {
+			sale.PPh21Amount = sale.TaxableAmount * (sale.PPh21Rate / 100)
+		} else {
+			sale.PPh21Amount = 0
+		}
+		if sale.PPh23Rate > 0 {
+			sale.PPh23Amount = sale.TaxableAmount * (sale.PPh23Rate / 100)
+		} else {
+			sale.PPh23Amount = 0
+		}
+		
+		// Recalculate totals
+		sale.TotalTaxAdditions = sale.OtherTaxAdditions
+		sale.TotalTaxDeductions = sale.PPh + sale.PPh21Amount + sale.PPh23Amount + sale.OtherTaxDeductions
+		sale.TotalTax = sale.PPN + sale.TotalTaxAdditions - sale.TotalTaxDeductions
+		sale.Tax = sale.TotalTax
+		
+		// Calculate final TotalAmount
+		sale.TotalAmount = sale.TaxableAmount + sale.PPN + sale.OtherTaxAdditions + sale.ShippingCost - sale.TotalTaxDeductions
+		sale.OutstandingAmount = sale.TotalAmount - sale.PaidAmount
+		
+		log.Printf("📊 [UPDATE-TAX-ONLY] TaxableAmt=%.2f, PPh23=%.2f, Deductions=%.2f, TotalAmount=%.2f", 
+			sale.TaxableAmount, sale.PPh23Amount, sale.TotalTaxDeductions, sale.TotalAmount)
 	}
 
 	// Save updated sale

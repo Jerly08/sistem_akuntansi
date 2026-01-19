@@ -2598,7 +2598,7 @@ const handleCreate = async () => {
               boxShadow: 'md'
             }}
           >
-            View Journal
+            {t('purchases.viewJournal')}
           </Button>
         )}
         
@@ -2611,7 +2611,7 @@ const handleCreate = async () => {
             leftIcon={<FiTrash2 />}
             onClick={() => handleDelete(purchase.id)}
           >
-            Delete
+            {t('purchases.delete')}
           </Button>
         )}
         
@@ -2624,7 +2624,7 @@ const handleCreate = async () => {
     return (
 <SimpleLayout allowedRoles={['admin', 'finance', 'inventory_manager', 'employee', 'director']}>
         <Box>
-          <Text>Loading purchases...</Text>
+          <Text>{t('purchases.loadingPurchases')}</Text>
         </Box>
       </SimpleLayout>
     );
@@ -2661,14 +2661,14 @@ const handleCreate = async () => {
                   fontSize="md" 
                   color={textSecondary}
                 >
-                  Manage your purchase transactions and approvals
+                  {t('purchases.manageTransactions')}
                 </Text>
               </VStack>
               
               <HStack spacing={3}>
-                <Tooltip label="Refresh Data">
+                <Tooltip label={t('purchases.refreshData')}>
                   <IconButton
-                    aria-label="Refresh"
+                    aria-label={t('purchases.refresh')}
                     icon={<FiRefreshCw />}
                     variant="ghost"
                     onClick={handleRefresh}
@@ -2696,7 +2696,7 @@ const handleCreate = async () => {
                     }}
                     transition="all 0.2s ease"
                   >
-                    Export Report
+                    {t('purchases.exportReport')}
                   </MenuButton>
                   <MenuList 
                     zIndex={10001}
@@ -2707,8 +2707,8 @@ const handleCreate = async () => {
                     minW="160px"
                     maxW="240px"
                   >
-                    <MenuItem onClick={handleExportPDF} icon={<FiFileText />}>Export PDF</MenuItem>
-                    <MenuItem onClick={handleExportCSV} icon={<FiDownload />}>Export CSV</MenuItem>
+                    <MenuItem onClick={handleExportPDF} icon={<FiFileText />}>{t('purchases.exportPDF')}</MenuItem>
+                    <MenuItem onClick={handleExportCSV} icon={<FiDownload />}>{t('purchases.exportCSV')}</MenuItem>
                   </MenuList>
                 </Menu>
                 
@@ -2933,7 +2933,7 @@ const handleCreate = async () => {
                     fontWeight="medium"
                     mb={2}
                   >
-                    Total Value
+                    {t('purchases.totalValue')}
                   </StatLabel>
                   <StatNumber 
                     color={headingColor}
@@ -2977,7 +2977,7 @@ const handleCreate = async () => {
                     fontWeight="medium"
                     mb={2}
                   >
-                    Total Approved Amount
+                    {t('purchases.totalApprovedAmount')}
                   </StatLabel>
                   <StatNumber 
                     color={headingColor}
@@ -3021,7 +3021,7 @@ const handleCreate = async () => {
                     fontWeight="medium"
                     mb={2}
                   >
-                    Total Paid
+                    {t('purchases.totalPaid')}
                   </StatLabel>
                   <StatNumber 
                     color={statColors.green}
@@ -3245,7 +3245,7 @@ const handleCreate = async () => {
           <ModalOverlay />
           <ModalContent bg={modalContentBg}>
             <ModalHeader bg={modalHeaderBg} borderBottomWidth={1} borderColor={borderColor}>
-              View Purchase - {selectedPurchase?.code}
+              {t('purchases.viewPurchase')} - {selectedPurchase?.code}
             </ModalHeader>
             <ModalCloseButton />
             <ModalBody>
@@ -3257,12 +3257,12 @@ const handleCreate = async () => {
                       <AlertIcon />
                       <VStack align="start" spacing={1}>
                         <AlertTitle>
-                          {selectedPurchase.status === 'CANCELLED' ? 'Purchase Dibatalkan' : 'Purchase Ditolak'}
+                          {selectedPurchase.status === 'CANCELLED' ? t('purchases.purchaseCancelled') : t('purchases.purchaseRejected')}
                         </AlertTitle>
                         <AlertDescription>
                           {selectedPurchase.status === 'CANCELLED' 
-                            ? 'Purchase ini telah dibatalkan dan tidak dapat diproses lebih lanjut.'
-                            : 'Purchase ini ditolak pada proses approval. Lihat detail penolakan di bagian Approval History.'}
+                            ? t('purchases.purchaseCancelledDesc')
+                            : t('purchases.purchaseRejectedDesc')}
                         </AlertDescription>
                       </VStack>
                     </Alert>
@@ -3271,34 +3271,34 @@ const handleCreate = async () => {
                   {/* Basic Info */}
                   <SimpleGrid columns={2} spacing={4}>
                     <FormControl>
-                      <FormLabel>Purchase Code</FormLabel>
+                      <FormLabel>{t('purchases.purchaseCode')}</FormLabel>
                       <Text fontWeight="medium">{selectedPurchase.code}</Text>
                     </FormControl>
                     
                     <FormControl>
-                      <FormLabel>Vendor</FormLabel>
+                      <FormLabel>{t('purchases.vendor')}</FormLabel>
                       <Text fontWeight="medium">{selectedPurchase.vendor?.name || 'N/A'}</Text>
                     </FormControl>
                     
                     <FormControl>
-                      <FormLabel>Date</FormLabel>
+                      <FormLabel>{t('purchases.date')}</FormLabel>
                       <Text fontWeight="medium">{new Date(selectedPurchase.date).toLocaleDateString('id-ID')}</Text>
                     </FormControl>
                     
                     <FormControl>
-                      <FormLabel>Total Amount</FormLabel>
+                      <FormLabel>{t('purchases.totalAmount')}</FormLabel>
                       <Text fontWeight="medium" color="green.500">{formatCurrency(selectedPurchase.total_amount)}</Text>
                     </FormControl>
                     
                     <FormControl>
-                      <FormLabel>Status</FormLabel>
+                      <FormLabel>{t('purchases.status')}</FormLabel>
                       <Badge colorScheme={getStatusColor(selectedPurchase.status)} variant="subtle" w="fit-content">
                         {selectedPurchase.status.replace('_', ' ').toUpperCase()}
                       </Badge>
                     </FormControl>
                     
                     <FormControl>
-                      <FormLabel>Approval Status</FormLabel>
+                      <FormLabel>{t('purchases.approvalStatus')}</FormLabel>
                       <Badge colorScheme={getApprovalStatusColor(selectedPurchase.approval_status)} variant="subtle" w="fit-content">
                         {selectedPurchase.approval_status.replace('_', ' ').toUpperCase()}
                       </Badge>
@@ -3308,10 +3308,10 @@ const handleCreate = async () => {
                   {/* Payment Information */}
                   {selectedPurchase.payment_method && (
                     <Box>
-                      <FormLabel mb={3}>Payment Information</FormLabel>
+                      <FormLabel mb={3}>{t('purchases.paymentInformation')}</FormLabel>
                       <SimpleGrid columns={3} spacing={4}>
                         <FormControl>
-                          <FormLabel fontSize="sm">Payment Method</FormLabel>
+                          <FormLabel fontSize="sm">{t('purchases.paymentMethod')}</FormLabel>
                           <Badge 
                             colorScheme={
                               selectedPurchase.payment_method === 'CREDIT' ? 'orange' :
@@ -3328,7 +3328,7 @@ const handleCreate = async () => {
                         
                         {selectedPurchase.bank_account_id && (
                           <FormControl>
-                            <FormLabel fontSize="sm">Bank Account</FormLabel>
+                            <FormLabel fontSize="sm">{t('purchases.bankAccount')}</FormLabel>
                             <Text fontWeight="medium">
                               {(() => {
                                 // Prefer relation from backend if available
@@ -3348,7 +3348,7 @@ const handleCreate = async () => {
                         
                         {selectedPurchase.payment_reference && (
                           <FormControl>
-                            <FormLabel fontSize="sm">Payment Reference</FormLabel>
+                            <FormLabel fontSize="sm">{t('purchases.paymentReference')}</FormLabel>
                             <Text fontWeight="medium">{selectedPurchase.payment_reference}</Text>
                           </FormControl>
                         )}
@@ -3359,7 +3359,7 @@ const handleCreate = async () => {
                   {/* Notes */}
                   {selectedPurchase.notes && (
                     <FormControl>
-                      <FormLabel>Notes</FormLabel>
+                      <FormLabel>{t('purchases.notes')}</FormLabel>
                       <Text p={3} bg={notesBoxBg} borderRadius="md">{selectedPurchase.notes}</Text>
                     </FormControl>
                   )}
@@ -3459,15 +3459,15 @@ const handleCreate = async () => {
                   {/* Items */}
                   {selectedPurchase.purchase_items && selectedPurchase.purchase_items.length > 0 && (
                     <FormControl>
-                      <FormLabel>Purchase Items</FormLabel>
+                      <FormLabel>{t('purchases.purchaseItems')}</FormLabel>
                       <TableContainer>
                         <Table size="sm" bg={tableBg}>
                           <Thead bg={tableHeaderBg}>
                             <Tr>
-                              <Th>Product</Th>
-                              <Th isNumeric>Quantity</Th>
-                              <Th isNumeric>Unit Price</Th>
-                              <Th isNumeric>Total</Th>
+                              <Th>{t('purchases.product')}</Th>
+                              <Th isNumeric>{t('purchases.quantity')}</Th>
+                              <Th isNumeric>{t('purchases.unitPrice')}</Th>
+                              <Th isNumeric>{t('purchases.total')}</Th>
                             </Tr>
                           </Thead>
                           <Tbody>
@@ -3488,7 +3488,7 @@ const handleCreate = async () => {
               )}
             </ModalBody>
             <ModalFooter>
-              <Button onClick={onViewClose}>Close</Button>
+              <Button onClick={onViewClose}>{t('purchases.close')}</Button>
             </ModalFooter>
           </ModalContent>
         </Modal>

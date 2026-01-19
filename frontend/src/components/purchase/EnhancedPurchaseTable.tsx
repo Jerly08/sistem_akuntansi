@@ -39,6 +39,7 @@ import {
   FiDollarSign,
 } from 'react-icons/fi';
 import { Purchase } from '@/services/purchaseService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface PurchaseTableProps {
   purchases: Purchase[];
@@ -73,6 +74,8 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
   canDelete = false,
   userRole,
 }) => {
+  const { t } = useTranslation();
+  
   // Theme colors with improved compatibility - using Chakra theme tokens with CSS variable fallbacks
   const headingColor = useColorModeValue('gray.800', 'gray.100');
   const tableBg = useColorModeValue('white', 'gray.800');
@@ -121,11 +124,15 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
   };
 
   const getStatusLabel = (status: string) => {
-    return status.replace('_', ' ').toUpperCase();
+    const statusKey = status.toLowerCase();
+    const translationKey = `purchases.statuses.${statusKey}`;
+    return t(translationKey);
   };
 
   const getApprovalStatusLabel = (approvalStatus: string) => {
-    return (approvalStatus || '').replace('_', ' ').toUpperCase();
+    const statusKey = (approvalStatus || '').toLowerCase();
+    const translationKey = `purchases.approvalStatuses.${statusKey}`;
+    return t(translationKey);
   };
 
   return (
@@ -141,26 +148,26 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
         {loading ? (
           <Flex justify="center" align="center" py={10}>
             <Spinner size="lg" color={useColorModeValue('blue.500', 'blue.400')} />
-            <Text ml={4} color={textColor}>Loading transactions...</Text>
+            <Text ml={4} color={textColor}>{t('purchases.loadingTransactions')}</Text>
           </Flex>
         ) : purchases.length === 0 ? (
           <Box p={8} textAlign="center">
-            <Text color={textColor}>No purchase transactions found.</Text>
+            <Text color={textColor}>{t('purchases.noTransactionsFound')}</Text>
           </Box>
         ) : (
           <Box overflowX="auto">
             <Table variant="simple" size="md" className="table">
               <Thead bg={theadBg}>
                 <Tr>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">PURCHASE #</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">VENDOR</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">DATE</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">TOTAL</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">PAID AMOUNT</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">OUTSTANDING</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">STATUS</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">APPROVAL STATUS</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold" textAlign="center">ACTIONS</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('purchases.table.purchaseNumber')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('purchases.table.vendor')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('purchases.table.date')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('purchases.table.total')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('purchases.table.paidAmount')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('purchases.table.outstanding')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('purchases.table.status')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('purchases.table.approvalStatus')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold" textAlign="center">{t('purchases.table.actions')}</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -247,11 +254,11 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
                               icon={<FiEye />} 
                               onClick={() => onViewDetails(purchase)}
                             >
-                              View Details
+                              {t('purchases.viewDetails')}
                             </MenuItem>
                             {purchase.status === 'DRAFT' && canEdit && onEdit && (
                               <MenuItem icon={<FiEdit />} onClick={() => onEdit(purchase)}>
-                                Edit
+                                {t('purchases.edit')}
                               </MenuItem>
                             )}
                             {purchase.status === 'DRAFT' && userRole === 'employee' && onSubmitForApproval && (
@@ -259,7 +266,7 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
                                 icon={<FiAlertCircle />} 
                                 onClick={() => onSubmitForApproval(purchase.id)}
                               >
-                                Submit for Approval
+                                {t('purchases.submitForApproval')}
                               </MenuItem>
                             )}
                             {/* Record Payment - Show for APPROVED, COMPLETED, or PAID credit purchases with outstanding amount */}
@@ -274,7 +281,7 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
                                   onClick={() => onRecordPayment(purchase)}
                                   color="green.600"
                                 >
-                                  Record Payment
+                                  {t('purchases.recordPayment')}
                                 </MenuItem>
                               </>
                             )}
@@ -286,7 +293,7 @@ const EnhancedPurchaseTable: React.FC<PurchaseTableProps> = ({
                                   color="red.500" 
                                   onClick={() => onDelete(purchase.id)}
                                 >
-                                  Delete
+                                  {t('purchases.delete')}
                                 </MenuItem>
                               </>
                             )}

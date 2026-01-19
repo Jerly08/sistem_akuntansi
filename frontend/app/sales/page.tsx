@@ -526,7 +526,6 @@ const SalesPage: React.FC = () => {
           onCreateReceipt={handleCreateReceipt}
           formatCurrency={salesService.formatCurrency}
           formatDate={salesService.formatDate}
-          getStatusLabel={salesService.getStatusLabel}
           canEdit={canEdit}
           canDelete={canDelete}
         />
@@ -561,7 +560,7 @@ const SalesPage: React.FC = () => {
           <ModalHeader>
             <HStack>
               <FiSettings />
-              <Text>Invoice Types Management</Text>
+              <Text>{t('sales.invoiceTypes')} {t('common.management')}</Text>
             </HStack>
           </ModalHeader>
           <ModalCloseButton />

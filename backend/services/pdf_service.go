@@ -23,6 +23,178 @@ type PDFService struct {
 	db *gorm.DB
 }
 
+// PDFTranslations holds all translatable strings for PDF generation
+type PDFTranslations struct {
+	Invoice           string
+	Quotation         string
+	Receipt           string
+	BillTo            string
+	ShipTo            string
+	InvoiceNumber     string
+	QuotationNumber   string
+	ReceiptNumber     string
+	Date              string
+	DueDate           string
+	ValidUntil        string
+	SaleCode          string
+	Item              string
+	Description       string
+	Quantity          string
+	UnitPrice         string
+	Discount          string
+	Tax               string
+	Amount            string
+	Subtotal          string
+	TotalDiscount     string
+	TaxableAmount     string
+	PPN               string
+	PPh               string
+	PPh21             string
+	PPh23             string
+	OtherTaxAdditions string
+	OtherTaxDeductions string
+	TotalTax          string
+	ShippingCost      string
+	Shipping          string
+	GrandTotal        string
+	Total             string
+	PaidAmount        string
+	OutstandingAmount string
+	Notes             string
+	PaymentTerms      string
+	PaymentMethod     string
+	ThankYou          string
+	CompanyInfo       string
+	Phone             string
+	Email             string
+	TransferTo        string
+	BankName          string
+	AccountNumber     string
+	AtasNama          string
+	BankBranch        string
+	GeneratedOn       string
+	CustomerInfoNotAvailable string
+	Product           string
+	No                string
+	Qty               string
+}
+
+// getPDFTranslations returns translations based on language
+func getPDFTranslations(lang string) PDFTranslations {
+	if lang == "id" || lang == "ID" {
+		return PDFTranslations{
+			Invoice:           "FAKTUR",
+			Quotation:         "PENAWARAN",
+			Receipt:           "KWITANSI",
+			BillTo:            "Tagih Ke",
+			ShipTo:            "Kirim Ke",
+			InvoiceNumber:     "Nomor Faktur",
+			QuotationNumber:   "Nomor Penawaran",
+			ReceiptNumber:     "Nomor Kwitansi",
+			Date:              "Tanggal",
+			DueDate:           "Jatuh Tempo",
+			ValidUntil:        "Berlaku Hingga",
+			SaleCode:          "Kode Penjualan",
+			Item:              "Item",
+			Description:       "Deskripsi",
+			Quantity:          "Jumlah",
+			UnitPrice:         "Harga Satuan",
+			Discount:          "Diskon",
+			Tax:               "Pajak",
+			Amount:            "Jumlah",
+			Subtotal:          "Subtotal",
+			TotalDiscount:     "Total Diskon",
+			TaxableAmount:     "Jumlah Kena Pajak",
+			PPN:               "PPN",
+			PPh:               "PPh",
+			PPh21:             "PPh 21",
+			PPh23:             "PPh 23",
+			OtherTaxAdditions: "Pajak Tambahan Lainnya",
+			OtherTaxDeductions: "Potongan Pajak Lainnya",
+			TotalTax:          "Total Pajak",
+			ShippingCost:      "Biaya Pengiriman",
+			Shipping:          "Pengiriman",
+			GrandTotal:        "Total Keseluruhan",
+			Total:             "TOTAL",
+			PaidAmount:        "Jumlah Dibayar",
+			OutstandingAmount: "Jumlah Belum Dibayar",
+			Notes:             "Catatan",
+			PaymentTerms:      "Syarat Pembayaran",
+			PaymentMethod:     "Metode Pembayaran",
+			ThankYou:          "Terima kasih atas kepercayaan Anda!",
+			CompanyInfo:       "Informasi Perusahaan",
+			Phone:             "Telepon",
+			Email:             "Email",
+			TransferTo:        "Transfer ke",
+			BankName:          "Nama Bank",
+			AccountNumber:     "Nomor Rekening",
+			AtasNama:          "Atas Nama",
+			BankBranch:        "Cabang Bank",
+			GeneratedOn:       "Dibuat pada",
+			CustomerInfoNotAvailable: "Informasi pelanggan tidak tersedia",
+			Product:           "Produk",
+			No:                "No.",
+			Qty:               "Jml",
+		}
+	}
+	
+	// Default to English
+	return PDFTranslations{
+		Invoice:           "INVOICE",
+		Quotation:         "QUOTATION",
+		Receipt:           "RECEIPT",
+		BillTo:            "Bill To",
+		ShipTo:            "Ship To",
+		InvoiceNumber:     "Invoice Number",
+		QuotationNumber:   "Quotation Number",
+		ReceiptNumber:     "Receipt Number",
+		Date:              "Date",
+		DueDate:           "Due Date",
+		ValidUntil:        "Valid Until",
+		SaleCode:          "Sale Code",
+		Item:              "Item",
+		Description:       "Description",
+		Quantity:          "Quantity",
+		UnitPrice:         "Unit Price",
+		Discount:          "Discount",
+		Tax:               "Tax",
+		Amount:            "Amount",
+		Subtotal:          "Subtotal",
+		TotalDiscount:     "Total Discount",
+		TaxableAmount:     "Taxable Amount",
+		PPN:               "PPN",
+		PPh:               "PPh",
+		PPh21:             "PPh 21",
+		PPh23:             "PPh 23",
+		OtherTaxAdditions: "Other Tax Additions",
+		OtherTaxDeductions: "Other Tax Deductions",
+		TotalTax:          "Total Tax",
+		ShippingCost:      "Shipping Cost",
+		Shipping:          "Shipping",
+		GrandTotal:        "Grand Total",
+		Total:             "TOTAL",
+		PaidAmount:        "Paid Amount",
+		OutstandingAmount: "Outstanding Amount",
+		Notes:             "Notes",
+		PaymentTerms:      "Payment Terms",
+		PaymentMethod:     "Payment Method",
+		ThankYou:          "Thank you for your business!",
+		CompanyInfo:       "Company Information",
+		Phone:             "Phone",
+		Email:             "Email",
+		TransferTo:        "Transfer to",
+		BankName:          "Bank Name",
+		AccountNumber:     "Account Number",
+		AtasNama:          "Account Holder",
+		BankBranch:        "Bank Branch",
+		GeneratedOn:       "Generated on",
+		CustomerInfoNotAvailable: "Customer information not available",
+		Product:           "Product",
+		No:                "No.",
+		Qty:               "Qty",
+	}
+}
+
 // amountToRupiahWords converts a float amount to Indonesian words (Rupiah)
 // Example: 47687820 -> "Empat Puluh Tujuh Juta Enam Ratus Delapan Puluh Tujuh Ribu Delapan Ratus Dua Puluh Rupiah"
 func (p *PDFService) amountToRupiahWords(amount float64) string {
@@ -412,8 +584,15 @@ func detectImageType(path string) string {
 	return ""
 }
 
-// GenerateInvoicePDF generates a clean PDF for a sale invoice
+// GenerateInvoicePDF generates a clean PDF for a sale invoice with multi-language support
 func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
+	// Default to user's language from settings
+	lang := p.Language()
+	return p.GenerateInvoicePDFWithLanguage(invoice, lang)
+}
+
+// GenerateInvoicePDFWithLanguage generates a clean PDF for a sale invoice with specified language
+func (p *PDFService) GenerateInvoicePDFWithLanguage(invoice interface{}, lang string) ([]byte, error) {
 	// Extract sale from interface{}
 	var sale *models.Sale
 	switch v := invoice.(type) {
@@ -428,6 +607,9 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	if sale == nil {
 		return nil, fmt.Errorf("sale data is required")
 	}
+
+	// Get translations for the specified language
+	tr := getPDFTranslations(lang)
 
 	// Create new PDF document with clean margins
 	pdf := gofpdf.New("P", "mm", "A4", "")
@@ -500,28 +682,36 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	pdf.Cell(addressWidth, 4, companyInfo.CompanyAddress)
 
 	// Phone
-	phoneText := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
+	phoneText := fmt.Sprintf("%s: %s", tr.Phone, companyInfo.CompanyPhone)
 	phoneWidth := pdf.GetStringWidth(phoneText)
 	pdf.SetXY(companyInfoX-phoneWidth, companyInfoY+14)
 	pdf.Cell(phoneWidth, 4, phoneText)
 
 	// Email
-	emailText := fmt.Sprintf("Email: %s", companyInfo.CompanyEmail)
+	emailText := fmt.Sprintf("%s: %s", tr.Email, companyInfo.CompanyEmail)
 	emailWidth := pdf.GetStringWidth(emailText)
 	pdf.SetXY(companyInfoX-emailWidth, companyInfoY+20)
 	pdf.Cell(emailWidth, 4, emailText)
 
+	// NPWP (Tax Number) - only show if available
+	if companyInfo.TaxNumber != "" {
+		npwpText := fmt.Sprintf("NPWP: %s", companyInfo.TaxNumber)
+		npwpWidth := pdf.GetStringWidth(npwpText)
+		pdf.SetXY(companyInfoX-npwpWidth, companyInfoY+26)
+		pdf.Cell(npwpWidth, 4, npwpText)
+	}
+
 	// Add a subtle line under header
 	pdf.SetDrawColor(238, 238, 238)
 	pdf.SetLineWidth(0.2)
-	pdf.Line(lm, tm+32, pageW-rm, tm+32)
+	pdf.Line(lm, tm+36, pageW-rm, tm+36)
 
 	// === INVOICE TITLE SECTION ===
 	pdf.SetY(tm + 38) // Start below the header area
 	pdf.SetX(lm)
 	pdf.SetFont("Arial", "B", 22)
 	pdf.SetTextColor(51, 51, 51)
-	pdf.Cell(contentW, 10, "INVOICE")
+	pdf.Cell(contentW, 10, tr.Invoice)
 	pdf.SetTextColor(0, 0, 0) // Reset
 	pdf.Ln(10)
 
@@ -536,7 +726,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 
 	// Left side details
 	pdf.SetX(lm)
-	pdf.Cell(30, 5, "Invoice Number:")
+	pdf.Cell(30, 5, tr.InvoiceNumber+":")
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(102, 102, 102)
 	pdf.Cell(50, 5, invoiceNum)
@@ -546,7 +736,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	pdf.SetTextColor(0, 0, 0)
 	dateX := lm + contentW - 60
 	pdf.SetX(dateX)
-	pdf.Cell(20, 5, "Date:")
+	pdf.Cell(20, 5, tr.Date+":")
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(102, 102, 102)
 	pdf.Cell(40, 5, sale.Date.Format("02/01/2006"))
@@ -556,7 +746,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	pdf.SetFont("Arial", "B", 9)
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetX(lm)
-	pdf.Cell(30, 5, "Sale Code:")
+	pdf.Cell(30, 5, tr.SaleCode+":")
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(102, 102, 102)
 	pdf.Cell(50, 5, sale.Code)
@@ -565,7 +755,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(0, 0, 0)
 		pdf.SetX(dateX)
-		pdf.Cell(20, 5, "Due Date:")
+		pdf.Cell(20, 5, tr.DueDate+":")
 		pdf.SetFont("Arial", "", 9)
 		pdf.SetTextColor(102, 102, 102)
 		pdf.Cell(40, 5, sale.DueDate.Format("02/01/2006"))
@@ -576,7 +766,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	// === BILL TO SECTION ===
 	pdf.SetFont("Arial", "B", 10)
 	pdf.SetTextColor(51, 51, 51)
-	pdf.Cell(contentW, 6, "Bill To:")
+	pdf.Cell(contentW, 6, tr.BillTo+":")
 	pdf.Ln(6)
 
 	// Customer details dengan jarak rapat
@@ -590,11 +780,11 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 			pdf.Ln(5)
 		}
 		if sale.Customer.Phone != "" {
-			pdf.Cell(contentW, 4, fmt.Sprintf("Phone: %s", sale.Customer.Phone))
+			pdf.Cell(contentW, 4, fmt.Sprintf("%s: %s", tr.Phone, sale.Customer.Phone))
 			pdf.Ln(5)
 		}
 	} else {
-		pdf.Cell(contentW, 4, "Customer information not available")
+		pdf.Cell(contentW, 4, tr.CustomerInfoNotAvailable)
 		pdf.Ln(5)
 	}
 	pdf.SetTextColor(0, 0, 0) // Reset
@@ -616,11 +806,11 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	priceWidth := contentW * 0.17
 	totalWidth := contentW * 0.18
 
-	pdf.CellFormat(numWidth, 6, "No.", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(descWidth, 6, "Description", "1", 0, "L", true, 0, "")
-	pdf.CellFormat(qtyWidth, 6, "Qty", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(priceWidth, 6, "Unit Price", "1", 0, "R", true, 0, "")
-	pdf.CellFormat(totalWidth, 6, "Total", "1", 0, "R", true, 0, "")
+	pdf.CellFormat(numWidth, 6, tr.No, "1", 0, "C", true, 0, "")
+	pdf.CellFormat(descWidth, 6, tr.Description, "1", 0, "L", true, 0, "")
+	pdf.CellFormat(qtyWidth, 6, tr.Qty, "1", 0, "C", true, 0, "")
+	pdf.CellFormat(priceWidth, 6, tr.UnitPrice, "1", 0, "R", true, 0, "")
+	pdf.CellFormat(totalWidth, 6, tr.Total, "1", 0, "R", true, 0, "")
 	pdf.Ln(6)
 
 	// Table data with clean alternating rows
@@ -639,11 +829,11 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 			pdf.SetDrawColor(160, 160, 160)
 			pdf.SetLineWidth(0.4)
 			pdf.SetTextColor(51, 51, 51)
-			pdf.CellFormat(numWidth, 6, "No.", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(descWidth, 6, "Description", "1", 0, "L", true, 0, "")
-			pdf.CellFormat(qtyWidth, 6, "Qty", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(priceWidth, 6, "Unit Price", "1", 0, "R", true, 0, "")
-			pdf.CellFormat(totalWidth, 6, "Total", "1", 0, "R", true, 0, "")
+			pdf.CellFormat(numWidth, 6, tr.No, "1", 0, "C", true, 0, "")
+			pdf.CellFormat(descWidth, 6, tr.Description, "1", 0, "L", true, 0, "")
+			pdf.CellFormat(qtyWidth, 6, tr.Qty, "1", 0, "C", true, 0, "")
+			pdf.CellFormat(priceWidth, 6, tr.UnitPrice, "1", 0, "R", true, 0, "")
+			pdf.CellFormat(totalWidth, 6, tr.Total, "1", 0, "R", true, 0, "")
 			pdf.Ln(6)
 			pdf.SetFont("Arial", "", 8)
 			pdf.SetTextColor(102, 102, 102)
@@ -658,7 +848,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 
 		// Item data
 		itemNumber := strconv.Itoa(i + 1)
-		description := "Product"
+		description := tr.Product
 		if item.Product.ID != 0 {
 			description = item.Product.Name
 			// Truncate long descriptions
@@ -692,56 +882,175 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	pdf.SetTextColor(0, 0, 0) // Reset to black
 
 	// Calculate summary values
-	discountAmount := subtotal * sale.DiscountPercent / 100
+	discountAmount := sale.DiscountAmount
+	if discountAmount == 0 && sale.DiscountPercent > 0 {
+		discountAmount = subtotal * sale.DiscountPercent / 100
+	}
 	taxableAmount := subtotal - discountAmount
-	ppnAmount := taxableAmount * sale.PPNPercent / 100
+	
+	// Use enhanced tax fields if available, otherwise calculate from percent
+	ppnRate := sale.PPNRate
+	if ppnRate == 0 {
+		ppnRate = sale.PPNPercent
+	}
+	ppnAmount := sale.PPNAmount
+	if ppnAmount == 0 && ppnRate > 0 {
+		ppnAmount = taxableAmount * ppnRate / 100
+	}
 
 	// Summary positioned on the right with clean design
-	summaryWidth := 75.0
+	summaryWidth := 85.0
 	summaryX := contentW - summaryWidth
 	currentY := pdf.GetY()
 
 	// Subtotal
 	pdf.SetFont("Arial", "B", 9)
 	pdf.SetXY(lm+summaryX, currentY)
-	pdf.Cell(35, 6, "Subtotal:")
+	pdf.Cell(45, 6, tr.Subtotal+":")
 	pdf.SetFont("Arial", "", 9)
 	pdf.SetTextColor(102, 102, 102)
 	pdf.CellFormat(40, 6, p.formatRupiah(subtotal), "", 0, "R", false, 0, "")
-	currentY += 8
+	currentY += 7
 
-	// PPN (if applicable)
-	if sale.PPNPercent > 0 {
+	// Global Discount (only show if > 0)
+	if discountAmount > 0 {
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(0, 0, 0)
 		pdf.SetXY(lm+summaryX, currentY)
-		pdf.Cell(35, 6, fmt.Sprintf("PPN (%.1f%%):", sale.PPNPercent))
+		pdf.Cell(45, 6, fmt.Sprintf("%s (%.1f%%):", tr.Discount, sale.DiscountPercent))
 		pdf.SetFont("Arial", "", 9)
-		pdf.SetTextColor(102, 102, 102)
-		pdf.CellFormat(40, 6, p.formatRupiah(ppnAmount), "", 0, "R", false, 0, "")
-		currentY += 8
+		pdf.SetTextColor(220, 53, 69) // Red for deduction
+		pdf.CellFormat(40, 6, "- "+p.formatRupiah(discountAmount), "", 0, "R", false, 0, "")
+		currentY += 7
+	}
+
+	// PPN (only show if > 0)
+	if ppnAmount > 0 {
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(lm+summaryX, currentY)
+		pdf.Cell(45, 6, fmt.Sprintf("%s (%.1f%%):", tr.PPN, ppnRate))
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(40, 167, 69) // Green for addition
+		pdf.CellFormat(40, 6, "+ "+p.formatRupiah(ppnAmount), "", 0, "R", false, 0, "")
+		currentY += 7
+	}
+
+	// Other Tax Additions (only show if > 0)
+	if sale.OtherTaxAdditions > 0 {
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(lm+summaryX, currentY)
+		pdf.Cell(45, 6, tr.OtherTaxAdditions+":")
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(40, 167, 69) // Green for addition
+		pdf.CellFormat(40, 6, "+ "+p.formatRupiah(sale.OtherTaxAdditions), "", 0, "R", false, 0, "")
+		currentY += 7
+	}
+
+	// PPh21 (only show if > 0)
+	if sale.PPh21Amount > 0 || sale.PPh21Rate > 0 {
+		pph21Amount := sale.PPh21Amount
+		if pph21Amount == 0 && sale.PPh21Rate > 0 {
+			pph21Amount = taxableAmount * sale.PPh21Rate / 100
+		}
+		if pph21Amount > 0 {
+			pdf.SetFont("Arial", "B", 9)
+			pdf.SetTextColor(0, 0, 0)
+			pdf.SetXY(lm+summaryX, currentY)
+			pdf.Cell(45, 6, fmt.Sprintf("%s (%.1f%%):", tr.PPh21, sale.PPh21Rate))
+			pdf.SetFont("Arial", "", 9)
+			pdf.SetTextColor(220, 53, 69) // Red for deduction
+			pdf.CellFormat(40, 6, "- "+p.formatRupiah(pph21Amount), "", 0, "R", false, 0, "")
+			currentY += 7
+		}
+	}
+
+	// PPh23 (only show if > 0)
+	if sale.PPh23Amount > 0 || sale.PPh23Rate > 0 {
+		pph23Amount := sale.PPh23Amount
+		if pph23Amount == 0 && sale.PPh23Rate > 0 {
+			pph23Amount = taxableAmount * sale.PPh23Rate / 100
+		}
+		if pph23Amount > 0 {
+			pdf.SetFont("Arial", "B", 9)
+			pdf.SetTextColor(0, 0, 0)
+			pdf.SetXY(lm+summaryX, currentY)
+			pdf.Cell(45, 6, fmt.Sprintf("%s (%.1f%%):", tr.PPh23, sale.PPh23Rate))
+			pdf.SetFont("Arial", "", 9)
+			pdf.SetTextColor(220, 53, 69) // Red for deduction
+			pdf.CellFormat(40, 6, "- "+p.formatRupiah(pph23Amount), "", 0, "R", false, 0, "")
+			currentY += 7
+		}
+	}
+
+	// Other Tax Deductions (only show if > 0)
+	if sale.OtherTaxDeductions > 0 {
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(lm+summaryX, currentY)
+		pdf.Cell(45, 6, tr.OtherTaxDeductions+":")
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(220, 53, 69) // Red for deduction
+		pdf.CellFormat(40, 6, "- "+p.formatRupiah(sale.OtherTaxDeductions), "", 0, "R", false, 0, "")
+		currentY += 7
+	}
+
+	// Shipping Cost (only show if > 0)
+	if sale.ShippingCost > 0 {
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(lm+summaryX, currentY)
+		pdf.Cell(45, 6, tr.ShippingCost+":")
+		pdf.SetFont("Arial", "", 9)
+		pdf.SetTextColor(40, 167, 69) // Green for addition
+		pdf.CellFormat(40, 6, "+ "+p.formatRupiah(sale.ShippingCost), "", 0, "R", false, 0, "")
+		currentY += 7
 	}
 
 	// Draw line above total
 	pdf.SetDrawColor(221, 221, 221)
 	pdf.SetLineWidth(0.3)
-	pdf.Line(lm+summaryX, currentY+2, lm+summaryX+75, currentY+2)
+	pdf.Line(lm+summaryX, currentY+2, lm+summaryX+85, currentY+2)
 	currentY += 6
+
+	// ✅ FIX: Recalculate total in PDF to ensure PPh23 is properly deducted
+	// This fixes the issue where sale.TotalAmount in database might not be updated
+	calculatedTotal := taxableAmount + ppnAmount + sale.OtherTaxAdditions + sale.ShippingCost
+	
+	// Subtract all deductions
+	pph21Deduction := sale.PPh21Amount
+	if pph21Deduction == 0 && sale.PPh21Rate > 0 {
+		pph21Deduction = taxableAmount * sale.PPh21Rate / 100
+	}
+	pph23Deduction := sale.PPh23Amount
+	if pph23Deduction == 0 && sale.PPh23Rate > 0 {
+		pph23Deduction = taxableAmount * sale.PPh23Rate / 100
+	}
+	totalDeductions := pph21Deduction + pph23Deduction + sale.OtherTaxDeductions
+	calculatedTotal = calculatedTotal - totalDeductions
+	
+	// Use calculated total if it differs from stored total (indicates PPh23 wasn't applied)
+	finalTotal := sale.TotalAmount
+	if totalDeductions > 0 && sale.TotalAmount > calculatedTotal {
+		// Database total doesn't include deductions, use calculated
+		finalTotal = calculatedTotal
+	}
 
 	// Total with emphasis
 	pdf.SetFont("Arial", "B", 10)
 	pdf.SetTextColor(0, 0, 0)
 	pdf.SetXY(lm+summaryX, currentY)
-	pdf.Cell(35, 8, "TOTAL:")
+	pdf.Cell(45, 8, tr.Total+":")
 	pdf.SetFont("Arial", "B", 10)
-	pdf.CellFormat(40, 8, p.formatRupiah(sale.TotalAmount), "", 0, "R", false, 0, "")
+	pdf.CellFormat(40, 8, p.formatRupiah(finalTotal), "", 0, "R", false, 0, "")
 	pdf.Ln(12)
 
 	// === PAYMENT TERMS SECTION ===
 	if sale.PaymentTerms != "" {
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(51, 51, 51)
-		pdf.Cell(30, 5, "Payment Terms:")
+		pdf.Cell(30, 5, tr.PaymentTerms+":")
 		pdf.SetFont("Arial", "", 9)
 		pdf.SetTextColor(102, 102, 102)
 		pdf.Cell(100, 5, sale.PaymentTerms)
@@ -752,12 +1061,12 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	if bankInfo, _ := p.getBankInfoForSale(sale); bankInfo != nil {
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(51, 51, 51)
-		pdf.Cell(30, 5, "Transfer to:")
+		pdf.Cell(30, 5, tr.TransferTo+":")
 		pdf.Ln(6)
 		// Bank Name
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(51, 51, 51)
-		pdf.Cell(35, 5, "Bank Name:")
+		pdf.Cell(35, 5, tr.BankName+":")
 		pdf.SetFont("Arial", "", 9)
 		pdf.SetTextColor(102, 102, 102)
 		pdf.Cell(120, 5, strings.TrimSpace(bankInfo.BankName))
@@ -765,7 +1074,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 		// Account Number
 		pdf.SetFont("Arial", "B", 9)
 		pdf.SetTextColor(51, 51, 51)
-		pdf.Cell(35, 5, "Account Number:")
+		pdf.Cell(35, 5, tr.AccountNumber+":")
 		pdf.SetFont("Arial", "", 9)
 		pdf.SetTextColor(102, 102, 102)
 		pdf.Cell(120, 5, strings.TrimSpace(bankInfo.AccountNo))
@@ -774,7 +1083,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 		if strings.TrimSpace(bankInfo.AccountHolderName) != "" {
 			pdf.SetFont("Arial", "B", 9)
 			pdf.SetTextColor(51, 51, 51)
-			pdf.Cell(35, 5, "Atas Nama:")
+			pdf.Cell(35, 5, tr.AtasNama+":")
 			pdf.SetFont("Arial", "", 9)
 			pdf.SetTextColor(102, 102, 102)
 			pdf.Cell(120, 5, strings.TrimSpace(bankInfo.AccountHolderName))
@@ -784,7 +1093,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 		if strings.TrimSpace(bankInfo.Branch) != "" {
 			pdf.SetFont("Arial", "B", 9)
 			pdf.SetTextColor(51, 51, 51)
-			pdf.Cell(35, 5, "Bank Branch:")
+			pdf.Cell(35, 5, tr.BankBranch+":")
 			pdf.SetFont("Arial", "", 9)
 			pdf.SetTextColor(102, 102, 102)
 			pdf.Cell(120, 5, strings.TrimSpace(bankInfo.Branch))
@@ -797,7 +1106,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	if sale.Notes != "" {
 		pdf.Ln(5)
 		pdf.SetFont("Arial", "B", 10)
-		pdf.Cell(190, 6, "Notes:")
+		pdf.Cell(190, 6, tr.Notes+":")
 		pdf.Ln(6)
 		pdf.SetFont("Arial", "", 9)
 		pdf.MultiCell(190, 4, sale.Notes, "", "", false)
@@ -816,7 +1125,7 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	// Footer text - centered and subtle
 	pdf.SetFont("Arial", "", 8)
 	pdf.SetTextColor(153, 153, 153)
-	footerText := fmt.Sprintf("Generated on %s", time.Now().Format("02/01/2006 15:04"))
+	footerText := fmt.Sprintf("%s %s", tr.GeneratedOn, time.Now().Format("02/01/2006 15:04"))
 	footerWidth := pdf.GetStringWidth(footerText)
 	footerX := (pageW - footerWidth) / 2
 	pdf.SetX(footerX)
@@ -832,8 +1141,28 @@ func (p *PDFService) GenerateInvoicePDF(invoice interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// GenerateInvoicePDFWithType generates a PDF for a sale with customizable document type
+// GenerateInvoicePDFWithType generates a PDF for a sale with customizable document type and multi-language support
 func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType string) ([]byte, error) {
+	// Default to user's language from settings
+	lang := p.Language()
+	return p.GenerateInvoicePDFWithTypeAndLanguage(sale, documentType, lang)
+}
+
+// GenerateInvoicePDFWithTypeAndLanguage generates a PDF for a sale with customizable document type and specified language
+func (p *PDFService) GenerateInvoicePDFWithTypeAndLanguage(sale *models.Sale, documentType string, lang string) ([]byte, error) {
+	// Get translations for the specified language
+	tr := getPDFTranslations(lang)
+	
+	// Translate document type if it's a standard type
+	translatedDocType := documentType
+	switch strings.ToUpper(documentType) {
+	case "INVOICE":
+		translatedDocType = tr.Invoice
+	case "QUOTATION":
+		translatedDocType = tr.Quotation
+	case "RECEIPT":
+		translatedDocType = tr.Receipt
+	}
 	// Create new PDF document
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
@@ -876,14 +1205,14 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	pdf.Cell(addressWidth, 5, companyInfo.CompanyAddress)
 
 	// Phone line
-	phoneText := fmt.Sprintf("Phone: %s", companyInfo.CompanyPhone)
+	phoneText := fmt.Sprintf("%s: %s", tr.Phone, companyInfo.CompanyPhone)
 	phoneWidth := pdf.GetStringWidth(phoneText)
 	phoneXStart := pageW - rm - phoneWidth
 	pdf.SetXY(phoneXStart, companyYStart+11)
 	pdf.Cell(phoneWidth, 5, phoneText)
 
 	// Email line
-	emailText := fmt.Sprintf("Email: %s", companyInfo.CompanyEmail)
+	emailText := fmt.Sprintf("%s: %s", tr.Email, companyInfo.CompanyEmail)
 	emailWidth := pdf.GetStringWidth(emailText)
 	emailXStart := pageW - rm - emailWidth
 	pdf.SetXY(emailXStart, companyYStart+16)
@@ -897,7 +1226,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	// Draw title below the logo area, left-aligned
 	pdf.SetX(lm)
 	pdf.SetFont("Arial", "B", 16)
-	pdf.Cell(pageW-lm-rm, 10, strings.ToUpper(documentType))
+	pdf.Cell(pageW-lm-rm, 10, strings.ToUpper(translatedDocType))
 	pdf.Ln(10)
 
 	// Document details with flexible labeling
@@ -905,22 +1234,22 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 
 	// Show invoice number only if it exists
 	if sale.InvoiceNumber != "" {
-		pdf.Cell(95, 6, fmt.Sprintf("%s Number: %s", documentType, sale.InvoiceNumber))
+		pdf.Cell(95, 6, fmt.Sprintf("%s %s: %s", translatedDocType, tr.InvoiceNumber, sale.InvoiceNumber))
 	} else {
-		pdf.Cell(95, 6, fmt.Sprintf("Document Number: %s", sale.Code))
+		pdf.Cell(95, 6, fmt.Sprintf("%s: %s", tr.SaleCode, sale.Code))
 	}
-	pdf.Cell(95, 6, fmt.Sprintf("Date: %s", sale.Date.Format("02/01/2006")))
+	pdf.Cell(95, 6, fmt.Sprintf("%s: %s", tr.Date, sale.Date.Format("02/01/2006")))
 	pdf.Ln(6)
 
-	pdf.Cell(95, 6, fmt.Sprintf("Sale Code: %s", sale.Code))
+	pdf.Cell(95, 6, fmt.Sprintf("%s: %s", tr.SaleCode, sale.Code))
 	if !sale.DueDate.IsZero() {
-		pdf.Cell(95, 6, fmt.Sprintf("Due Date: %s", sale.DueDate.Format("02/01/2006")))
+		pdf.Cell(95, 6, fmt.Sprintf("%s: %s", tr.DueDate, sale.DueDate.Format("02/01/2006")))
 	}
 	pdf.Ln(10)
 
 	// Customer info
 	pdf.SetFont("Arial", "B", 10)
-	pdf.Cell(190, 6, "Bill To:")
+	pdf.Cell(190, 6, tr.BillTo+":")
 	pdf.Ln(6)
 	pdf.SetFont("Arial", "", 10)
 	// Customer info is always loaded, check if ID is set
@@ -932,15 +1261,15 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 			pdf.Ln(5)
 		}
 		if sale.Customer.Phone != "" {
-			pdf.Cell(190, 5, fmt.Sprintf("Phone: %s", sale.Customer.Phone))
+			pdf.Cell(190, 5, fmt.Sprintf("%s: %s", tr.Phone, sale.Customer.Phone))
 			pdf.Ln(5)
 		}
 		if sale.Customer.Email != "" {
-			pdf.Cell(190, 5, fmt.Sprintf("Email: %s", sale.Customer.Email))
+			pdf.Cell(190, 5, fmt.Sprintf("%s: %s", tr.Email, sale.Customer.Email))
 			pdf.Ln(5)
 		}
 	} else {
-		pdf.Cell(190, 5, "Customer information not available")
+		pdf.Cell(190, 5, tr.CustomerInfoNotAvailable)
 		pdf.Ln(5)
 	}
 	pdf.Ln(5)
@@ -948,11 +1277,11 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	// Items table header
 	pdf.SetFont("Arial", "B", 10)
 	pdf.SetFillColor(220, 220, 220)
-	pdf.CellFormat(15, 8, "No.", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(65, 8, "Description", "1", 0, "L", true, 0, "")
-	pdf.CellFormat(20, 8, "Qty", "1", 0, "C", true, 0, "")
-	pdf.CellFormat(45, 8, "Unit Price", "1", 0, "R", true, 0, "")
-	pdf.CellFormat(45, 8, "Total", "1", 0, "R", true, 0, "")
+	pdf.CellFormat(15, 8, tr.No, "1", 0, "C", true, 0, "")
+	pdf.CellFormat(65, 8, tr.Description, "1", 0, "L", true, 0, "")
+	pdf.CellFormat(20, 8, tr.Qty, "1", 0, "C", true, 0, "")
+	pdf.CellFormat(45, 8, tr.UnitPrice, "1", 0, "R", true, 0, "")
+	pdf.CellFormat(45, 8, tr.Total, "1", 0, "R", true, 0, "")
 	pdf.Ln(8)
 
 	// Items data
@@ -967,11 +1296,11 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 			// Re-add headers
 			pdf.SetFont("Arial", "B", 10)
 			pdf.SetFillColor(220, 220, 220)
-			pdf.CellFormat(15, 8, "#", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(65, 8, "Description", "1", 0, "L", true, 0, "")
-			pdf.CellFormat(20, 8, "Qty", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(45, 8, "Unit Price", "1", 0, "R", true, 0, "")
-			pdf.CellFormat(45, 8, "Total", "1", 0, "R", true, 0, "")
+			pdf.CellFormat(15, 8, tr.No, "1", 0, "C", true, 0, "")
+			pdf.CellFormat(65, 8, tr.Description, "1", 0, "L", true, 0, "")
+			pdf.CellFormat(20, 8, tr.Qty, "1", 0, "C", true, 0, "")
+			pdf.CellFormat(45, 8, tr.UnitPrice, "1", 0, "R", true, 0, "")
+			pdf.CellFormat(45, 8, tr.Total, "1", 0, "R", true, 0, "")
 			pdf.Ln(8)
 			pdf.SetFont("Arial", "", 9)
 			pdf.SetFillColor(255, 255, 255)
@@ -979,7 +1308,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 
 		// Item data
 		itemNumber := strconv.Itoa(i + 1)
-		description := "Product"
+		description := tr.Product
 		if item.Product.ID != 0 {
 			description = item.Product.Name
 		}
@@ -1004,7 +1333,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 
 	// Subtotal
 	pdf.Cell(120, 6, "")
-	pdf.Cell(25, 6, "Subtotal:")
+	pdf.Cell(25, 6, tr.Subtotal+":")
 	pdf.Cell(45, 6, p.formatRupiah(subtotal))
 	pdf.Ln(6)
 
@@ -1012,7 +1341,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	if sale.DiscountPercent > 0 {
 		discountAmount := subtotal * sale.DiscountPercent / 100
 		pdf.Cell(120, 6, "")
-		pdf.Cell(25, 6, fmt.Sprintf("Discount (%.1f%%):", sale.DiscountPercent))
+		pdf.Cell(25, 6, fmt.Sprintf("%s (%.1f%%):", tr.Discount, sale.DiscountPercent))
 		pdf.Cell(45, 6, "-"+p.formatRupiah(discountAmount))
 		pdf.Ln(6)
 	}
@@ -1021,7 +1350,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	if sale.PPNPercent > 0 {
 		ppnAmount := (subtotal - (subtotal * sale.DiscountPercent / 100)) * sale.PPNPercent / 100
 		pdf.Cell(120, 6, "")
-		pdf.Cell(25, 6, fmt.Sprintf("PPN (%.1f%%):", sale.PPNPercent))
+		pdf.Cell(25, 6, fmt.Sprintf("%s (%.1f%%):", tr.PPN, sale.PPNPercent))
 		pdf.Cell(45, 6, p.formatRupiah(ppnAmount))
 		pdf.Ln(6)
 	}
@@ -1029,7 +1358,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	if sale.PPhPercent > 0 {
 		pphAmount := (subtotal - (subtotal * sale.DiscountPercent / 100)) * sale.PPhPercent / 100
 		pdf.Cell(120, 6, "")
-		pdf.Cell(25, 6, fmt.Sprintf("PPh (%.1f%%):", sale.PPhPercent))
+		pdf.Cell(25, 6, fmt.Sprintf("%s (%.1f%%):", tr.PPh, sale.PPhPercent))
 		pdf.Cell(45, 6, "-"+p.formatRupiah(pphAmount))
 		pdf.Ln(6)
 	}
@@ -1037,7 +1366,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	// Shipping
 	if sale.ShippingCost > 0 {
 		pdf.Cell(120, 6, "")
-		pdf.Cell(25, 6, "Shipping:")
+		pdf.Cell(25, 6, tr.Shipping+":")
 		pdf.Cell(45, 6, p.formatRupiah(sale.ShippingCost))
 		pdf.Ln(6)
 	}
@@ -1045,37 +1374,37 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	// Total
 	pdf.SetFont("Arial", "B", 12)
 	pdf.Cell(120, 8, "")
-	pdf.Cell(25, 8, "TOTAL:")
+	pdf.Cell(25, 8, tr.Total+":")
 	pdf.Cell(45, 8, p.formatRupiah(sale.TotalAmount))
 	pdf.Ln(10)
 
 	// Payment info
 	if sale.PaymentTerms != "" {
 		pdf.SetFont("Arial", "", 10)
-		pdf.Cell(190, 5, fmt.Sprintf("Payment Terms: %s", sale.PaymentTerms))
+		pdf.Cell(190, 5, fmt.Sprintf("%s: %s", tr.PaymentTerms, sale.PaymentTerms))
 		pdf.Ln(5)
 	}
 
 	// Transfer to section (bank info)
 	if bankInfo, _ := p.getBankInfoForSale(sale); bankInfo != nil {
 		pdf.SetFont("Arial", "B", 10)
-		pdf.Cell(190, 6, "Transfer to:")
+		pdf.Cell(190, 6, tr.TransferTo+":")
 		pdf.Ln(6)
 		pdf.SetFont("Arial", "", 10)
 		// Bank Name
-		pdf.Cell(190, 5, fmt.Sprintf("Bank Name: %s", strings.TrimSpace(bankInfo.BankName)))
+		pdf.Cell(190, 5, fmt.Sprintf("%s: %s", tr.BankName, strings.TrimSpace(bankInfo.BankName)))
 		pdf.Ln(6)
 		// Account Number
-		pdf.Cell(190, 5, fmt.Sprintf("Account Number: %s", strings.TrimSpace(bankInfo.AccountNo)))
+		pdf.Cell(190, 5, fmt.Sprintf("%s: %s", tr.AccountNumber, strings.TrimSpace(bankInfo.AccountNo)))
 		pdf.Ln(6)
 		// Atas Nama
 		if strings.TrimSpace(bankInfo.AccountHolderName) != "" {
-			pdf.Cell(190, 5, fmt.Sprintf("Atas Nama: %s", strings.TrimSpace(bankInfo.AccountHolderName)))
+			pdf.Cell(190, 5, fmt.Sprintf("%s: %s", tr.AtasNama, strings.TrimSpace(bankInfo.AccountHolderName)))
 			pdf.Ln(6)
 		}
 		// Bank Branch
 		if strings.TrimSpace(bankInfo.Branch) != "" {
-			pdf.Cell(190, 5, fmt.Sprintf("Bank Branch: %s", strings.TrimSpace(bankInfo.Branch)))
+			pdf.Cell(190, 5, fmt.Sprintf("%s: %s", tr.BankBranch, strings.TrimSpace(bankInfo.Branch)))
 			pdf.Ln(6)
 		}
 	}
@@ -1084,7 +1413,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	if sale.Notes != "" {
 		pdf.Ln(5)
 		pdf.SetFont("Arial", "B", 10)
-		pdf.Cell(190, 6, "Notes:")
+		pdf.Cell(190, 6, tr.Notes+":")
 		pdf.Ln(6)
 		pdf.SetFont("Arial", "", 9)
 		pdf.MultiCell(190, 4, sale.Notes, "", "", false)
@@ -1093,7 +1422,7 @@ func (p *PDFService) GenerateInvoicePDFWithType(sale *models.Sale, documentType 
 	// Footer
 	pdf.Ln(10)
 	pdf.SetFont("Arial", "I", 8)
-	pdf.Cell(190, 4, fmt.Sprintf("Generated on %s", time.Now().Format("02/01/2006 15:04")))
+	pdf.Cell(190, 4, fmt.Sprintf("%s %s", tr.GeneratedOn, time.Now().Format("02/01/2006 15:04")))
 
 	// Output to buffer
 	var buf bytes.Buffer

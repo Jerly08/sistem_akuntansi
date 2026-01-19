@@ -338,3 +338,24 @@ func (h *CashBankHandler) ValidateIntegrity(c *gin.Context) {
 		"note":    "Implementation would use CashBankSSOTJournalAdapter.ValidateJournalIntegrity()",
 	}))
 }
+
+// GetAvailableGLAccounts handles GET /api/cash-bank/available-gl-accounts
+// Returns GL accounts that are not already linked to any cash/bank account
+// and filtered by type (CASH shows accounts with "KAS" in name, BANK shows accounts with "BANK" in name)
+func (h *CashBankHandler) GetAvailableGLAccounts(c *gin.Context) {
+	accountType := c.Query("type")
+	
+	// Validate type parameter
+	if accountType != "CASH" && accountType != "BANK" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("Invalid account type. Must be CASH or BANK", nil))
+		return
+	}
+	
+	accounts, err := h.cashBankService.GetAvailableGLAccounts(accountType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("Failed to retrieve available GL accounts", err))
+		return
+	}
+	
+	c.JSON(http.StatusOK, utils.SuccessResponse("Available GL accounts retrieved successfully", accounts))
+}

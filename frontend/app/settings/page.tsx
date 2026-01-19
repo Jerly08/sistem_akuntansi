@@ -621,7 +621,7 @@ const SettingsPage: React.FC = () => {
                       {t('settings.companyName')}
                     </FormLabel>
                     <Input
-                      value={formData?.company_name || settings?.company_name || ''}
+                      value={formData?.company_name ?? settings?.company_name ?? ''}
                       onChange={(e) => handleFormChange('company_name', e.target.value)}
                       placeholder="Enter company name"
                       variant="filled"
@@ -636,7 +636,7 @@ const SettingsPage: React.FC = () => {
                       {t('settings.address')}
                     </FormLabel>
                     <Textarea
-                      value={formData?.company_address || settings?.company_address || ''}
+                      value={formData?.company_address ?? settings?.company_address ?? ''}
                       onChange={(e) => handleFormChange('company_address', e.target.value)}
                       placeholder="Enter company address"
                       rows={3}
@@ -652,7 +652,7 @@ const SettingsPage: React.FC = () => {
                       {t('settings.phone')}
                     </FormLabel>
                     <Input
-                      value={formData?.company_phone || settings?.company_phone || ''}
+                      value={formData?.company_phone ?? settings?.company_phone ?? ''}
                       onChange={(e) => handleFormChange('company_phone', e.target.value)}
                       placeholder="Enter phone number"
                       type="tel"
@@ -668,7 +668,7 @@ const SettingsPage: React.FC = () => {
                       {t('settings.email')}
                     </FormLabel>
                     <Input
-                      value={formData?.company_email || settings?.company_email || ''}
+                      value={formData?.company_email ?? settings?.company_email ?? ''}
                       onChange={(e) => handleFormChange('company_email', e.target.value)}
                       placeholder="Enter email address"
                       type="email"
@@ -684,7 +684,7 @@ const SettingsPage: React.FC = () => {
                       {t('settings.taxNumber')}
                     </FormLabel>
                     <Input
-                      value={formData?.tax_number || settings?.tax_number || ''}
+                      value={formData?.tax_number ?? settings?.tax_number ?? ''}
                       onChange={(e) => handleFormChange('tax_number', e.target.value)}
                       placeholder="Enter tax number (optional)"
                       variant="filled"

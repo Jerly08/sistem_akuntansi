@@ -14,6 +14,7 @@ import {
   HStack
 } from '@chakra-ui/react';
 import { formatDateWithIndonesianMonth } from '../../utils/dataFormatters';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface SalesFormProps {
   formData: any;
@@ -21,6 +22,7 @@ interface SalesFormProps {
 }
 
 export const EnhancedSalesForm: React.FC<SalesFormProps> = ({ formData, setFormData }) => {
+  const { t } = useTranslation();
   const [calculatedDueDate, setCalculatedDueDate] = useState<string>('');
   const [paymentTermsExplanation, setPaymentTermsExplanation] = useState<string>('');
 
@@ -134,7 +136,7 @@ export const EnhancedSalesForm: React.FC<SalesFormProps> = ({ formData, setFormD
       <Alert status="info" size="sm">
         <AlertIcon />
         <Text fontSize="sm">
-          📅 Tanggal ditampilkan dalam format Indonesia dengan nama bulan (DD Bulan YYYY)
+          📅 {t('sales.messages.dateFormatInfo')}
         </Text>
       </Alert>
 
@@ -142,7 +144,7 @@ export const EnhancedSalesForm: React.FC<SalesFormProps> = ({ formData, setFormD
         {/* Invoice Date */}
         <FormControl isRequired>
           <FormLabel>
-            Tanggal Invoice <Text as="span" color="red.500">*</Text>
+            {t('sales.form.invoiceDate')} <Text as="span" color="red.500">*</Text>
           </FormLabel>
           <Input
             type="date"
@@ -151,7 +153,7 @@ export const EnhancedSalesForm: React.FC<SalesFormProps> = ({ formData, setFormD
             bg="white"
           />
           <FormHelperText>
-            Kapan transaksi ini terjadi
+            {t('sales.tooltips.date')}
             {formData.date && (
               <Text as="span" fontWeight="medium" color="blue.600">
                 {' → '}{formatDateForDisplay(formData.date)}
@@ -162,18 +164,18 @@ export const EnhancedSalesForm: React.FC<SalesFormProps> = ({ formData, setFormD
 
         {/* Payment Terms */}
         <FormControl>
-          <FormLabel>Syarat Pembayaran</FormLabel>
+          <FormLabel>{t('sales.form.paymentTerms')}</FormLabel>
           <Select
             value={formData.payment_terms || 'NET30'}
             onChange={(e) => handlePaymentTermsChange(e.target.value)}
             bg="white"
           >
-            <option value="COD">COD - Cash on Delivery</option>
-            <option value="NET15">NET 15 - 15 Hari</option>
-            <option value="NET30">NET 30 - 30 Hari</option>
-            <option value="NET45">NET 45 - 45 Hari</option>
-            <option value="NET60">NET 60 - 60 Hari</option>
-            <option value="NET90">NET 90 - 90 Hari</option>
+            <option value="COD">{t('sales.form.paymentTermsOptions.cod')}</option>
+            <option value="NET15">{t('sales.form.paymentTermsOptions.net15')}</option>
+            <option value="NET30">{t('sales.form.paymentTermsOptions.net30')}</option>
+            <option value="NET45">{t('sales.form.paymentTermsOptions.net45')}</option>
+            <option value="NET60">{t('sales.form.paymentTermsOptions.net60')}</option>
+            <option value="NET90">{t('sales.form.paymentTermsOptions.net90')}</option>
           </Select>
           {paymentTermsExplanation && (
             <FormHelperText color="blue.600" fontWeight="medium">
@@ -186,8 +188,8 @@ export const EnhancedSalesForm: React.FC<SalesFormProps> = ({ formData, setFormD
       {/* Due Date - Auto calculated */}
       <FormControl>
         <FormLabel>
-          Tanggal Jatuh Tempo 
-          <Badge ml={2} colorScheme="green" size="sm">Auto-calculated</Badge>
+          {t('sales.dueDate')} 
+          <Badge ml={2} colorScheme="green" size="sm">{t('sales.form.autoCalculated')}</Badge>
         </FormLabel>
         <Input
           type="date"
@@ -197,7 +199,7 @@ export const EnhancedSalesForm: React.FC<SalesFormProps> = ({ formData, setFormD
           cursor="not-allowed"
         />
         <FormHelperText color="green.600">
-          Otomatis dihitung dari tanggal invoice + syarat pembayaran
+          {t('sales.form.dueDateAutoCalculated')}
           {calculatedDueDate && (
             <Text as="span" fontWeight="bold">
               {' → '}{formatDateForDisplay(calculatedDueDate)}
@@ -211,11 +213,11 @@ export const EnhancedSalesForm: React.FC<SalesFormProps> = ({ formData, setFormD
         <Alert status="success" size="sm">
           <AlertIcon />
           <Box>
-            <Text fontWeight="medium">Konfirmasi Perhitungan:</Text>
+            <Text fontWeight="medium">{t('sales.messages.confirmCalculation')}:</Text>
             <Text fontSize="sm">
-              Invoice: <strong>{formatDateForDisplay(formData.date)}</strong> + 
-              Payment Terms: <strong>{formData.payment_terms}</strong> = 
-              Due Date: <strong>{formatDateForDisplay(calculatedDueDate)}</strong>
+              {t('sales.invoice')}: <strong>{formatDateForDisplay(formData.date)}</strong> + 
+              {t('sales.form.paymentTerms')}: <strong>{formData.payment_terms}</strong> = 
+              {t('sales.dueDate')}: <strong>{formatDateForDisplay(calculatedDueDate)}</strong>
             </Text>
           </Box>
         </Alert>

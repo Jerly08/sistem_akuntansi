@@ -86,5 +86,8 @@ cashBankGroup.GET("/revenue-accounts", permMiddleware.CanView("cash_bank"), func
 			ssot.GET("/journals", permMiddleware.CanView("reports"), cashBankHandler.GetSSOTJournalEntries)
 			ssot.POST("/validate-integrity", permMiddleware.CanView("reports"), cashBankHandler.ValidateIntegrity)
 		}
+		
+		// Available GL Accounts for Cash/Bank creation (filtered by type and not already linked)
+		cashBankGroup.GET("/available-gl-accounts", permMiddleware.CanView("cash_bank"), cashBankHandler.GetAvailableGLAccounts)
 	}
 }

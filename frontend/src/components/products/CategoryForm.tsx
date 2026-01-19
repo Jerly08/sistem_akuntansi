@@ -17,6 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { FiSave, FiX } from 'react-icons/fi';
 import ProductService, { Category } from '@/services/productService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface CategoryFormProps {
   category?: Category;
@@ -25,6 +26,7 @@ interface CategoryFormProps {
 }
 
 const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState<Partial<Category>>({
     code: '',
     name: '',
@@ -50,7 +52,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSave, onCancel 
       setCategories(data.data);
     } catch (error) {
       toast({
-        title: 'Failed to fetch categories',
+        title: t('products.category.messages.fetchFailed'),
         status: 'error',
         isClosable: true,
       });
@@ -77,7 +79,7 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSave, onCancel 
       }
       
       toast({
-        title: `Category ${category?.id ? 'updated' : 'created'} successfully`,
+        title: category?.id ? t('products.category.messages.updateSuccess') : t('products.category.messages.createSuccess'),
         status: 'success',
         isClosable: true,
       });
@@ -85,8 +87,8 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSave, onCancel 
       onSave(result.data);
     } catch (error: any) {
       toast({
-        title: `Failed to ${category?.id ? 'update' : 'create'} category`,
-        description: error.response?.data?.error || 'An error occurred',
+        title: category?.id ? t('products.category.messages.updateFailed') : t('products.category.messages.createFailed'),
+        description: error.response?.data?.error || t('messages.toast.unknownErrorDesc'),
         status: 'error',
         isClosable: true,
       });
@@ -106,35 +108,35 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSave, onCancel 
       <VStack spacing={6} align="stretch">
         {/* Basic Information */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Informasi Dasar</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.form.basicInfo')}</Text>
           <Grid templateColumns="repeat(2, 1fr)" gap={4}>
             <GridItem>
               <FormControl isRequired>
-                <FormLabel>Kode Kategori</FormLabel>
+                <FormLabel>{t('products.category.categoryCode')}</FormLabel>
                 <Input
                   value={formData.code}
                   onChange={(e) => handleInputChange('code', e.target.value)}
-                  placeholder="Masukkan kode kategori (contoh: ELEC001)"
+                  placeholder={t('products.category.enterCategoryCode')}
                 />
               </FormControl>
             </GridItem>
             <GridItem>
               <FormControl isRequired>
-                <FormLabel>Nama Kategori</FormLabel>
+                <FormLabel>{t('products.category.categoryName')}</FormLabel>
                 <Input
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  placeholder="Masukkan nama kategori"
+                  placeholder={t('products.category.enterCategoryName')}
                 />
               </FormControl>
             </GridItem>
             <GridItem colSpan={2}>
               <FormControl>
-                <FormLabel>Deskripsi</FormLabel>
+                <FormLabel>{t('products.description')}</FormLabel>
                 <Textarea
                   value={formData.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="Masukkan deskripsi kategori"
+                  placeholder={t('products.category.enterDescription')}
                   rows={3}
                 />
               </FormControl>
@@ -144,13 +146,13 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSave, onCancel 
 
         {/* Hierarchy */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Hierarki</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.category.hierarchy')}</Text>
           <FormControl>
-            <FormLabel>Kategori Induk</FormLabel>
+            <FormLabel>{t('products.category.parentCategory')}</FormLabel>
             <Select
               value={formData.parent_id || ''}
               onChange={(e) => handleInputChange('parent_id', e.target.value ? Number(e.target.value) : undefined)}
-              placeholder="Pilih kategori induk (kosongkan untuk kategori utama)"
+              placeholder={t('products.category.selectParentCategory')}
             >
               {availableParentCategories.map(cat => (
                 <option key={cat.id} value={cat.id}>
@@ -163,10 +165,10 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSave, onCancel 
 
         {/* Settings */}
         <Box>
-          <Text fontSize="lg" fontWeight="bold" mb={4}>Pengaturan</Text>
+          <Text fontSize="lg" fontWeight="bold" mb={4}>{t('products.form.settings')}</Text>
           <FormControl display="flex" alignItems="center">
             <FormLabel htmlFor="is_active" mb="0">
-              Status Aktif
+              {t('products.category.activeStatus')}
             </FormLabel>
             <Switch
               id="is_active"
@@ -183,16 +185,16 @@ const CategoryForm: React.FC<CategoryFormProps> = ({ category, onSave, onCancel 
             onClick={onCancel}
             variant="outline"
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             leftIcon={<FiSave />}
             type="submit"
             colorScheme="blue"
             isLoading={isLoading}
-            loadingText={category?.id ? 'Updating...' : 'Creating...'}
+            loadingText={category?.id ? t('common.updating') : t('common.creating')}
           >
-            {category?.id ? 'Update Category' : 'Create Category'}
+            {category?.id ? t('products.category.updateCategory') : t('products.category.createCategory')}
           </Button>
         </HStack>
       </VStack>

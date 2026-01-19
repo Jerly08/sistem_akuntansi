@@ -50,7 +50,7 @@ const getMenuGroups = (t) => [
     ]
   },
   {
-    title: 'Master Data',
+    title: t('navigation.sidebar.masterData'),
     items: [
       { name: t('navigation.accounts'), icon: FiFileText, href: '/accounts', module: 'accounts', permission: 'view', roles: ['ADMIN', 'FINANCE'] },
       { name: t('navigation.products'), icon: FiLayers, href: '/products', module: 'products', permission: 'view', roles: ['ADMIN', 'INVENTORY_MANAGER', 'EMPLOYEE', 'DIRECTOR'] },
@@ -59,7 +59,7 @@ const getMenuGroups = (t) => [
     ]
   },
   {
-    title: 'Financial',
+    title: t('navigation.sidebar.financial'),
     items: [
       { name: t('navigation.sales'), icon: FiDollarSign, href: '/sales', module: 'sales', permission: 'view', roles: ['ADMIN', 'FINANCE', 'DIRECTOR', 'EMPLOYEE'] },
       { name: t('navigation.purchases'), icon: FiShoppingCart, href: '/purchases', module: 'purchases', permission: 'view', roles: ['ADMIN', 'FINANCE', 'INVENTORY_MANAGER', 'EMPLOYEE', 'DIRECTOR'] },
@@ -74,7 +74,7 @@ const getMenuGroups = (t) => [
     ]
   },
   {
-    title: 'System',
+    title: t('navigation.sidebar.system'),
     items: [
       { name: t('navigation.users'), icon: FiUser, href: '/users', module: null, permission: null, roles: ['ADMIN'] },
       { name: t('navigation.settings'), icon: FiSettings, href: '/settings', module: null, permission: null, roles: ['ADMIN'] },
@@ -139,13 +139,14 @@ export default function Sidebar({ isOpen, onClose, display, width, collapsed, on
             color='var(--accent-color)'
             letterSpacing="tight"
           >
-            Accounting App
+            {t('navigation.sidebar.appTitle')}
           </Text>
           <CloseButton 
             display={{ base: 'flex', md: 'none' }} 
             onClick={onClose} 
             color={useColorModeValue('gray.600', 'var(--text-secondary)')}
             _hover={{ bg: useColorModeValue('gray.100', 'var(--bg-tertiary)') }}
+            aria-label={t('navigation.navbar.closeMenu')}
           />
         </Flex>
         

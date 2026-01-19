@@ -45,6 +45,7 @@ import {
 } from '@chakra-ui/react';
 import { formatCurrency } from '../../utils/formatters';
 import { SSOTPurchaseReportData, VendorPurchaseSummary, PurchaseItemDetail } from '../../services/ssotPurchaseReportService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface PurchaseReportModalProps {
   isOpen: boolean;
@@ -71,6 +72,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
   onFetch,
   onExport
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'summary'>('summary');
   const toast = useToast();
   
@@ -106,8 +108,8 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
       }
       
       toast({
-        title: 'Export Feature',
-        description: `${format.toUpperCase()} export will be implemented soon`,
+        title: t('reports.modal.exportFeature'),
+        description: t('reports.modal.exportComingSoon', { format: format.toUpperCase() }),
         status: 'info',
         duration: 3000,
         isClosable: true,
@@ -133,13 +135,13 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
           <Card size="sm">
             <CardBody>
               <Stat>
-                <StatLabel>Total Purchase Amount</StatLabel>
+                <StatLabel>{t('reports.modal.totalPurchases')}</StatLabel>
                 <StatNumber color="green.600">
                   {formatCurrency(data.total_amount || 0)}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  Purchases for the period
+                  {t('reports.modal.purchasesForPeriod')}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -150,13 +152,13 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
           <Card size="sm">
             <CardBody>
               <Stat>
-                <StatLabel>Total Vendors</StatLabel>
+                <StatLabel>{t('reports.modal.totalVendors')}</StatLabel>
                 <StatNumber color="blue.600">
                   {totalVendors}
                 </StatNumber>
                 <StatHelpText>
                   <Icon as={FiUsers} />
-                  Active vendors
+                  {t('reports.modal.activeVendors')}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -168,13 +170,13 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
             <Card size="sm">
               <CardBody>
                 <Stat>
-                  <StatLabel>Total Purchases</StatLabel>
+                  <StatLabel>{t('reports.modal.totalOrders')}</StatLabel>
                   <StatNumber color="purple.600">
                     {totalOrders}
                   </StatNumber>
                   <StatHelpText>
                     <Icon as={FiShoppingCart} />
-                    Purchase orders
+                    {t('reports.modal.ordersProcessed')}
                   </StatHelpText>
                 </Stat>
               </CardBody>
@@ -187,13 +189,13 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
             <Card size="sm">
               <CardBody>
                 <Stat>
-                  <StatLabel>Average Purchase Value</StatLabel>
+                  <StatLabel>{t('reports.modal.averageOrderValue')}</StatLabel>
                   <StatNumber color="orange.600">
                     {formatCurrency(averageOrderValue)}
                   </StatNumber>
                   <StatHelpText>
                     <Icon as={FiTrendingUp} />
-                    Per order average
+                    {t('reports.modal.perOrderAverage')}
                   </StatHelpText>
                 </Stat>
               </CardBody>
@@ -213,10 +215,10 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
             <Icon as={FiShoppingCart} color="orange.500" />
             <VStack align="start" spacing={0}>
               <Text fontSize="lg" fontWeight="bold">
-                Purchase Report (SSOT)
+                {t('reports.modal.purchaseReportTitle')}
               </Text>
               <Text fontSize="sm" color={previewPeriodTextColor}>
-                {startDate} - {endDate} | SSOT Journal Integration
+                {startDate} - {endDate} | {t('reports.modal.ssotJournalIntegration')}
               </Text>
             </VStack>
           </HStack>
@@ -228,7 +230,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
           <Box mb={4}>
             <HStack spacing={4} mb={4} flexWrap="wrap">
               <FormControl>
-                <FormLabel>Start Date</FormLabel>
+                <FormLabel>{t('reports.modal.startDate')}</FormLabel>
                 <Input 
                   type="date" 
                   value={startDate} 
@@ -236,7 +238,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>End Date</FormLabel>
+                <FormLabel>{t('reports.modal.endDate')}</FormLabel>
                 <Input 
                   type="date" 
                   value={endDate} 
@@ -252,7 +254,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                 mt={8}
                 whiteSpace="nowrap"
               >
-                Generate Report
+                {t('reports.modal.generateReport')}
               </Button>
             </HStack>
           </Box>
@@ -263,10 +265,10 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                 <Spinner size="xl" thickness="4px" speed="0.65s" color="orange.500" />
                 <VStack spacing={2}>
                   <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                    Generating Purchase Report
+                    {t('reports.modal.generatingPurchaseReport')}
                   </Text>
                   <Text fontSize="sm" color={secondaryTextColor}>
-                    Analyzing purchase transactions from SSOT journal system...
+                    {t('reports.modal.analyzingPurchaseTransactions')}
                   </Text>
                 </VStack>
               </VStack>
@@ -283,7 +285,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                 variant="outline"
                 onClick={onFetch}
               >
-                Retry
+                {t('reports.modal.retry')}
               </Button>
             </Box>
           )}
@@ -311,10 +313,10 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                     </VStack>
                     <VStack align="end" spacing={1}>
                       <Text fontSize="sm" color="orange.600">
-                        Currency: {data.currency || 'IDR'}
+                        {t('reports.modal.currency')}: {data.currency || 'IDR'}
                       </Text>
                       <Text fontSize="xs" color="orange.500">
-                        Generated: {data.generated_at ? new Date(data.generated_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')}
+                        {t('reports.modal.generated')}: {data.generated_at ? new Date(data.generated_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')}
                       </Text>
                     </VStack>
                   </HStack>
@@ -324,13 +326,13 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
               {/* Report Header */}
               <Box textAlign="center" bg={sectionBg} p={4} borderRadius="md">
                 <Heading size="md" color={textColor}>
-                  Purchase Report
+                  {t('reports.purchaseReport')}
                 </Heading>
                 <Text fontSize="sm" color={secondaryTextColor}>
-                  Period: {startDate} - {endDate}
+                  {t('reports.modal.period')}: {startDate} - {endDate}
                 </Text>
                 <Text fontSize="xs" color={secondaryTextColor} mt={1}>
-                  Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
+                  {t('reports.modal.generated')}: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
                 </Text>
               </Box>
 
@@ -341,7 +343,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                 <CardBody>
                   <Flex justify="space-between" align="center" mb={3}>
                     <Heading size="md" color={textColor}>
-                      Purchase Performance
+                      {t('reports.modal.purchasePerformance')}
                     </Heading>
                     <Text fontWeight="bold" fontSize="lg" color="green.600">
                       {formatCurrency(data.total_amount || 0)}
@@ -350,16 +352,16 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                   
                   <SimpleGrid columns={[1, 3]} spacing={4}>
                     <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                      <Text fontSize="sm" color={secondaryTextColor}>Period</Text>
+                      <Text fontSize="sm" color={secondaryTextColor}>{t('reports.modal.period')}</Text>
                       <Text fontWeight="medium">{startDate} to {endDate}</Text>
                     </Box>
                     <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                      <Text fontSize="sm" color={secondaryTextColor}>Report Type</Text>
-                      <Text fontWeight="medium">SSOT Integration</Text>
+                      <Text fontSize="sm" color={secondaryTextColor}>{t('reports.modal.reportType')}</Text>
+                      <Text fontWeight="medium">{t('reports.modal.ssotIntegration')}</Text>
                     </Box>
                     <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                      <Text fontSize="sm" color={secondaryTextColor}>Status</Text>
-                      <Badge colorScheme="green">Active</Badge>
+                      <Text fontSize="sm" color={secondaryTextColor}>{t('reports.modal.status')}</Text>
+                      <Badge colorScheme="green">{t('reports.modal.active')}</Badge>
                     </Box>
                   </SimpleGrid>
                 </CardBody>
@@ -369,7 +371,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
               {data.purchases_by_vendor && data.purchases_by_vendor.length > 0 && (
                 <Box>
                   <Heading size="sm" mb={4} color={textColor}>
-                    Top Performing Vendors ({Math.min(data.purchases_by_vendor.length, 6)} vendors)
+                    {t('reports.modal.topPerformingVendors')} ({Math.min(data.purchases_by_vendor.length, 6)} {t('reports.modal.vendors')})
                   </Heading>
                   <SimpleGrid columns={[1, 2, 3]} spacing={4}>
                     {[...data.purchases_by_vendor]
@@ -388,11 +390,11 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                               {formatCurrency(vendor.total_amount)}
                             </Text>
                             <Text fontSize="sm" color="gray.600">
-                              {((vendor.total_amount / (data.total_amount || 1)) * 100).toFixed(1)}% of total
+                              {((vendor.total_amount / (data.total_amount || 1)) * 100).toFixed(1)}% {t('reports.modal.ofTotal')}
                             </Text>
                             {vendor.total_purchases && (
                               <Text fontSize="xs" color="purple.600">
-                                {vendor.total_purchases} purchases
+                                {vendor.total_purchases} {t('reports.modal.orders')}
                               </Text>
                             )}
                           </VStack>
@@ -406,15 +408,15 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
               {data.purchases_by_vendor && data.purchases_by_vendor.length > 0 && (
                 <Box>
                   <Heading size="sm" mb={4} color={textColor}>
-                    Purchases by Vendor ({data.purchases_by_vendor.length} vendors)
+                    {t('reports.modal.purchasesByVendor')} ({data.purchases_by_vendor.length} {t('reports.modal.vendors')})
                   </Heading>
                   
                   {/* Vendor Table Header */}
                   <Box bg="orange.50" p={3} borderRadius="md" mb={2} border="1px solid" borderColor="orange.200">
                     <SimpleGrid columns={[1, 3]} spacing={2} fontSize="sm" fontWeight="bold" color="orange.800">
-                      <Text>Vendor</Text>
-                      <Text textAlign="right">Total Amount</Text>
-                      <Text textAlign="right">Purchases</Text>
+                      <Text>{t('reports.modal.vendor')}</Text>
+                      <Text textAlign="right">{t('reports.csv.totalAmount')}</Text>
+                      <Text textAlign="right">{t('reports.modal.totalPurchases')}</Text>
                     </SimpleGrid>
                   </Box>
                   
@@ -445,7 +447,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
               {data.purchases_by_vendor && data.purchases_by_vendor.some(v => v.items && v.items.length > 0) && (
                 <Box>
                   <Heading size="sm" mb={4} color={textColor}>
-                    Items Purchased
+                    {t('reports.modal.itemsSales')}
                   </Heading>
                   
                   <VStack spacing={4} align="stretch">
@@ -459,7 +461,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                                 {vendor.vendor_name}
                               </Heading>
                               <Badge colorScheme="orange">
-                                {vendor.items?.length || 0} items
+                                {vendor.items?.length || 0} {t('reports.modal.items')}
                               </Badge>
                             </HStack>
                           </CardHeader>
@@ -467,11 +469,11 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                             {/* Items Table Header */}
                             <Box bg="gray.50" p={2} borderRadius="md" mb={2}>
                               <SimpleGrid columns={[1, 5]} spacing={2} fontSize="xs" fontWeight="bold" color="gray.700">
-                                <Text>Product</Text>
-                                <Text textAlign="right">Qty</Text>
-                                <Text textAlign="right">Unit Price</Text>
-                                <Text textAlign="right">Total</Text>
-                                <Text textAlign="center">Date</Text>
+                                <Text>{t('reports.modal.product')}</Text>
+                                <Text textAlign="right">{t('reports.modal.qty')}</Text>
+                                <Text textAlign="right">{t('reports.modal.unitPrice')}</Text>
+                                <Text textAlign="right">{t('reports.modal.total')}</Text>
+                                <Text textAlign="center">{t('reports.modal.date')}</Text>
                               </SimpleGrid>
                             </Box>
                             
@@ -515,7 +517,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                             <Box mt={3} pt={3} borderTop="2px solid" borderColor="orange.200">
                               <Flex justify="space-between" align="center">
                                 <Text fontWeight="bold" color="gray.700">
-                                  Subtotal ({vendor.vendor_name})
+                                  {t('reports.modal.subtotal')} ({vendor.vendor_name})
                                 </Text>
                                 <Text fontWeight="bold" fontSize="lg" color="orange.600">
                                   {formatCurrency(vendor.total_amount)}
@@ -544,7 +546,7 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                   leftIcon={<FiFilePlus />}
                   onClick={() => handleExport('pdf')}
                 >
-                  Export PDF
+                  {t('reports.modal.exportPDF')}
                 </Button>
                 <Button
                   colorScheme="green"
@@ -553,13 +555,13 @@ const PurchaseReportModal: React.FC<PurchaseReportModalProps> = ({
                   leftIcon={<FiFileText />}
                   onClick={() => handleExport('excel')}
                 >
-                  Export CSV
+                  {t('reports.modal.exportCSV')}
                 </Button>
               </>
             )}
           </HStack>
           <Button variant="ghost" onClick={onClose}>
-            Close
+            {t('reports.modal.close')}
           </Button>
         </ModalFooter>
       </ModalContent>

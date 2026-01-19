@@ -514,79 +514,78 @@ const AccountsPage = () => {
                 <PopoverArrow />
                 <PopoverCloseButton />
                 <PopoverHeader fontWeight="bold" fontSize="lg">
-                  📚 Panduan Chart of Accounts (COA)
+                  📚 {t('accounts.guide.title')}
                 </PopoverHeader>
                 <PopoverBody>
                   <VStack align="stretch" spacing={3}>
                     <Box>
-                      <Text fontWeight="semibold" color="blue.600" mb={2}>🏷️ Struktur Kode Akun:</Text>
+                      <Text fontWeight="semibold" color="blue.600" mb={2}>🏷️ {t('accounts.guide.codeStructure')}</Text>
                       <UnorderedList spacing={1} fontSize="sm">
-                        <ListItem><Code>1xxx</Code> - ASSETS (Aset)</ListItem>
-                        <ListItem><Code>2xxx</Code> - LIABILITIES (Kewajiban)</ListItem>
-                        <ListItem><Code>3xxx</Code> - EQUITY (Ekuitas/Modal)</ListItem>
-                        <ListItem><Code>4xxx</Code> - REVENUE (Pendapatan)</ListItem>
-                        <ListItem><Code>5xxx</Code> - EXPENSES (Beban)</ListItem>
+                        <ListItem><Code>1xxx</Code> - {t('accounts.guide.assets')}</ListItem>
+                        <ListItem><Code>2xxx</Code> - {t('accounts.guide.liabilities')}</ListItem>
+                        <ListItem><Code>3xxx</Code> - {t('accounts.guide.equity')}</ListItem>
+                        <ListItem><Code>4xxx</Code> - {t('accounts.guide.revenue')}</ListItem>
+                        <ListItem><Code>5xxx</Code> - {t('accounts.guide.expenses')}</ListItem>
                       </UnorderedList>
                     </Box>
                     
                     <Divider />
                     
                     <Box>
-                      <Text fontWeight="semibold" color="green.600" mb={2}>✅ Contoh Akun yang Harus Ada:</Text>
+                      <Text fontWeight="semibold" color="green.600" mb={2}>✅ {t('accounts.guide.requiredAccounts')}</Text>
                       <UnorderedList spacing={1} fontSize="sm">
-                        <ListItem><Code>1101</Code> - KAS</ListItem>
-                        <ListItem><Code>1102</Code> - BANK</ListItem>
-                        <ListItem><Code>1201</Code> - PIUTANG USAHA</ListItem>
-                        <ListItem><Code>2101</Code> - UTANG USAHA</ListItem>
-                        <ListItem><Code>2103</Code> - PPN KELUARAN</ListItem>
-                        <ListItem><Code>1240</Code> - PPN MASUKAN</ListItem>
-                        <ListItem><Code>4101</Code> - PENDAPATAN PENJUALAN</ListItem>
-                        <ListItem><Code>5101</Code> - HARGA POKOK PENJUALAN</ListItem>
+                        <ListItem><Code>1101</Code> - {t('accounts.guide.cash')}</ListItem>
+                        <ListItem><Code>1102</Code> - {t('accounts.guide.bank')}</ListItem>
+                        <ListItem><Code>1201</Code> - {t('accounts.guide.accountsReceivable')}</ListItem>
+                        <ListItem><Code>2101</Code> - {t('accounts.guide.accountsPayable')}</ListItem>
+                        <ListItem><Code>2103</Code> - {t('accounts.guide.vatOutput')}</ListItem>
+                        <ListItem><Code>1240</Code> - {t('accounts.guide.vatInput')}</ListItem>
+                        <ListItem><Code>4101</Code> - {t('accounts.guide.salesRevenue')}</ListItem>
+                        <ListItem><Code>5101</Code> - {t('accounts.guide.costOfGoodsSold')}</ListItem>
                       </UnorderedList>
                     </Box>
                     
                     <Divider />
                     
                     <Box>
-                      <Text fontWeight="semibold" color="orange.600" mb={2}>⚠️ Tips Penting:</Text>
+                      <Text fontWeight="semibold" color="orange.600" mb={2}>⚠️ {t('accounts.guide.importantTips')}</Text>
                       <UnorderedList spacing={1} fontSize="sm">
-                        <ListItem>Jangan hapus akun yang sudah punya transaksi</ListItem>
-                        <ListItem>Header Account (parent) tidak bisa dihapus jika punya child</ListItem>
-                        <ListItem>Gunakan nama UPPERCASE untuk konsistensi</ListItem>
-                        <ListItem>Backup data sebelum hapus akun penting</ListItem>
+                        <ListItem>{t('accounts.guide.tip1')}</ListItem>
+                        <ListItem>{t('accounts.guide.tip2')}</ListItem>
+                        <ListItem>{t('accounts.guide.tip3')}</ListItem>
+                        <ListItem>{t('accounts.guide.tip4')}</ListItem>
                       </UnorderedList>
                     </Box>
                     
                     <Divider />
                     
                     <Box>
-                      <Text fontWeight="semibold" color="purple.600" mb={2}>🔧 Jika Akun Terhapus Tidak Sengaja:</Text>
+                      <Text fontWeight="semibold" color="purple.600" mb={2}>🔧 {t('accounts.guide.ifDeleted')}</Text>
                       <Text fontSize="sm" mb={2} color="red.600">
-                        ⚠️ <strong>PENTING:</strong> Beberapa akun di-hardcode di backend dan wajib ada untuk sistem berjalan!
+                        ⚠️ <strong>{t('accounts.guide.hardcodedWarning')}</strong>
                       </Text>
-                      <Text fontSize="sm" fontWeight="semibold" mb={1}>Akun yang Hardcoded (WAJIB):</Text>
+                      <Text fontSize="sm" fontWeight="semibold" mb={1}>{t('accounts.guide.hardcodedAccounts')}</Text>
                       <UnorderedList spacing={1} fontSize="sm" mb={2}>
-                        <ListItem><Code>1101 - KAS</Code> (Asset, type: Asset)</ListItem>
-                        <ListItem><Code>1102 - BANK</Code> (Asset, type: Asset)</ListItem>
-                        <ListItem><Code>1240 - PPN MASUKAN</Code> (Asset, type: Asset)</ListItem>
-                        <ListItem><Code>2103 - PPN KELUARAN</Code> (Liability, type: Liability)</ListItem>
-                        <ListItem><Code>4101 - PENDAPATAN PENJUALAN</Code> (Revenue, type: Revenue)</ListItem>
-                        <ListItem><Code>5101 - HARGA POKOK PENJUALAN</Code> (Expense, type: Expense)</ListItem>
+                        <ListItem><Code>1101 - {t('accounts.guide.cash')}</Code> (Asset, type: Asset)</ListItem>
+                        <ListItem><Code>1102 - {t('accounts.guide.bank')}</Code> (Asset, type: Asset)</ListItem>
+                        <ListItem><Code>1240 - {t('accounts.guide.vatInput')}</Code> (Asset, type: Asset)</ListItem>
+                        <ListItem><Code>2103 - {t('accounts.guide.vatOutput')}</Code> (Liability, type: Liability)</ListItem>
+                        <ListItem><Code>4101 - {t('accounts.guide.salesRevenue')}</Code> (Revenue, type: Revenue)</ListItem>
+                        <ListItem><Code>5101 - {t('accounts.guide.costOfGoodsSold')}</Code> (Expense, type: Expense)</ListItem>
                       </UnorderedList>
-                      <Text fontSize="sm" fontWeight="semibold" mb={1}>Cara Membuat Ulang:</Text>
+                      <Text fontSize="sm" fontWeight="semibold" mb={1}>{t('accounts.guide.howToRecreate')}</Text>
                       <UnorderedList spacing={1} fontSize="sm" mt={1}>
-                        <ListItem>Gunakan kode PERSIS sama (misal: <Code>1101</Code>)</ListItem>
-                        <ListItem>Nama harus UPPERCASE (misal: <Code>KAS</Code>)</ListItem>
-                        <ListItem>Type harus sesuai kategori (Asset/Liability/Revenue/Expense)</ListItem>
-                        <ListItem>Pastikan parent account sudah ada (misal: <Code>1100 - CURRENT ASSETS</Code>)</ListItem>
-                        <ListItem>Jangan centang "Is Header" (kecuali untuk kategori besar)</ListItem>
+                        <ListItem>{t('accounts.guide.recreate1')}</ListItem>
+                        <ListItem>{t('accounts.guide.recreate2')}</ListItem>
+                        <ListItem>{t('accounts.guide.recreate3')}</ListItem>
+                        <ListItem>{t('accounts.guide.recreate4')}</ListItem>
+                        <ListItem>{t('accounts.guide.recreate5')}</ListItem>
                       </UnorderedList>
                     </Box>
                     
                     <Box bg="blue.50" p={3} borderRadius="md">
                       <Text fontSize="xs" color="blue.800">
-                        💡 <strong>Pro Tip:</strong> Gunakan tombol "Add Header Account" untuk membuat kategori besar,
-                        lalu "Add Account" untuk detail akun di dalamnya.
+                        💡 <strong>{t('accounts.guide.proTip')}</strong>
                       </Text>
                     </Box>
                   </VStack>
@@ -597,7 +596,7 @@ const AccountsPage = () => {
           {canCreate && (
             <HStack spacing={3}>
               <Tooltip 
-                label="Buat kategori besar (Header) seperti ASSETS, CURRENT ASSETS, LIABILITIES, dll. Header tidak bisa digunakan untuk transaksi langsung, hanya untuk mengelompokkan akun." 
+                label={t('accounts.guide.headerTooltip')} 
                 placement="bottom"
                 hasArrow
               >
@@ -620,7 +619,7 @@ const AccountsPage = () => {
                 </Button>
               </Tooltip>
               <Tooltip 
-                label="Buat akun detail seperti KAS (1101), BANK (1102), PIUTANG USAHA (1201) yang bisa digunakan untuk mencatat transaksi. WAJIB: KAS, BANK, PPN MASUKAN (1240), PPN KELUARAN (2103) di-hardcode di backend!" 
+                label={t('accounts.guide.accountTooltip')} 
                 placement="bottom"
                 hasArrow
               >
@@ -649,11 +648,9 @@ const AccountsPage = () => {
         <Alert status="warning" mb={4} borderRadius="md" variant="left-accent">
           <AlertIcon />
           <Box flex="1">
-            <AlertTitle fontSize="sm" mb={1}>⚠️ Akun-Akun Wajib (Hardcoded di Backend)</AlertTitle>
+            <AlertTitle fontSize="sm" mb={1}>⚠️ {t('accounts.guide.warningTitle')}</AlertTitle>
             <AlertDescription fontSize="xs">
-              Akun berikut <strong>WAJIB ADA</strong> dan di-hardcode di backend: <strong>KAS (1101)</strong>, <strong>BANK (1102)</strong>, <strong>PPN MASUKAN (1240)</strong>, <strong>PPN KELUARAN (2103)</strong>, 
-              <strong>PENDAPATAN PENJUALAN (4101)</strong>, <strong>HARGA POKOK PENJUALAN (5101)</strong>. 
-              Jika terhapus, <strong>HARUS dibuat ulang dengan kode, nama UPPERCASE, dan type yang PERSIS sama!</strong> Klik ikon 📚 untuk panduan lengkap.
+              {t('accounts.guide.warningDesc')}
             </AlertDescription>
           </Box>
         </Alert>

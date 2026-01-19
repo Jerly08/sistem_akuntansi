@@ -279,6 +279,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, startupService *services.StartupSer
 	// 🔒 Initialize Enhanced Security Middleware
 	enhancedSecurity := middleware.NewEnhancedSecurityMiddleware(db)
 	
+	// 🛡️ Apply panic recovery middleware FIRST to catch all panics
+	r.Use(middleware.RecoverPanic())              // 🛡️ Recover from panics and return proper error responses
+	
 	// 🎛️ Apply global security middleware
 	r.Use(enhancedSecurity.SecurityHeaders())     // Security headers pada semua requests
 	r.Use(enhancedSecurity.RequestMonitoring())   // Monitor semua requests untuk threats

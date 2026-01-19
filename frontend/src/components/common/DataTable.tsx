@@ -20,6 +20,7 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import { SearchIcon } from '@chakra-ui/icons';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface Column<T> {
   header: string;
@@ -50,6 +51,7 @@ function DataTable<T>({
   actions,
   onRowClick,
 }: DataTableProps<T>) {
+  const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [filteredData, setFilteredData] = useState<T[]>(data);
@@ -135,7 +137,7 @@ function DataTable<T>({
             </InputLeftElement>
             <Input
               type="text"
-              placeholder="Search..."
+              placeholder={t('common.placeholders.search')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               bg={inputBg}
@@ -168,7 +170,7 @@ function DataTable<T>({
                   {column.header}
                 </Th>
               ))}
-              {actions && <Th textAlign="right" color={mutedTextColor} borderColor={borderColor}>Actions</Th>}
+              {actions && <Th textAlign="right" color={mutedTextColor} borderColor={borderColor}>{t('common.actions')}</Th>}
             </Tr>
           </Thead>
           <Tbody>
@@ -206,7 +208,7 @@ function DataTable<T>({
                   color={mutedTextColor}
                   borderColor={borderColor}
                 >
-                  No data available
+                  {t('common.table.noData')}
                 </Td>
               </Tr>
             )}
@@ -218,7 +220,7 @@ function DataTable<T>({
       {pagination && totalPages > 1 && (
         <Flex px={4} py={3} borderTopWidth="1px" borderColor={borderColor} justify="space-between" align="center">
           <Text fontSize="sm" color={mutedTextColor}>
-            Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredData.length)} of {filteredData.length} entries
+            {t('common.pagination.showing')} {((currentPage - 1) * pageSize) + 1} {t('common.pagination.to')} {Math.min(currentPage * pageSize, filteredData.length)} {t('common.pagination.of')} {filteredData.length} {t('common.pagination.entries')}
           </Text>
           
           <HStack spacing={1}>
@@ -231,7 +233,7 @@ function DataTable<T>({
               _hover={currentPage === 1 ? {} : { bg: buttonHoverBg }}
               cursor={currentPage === 1 ? 'not-allowed' : 'pointer'}
             >
-              Previous
+              {t('common.previous')}
             </Button>
             
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
@@ -256,7 +258,7 @@ function DataTable<T>({
               _hover={currentPage === totalPages ? {} : { bg: buttonHoverBg }}
               cursor={currentPage === totalPages ? 'not-allowed' : 'pointer'}
             >
-              Next
+              {t('common.next')}
             </Button>
           </HStack>
         </Flex>

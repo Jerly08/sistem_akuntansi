@@ -938,6 +938,7 @@ c.JSON(http.StatusNotImplemented, gin.H{"error": "GetReceivablesReport is not im
 // PDF Export
 
 // ExportSaleInvoicePDF exports sale invoice as PDF
+// Accepts optional query parameter: lang (en or id)
 func (sc *SalesController) ExportSaleInvoicePDF(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -951,7 +952,20 @@ func (sc *SalesController) ExportSaleInvoicePDF(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Sale not found"})
 		return
 	}
-	pdfBytes, genErr := sc.pdfService.GenerateInvoicePDF(sale)
+	
+	// Get language from query parameter (defaults to user's language from settings)
+	lang := c.Query("lang")
+	var pdfBytes []byte
+	var genErr error
+	
+	if lang != "" {
+		// Use specified language
+		pdfBytes, genErr = sc.pdfService.GenerateInvoicePDFWithLanguage(sale, lang)
+	} else {
+		// Use default language from settings
+		pdfBytes, genErr = sc.pdfService.GenerateInvoicePDF(sale)
+	}
+	
 	if genErr != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": genErr.Error()})
 		return

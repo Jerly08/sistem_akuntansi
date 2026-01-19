@@ -28,6 +28,7 @@ import {
 } from 'react-icons/fi';
 import api from '@/services/api';
 import { API_ENDPOINTS } from '@/config/api';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface DashboardAnalytics {
   totalSales: number;
@@ -55,6 +56,7 @@ interface DirectorDashboardProps {
 
 export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ analytics }) => {
   const router = useRouter();
+  const { t } = useTranslation();
   const [approvalStats, setApprovalStats] = useState<{ pending_approvals: number; total_amount_pending: number } | null>(null);
   const [loadingStats, setLoadingStats] = useState<boolean>(false);
 
@@ -82,37 +84,37 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ analytics 
   return (
     <Box>
       <Heading as="h2" size="xl" mb={6} color="gray.800">
-        Dasbor Direktur
+        {t('navigation.dashboard')} - {t('users.director')}
       </Heading>
 
       <Flex gap={4} flexWrap="wrap" mt={2}>
         <Box bg="white" p={4} borderRadius="lg" boxShadow="sm" flex="1" minW="240px">
-          <Heading as="h3" size="sm" mb={2}>Total Pendapatan</Heading>
+          <Heading as="h3" size="sm" mb={2}>{t('dashboard.stats.totalRevenue')}</Heading>
           <Text fontSize="xl" fontWeight="bold">{formatCurrency(analytics?.totalSales || 0)}</Text>
-          <Text fontSize="sm" color="gray.600">Pertumbuhan {formatPct(analytics?.salesGrowth || 0)}</Text>
+          <Text fontSize="sm" color="gray.600">{formatPct(analytics?.salesGrowth || 0)}</Text>
         </Box>
         <Box bg="white" p={4} borderRadius="lg" boxShadow="sm" flex="1" minW="240px">
-          <Heading as="h3" size="sm" mb={2}>Total Pembelian</Heading>
+          <Heading as="h3" size="sm" mb={2}>{t('dashboard.stats.totalPurchases')}</Heading>
           <Text fontSize="xl" fontWeight="bold">{formatCurrency(analytics?.totalPurchases || 0)}</Text>
-          <Text fontSize="sm" color="gray.600">Pertumbuhan {formatPct(analytics?.purchasesGrowth || 0)}</Text>
+          <Text fontSize="sm" color="gray.600">{formatPct(analytics?.purchasesGrowth || 0)}</Text>
         </Box>
         <Box bg="white" p={4} borderRadius="lg" boxShadow="sm" flex="1" minW="240px">
-          <Heading as="h3" size="sm" mb={2}>Piutang Usaha</Heading>
+          <Heading as="h3" size="sm" mb={2}>{t('dashboard.stats.accountsReceivable')}</Heading>
           <Text fontSize="xl" fontWeight="bold">{formatCurrency(analytics?.accountsReceivable || 0)}</Text>
-          <Text fontSize="sm" color="gray.600">Perubahan {formatPct(analytics?.receivablesGrowth || 0)}</Text>
+          <Text fontSize="sm" color="gray.600">{formatPct(analytics?.receivablesGrowth || 0)}</Text>
         </Box>
         <Box bg="white" p={4} borderRadius="lg" boxShadow="sm" flex="1" minW="240px">
-          <Heading as="h3" size="sm" mb={2}>Utang Usaha</Heading>
+          <Heading as="h3" size="sm" mb={2}>{t('dashboard.stats.accountsPayable')}</Heading>
           <Text fontSize="xl" fontWeight="bold">{formatCurrency(analytics?.accountsPayable || 0)}</Text>
-          <Text fontSize="sm" color="gray.600">Perubahan {formatPct(analytics?.payablesGrowth || 0)}</Text>
+          <Text fontSize="sm" color="gray.600">{formatPct(analytics?.payablesGrowth || 0)}</Text>
         </Box>
         <Box bg="white" p={4} borderRadius="lg" boxShadow="sm" flex="1" minW="240px">
-          <Heading as="h3" size="sm" mb={2}>Persetujuan Tertunda</Heading>
+          <Heading as="h3" size="sm" mb={2}>{t('dashboard.pendingApprovals')}</Heading>
           <Text fontSize="xl" fontWeight="bold" display="flex" alignItems="center" gap={2}>
             <Icon as={FiCheckCircle} color="orange.500" />
-            {loadingStats ? 'Memuat…' : (approvalStats?.pending_approvals ?? 0)} item
+            {loadingStats ? t('common.loading') : (approvalStats?.pending_approvals ?? 0)} item
           </Text>
-          <Text fontSize="sm" color="gray.600">Total nilai {formatCurrency(approvalStats?.total_amount_pending || 0)}</Text>
+          <Text fontSize="sm" color="gray.600">{t('common.labels.total')}: {formatCurrency(approvalStats?.total_amount_pending || 0)}</Text>
         </Box>
       </Flex>
 
@@ -121,18 +123,18 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ analytics 
         <Card mt={6}>
           <CardHeader>
             <Heading size="md" display="flex" alignItems="center" gap={2}>
-              <Icon as={FiActivity} /> Transaksi Terbaru
+              <Icon as={FiActivity} /> {t('dashboard.recentTransactions')}
             </Heading>
           </CardHeader>
           <CardBody>
             <List spacing={3}>
-              {analytics.recentTransactions.slice(0, 8).map((t) => (
-                <ListItem key={`${t.type}-${t.id}`} display="flex" justifyContent="space-between" gap={4}>
+              {analytics.recentTransactions.slice(0, 8).map((txn) => (
+                <ListItem key={`${txn.type}-${txn.id}`} display="flex" justifyContent="space-between" gap={4}>
                   <Box>
-                    <Text fontWeight="medium">{t.description || t.transaction_id}</Text>
-                    <Text fontSize="sm" color="gray.600">{t.type} • {new Date(t.date).toLocaleDateString('id-ID')}</Text>
+                    <Text fontWeight="medium">{txn.description || txn.transaction_id}</Text>
+                    <Text fontSize="sm" color="gray.600">{txn.type} • {new Date(txn.date).toLocaleDateString('id-ID')}</Text>
                   </Box>
-                  <Badge colorScheme={t.type === 'SALE' ? 'green' : 'orange'}>{formatCurrency(t.amount)}</Badge>
+                  <Badge colorScheme={txn.type === 'SALE' ? 'green' : 'orange'}>{formatCurrency(txn.amount)}</Badge>
                 </ListItem>
               ))}
             </List>
@@ -145,7 +147,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ analytics 
         <CardHeader>
           <Heading size="md" display="flex" alignItems="center">
             <Icon as={FiPlus} mr={2} color="blue.500" />
-            Akses Cepat
+            {t('dashboard.quickAccess.title')}
           </Heading>
         </CardHeader>
         <CardBody>
@@ -157,7 +159,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ analytics 
               onClick={() => router.push('/sales')}
               size="md"
             >
-              Tambah Penjualan
+              {t('dashboard.quickAccess.addSale')}
             </Button>
             <Button
               leftIcon={<FiShoppingCart />}
@@ -166,7 +168,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ analytics 
               onClick={() => router.push('/purchases')}
               size="md"
             >
-              Tambah Pembelian
+              {t('dashboard.quickAccess.addPurchase')}
             </Button>
             <Button
               leftIcon={<FiBarChart2 />}
@@ -175,7 +177,7 @@ export const DirectorDashboard: React.FC<DirectorDashboardProps> = ({ analytics 
               onClick={() => router.push('/reports')}
               size="md"
             >
-              Laporan Keuangan
+              {t('dashboard.quickAccess.financialReports')}
             </Button>
           </HStack>
         </CardBody>

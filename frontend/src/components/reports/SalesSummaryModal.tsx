@@ -45,6 +45,7 @@ import {
 } from '@chakra-ui/react';
 import { formatCurrency } from '../../utils/formatters';
 import { SSOTSalesSummaryData, CustomerSalesData, ProductSalesData, SaleItemDetail } from '../../services/ssotSalesSummaryService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface SalesSummaryModalProps {
   isOpen: boolean;
@@ -71,6 +72,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
   onFetch,
   onExport
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'summary'>('summary');
   const toast = useToast();
   
@@ -106,8 +108,8 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
       }
       
       toast({
-        title: 'Export Feature',
-        description: `${format.toUpperCase()} export will be implemented soon`,
+        title: t('reports.modal.exportFeature'),
+        description: t('reports.modal.exportComingSoon', { format: format.toUpperCase() }),
         status: 'info',
         duration: 3000,
         isClosable: true,
@@ -135,13 +137,13 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
           <Card size="sm">
             <CardBody>
               <Stat>
-                <StatLabel>Total Revenue</StatLabel>
+                <StatLabel>{t('reports.modal.totalRevenue')}</StatLabel>
                 <StatNumber color="green.600">
                   {formatCurrency(data.total_revenue || data.total_sales || 0)}
                 </StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  Sales for the period
+                  {t('reports.modal.salesForPeriod')}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -152,13 +154,13 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
           <Card size="sm">
             <CardBody>
               <Stat>
-                <StatLabel>Total Customers</StatLabel>
+                <StatLabel>{t('reports.modal.totalCustomers')}</StatLabel>
                 <StatNumber color="blue.600">
                   {totalCustomers}
                 </StatNumber>
                 <StatHelpText>
                   <Icon as={FiUsers} />
-                  Active customers
+                  {t('reports.modal.activeCustomers')}
                 </StatHelpText>
               </Stat>
             </CardBody>
@@ -170,13 +172,13 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
             <Card size="sm">
               <CardBody>
                 <Stat>
-                  <StatLabel>Total Orders</StatLabel>
+                  <StatLabel>{t('reports.modal.totalOrders')}</StatLabel>
                   <StatNumber color="purple.600">
                     {totalOrders}
                   </StatNumber>
                   <StatHelpText>
                     <Icon as={FiShoppingCart} />
-                    Orders processed
+                    {t('reports.modal.ordersProcessed')}
                   </StatHelpText>
                 </Stat>
               </CardBody>
@@ -189,13 +191,13 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
             <Card size="sm">
               <CardBody>
                 <Stat>
-                  <StatLabel>Average Order Value</StatLabel>
+                  <StatLabel>{t('reports.modal.averageOrderValue')}</StatLabel>
                   <StatNumber color="orange.600">
                     {formatCurrency(averageOrderValue)}
                   </StatNumber>
                   <StatHelpText>
                     <Icon as={FiTrendingUp} />
-                    Per order average
+                    {t('reports.modal.perOrderAverage')}
                   </StatHelpText>
                 </Stat>
               </CardBody>
@@ -410,10 +412,10 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
             <Icon as={FiShoppingCart} color="blue.500" />
             <VStack align="start" spacing={0}>
               <Text fontSize="lg" fontWeight="bold">
-                Sales Summary Report (SSOT)
+                {t('reports.modal.salesSummaryTitle')}
               </Text>
               <Text fontSize="sm" color={previewPeriodTextColor}>
-                {startDate} - {endDate} | SSOT Journal Integration
+                {startDate} - {endDate} | {t('reports.modal.ssotJournalIntegration')}
               </Text>
             </VStack>
           </HStack>
@@ -425,7 +427,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
           <Box mb={4}>
             <HStack spacing={4} mb={4} flexWrap="wrap">
               <FormControl>
-                <FormLabel>Start Date</FormLabel>
+                <FormLabel>{t('reports.modal.startDate')}</FormLabel>
                 <Input 
                   type="date" 
                   value={startDate} 
@@ -433,7 +435,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                 />
               </FormControl>
               <FormControl>
-                <FormLabel>End Date</FormLabel>
+                <FormLabel>{t('reports.modal.endDate')}</FormLabel>
                 <Input 
                   type="date" 
                   value={endDate} 
@@ -449,7 +451,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                 mt={8}
                 whiteSpace="nowrap"
               >
-                Generate Report
+                {t('reports.modal.generateReport')}
               </Button>
             </HStack>
           </Box>
@@ -460,10 +462,10 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                 <Spinner size="xl" thickness="4px" speed="0.65s" color="blue.500" />
                 <VStack spacing={2}>
                   <Text fontSize="lg" fontWeight="medium" color={loadingTextColor}>
-                    Generating Sales Summary Report
+                    {t('reports.modal.generatingSalesSummary')}
                   </Text>
                   <Text fontSize="sm" color={secondaryTextColor}>
-                    Analyzing sales transactions from SSOT journal system...
+                    {t('reports.modal.analyzingSalesTransactions')}
                   </Text>
                 </VStack>
               </VStack>
@@ -480,7 +482,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                 variant="outline"
                 onClick={onFetch}
               >
-                Retry
+                {t('reports.modal.retry')}
               </Button>
             </Box>
           )}
@@ -508,10 +510,10 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                     </VStack>
                     <VStack align="end" spacing={1}>
                       <Text fontSize="sm" color="blue.600">
-                        Currency: {data.currency || 'IDR'}
+                        {t('reports.modal.currency')}: {data.currency || 'IDR'}
                       </Text>
                       <Text fontSize="xs" color="blue.500">
-                        Generated: {data.generated_at ? new Date(data.generated_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')}
+                        {t('reports.modal.generated')}: {data.generated_at ? new Date(data.generated_at).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')}
                       </Text>
                     </VStack>
                   </HStack>
@@ -521,13 +523,13 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
               {/* Report Header */}
               <Box textAlign="center" bg={sectionBg} p={4} borderRadius="md">
                 <Heading size="md" color={textColor}>
-                  Sales Summary Report
+                  {t('reports.modal.salesSummaryReport')}
                 </Heading>
                 <Text fontSize="sm" color={secondaryTextColor}>
-                  Period: {startDate} - {endDate}
+                  {t('reports.modal.period')}: {startDate} - {endDate}
                 </Text>
                 <Text fontSize="xs" color={secondaryTextColor} mt={1}>
-                  Generated: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
+                  {t('reports.modal.generated')}: {new Date().toLocaleDateString('id-ID')} at {new Date().toLocaleTimeString('id-ID')}
                 </Text>
               </Box>
 
@@ -538,7 +540,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                 <CardBody>
                   <Flex justify="space-between" align="center" mb={3}>
                     <Heading size="md" color={textColor}>
-                      Sales Performance
+                      {t('reports.modal.salesPerformance')}
                     </Heading>
                     <Text fontWeight="bold" fontSize="lg" color="green.600">
                       {formatCurrency(data.total_revenue || data.total_sales || 0)}
@@ -547,16 +549,16 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                   
                   <SimpleGrid columns={[1, 3]} spacing={4}>
                     <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                      <Text fontSize="sm" color={secondaryTextColor}>Period</Text>
+                      <Text fontSize="sm" color={secondaryTextColor}>{t('reports.modal.period')}</Text>
                       <Text fontWeight="medium">{startDate} to {endDate}</Text>
                     </Box>
                     <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                      <Text fontSize="sm" color={secondaryTextColor}>Report Type</Text>
-                      <Text fontWeight="medium">SSOT Integration</Text>
+                      <Text fontSize="sm" color={secondaryTextColor}>{t('reports.modal.reportType')}</Text>
+                      <Text fontWeight="medium">{t('reports.modal.ssotIntegration')}</Text>
                     </Box>
                     <Box textAlign="center" p={3} bg={sectionBg} borderRadius="md">
-                      <Text fontSize="sm" color={secondaryTextColor}>Status</Text>
-                      <Badge colorScheme="green">Active</Badge>
+                      <Text fontSize="sm" color={secondaryTextColor}>{t('reports.modal.status')}</Text>
+                      <Badge colorScheme="green">{t('reports.modal.active')}</Badge>
                     </Box>
                   </SimpleGrid>
                 </CardBody>
@@ -566,7 +568,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
               {data.sales_by_customer && data.sales_by_customer.length > 0 && (
                 <Box>
                   <Heading size="sm" mb={4} color={textColor}>
-                    Top Performing Customers ({Math.min(data.sales_by_customer.length, 6)} customers)
+                    {t('reports.modal.topPerformingCustomers')} ({Math.min(data.sales_by_customer.length, 6)} {t('reports.modal.customers')})
                   </Heading>
                   <SimpleGrid columns={[1, 2, 3]} spacing={4}>
                     {[...data.sales_by_customer]
@@ -585,11 +587,11 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                               {formatCurrency(customer.total_sales)}
                             </Text>
                             <Text fontSize="sm" color="gray.600">
-                              {((customer.total_sales / (data.total_revenue || data.total_sales || 1)) * 100).toFixed(1)}% of total
+                              {((customer.total_sales / (data.total_revenue || data.total_sales || 1)) * 100).toFixed(1)}% {t('reports.modal.ofTotal')}
                             </Text>
                             {customer.transaction_count && (
                               <Text fontSize="xs" color="purple.600">
-                                {customer.transaction_count} orders
+                                {customer.transaction_count} {t('reports.modal.orders')}
                               </Text>
                             )}
                           </VStack>
@@ -603,15 +605,15 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
               {data.sales_by_customer && data.sales_by_customer.length > 0 && (
                 <Box>
                   <Heading size="sm" mb={4} color={textColor}>
-                    Sales by Customer ({data.sales_by_customer.length} customers)
+                    {t('reports.modal.salesByCustomer')} ({data.sales_by_customer.length} {t('reports.modal.customers')})
                   </Heading>
                   
                   {/* Customer Table Header */}
                   <Box bg="blue.50" p={3} borderRadius="md" mb={2} border="1px solid" borderColor="blue.200">
                     <SimpleGrid columns={[1, 3]} spacing={2} fontSize="sm" fontWeight="bold" color="blue.800">
-                      <Text>Customer</Text>
-                      <Text textAlign="right">Total Sales</Text>
-                      <Text textAlign="right">Orders</Text>
+                      <Text>{t('reports.modal.customer')}</Text>
+                      <Text textAlign="right">{t('reports.modal.totalSales')}</Text>
+                      <Text textAlign="right">{t('reports.modal.orders')}</Text>
                     </SimpleGrid>
                   </Box>
                   
@@ -642,7 +644,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
               {data.sales_by_customer && data.sales_by_customer.some(c => c.items && c.items.length > 0) && (
                 <Box>
                   <Heading size="sm" mb={4} color={textColor}>
-                    Items Sales
+                    {t('reports.modal.itemsSales')}
                   </Heading>
                   
                   <VStack spacing={4} align="stretch">
@@ -656,7 +658,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                                 {customer.customer_name}
                               </Heading>
                               <Badge colorScheme="blue">
-                                {customer.items?.length || 0} items
+                                {customer.items?.length || 0} {t('reports.modal.items')}
                               </Badge>
                             </HStack>
                           </CardHeader>
@@ -664,11 +666,11 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                             {/* Items Table Header */}
                             <Box bg="gray.50" p={2} borderRadius="md" mb={2}>
                               <SimpleGrid columns={[1, 5]} spacing={2} fontSize="xs" fontWeight="bold" color="gray.700">
-                                <Text>Product</Text>
-                                <Text textAlign="right">Qty</Text>
-                                <Text textAlign="right">Unit Price</Text>
-                                <Text textAlign="right">Total</Text>
-                                <Text textAlign="center">Date</Text>
+                                <Text>{t('reports.modal.product')}</Text>
+                                <Text textAlign="right">{t('reports.modal.qty')}</Text>
+                                <Text textAlign="right">{t('reports.modal.unitPrice')}</Text>
+                                <Text textAlign="right">{t('reports.modal.total')}</Text>
+                                <Text textAlign="center">{t('reports.modal.date')}</Text>
                               </SimpleGrid>
                             </Box>
                             
@@ -712,7 +714,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                             <Box mt={3} pt={3} borderTop="2px solid" borderColor="blue.200">
                               <Flex justify="space-between" align="center">
                                 <Text fontWeight="bold" color="gray.700">
-                                  Subtotal ({customer.customer_name})
+                                  {t('reports.modal.subtotal')} ({customer.customer_name})
                                 </Text>
                                 <Text fontWeight="bold" fontSize="lg" color="blue.600">
                                   {formatCurrency(customer.total_sales)}
@@ -740,7 +742,7 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                   leftIcon={<FiFilePlus />}
                   onClick={() => handleExport('pdf')}
                 >
-                  Export PDF
+                  {t('reports.modal.exportPDF')}
                 </Button>
                 <Button
                   colorScheme="green"
@@ -749,13 +751,13 @@ const SalesSummaryModal: React.FC<SalesSummaryModalProps> = ({
                   leftIcon={<FiFileText />}
                   onClick={() => handleExport('excel')}
                 >
-                  Export CSV
+                  {t('reports.modal.exportCSV')}
                 </Button>
               </>
             )}
           </HStack>
           <Button variant="ghost" onClick={onClose}>
-            Close
+            {t('reports.modal.close')}
           </Button>
         </ModalFooter>
       </ModalContent>

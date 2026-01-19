@@ -106,7 +106,7 @@ const ContactsPage = () => {
       // Backend returns direct array, not wrapped in data field
       setContacts(Array.isArray(response.data) ? response.data : response.data.data || []);
     } catch (err: any) {
-      setError('Failed to fetch contacts. Please try again.');
+      setError(t('contacts.messages.fetchError'));
       console.error('Error fetching contacts:', err);
     } finally {
       setIsLoading(false);
@@ -139,8 +139,8 @@ const ContactsPage = () => {
       
       // Show success message
       toast({
-        title: formData.id ? 'Contact Updated' : 'Contact Created',
-        description: `Contact has been ${formData.id ? 'updated' : 'created'} successfully.`,
+        title: formData.id ? t('contacts.messages.contactUpdated') : t('contacts.messages.contactCreated'),
+        description: formData.id ? t('contacts.messages.updateSuccess') : t('contacts.messages.createSuccess'),
         status: 'success',
         duration: 3000,
         isClosable: true,
@@ -162,7 +162,7 @@ const ContactsPage = () => {
         is_active: true
       });
     } catch (err) {
-      setError(`Error ${formData.id ? 'updating' : 'creating'} contact. Please try again.`);
+      setError(formData.id ? t('contacts.messages.updateError') : t('contacts.messages.createError'));
       console.error('Error submitting contact:', err);
     } finally {
       setIsSubmitting(false);
@@ -171,7 +171,7 @@ const ContactsPage = () => {
 
   // Handle contact deletion
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this contact?')) {
+    if (!window.confirm(t('contacts.messages.confirmDelete'))) {
       return;
     }
     
@@ -186,14 +186,14 @@ const ContactsPage = () => {
       
       // Show success message
       toast({
-        title: 'Contact Deleted',
-        description: 'Contact has been deleted successfully.',
+        title: t('contacts.messages.contactDeleted'),
+        description: t('contacts.messages.deleteSuccess'),
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (err) {
-      setError('Error deleting contact. Please try again.');
+      setError(t('contacts.messages.deleteError'));
       console.error('Error deleting contact:', err);
     } finally {
       setIsLoading(false);
@@ -238,13 +238,13 @@ const ContactsPage = () => {
   const getColumnsForType = (contactType?: string) => {
     const baseColumns = [
       { 
-        header: 'Name', 
+        header: t('contacts.table.name'), 
         accessor: 'name',
         headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
         cellStyle: { padding: '12px 8px', fontSize: '14px' }
       },
       { 
-        header: 'External ID', 
+        header: t('contacts.table.externalId'), 
         accessor: (contact: Contact) => contact.external_id || '-',
         headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
         cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
@@ -254,7 +254,7 @@ const ContactsPage = () => {
     // Only add PIC Name column for Customer and Vendor groups, not for Employee
     if (contactType !== 'EMPLOYEE') {
       baseColumns.push({
-        header: 'PIC Name', 
+        header: t('contacts.table.picName'), 
         accessor: (contact: Contact) => contact.pic_name || '-',
         headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
         cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
@@ -264,19 +264,19 @@ const ContactsPage = () => {
     // Add remaining columns
     baseColumns.push(
       { 
-        header: 'Email', 
+        header: t('contacts.table.email'), 
         accessor: 'email',
         headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold' },
         cellStyle: { padding: '12px 8px', fontSize: '14px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
       },
       { 
-        header: 'Phone', 
+        header: t('contacts.table.phone'), 
         accessor: 'phone',
         headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
         cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
       },
       { 
-        header: 'Address', 
+        header: t('contacts.table.address'), 
         accessor: (contact: Contact) => {
           if (contact.address) {
             // Truncate long address for table display
@@ -290,8 +290,8 @@ const ContactsPage = () => {
         cellStyle: { padding: '12px 8px', fontSize: '14px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
       },
       { 
-        header: 'Status', 
-        accessor: (contact: Contact) => (contact.is_active ? 'Active' : 'Inactive'),
+        header: t('contacts.table.status'), 
+        accessor: (contact: Contact) => (contact.is_active ? t('contacts.status.active') : t('contacts.status.inactive')),
         headerStyle: { padding: '12px 8px', fontSize: '14px', fontWeight: 'semibold', whiteSpace: 'nowrap' },
         cellStyle: { padding: '12px 8px', fontSize: '14px', whiteSpace: 'nowrap' }
       }
@@ -327,7 +327,7 @@ const ContactsPage = () => {
         minW="auto"
         px={2}
       >
-        View
+        {t('common.view')}
       </Button>
       {canEdit && (
         <>
@@ -339,7 +339,7 @@ const ContactsPage = () => {
             minW="auto"
             px={2}
           >
-            Edit
+            {t('common.edit')}
           </Button>
           <Button
             size="xs"
@@ -350,7 +350,7 @@ const ContactsPage = () => {
             minW="auto"
             px={2}
           >
-            Delete
+            {t('common.delete')}
           </Button>
         </>
       )}
@@ -361,7 +361,7 @@ const ContactsPage = () => {
 <Layout allowedRoles={['admin', 'finance', 'inventory_manager', 'employee', 'director']}>
       <Box>
         <Flex justify="space-between" align="center" mb={6}>
-          <Heading size="lg">Contact Master</Heading>
+          <Heading size="lg">{t('contacts.contactMaster')}</Heading>
           {canEdit && (
             <Button
               colorScheme="brand"
@@ -386,13 +386,13 @@ const ContactsPage = () => {
           data={contacts}
           keyField="id"
           groupBy="type"
-          title="Contacts"
+          title={t('contacts.contacts')}
           actions={renderActions}
           isLoading={isLoading}
           groupLabels={{
-            VENDOR: 'Vendors',
-            CUSTOMER: 'Customers', 
-            EMPLOYEE: 'Employees'
+            VENDOR: t('contacts.vendors'),
+            CUSTOMER: t('contacts.customers'), 
+            EMPLOYEE: t('contacts.employees')
           }}
         />
         
@@ -411,7 +411,7 @@ const ContactsPage = () => {
                     <Input
                       value={formData.name || ''}
                       onChange={(e) => handleInputChange('name', e.target.value)}
-                      placeholder="Enter contact name"
+                      placeholder={t('contacts.form.enterContactName')}
                     />
                   </FormControl>
                   
@@ -429,14 +429,14 @@ const ContactsPage = () => {
                   
                   <FormControl>
                     <FormLabel>
-                      {formData.type === 'CUSTOMER' ? 'Customer ID' : 
-                       formData.type === 'VENDOR' ? 'Vendor ID' : 
-                       formData.type === 'EMPLOYEE' ? 'Employee ID' : 'External ID'}
+                      {formData.type === 'CUSTOMER' ? t('contacts.customerId') : 
+                       formData.type === 'VENDOR' ? t('contacts.vendorId') : 
+                       formData.type === 'EMPLOYEE' ? t('contacts.employeeId') : t('contacts.externalId')}
                     </FormLabel>
                     <Input
                       value={formData.external_id || ''}
                       onChange={(e) => handleInputChange('external_id', e.target.value)}
-                      placeholder={`Enter ${formData.type?.toLowerCase() || 'external'} ID`}
+                      placeholder={t('contacts.form.enterExternalId')}
                     />
                   </FormControl>
                   
@@ -447,7 +447,7 @@ const ContactsPage = () => {
                       <Input
                         value={formData.pic_name || ''}
                         onChange={(e) => handleInputChange('pic_name', e.target.value)}
-                        placeholder="Enter person in charge name"
+                        placeholder={t('contacts.form.enterPicName')}
                       />
                     </FormControl>
                   )}
@@ -458,7 +458,7 @@ const ContactsPage = () => {
                       type="email"
                       value={formData.email || ''}
                       onChange={(e) => handleInputChange('email', e.target.value)}
-                      placeholder="Enter email address"
+                      placeholder={t('contacts.form.enterEmail')}
                     />
                   </FormControl>
                   
@@ -467,7 +467,7 @@ const ContactsPage = () => {
                     <Input
                       value={formData.phone || ''}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
-                      placeholder="Enter phone number"
+                      placeholder={t('contacts.form.enterPhone')}
                     />
                   </FormControl>
                   
@@ -476,7 +476,7 @@ const ContactsPage = () => {
                     <Input
                       value={formData.mobile || ''}
                       onChange={(e) => handleInputChange('mobile', e.target.value)}
-                      placeholder="Enter mobile number"
+                      placeholder={t('contacts.form.enterMobile')}
                     />
                   </FormControl>
                   
@@ -485,7 +485,7 @@ const ContactsPage = () => {
                     <Textarea
                       value={formData.address || ''}
                       onChange={(e) => handleInputChange('address', e.target.value)}
-                      placeholder="Enter complete address"
+                      placeholder={t('contacts.form.enterAddress')}
                       rows={3}
                     />
                   </FormControl>
@@ -495,7 +495,7 @@ const ContactsPage = () => {
                     <Textarea
                       value={formData.notes || ''}
                       onChange={(e) => handleInputChange('notes', e.target.value)}
-                      placeholder="Enter notes"
+                      placeholder={t('contacts.form.enterNotes')}
                       rows={3}
                     />
                   </FormControl>
@@ -538,51 +538,51 @@ const ContactsPage = () => {
               {viewContact && (
                 <VStack spacing={3} align="stretch">
                   <Box>
-                    <strong>Name:</strong> {viewContact.name}
+                    <strong>{t('common.name')}:</strong> {viewContact.name}
                   </Box>
                   <Box>
-                    <strong>Type:</strong> {viewContact.type}
+                    <strong>{t('common.type')}:</strong> {viewContact.type === 'CUSTOMER' ? t('contacts.customer') : viewContact.type === 'VENDOR' ? t('contacts.vendor') : t('contacts.employee')}
                   </Box>
                   <Box>
-                    <strong>Code:</strong> {viewContact.code || '-'}
+                    <strong>{t('contacts.table.code')}:</strong> {viewContact.code || '-'}
                   </Box>
                   <Box>
-                    <strong>External ID:</strong> {viewContact.external_id || '-'}
+                    <strong>{t('contacts.externalId')}:</strong> {viewContact.external_id || '-'}
                   </Box>
                   {(viewContact.type === 'CUSTOMER' || viewContact.type === 'VENDOR') && (
                     <Box>
-                      <strong>PIC Name:</strong> {viewContact.pic_name || '-'}
+                      <strong>{t('contacts.picName')}:</strong> {viewContact.pic_name || '-'}
                     </Box>
                   )}
                   <Box>
-                    <strong>Email:</strong> {viewContact.email}
+                    <strong>{t('contacts.email')}:</strong> {viewContact.email}
                   </Box>
                   <Box>
-                    <strong>Phone:</strong> {viewContact.phone}
+                    <strong>{t('contacts.phone')}:</strong> {viewContact.phone}
                   </Box>
                   <Box>
-                    <strong>Mobile:</strong> {viewContact.mobile || '-'}
+                    <strong>{t('contacts.mobile')}:</strong> {viewContact.mobile || '-'}
                   </Box>
                   <Box>
-                    <strong>Address:</strong> {viewContact.address || '-'}
+                    <strong>{t('contacts.address')}:</strong> {viewContact.address || '-'}
                   </Box>
                   <Box>
-                    <strong>Status:</strong> {viewContact.is_active ? 'Active' : 'Inactive'}
+                    <strong>{t('common.status')}:</strong> {viewContact.is_active ? t('contacts.status.active') : t('contacts.status.inactive')}
                   </Box>
                   <Box>
-                    <strong>Notes:</strong> {viewContact.notes || '-'}
+                    <strong>{t('common.notes')}:</strong> {viewContact.notes || '-'}
                   </Box>
                   <Box>
-                    <strong>Created:</strong> {new Date(viewContact.created_at).toLocaleDateString()}
+                    <strong>{t('contacts.table.created')}:</strong> {new Date(viewContact.created_at).toLocaleDateString()}
                   </Box>
                   <Box>
-                    <strong>Updated:</strong> {new Date(viewContact.updated_at).toLocaleDateString()}
+                    <strong>{t('contacts.table.updated')}:</strong> {new Date(viewContact.updated_at).toLocaleDateString()}
                   </Box>
                 </VStack>
               )}
             </ModalBody>
             <ModalFooter>
-              <Button onClick={() => setIsViewModalOpen(false)}>Close</Button>
+              <Button onClick={() => setIsViewModalOpen(false)}>{t('common.close')}</Button>
             </ModalFooter>
           </ModalContent>
         </Modal>

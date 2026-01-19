@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 	
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,59 @@ func NewCashBankController(cashBankService *services.CashBankService, accountSer
 		cashBankService: cashBankService,
 		accountService:  accountService,
 	}
+}
+
+// determineStatusCode maps error messages to appropriate HTTP status codes
+// This ensures proper error categorization for frontend handling
+func determineStatusCode(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+	
+	errMsg := strings.ToLower(err.Error())
+	
+	// Validation errors (400 Bad Request)
+	if strings.Contains(errMsg, "required") ||
+		strings.Contains(errMsg, "invalid") ||
+		strings.Contains(errMsg, "cannot be empty") ||
+		strings.Contains(errMsg, "must be") ||
+		strings.Contains(errMsg, "cannot be negative") ||
+		strings.Contains(errMsg, "validation failed") {
+		return http.StatusBadRequest
+	}
+	
+	// Not found errors (404 Not Found)
+	if strings.Contains(errMsg, "not found") ||
+		strings.Contains(errMsg, "does not exist") ||
+		strings.Contains(errMsg, "no record") {
+		return http.StatusNotFound
+	}
+	
+	// Conflict errors (409 Conflict)
+	if strings.Contains(errMsg, "already exists") ||
+		strings.Contains(errMsg, "duplicate") ||
+		strings.Contains(errMsg, "already linked") ||
+		strings.Contains(errMsg, "unique constraint") ||
+		strings.Contains(errMsg, "conflict") {
+		return http.StatusConflict
+	}
+	
+	// Unauthorized errors (401 Unauthorized)
+	if strings.Contains(errMsg, "unauthorized") ||
+		strings.Contains(errMsg, "not authenticated") ||
+		strings.Contains(errMsg, "authentication failed") {
+		return http.StatusUnauthorized
+	}
+	
+	// Forbidden errors (403 Forbidden)
+	if strings.Contains(errMsg, "forbidden") ||
+		strings.Contains(errMsg, "permission denied") ||
+		strings.Contains(errMsg, "access denied") {
+		return http.StatusForbidden
+	}
+	
+	// Default to internal server error (500)
+	return http.StatusInternalServerError
 }
 
 // GetAccounts godoc
@@ -85,31 +139,99 @@ func (c *CashBankController) GetAccountByID(ctx *gin.Context) {
 // @Success 201 {object} models.CashBank
 // @Router /api/cashbank/accounts [post]
 func (c *CashBankController) CreateAccount(ctx *gin.Context) {
+	// Log incoming request
+	userID := ctx.GetUint("user_id")
+	log.Printf("🔄 [CASHBANK CREATE] Starting account creation - UserID: %d", userID)
+	
 	var request services.CashBankCreateRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
+		log.Printf("❌ [CASHBANK CREATE] Invalid request data: %v", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invalid request data",
-			"details": err.Error(),
+			"error":     "Invalid request data",
+			"details":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+			"user_id":   userID,
 		})
 		return
 	}
 	
-	userID := ctx.GetUint("user_id")
+	// Log request parameters
+	log.Printf("📋 [CASHBANK CREATE] Request: Name=%s, Type=%s, AccountID=%d, OpeningBalance=%.2f, UserID=%d",
+		request.Name, request.Type, request.AccountID, request.OpeningBalance, userID)
+	
 	if userID == 0 {
+		log.Printf("❌ [CASHBANK CREATE] User not authenticated")
 		ctx.JSON(http.StatusUnauthorized, gin.H{
-			"error": "User not authenticated",
+			"error":     "User not authenticated",
+			"details":   "A valid user session is required to create accounts",
+			"timestamp": time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	
+	// Additional validation
+	if strings.TrimSpace(request.Name) == "" {
+		log.Printf("❌ [CASHBANK CREATE] Account name is empty")
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":     "Validation failed",
+			"details":   "Account name is required and cannot be empty",
+			"timestamp": time.Now().Format(time.RFC3339),
+			"user_id":   userID,
+		})
+		return
+	}
+	
+	if request.Type != "CASH" && request.Type != "BANK" {
+		log.Printf("❌ [CASHBANK CREATE] Invalid account type: %s", request.Type)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":     "Validation failed",
+			"details":   "Account type must be CASH or BANK",
+			"timestamp": time.Now().Format(time.RFC3339),
+			"user_id":   userID,
+		})
+		return
+	}
+	
+	if request.Type == "BANK" && strings.TrimSpace(request.BankName) == "" {
+		log.Printf("❌ [CASHBANK CREATE] Bank name is required for BANK type")
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":     "Validation failed",
+			"details":   "Bank name is required for bank accounts",
+			"timestamp": time.Now().Format(time.RFC3339),
+			"user_id":   userID,
+		})
+		return
+	}
+	
+	if request.OpeningBalance < 0 {
+		log.Printf("❌ [CASHBANK CREATE] Negative opening balance: %.2f", request.OpeningBalance)
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":     "Validation failed",
+			"details":   "Opening balance cannot be negative",
+			"timestamp": time.Now().Format(time.RFC3339),
+			"user_id":   userID,
 		})
 		return
 	}
 	
 	account, err := c.cashBankService.CreateCashBankAccount(request, userID)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"error": "Failed to create account",
-			"details": err.Error(),
+		// Determine appropriate status code based on error type
+		statusCode := determineStatusCode(err)
+		
+		log.Printf("❌ [CASHBANK CREATE] Failed to create account: %v (Status: %d)", err, statusCode)
+		
+		ctx.JSON(statusCode, gin.H{
+			"error":     "Failed to create account",
+			"details":   err.Error(),
+			"timestamp": time.Now().Format(time.RFC3339),
+			"user_id":   userID,
 		})
 		return
 	}
+	
+	log.Printf("✅ [CASHBANK CREATE] Account created successfully: ID=%d, Code=%s, Name=%s", 
+		account.ID, account.Code, account.Name)
 	
 	ctx.JSON(http.StatusCreated, account)
 }
@@ -434,3 +556,41 @@ func (c *CashBankController) GetPaymentAccounts(ctx *gin.Context) {
 	})
 }
 
+
+// GetAvailableGLAccounts godoc
+// @Summary Get available GL accounts for cash/bank creation
+// @Description Get GL accounts that are not already linked to any cash/bank account, filtered by type (CASH or BANK)
+// @Tags CashBank
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param type query string true "Account type: CASH or BANK"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/cashbank/available-gl-accounts [get]
+func (c *CashBankController) GetAvailableGLAccounts(ctx *gin.Context) {
+	accountType := strings.ToUpper(ctx.Query("type"))
+	
+	// Validate type parameter
+	if accountType != "CASH" && accountType != "BANK" {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid account type",
+			"details": "Account type must be CASH or BANK",
+		})
+		return
+	}
+	
+	accounts, err := c.cashBankService.GetAvailableGLAccounts(accountType)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve available GL accounts",
+			"details": err.Error(),
+		})
+		return
+	}
+	
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    accounts,
+		"count":   len(accounts),
+	})
+}

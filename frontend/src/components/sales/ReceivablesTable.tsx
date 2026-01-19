@@ -44,6 +44,7 @@ import {
   FiFileText
 } from 'react-icons/fi';
 import salesService, { ReceivablesReport, ReceivableItem } from '@/services/salesService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ReceivablesTableProps {
   // Optional props for filtering or customization
@@ -55,6 +56,7 @@ const ReceivablesTable: React.FC<ReceivablesTableProps> = ({
   customerId,
   showExportButton = true
 }) => {
+  const { t } = useTranslation();
   const [receivablesData, setReceivablesData] = useState<ReceivablesReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -173,7 +175,7 @@ const ReceivablesTable: React.FC<ReceivablesTableProps> = ({
     return (
       <Box>
         <Progress size="sm" isIndeterminate />
-        <Text mt={4} textAlign="center">Loading receivables data...</Text>
+        <Text mt={4} textAlign="center">{t('common.loading')}</Text>
       </Box>
     );
   }
@@ -183,7 +185,7 @@ const ReceivablesTable: React.FC<ReceivablesTableProps> = ({
       <Card>
         <CardBody>
           <Text textAlign="center" color="gray.500">
-            No receivables data available
+            {t('common.noData')}
           </Text>
         </CardBody>
       </Card>
@@ -318,7 +320,7 @@ const ReceivablesTable: React.FC<ReceivablesTableProps> = ({
                 onClick={loadReceivablesData}
                 isLoading={loading}
               >
-                Refresh
+                {t('common.refresh')}
               </Button>
               {showExportButton && (
                 <Button
@@ -327,7 +329,7 @@ const ReceivablesTable: React.FC<ReceivablesTableProps> = ({
                   leftIcon={<FiDownload />}
                   onClick={handleExportReport}
                 >
-                  Export
+                  {t('common.export')}
                 </Button>
               )}
             </HStack>
@@ -340,24 +342,24 @@ const ReceivablesTable: React.FC<ReceivablesTableProps> = ({
                 <FiSearch color="gray.300" />
               </InputLeftElement>
               <Input
-                placeholder="Search customer or invoice..."
+                placeholder={t('common.placeholders.search')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </InputGroup>
             
             <Select
-              placeholder="All Status"
+              placeholder={t('common.filters.allStatus')}
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               maxW="200px"
             >
-              <option value="INVOICED">Invoiced</option>
-              <option value="OVERDUE">Overdue</option>
+              <option value="INVOICED">{t('sales.invoiced')}</option>
+              <option value="OVERDUE">{t('sales.overdue')}</option>
             </Select>
             
             <Select
-              placeholder="All Ages"
+              placeholder={t('common.filters.allAges')}
               value={overdueFilter}
               onChange={(e) => setOverdueFilter(e.target.value)}
               maxW="200px"
@@ -433,7 +435,7 @@ const ReceivablesTable: React.FC<ReceivablesTableProps> = ({
           
           {filteredReceivables.length === 0 && (
             <Box py={8} textAlign="center">
-              <Text color="gray.500">No receivables found matching the current filters</Text>
+              <Text color="gray.500">{t('common.table.emptyState')}</Text>
             </Box>
           )}
         </CardBody>

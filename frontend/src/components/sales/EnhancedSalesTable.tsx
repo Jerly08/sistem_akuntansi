@@ -38,6 +38,7 @@ import {
   FiTrash2,
 } from 'react-icons/fi';
 import { Sale } from '@/services/salesService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface SalesTableProps {
   sales: Sale[];
@@ -53,7 +54,6 @@ interface SalesTableProps {
   title?: string;
   formatCurrency: (amount: number) => string;
   formatDate: (date: string) => string;
-  getStatusLabel: (status: string) => string;
   canEdit?: boolean;
   canDelete?: boolean;
 }
@@ -69,13 +69,22 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
   onDelete,
   onDownloadInvoice,
   onCreateReceipt,
-  title = 'Sales Transactions',
+  title,
   formatCurrency,
   formatDate,
-  getStatusLabel,
   canEdit = false,
   canDelete = false,
 }) => {
+  const { t } = useTranslation();
+  const displayTitle = title || t('sales.title');
+  
+  // Get status label with translation
+  const getStatusLabel = (status: string) => {
+    const statusKey = status.toLowerCase();
+    const translationKey = `sales.statuses.${statusKey}`;
+    return t(translationKey);
+  };
+  
   // Debug logging for props
   console.log('EnhancedSalesTable props:', {
     salesCount: sales?.length,
@@ -113,7 +122,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
       <CardHeader>
         <Flex justify="space-between" align="center">
           <Heading size="md" color={headingColor}>
-            {title} ({sales?.length || 0})
+            {displayTitle} ({sales?.length || 0})
           </Heading>
         </Flex>
       </CardHeader>
@@ -121,24 +130,24 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
         {loading ? (
           <Flex justify="center" align="center" py={10}>
             <Spinner size="lg" color="var(--accent-color)" />
-            <Text ml={4} color={textColor}>Loading transactions...</Text>
+            <Text ml={4} color={textColor}>{t('common.table.loading')}</Text>
           </Flex>
         ) : sales.length === 0 ? (
           <Box p={8} textAlign="center">
-            <Text color={textColor}>No sales transactions found.</Text>
+            <Text color={textColor}>{t('common.table.emptyState')}</Text>
           </Box>
         ) : (
           <Box overflowX="auto" position="relative">
             <Table variant="simple" size="md" className="table">
               <Thead bg={theadBg}>
                 <Tr>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">CODE</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">CUSTOMER</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">DATE</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">TOTAL</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">OUTSTANDING</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">STATUS</Th>
-                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold" textAlign="center">ACTIONS</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('sales.table.code')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('sales.table.customer')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('sales.table.date')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('sales.table.total')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('sales.table.outstanding')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold">{t('sales.table.status')}</Th>
+                  <Th color={textColor} borderColor={borderColor} fontSize="xs" fontWeight="bold" textAlign="center">{t('common.actions').toUpperCase()}</Th>
                 </Tr>
               </Thead>
               <Tbody>
@@ -198,7 +207,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                           icon={<FiMoreVertical />}
                           variant="ghost"
                           size="sm"
-                          aria-label="Actions for sale"
+                          aria-label={t('common.actions')}
                           _hover={{ bg: hoverBg }}
                           data-testid={`actions-${sale.id}`}
                           onClick={(e) => {
@@ -215,7 +224,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                               onViewDetails(sale);
                             }}
                           >
-                            View Details
+                            {t('common.buttons.viewDetails')}
                           </MenuItem>
                           
                           {/* Debug: Show permissions */}
@@ -232,7 +241,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                                 onEdit(sale);
                               }}
                             >
-                              Edit
+                              {t('common.edit')}
                             </MenuItem>
                           )}
                           {sale.status === 'DRAFT' && canEdit && onConfirm && (
@@ -243,17 +252,17 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                                 onConfirm(sale);
                               }}
                             >
-                              Create Invoice
+                              {t('sales.invoice')}
                             </MenuItem>
                           )}
                           {sale.status === 'INVOICED' && sale.outstanding_amount > 0 && canEdit && onPayment && (
                             <MenuItem icon={<FiDollarSign />} onClick={() => onPayment(sale)}>
-                              Record Payment
+                              {t('purchases.payment.recordPayment')}
                             </MenuItem>
                           )}
                           {canEdit && sale.status !== 'PAID' && sale.status !== 'CANCELLED' && onCancel && (
                             <MenuItem icon={<FiX />} onClick={() => onCancel(sale)}>
-                              Cancel Sale
+                              {t('common.cancel')}
                             </MenuItem>
                           )}
                           {onDownloadInvoice && (
@@ -264,7 +273,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                                 onDownloadInvoice(sale);
                               }}
                             >
-                              Download Invoice
+                              {t('common.buttons.download')}
                             </MenuItem>
                           )}
                           {/* Create Receipt visible when fully paid */}
@@ -276,7 +285,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                                 onCreateReceipt(sale);
                               }}
                             >
-                              Create Receipt (PDF)
+                              {t('common.buttons.print')} (PDF)
                             </MenuItem>
                           )}
                           {canDelete && onDelete && (
@@ -290,7 +299,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                                   onDelete(sale);
                                 }}
                               >
-                                Delete
+                                {t('common.delete')}
                               </MenuItem>
                             </>
                           )}
@@ -300,7 +309,7 @@ const EnhancedSalesTable: React.FC<SalesTableProps> = ({
                             <>
                               <MenuDivider />
                               <MenuItem isDisabled fontSize="xs" color="gray.500">
-                                No actions available
+                                {t('common.table.noData')}
                               </MenuItem>
                             </>
                           )}
