@@ -11,8 +11,8 @@ RUN npm ci --only=production=false
 # Copy source code
 COPY . .
 
-# Copy env example as default (will be overridden by docker-compose env)
-COPY .env.example .env.local
+# Create empty .env.local (env vars will come from docker-compose)
+RUN touch .env.local
 
 # Build the application
 RUN npm run build
