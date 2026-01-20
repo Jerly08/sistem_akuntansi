@@ -60,13 +60,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # CRITICAL: NEXT_PUBLIC_* vars must be passed at BUILD TIME for Next.js
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8081}
     container_name: akuntansi_frontend
     restart: unless-stopped
     environment:
-      # API URL - points to backend service
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8080}
-      
-      # Node environment
+      # Runtime env (for SSR/rewrites only, client-side uses build-time value)
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8081}
       NODE_ENV: ${NODE_ENV:-production}
     ports:
       - "${FRONTEND_PORT:-3001}:3000"
