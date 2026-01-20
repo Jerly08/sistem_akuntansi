@@ -14,6 +14,9 @@ COPY . .
 # Create empty .env.local (env vars will come from docker-compose)
 RUN touch .env.local
 
+# Create public folder if not exists
+RUN mkdir -p public
+
 # Build the application
 RUN npm run build
 
